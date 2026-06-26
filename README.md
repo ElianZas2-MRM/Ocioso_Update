@@ -127,12 +127,6 @@ El label de estado al lado del campo de email muestra en tiempo real:
 **7. Email con PASS/FAILED en asunto**
 Asunto: `[PASS] Osocio Programación 26/06/2026 — 15 OK / 0 errores` o `[FAILED] ... — 12 OK / 3 errores`. Aplica tanto al email de runs normales (botón) como al consolidado de programación automática.
 
-**8. LambdaTest Mac y Android en programación**
-Se pueden incluir `LambdaTest Mac` y `LambdaTest Android` como browsers en la programación automática. El ejecutor autónomo los detecta y salta el loop de viewports (no aplica para LambdaTest).
-
-**9. Build en LambdaTest marcado como "Automatizado"**
-Cuando el test se lanza desde la programación, el build aparece como `Automatizado — [País]` en el dashboard de LambdaTest, diferenciándolo de runs manuales.
-
 **10. Checkbox "Ver navegador mientras corre"**
 Por defecto el browser corre fuera de pantalla (silencioso). Al marcar el checkbox, abre normalmente en pantalla. La programación automática siempre corre en background sin importar este checkbox.
 
