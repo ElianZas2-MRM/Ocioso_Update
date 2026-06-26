@@ -1,6 +1,6 @@
 {
   "email_destinatario": "elian.zas@mrm.com",
-  "enviar_mail": true,
+  "enviar_mail": false,
   "adjuntar_resultados": false,
   "adjuntar_screenshots": false,
   "timeouts": {
@@ -16,12 +16,42 @@
   },
   "ui_prefs": {
     "navegadores": [
-      "chrome"
+      "chrome",
+      "lambdatest_mac"
     ],
     "viewports": [
       "fullscreen"
     ],
     "visible_browser": false,
     "email_modo": "consolidado"
+  },
+  "scheduler_config": {
+    "horarios": {
+      "Lunes": [
+        "10:30"
+      ],
+      "Martes": [
+        "10:30"
+      ],
+      "Miércoles": [
+        "10:30"
+      ],
+      "Jueves": [
+        "10:30"
+      ],
+      "Viernes": [
+        "10:30"
+      ],
+      "Sábado": [
+        "10:30"
+      ],
+      "Domingo": [
+        "10:30"
+      ]
+    },
+    "paises": [
+      "Bolivia",
+      "Paraguay"
+    ]
   }
 }
