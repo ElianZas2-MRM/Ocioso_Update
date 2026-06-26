@@ -5,7 +5,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 a = Analysis(
     ['run.py'],
-    pathex=['.', 'forms', 'core'],
+    pathex=['.', 'forms', 'core', 'validation', 'utils', 'interface'],
     binaries=[],
     datas=[
         ('Asset/Fullheader.png', 'Asset'),
