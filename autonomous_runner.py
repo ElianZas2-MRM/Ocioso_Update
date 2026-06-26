@@ -359,52 +359,51 @@ def main():
     _safe_console_print("⏹  Presiona Ctrl+C para salir")
     _safe_console_print("=" * 60)
 
+    DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    last_triggered = {}  # {(dia, hora): date} — evita doble disparo en el mismo slot
+
     try:
         while True:
             programacion = cargar_programacion()
 
-            if programacion:
-                ahora = datetime.now()
-                fecha_hora_programada = programacion["fecha_hora"]
-                diferencia = (ahora - fecha_hora_programada).total_seconds()
+            if programacion and programacion.get("tipo") == "semanal":
+                ahora      = datetime.now()
+                dia_actual  = DIAS_ES[ahora.weekday()]
+                slot_min    = (ahora.minute // 15) * 15
+                hora_actual = f"{ahora.hour:02d}:{slot_min:02d}"
+                horarios_hoy = programacion.get("horarios", {}).get(dia_actual, [])
 
-                if -60 <= diferencia <= 60:
-                    log_mensaje(" ¡HORA DETECTADA! Ejecutando test programado...")
-                    resultados = ejecutar_tests(programacion)
+                if hora_actual in horarios_hoy:
+                    key = (dia_actual, hora_actual)
+                    if last_triggered.get(key) != ahora.date():
+                        last_triggered[key] = ahora.date()
+                        log_mensaje(f" ¡SLOT DETECTADO! {dia_actual} {hora_actual} — ejecutando test...")
+                        resultados = ejecutar_tests(programacion)
 
-                    log_mensaje(f"\n📊 RESULTADOS RECOPILADOS: {len(resultados)} ejecuciones")
-                    for index, resultado in enumerate(resultados, 1):
-                        log_mensaje(
-                            f"   [{index}] {resultado['pais']} ({resultado['navegador']}/{resultado['viewport']}) - {resultado['estado']}"
-                        )
+                        log_mensaje(f"\n📊 RESULTADOS RECOPILADOS: {len(resultados)} ejecuciones")
+                        for index, resultado in enumerate(resultados, 1):
+                            log_mensaje(
+                                f"   [{index}] {resultado['pais']} ({resultado['navegador']}/{resultado['viewport']}) - {resultado['estado']}"
+                            )
 
-                    if resultados:
-                        log_mensaje(f" ✅ {len(resultados)} ejecuciones completadas")
-                        log_mensaje(" 📧 INICIANDO ENVÍO DE EMAIL CONSOLIDADO...")
-                        try:
-                            envio_exitoso = enviar_email_resultados_consolidados(resultados)
-                            if envio_exitoso:
-                                log_mensaje(" ✅ Proceso de email COMPLETADO exitosamente")
-                                log_mensaje(" ⏳ Esperando a que Outlook procese el email (10 segundos)...")
-                                time.sleep(10)
-                                log_mensaje("✅ Tiempo de espera completado")
-                            else:
-                                log_mensaje(" ⚠️ Proceso de email devolvió False")
-                        except Exception as exc:
-                            log_mensaje(f" ❌ Excepción al enviar email consolidado: {exc}")
-                            import traceback
-
-                            log_mensaje(traceback.format_exc())
-
-                        limpiar_programacion()
-                        log_mensaje(" Test programado COMPLETADO y archivo limpiado")
-                    else:
-                        log_mensaje(" ⚠️ No se recopilaron resultados para enviar")
-                        limpiar_programacion()
-
-                elif diferencia > 120:
-                    log_mensaje(" Programación obsoleta detectada, limpiando...")
-                    limpiar_programacion()
+                        if resultados:
+                            log_mensaje(f" ✅ {len(resultados)} ejecuciones completadas")
+                            log_mensaje(" 📧 INICIANDO ENVÍO DE EMAIL CONSOLIDADO...")
+                            try:
+                                envio_exitoso = enviar_email_resultados_consolidados(resultados)
+                                if envio_exitoso:
+                                    log_mensaje(" ✅ Email enviado exitosamente")
+                                    time.sleep(10)
+                                else:
+                                    log_mensaje(" ⚠️ Proceso de email devolvió False")
+                            except Exception as exc:
+                                import traceback
+                                log_mensaje(f" ❌ Excepción al enviar email: {exc}")
+                                log_mensaje(traceback.format_exc())
+                            # NO limpiar — programación semanal persiste para la próxima semana
+                            log_mensaje(" Slot completado. Próxima ejecución: semana siguiente.")
+                        else:
+                            log_mensaje(" ⚠️ No se recopilaron resultados")
 
             time.sleep(60)
 

@@ -70,6 +70,28 @@ def print(*args, **kwargs):
     return None
 
 
+_PAIS_ABREV = {
+    "Argentina": "AR", "Bolivia": "BO", "Brasil": "BR",
+    "Chile": "CL", "Colombia": "CO", "Ecuador": "EC",
+    "Paraguay": "PY", "Peru": "PE", "Uruguay": "UY",
+}
+
+def _abrev_paises(lista):
+    return " ".join(_PAIS_ABREV.get(p, p[:2].upper()) for p in lista)
+
+
+def _cuerpo_a_html(texto):
+    """Convierte cuerpo de texto plano a HTML con fuente Segoe UI Emoji para Outlook clásico."""
+    import html as _html
+    escaped = _html.escape(texto).replace('\n', '<br>\n')
+    return (
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>'
+        '<body style="font-family:\'Segoe UI Emoji\',\'Segoe UI\',Arial,sans-serif;'
+        'font-size:13px;color:#222;line-height:1.6;">'
+        f'{escaped}</body></html>'
+    )
+
+
 def _enviar_via_smtp(destinatarios, asunto, cuerpo, adjuntos):
     """Envía email via SMTP usando configuración en config_global.json."""
     import smtplib
@@ -95,7 +117,7 @@ def _enviar_via_smtp(destinatarios, asunto, cuerpo, adjuntos):
     msg["From"] = user
     msg["To"] = destinatarios if isinstance(destinatarios, str) else "; ".join(destinatarios)
     msg["Subject"] = asunto
-    msg.attach(MIMEText(cuerpo, "plain", "utf-8"))
+    msg.attach(MIMEText(_cuerpo_a_html(cuerpo), "html", "utf-8"))
 
     if adjuntos:
         for archivo in adjuntos:
@@ -148,7 +170,7 @@ def _worker_envio_emails():
                     mail = _outlook_instance.CreateItem(0)
                     mail.To = destinatarios if isinstance(destinatarios, str) else "; ".join(destinatarios)
                     mail.Subject = asunto
-                    mail.Body = cuerpo
+                    mail.HTMLBody = _cuerpo_a_html(cuerpo)
                     if adjuntos:
                         for i, archivo in enumerate(adjuntos, 1):
                             if archivo and os.path.exists(archivo):
@@ -270,10 +292,12 @@ def guardar_config_global(config):
 
 
 def obtener_email_destinatario():
-    """Devuelve el email destinatario actual (persistido) o el default."""
+    """Devuelve lista de emails destinatarios (soporta varios separados por coma)."""
     config = cargar_config_global()
-    email = (config.get("email_destinatario") or "").strip()
-    return email if email else DEFAULT_EMAIL_DESTINATARIO
+    raw = (config.get("email_destinatario") or "").strip()
+    if not raw:
+        raw = DEFAULT_EMAIL_DESTINATARIO
+    return [e.strip() for e in raw.replace(';', ',').split(',') if e.strip()]
 
 
 # === IDs DINÁMICOS ===
@@ -1020,7 +1044,7 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
 
         resultado_global = "PASS" if con_errores == 0 else "FAILED"
-        asunto = f"[{resultado_global}] Osocio {pais} {fecha_actual} — {exitosos} OK / {con_errores} errores"
+        asunto = f"[{resultado_global}] Osocio {_PAIS_ABREV.get(pais, pais)} {fecha_actual} — {exitosos} OK / {con_errores} errores"
 
         encabezado = pais
         if browser:
@@ -1199,11 +1223,12 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
         total_errores = sum(pais_errores.values())
         resultado_global = "PASS" if not paises_failed else "FAILED"
 
-        failed_tag = f": {', '.join(paises_failed)}" if paises_failed else ""
-        asunto = (
-            f"[{resultado_global}] Osocio — {fecha_actual} — "
-            f"{len(paises_passed)} PASSED / {len(paises_failed)} FAILED{failed_tag}"
-        )
+        partes_asunto = []
+        if paises_passed:
+            partes_asunto.append(f"{_abrev_paises(paises_passed)} ✓")
+        if paises_failed:
+            partes_asunto.append(f"{_abrev_paises(paises_failed)} ✗")
+        asunto = f"[{resultado_global}] Osocio — {fecha_actual} — {' | '.join(partes_asunto)}"
 
         icono_global = "✅" if resultado_global == "PASS" else "❌"
         cuerpo = f"{icono_global} RESULTADO GLOBAL: {resultado_global}\n\n"
