@@ -1,0 +1,72 @@
+{
+  "pais": "Peru",
+  "ultima_deteccion": "2026-06-12T00:13:43",
+  "campos_nuevos": [
+    {
+      "id": "cc_date",
+      "type": "text",
+      "required": false,
+      "label": "cc_date"
+    },
+    {
+      "id": "cc_name",
+      "type": "text",
+      "required": false,
+      "label": "cc_name"
+    },
+    {
+      "id": "cc_address",
+      "type": "text",
+      "required": false,
+      "label": "cc_address"
+    },
+    {
+      "id": "cc_ci",
+      "type": "text",
+      "required": false,
+      "label": "cc_ci"
+    },
+    {
+      "id": "cc_telephone",
+      "type": "text",
+      "required": false,
+      "label": "cc_telephone"
+    },
+    {
+      "id": "cc_email",
+      "type": "text",
+      "required": false,
+      "label": "cc_email"
+    },
+    {
+      "id": "cc_amount",
+      "type": "text",
+      "required": false,
+      "label": "cc_amount"
+    },
+    {
+      "id": "cc_details_claim",
+      "type": "text",
+      "required": false,
+      "label": "cc_details_claim"
+    },
+    {
+      "id": "cc_order_claim",
+      "type": "text",
+      "required": false,
+      "label": "cc_order_claim"
+    },
+    {
+      "id": "cc_vin",
+      "type": "text",
+      "required": false,
+      "label": "cc_vin"
+    },
+    {
+      "id": "patent",
+      "type": "text",
+      "required": false,
+      "label": "patent"
+    }
+  ]
+}

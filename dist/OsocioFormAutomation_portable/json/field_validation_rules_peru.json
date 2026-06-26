@@ -1,0 +1,601 @@
+{
+  "browser": "chrome",
+  "viewport": "fullscreen",
+  "selected_browsers": [
+    "chrome"
+  ],
+  "selected_viewports": [
+    "fullscreen"
+  ],
+  "url": "pe",
+  "urls": [
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe"
+  ],
+  "landing_urls": [
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe"
+  ],
+  "form_urls": [
+    "https://www.chevrolet.com.pe/camionetas/tracker-turbo-suv",
+    "https://www.chevrolet.com.pe/colision",
+    "https://www.chevrolet.com.pe/evento-chevydays",
+    "https://www.chevrolet.com.pe/libro-reclamaciones-virtual",
+    "https://www.chevrolet.com.pe/momentos-chevrolet",
+    "https://www.chevrolet.com.pe/onstar/formulario-suscripcion-renovacion",
+    "https://www.chevrolet.com.pe/oportunidades",
+    "https://www.chevrolet.com.pe/oportunidades",
+    "https://www.chevrolet.com.pe/pickups/montana",
+    "https://www.chevrolet.com.pe/posventa",
+    "https://www.chevrolet.com.pe/reactiva-tu-garantia",
+    "https://www.chevrolet.com.pe/solicita-una-cotizacion",
+    "https://www.chevrolet.com.pe/vehiculos-electricos",
+    "https://www.chevrolet.com.pe/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.pe/vehiculos-hibridos/captiva-phev"
+  ],
+  "selected_paises": [
+    "Peru"
+  ],
+  "fields": {
+    "NOMBRES": {
+      "descripcion": "NOMBRES",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDOS": {
+      "descripcion": "APELLIDOS",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Peru)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?=(?:9))[A-Z0-9]{9}$",
+      "regex_char": "[A-Z0-9]",
+      "test_text": "92342342p=é?34",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Completa 9 números."
+        },
+        {
+          "regex": "^(?=(?:4))[0-9]{17}$",
+          "mensaje": "El celular ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Peru)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE (Peru)": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{1,40}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "a0a9a8s7s7s6d6d5f54=?2=\"$2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa la placa."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "VIN": {
+      "descripcion": "VIN",
+      "campo": "vin",
+      "element_id": "vin",
+      "regex_full": "^[0-9]{17}$",
+      "regex_char": "[0-9]",
+      "test_text": "9o2324?=2132837404842",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu VIN."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresá 17 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "TIPO DE DOCUMENTO": {
+      "descripcion": "TIPO DE DOCUMENTO",
+      "campo": "document-type",
+      "element_id": "document-type",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un tipo de documento.",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Peru)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccione una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Peru)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Peru)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Peru)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "RUT": {
+      "descripcion": "RUC",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{11}$",
+      "regex_char": "[0-9]",
+      "test_text": "123123po?=32142",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "RUC"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu RUC."
+        },
+        {
+          "regex": "^[0-9]{6}$",
+          "mensaje": "Ingresa al menos 11 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{11}$",
+          "mensaje": "El RUC ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DNI__2": {
+      "descripcion": "DNI",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{8}$",
+      "regex_char": "[0-9]",
+      "test_text": "123pó=?42345",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "DNI"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu DNI."
+        },
+        {
+          "regex": "^[0-9]{5}$",
+          "mensaje": "Ingresa al menos 8 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{8}$",
+          "mensaje": "El DNI ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "Carné de Extranjería": {
+      "descripcion": "Carné de Extranjería",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{12}$",
+      "regex_char": "[0-9]",
+      "test_text": "123456pó=?123456",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "carné"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu carné de extranjería."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{5}$",
+          "mensaje": "Ingresa al menos 12 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{12}$",
+          "mensaje": "El carné de extranjería ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "Pasaporte": {
+      "descripcion": "Pasaporte",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{12}$",
+      "regex_char": "[0-9]",
+      "test_text": "123456pó=?123456",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "Pasaporte"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu pasaporte."
+        },
+        {
+          "regex": "^[0-9]{7}$",
+          "mensaje": "Ingresa al menos 12 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{12}$",
+          "mensaje": "El pasaporte ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS__2": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Esse campo é obrigatório.",
+      "dependencies": [],
+      "paises": [
+        "Argentina",
+        "Bolivia",
+        "Brasil",
+        "Chile",
+        "Colombia",
+        "Ecuador",
+        "Paraguay",
+        "Peru",
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    }
+  }
+}

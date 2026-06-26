@@ -1,0 +1,3557 @@
+{
+  "url": "co",
+  "urls": [
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "bo",
+    "bo",
+    "bo",
+    "bo",
+    "bo",
+    "bo",
+    "bo"
+  ],
+  "landing_urls": [
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "pe",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "ar",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ec",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "uy",
+    "bo",
+    "bo",
+    "bo",
+    "bo",
+    "bo",
+    "bo",
+    "bo"
+  ],
+  "form_urls": [
+    "https://www.chevrolet.com.co/camionetas/traverse-camioneta-suv",
+    "https://www.chevrolet.com.co/contacta-un-concesionario",
+    "https://www.chevrolet.com.co/convenioscorporativos/plan-educacion",
+    "https://www.chevrolet.com.co/flotas/portafolio",
+    "https://www.chevrolet.com.co/hibridos/captiva-phev",
+    "https://www.chevrolet.com.co/lanzamiento-revelacion-sonic",
+    "https://www.chevrolet.com.co/ofertas-oportunidades",
+    "https://www.chevrolet.com.co/plan-chevrolet-siempre",
+    "https://www.chevrolet.com.co/servicios/colision",
+    "https://www.chevrolet.com.co/teleperformance",
+    "https://www.chevrolet.com.co/test-drive-auto-show",
+    "https://www.chevrolet.com.co/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.co/vive-chevrolet",
+    "https://www.chevrolet.com.pe/camionetas/tracker-turbo-suv",
+    "https://www.chevrolet.com.pe/colision",
+    "https://www.chevrolet.com.pe/evento-chevydays",
+    "https://www.chevrolet.com.pe/libro-reclamaciones-virtual",
+    "https://www.chevrolet.com.pe/momentos-chevrolet",
+    "https://www.chevrolet.com.pe/onstar/formulario-suscripcion-renovacion",
+    "https://www.chevrolet.com.pe/oportunidades",
+    "https://www.chevrolet.com.pe/oportunidades",
+    "https://www.chevrolet.com.pe/pickups/montana",
+    "https://www.chevrolet.com.pe/posventa",
+    "https://www.chevrolet.com.pe/reactiva-tu-garantia",
+    "https://www.chevrolet.com.pe/solicita-una-cotizacion",
+    "https://www.chevrolet.com.pe/vehiculos-electricos",
+    "https://www.chevrolet.com.pe/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.pe/vehiculos-hibridos/captiva-phev",
+    "https://www.chevrolet.com.ar/airbag-takata",
+    "https://www.chevrolet.com.ar/camionetas-pick-up/silverado-pickup/accesorios/formulario",
+    "https://www.chevrolet.com.ar/camionetas-suv/tracker-suv/accesorios/formulario",
+    "https://www.chevrolet.com.ar/eventos",
+    "https://www.chevrolet.com.ar/financiamiento-autos-corporativos/autoescuela",
+    "https://www.chevrolet.com.ar/formulario-reserva-de-servicios",
+    "https://www.chevrolet.com.ar/formulario-verano-quote",
+    "https://www.chevrolet.com.ar/hibridos/captiva-phev-test-drive",
+    "https://www.chevrolet.com.ar/lanzamiento-revelacion-sonic",
+    "https://www.chevrolet.com.ar/onix-test-drive",
+    "https://www.chevrolet.com.ar/oportunidades",
+    "https://www.chevrolet.com.ar/plan-chevrolet",
+    "https://www.chevrolet.com.ar/solicita-una-cotizacion",
+    "https://www.chevrolet.com.py/autos/onix-plus-sedan-familiar",
+    "https://www.chevrolet.com.py/lanzamiento-revelacion-sonic",
+    "https://www.chevrolet.com.py/oportunidades",
+    "https://www.chevrolet.com.py/pickups/nueva-s10-high-country-4x4",
+    "https://www.chevrolet.com.py/pickups/silverado-camioneta-pickup",
+    "https://www.chevrolet.com.py/solicita-una-cotizacion",
+    "https://www.chevrolet.com.py/suvs/trailblazer-high-country-4x4",
+    "https://www.chevrolet.com.py/vehiculos-electricos",
+    "https://www.chevrolet.com.py/vehiculos-electricos/captiva-ev",
+    "https://www.chevrolet.com.py/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.py/vehiculos-electricos/spark-euv/accesorios/formulario",
+    "https://www.chevrolet.com.ec/agenda-tu-mantenimiento",
+    "https://www.chevrolet.com.ec/campanas-de-seguridad",
+    "https://www.chevrolet.com.ec/evento",
+    "https://www.chevrolet.com.ec/evento-aventura",
+    "https://www.chevrolet.com.ec/evento-exhibicion-captiva-ev",
+    "https://www.chevrolet.com.ec/evento-exhibicion-test-drive-nevs",
+    "https://www.chevrolet.com.ec/flotas-pesados-camiones",
+    "https://www.chevrolet.com.ec/hibridos/captiva-phev",
+    "https://www.chevrolet.com.ec/ofertas-autos-suvs-camionetas",
+    "https://www.chevrolet.com.ec/posventa/colision",
+    "https://www.chevrolet.com.ec/socios-de-negocio/issfa",
+    "https://www.chevrolet.com.ec/solicitar-cotizacion",
+    "https://www.chevrolet.com.ec/suvs/groove-suv",
+    "https://www.chevrolet.com.ec/suvs/tracker-turbo-suv",
+    "https://www.chevrolet.com.ec/vehiculos-electricos/captiva-ev",
+    "https://www.chevrolet.com.ec/vehiculos-electricos/equinox-ev",
+    "https://www.chevrolet.cl/autos-electricos/captiva-ev",
+    "https://www.chevrolet.cl/camiones/camion-mediano-ftr1524amt/serie-f",
+    "https://www.chevrolet.cl/camiones/frr-camion",
+    "https://www.chevrolet.cl/camiones/fvz-camion",
+    "https://www.chevrolet.cl/evento-drive-experience",
+    "https://www.chevrolet.cl/evento-maitencillo",
+    "https://www.chevrolet.cl/flotas",
+    "https://www.chevrolet.cl/flotas/planes-leasing",
+    "https://www.chevrolet.cl/ofertas-oportunidades-descuentos",
+    "https://www.chevrolet.cl/ofertas-oportunidades-descuentos",
+    "https://www.chevrolet.cl/onstar/formulario-suscripcion-renovacion",
+    "https://www.chevrolet.cl/pickups/colorado-camioneta-pickup/test-drive",
+    "https://www.chevrolet.cl/solicitar-cotizacion",
+    "https://www.chevrolet.cl/suvs/groove-suv-deportivo",
+    "https://www.chevrolet.cl/suvs/traverse",
+    "https://www.chevrolet.com.uy/autos/onix-plus-auto-familiar",
+    "https://www.chevrolet.com.uy/lanzamiento-revelacion-sonic",
+    "https://www.chevrolet.com.uy/onstar/formulario-suscripcion-renovacion",
+    "https://www.chevrolet.com.uy/pickups/silverado-camioneta-pickup",
+    "https://www.chevrolet.com.uy/solicita-una-cotizacion",
+    "https://www.chevrolet.com.uy/vans/n400-max",
+    "https://www.chevrolet.com.uy/vehiculos-electricos",
+    "https://www.chevrolet.com.uy/vehiculos-electricos/blazer-rs-ev",
+    "https://www.chevrolet.com.uy/vehiculos-electricos/captiva-ev",
+    "https://www.chevrolet.com.uy/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.uy/vehiculos-hibridos/captiva-phev",
+    "https://www.chevrolet.com.bo/autos/onix",
+    "https://www.chevrolet.com.bo/pickups/montana",
+    "https://www.chevrolet.com.bo/pickups/silverado",
+    "https://www.chevrolet.com.bo/solicitar-cotizacion",
+    "https://www.chevrolet.com.bo/suvs/suburban",
+    "https://www.chevrolet.com.bo/suvs/tahoe",
+    "https://www.chevrolet.com.bo/suvs/tracker"
+  ],
+  "browser": "chrome",
+  "viewport": "fullscreen",
+  "selected_browsers": [
+    "chrome"
+  ],
+  "selected_viewports": [
+    "fullscreen"
+  ],
+  "fields": {
+    "NOMBRE": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu nombre."
+        },
+        {
+          "regex": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1}$",
+          "mensaje": "Ingresá mínimo 2 letras."
+        },
+        {
+          "regex": "^([a\\-z])\\1{8,10}$",
+          "mensaje": "Ingrese un nombre válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu apellido."
+        },
+        {
+          "regex": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1}$",
+          "mensaje": "Ingresá mínimo 2 letras."
+        },
+        {
+          "regex": "^([a\\-z])\\1{8,10}$",
+          "mensaje": "Ingrese un apellido válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR": {
+      "descripcion": "CELULAR",
+      "campo": "cellphone",
+      "element_id": "cellphone",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{10,15}$",
+      "regex_char": "[0-9]",
+      "test_text": "324234234123pó?=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu número de celular completo."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresá mínimo 10 números."
+        },
+        {
+          "regex": "^([0\\-9])\\1{10}$",
+          "mensaje": "El celular ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DNI": {
+      "descripcion": "DNI",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{7,9}$",
+      "regex_char": "[0-9]",
+      "test_text": "26893967pó=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresá 7 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{8}$",
+          "mensaje": "El DNI registrado no cumple con un número válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NÚMERO DE CONTRATO": {
+      "descripcion": "NÚMERO DE CONTRATO",
+      "campo": "contract",
+      "element_id": "contract",
+      "regex_full": "^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{1,10}$",
+      "regex_char": "[0-9]",
+      "test_text": "38293829382pó=?",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá el número de contrato."
+        },
+        {
+          "regex": "^(?=(?:0))[0-9]{1,10}$",
+          "mensaje": "Ingresá 10 caracteres que no comiencen con 0."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "ORDEN": {
+      "descripcion": "ORDEN",
+      "campo": "order",
+      "element_id": "order",
+      "regex_full": "^[0-9]{1,3}$",
+      "regex_char": "[0-9]",
+      "test_text": "324pó?=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá el orden."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{6,7}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "ASD123?=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Debes completar la patente."
+        },
+        {
+          "regex": "^[a-zA-Z0-9]{3}$",
+          "mensaje": "La patente debe tener entre 6 y 7 caracteres."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "VIN/CHASIS": {
+      "descripcion": "VIN/CHASIS",
+      "campo": "vin",
+      "element_id": "vin",
+      "regex_full": "^[a-zA-Z0-9]{17,}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "3928ksu8392839283=?",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu VIN/CHASIS."
+        },
+        {
+          "regex": "^[a-zA-Z0-9]{3}$",
+          "mensaje": "Ingresá 17 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "INSERTÁ TU OPINIÓN": {
+      "descripcion": "INSERTÁ TU OPINIÓN",
+      "campo": "disapproval",
+      "element_id": "disapproval",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ .,;:!?\"'()_\\-+/@#%&*0-9]{5,500}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ .,;:!?\"'()_\\-+/@#%&*0-9]",
+      "test_text": "Hola que tal como te va1234",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^[a-zA-Z0-9]{3}$",
+          "mensaje": "Describí mejor tu opinión."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "COMENTARIOS": {
+      "descripcion": "COMENTARIOS",
+      "campo": "comment",
+      "element_id": "comment",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ .,;:!?\"'()_\\-+/@#%&*0-9]{5,520}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ .,;:!?\"'()_\\-+/@#%&*0-9]",
+      "test_text": "Hola que tal como te va1234",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccioná un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PROVINCIA": {
+      "descripcion": "PROVINCIA",
+      "campo": "region",
+      "element_id": "region",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccioná una provincia.",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccioná una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccioná un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccioná la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "¿CÓMO DESEAS REALIZAR LA COMPRA?": {
+      "descripcion": "¿CÓMO DESEAS REALIZAR LA COMPRA?",
+      "campo": "buy_pda",
+      "element_id": "buy_pda",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccioná una opción.",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE / NAME": {
+      "descripcion": "NOMBRE / NAME",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Chile)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Chile)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^[0-9]{9}$",
+      "regex_char": "[0-9]",
+      "test_text": "392839283?hó",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Completar 9 números."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Chile)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE (Chile)": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{6}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "AA1234?=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa la patente en uno de los siguientes formatos: AA1111 o AAAA11."
+        },
+        {
+          "regex": "^[a-zA-Z0-9]{3}$",
+          "mensaje": "Ingresa 6 caracteres."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Chile)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "REGIÓN": {
+      "descripcion": "REGIÓN",
+      "campo": "region",
+      "element_id": "region",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una región.",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Chile)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccione una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Chile)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Chile)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRES": {
+      "descripcion": "NOMBRES",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDOS": {
+      "descripcion": "APELLIDOS",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Peru)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?=(?:9))[A-Z0-9]{9}$",
+      "regex_char": "[A-Z0-9]",
+      "test_text": "92342342p=é?34",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Completa 9 números."
+        },
+        {
+          "regex": "^(?=(?:4))[0-9]{17}$",
+          "mensaje": "El celular ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Peru)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE (Peru)": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{1,40}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "a0a9a8s7s7s6d6d5f54=?2=\"$2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa la placa."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "VIN": {
+      "descripcion": "VIN",
+      "campo": "vin",
+      "element_id": "vin",
+      "regex_full": "^[0-9]{17}$",
+      "regex_char": "[0-9]",
+      "test_text": "9o2324?=2132837404842",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu VIN."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresá 17 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "TIPO DE DOCUMENTO": {
+      "descripcion": "TIPO DE DOCUMENTO",
+      "campo": "document-type",
+      "element_id": "document-type",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un tipo de documento.",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Peru)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccione una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Peru)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Peru)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Peru)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE (Paraguay)": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Paraguay)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÉDULA": {
+      "descripcion": "CÉDULA",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^(?!(.)(\\1+$))(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{7}$",
+      "regex_char": "[0-9]",
+      "test_text": "324Pó=?2452",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresa al menos 7 dígitos."
+        },
+        {
+          "regex": "^([a\\-z])\\1{7}$",
+          "mensaje": "La cédula de identidad ingresada no parece vállida."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Paraguay)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{10}$",
+      "regex_char": "[0-9]",
+      "test_text": "828382Pó=?2837",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Completa 10 números."
+        },
+        {
+          "regex": "^([a\\-z])\\1{10}$",
+          "mensaje": "No puede ingresar el mismo dígito más de 4 veces seguidas."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Paraguay)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE (Paraguay)": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^(?!(.)(\\1+$))[a-zA-Z0-9]{2,50}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "a0a9a8s7s7s6d6d5f54=?2=\"$2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Paraguay)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Paraguay)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Paraguay)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Paraguay)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE (Uruguay)": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Uruguay)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÉDULA (Uruguay)": {
+      "descripcion": "CÉDULA",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{8}$",
+      "regex_char": "[0-9]",
+      "test_text": "234p='12345",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresa 8 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{8}$",
+          "mensaje": "La cédula de identidad ingresada no parece válida."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Uruguay)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?!(.)(\\1+$))(?=(?:09))[0-9]{9}$",
+      "regex_char": "[0-9]",
+      "test_text": "321po534?=928",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa los 9 dígitos de tu celular que empieza con 09."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresa 9 números."
+        },
+        {
+          "regex": "^(?=(?:8))[a-zA-Z0-9]{9}$",
+          "mensaje": "Comenzá con los números 09"
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Uruguay)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "VINES/CHASIS": {
+      "descripcion": "VINES/CHASIS",
+      "campo": "vin",
+      "element_id": "vin",
+      "regex_full": "^[a-zA-Z0-9]{15}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "324124purj=?we234",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresá tu VINES/CHASIS."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresá 15 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MATRÍCULA VEHÍCULO": {
+      "descripcion": "MATRÍCULA VEHÍCULO",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{15}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "324124purj=?we234",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa la matrícula."
+        },
+        {
+          "regex": "^[a-zA-Z .,;:!?\"'()_\\-+/@#%&*0-9]{3,5}$",
+          "mensaje": "La matrícula ingresada no parece válida."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Uruguay)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DEPARTAMENTO": {
+      "descripcion": "DEPARTAMENTO",
+      "campo": "region",
+      "element_id": "region",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un departamento.",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Uruguay)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccione una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Uruguay)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Uruguay)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE (Bolivia)": {
+      "descripcion": "NOMBRE",
+      "campo": "name",
+      "element_id": "name",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre"
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "El nombre sólo puede contener letras y espacios."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Bolivia)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido"
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "El apellido sólo puede contener letras y espacios."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÉDULA (Bolivia)": {
+      "descripcion": "CÉDULA",
+      "campo": "document",
+      "element_id": "document",
+      "regex_full": "^[0-9]{5,12}$",
+      "regex_char": "[0-9]",
+      "test_text": "324Pó=?2452",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu número de cédula de identidad"
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,4}$",
+          "mensaje": "La cédula ingresada no es válida"
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Bolivia)": {
+      "descripcion": "CELULAR",
+      "campo": "phone",
+      "element_id": "phone",
+      "regex_full": "^(?=(?:6|7))[0-9]{8}$",
+      "regex_char": "[0-9]",
+      "test_text": "6742=Pp'o4123",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu número de celular"
+        },
+        {
+          "regex": "^(?=(?:2))[0-9]{8}$",
+          "mensaje": "El número debe comenzar con 6 o 7"
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Bolivia)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu correo electrónico"
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El correo electrónico ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Bolivia)": {
+      "descripcion": "MODELOS",
+      "campo": "model",
+      "element_id": "model",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DEPARTAMENTO (Bolivia)": {
+      "descripcion": "DEPARTAMENTO",
+      "campo": "region",
+      "element_id": "region",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un departamento",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Bolivia)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una ciudad",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DISTRIBUIDOR": {
+      "descripcion": "DISTRIBUIDOR",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un distribuidor",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Bolivia)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-day",
+      "element_id": "estimated-day",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una fecha estimada de compra",
+      "dependencies": [],
+      "paises": [
+        "Bolivia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE (Colombia)": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Colombia)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÉDULA (Colombia)": {
+      "descripcion": "CÉDULA",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{7,10}$",
+      "regex_char": "[0-9]",
+      "test_text": "324Pó=?2452",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,4}$",
+          "mensaje": "Ingresa al menos 7 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Colombia)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?=(?:3))[0-9]{10}$",
+      "regex_char": "[0-9]",
+      "test_text": "34123pó=?42321",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa los 10 dígitos de tu celular que empieza con 3."
+        },
+        {
+          "regex": "^(?=(?:2))[0-9]{10}$",
+          "mensaje": "El nùmero de celular debe comenzar con 3"
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Colombia)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÓDIGO ASESOR": {
+      "descripcion": "CÓDIGO ASESOR",
+      "campo": "adviser",
+      "element_id": "adviser",
+      "regex_full": "^(00[1-9]|0[1-9][0-9]|100)$",
+      "regex_char": "[0-9]",
+      "test_text": "045p=?",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa con números entre el 001 y 100."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Colombia)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Colombia)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Colombia)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Colombia)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE (Ecuador)": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Ecuador)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "C.I.": {
+      "descripcion": "C.I.",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^((0[0-9]|1[0-9]|2[0-4])|30)[0-9]{5,8}$",
+      "regex_char": "[0-9]",
+      "test_text": "3042pó?=42312",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,4}$",
+          "mensaje": "Ingresa al menos 7 dígitos."
+        },
+        {
+          "regex": "^(?=(?:39))[0-9]{10}$",
+          "mensaje": "La cédula de identidad ingresada no parece válida."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Ecuador)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?=(?:09))[0-9]{10}$",
+      "regex_char": "[0-9]",
+      "test_text": "34123pó=?42321",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?=(?:09))[0-9]{5}$",
+          "mensaje": "Ingresa 10 números."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Ecuador)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PLACA": {
+      "descripcion": "PLACA",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[A-Za-z]{3}[A-Za-z0-9]{0,4}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "AAA1234?=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa la placa."
+        },
+        {
+          "regex": "^[A-Za-z]{3}[A-Za-z0-9]{2}$",
+          "mensaje": "Ingresa 7 caracteres."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELO": {
+      "descripcion": "MODELO",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Ecuador)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Ecuador)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Ecuador)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "RUT": {
+      "descripcion": "RUC",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{11}$",
+      "regex_char": "[0-9]",
+      "test_text": "123123po?=32142",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "RUC"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu RUC."
+        },
+        {
+          "regex": "^[0-9]{6}$",
+          "mensaje": "Ingresa al menos 11 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{11}$",
+          "mensaje": "El RUC ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DNI__2": {
+      "descripcion": "DNI",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{8}$",
+      "regex_char": "[0-9]",
+      "test_text": "123pó=?42345",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "DNI"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu DNI."
+        },
+        {
+          "regex": "^[0-9]{5}$",
+          "mensaje": "Ingresa al menos 8 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{8}$",
+          "mensaje": "El DNI ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "Carné de Extranjería": {
+      "descripcion": "Carné de Extranjería",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{12}$",
+      "regex_char": "[0-9]",
+      "test_text": "123456pó=?123456",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "carné"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu carné de extranjería."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{5}$",
+          "mensaje": "Ingresa al menos 12 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{12}$",
+          "mensaje": "El carné de extranjería ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "Pasaporte": {
+      "descripcion": "Pasaporte",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{12}$",
+      "regex_char": "[0-9]",
+      "test_text": "123456pó=?123456",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [
+        {
+          "element_id": "document-type",
+          "value": "Pasaporte"
+        }
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu pasaporte."
+        },
+        {
+          "regex": "^[0-9]{7}$",
+          "mensaje": "Ingresa al menos 12 dígitos."
+        },
+        {
+          "regex": "^([0\\-9])\\1{12}$",
+          "mensaje": "El pasaporte ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "NOMBRE__2": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,20}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "JuáN ?1=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO__2": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,30}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán ?02.",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR__2": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^[0-9]{11}$",
+      "regex_char": "[0-9]",
+      "test_text": "123ASD?34234123",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "EMAIL": {
+      "descripcion": "EMAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "ejemplo@mrm.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "E-mail inválido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE__2": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{2,36}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "aaa3242asd?= d123as",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CHASIS 1": {
+      "descripcion": "CHASIS 1",
+      "campo": "vin",
+      "element_id": "vin",
+      "regex_full": "^[a-zA-Z0-9]{17}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "ASD123ASD123?ASD123 ASD123",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^[a-zA-Z0-9]{14}$",
+          "mensaje": "Digite 17 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CHASIS 2": {
+      "descripcion": "CHASIS 2",
+      "campo": "vin-code",
+      "element_id": "vin-code",
+      "regex_full": "^[a-zA-Z0-9]{17}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "ASD123ASD123?ASD123 123ASD123",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^[a-zA-Z0-9]{13}$",
+          "mensaje": "Digite 17 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "ESTADO": {
+      "descripcion": "ESTADO",
+      "campo": "region",
+      "element_id": "region",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecione um estado.",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIDADE": {
+      "descripcion": "CIDADE",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecione uma cidade.",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESSIONÁRIA": {
+      "descripcion": "CONCESSIONÁRIA",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecione uma concessionária.",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "DATA ESTIMADA DE COMPRA": {
+      "descripcion": "DATA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecione data estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS__2": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Esse campo é obrigatório.",
+      "dependencies": [],
+      "paises": [
+        "Argentina",
+        "Bolivia",
+        "Brasil",
+        "Chile",
+        "Colombia",
+        "Ecuador",
+        "Paraguay",
+        "Peru",
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    }
+  }
+}

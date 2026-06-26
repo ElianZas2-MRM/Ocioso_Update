@@ -1,0 +1,415 @@
+{
+  "browser": "chrome",
+  "viewport": "fullscreen",
+  "selected_browsers": [
+    "chrome"
+  ],
+  "selected_viewports": [
+    "fullscreen"
+  ],
+  "url": "ch",
+  "urls": [
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch"
+  ],
+  "landing_urls": [
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch",
+    "ch"
+  ],
+  "form_urls": [
+    "https://www.chevrolet.cl/autos-electricos/captiva-ev",
+    "https://www.chevrolet.cl/camiones/camion-mediano-ftr1524amt/serie-f",
+    "https://www.chevrolet.cl/camiones/frr-camion",
+    "https://www.chevrolet.cl/camiones/fvz-camion",
+    "https://www.chevrolet.cl/evento-drive-experience",
+    "https://www.chevrolet.cl/evento-maitencillo",
+    "https://www.chevrolet.cl/flotas",
+    "https://www.chevrolet.cl/flotas/planes-leasing",
+    "https://www.chevrolet.cl/ofertas-oportunidades-descuentos",
+    "https://www.chevrolet.cl/ofertas-oportunidades-descuentos",
+    "https://www.chevrolet.cl/onstar/formulario-suscripcion-renovacion",
+    "https://www.chevrolet.cl/pickups/colorado-camioneta-pickup/test-drive",
+    "https://www.chevrolet.cl/solicitar-cotizacion",
+    "https://www.chevrolet.cl/suvs/groove-suv-deportivo",
+    "https://www.chevrolet.cl/suvs/traverse"
+  ],
+  "selected_paises": [
+    "Chile"
+  ],
+  "fields": {
+    "NOMBRE / NAME": {
+      "descripcion": "NOMBRE / NAME",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Chile)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Chile)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^[0-9]{9}$",
+      "regex_char": "[0-9]",
+      "test_text": "392839283?hó",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Completar 9 números."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Chile)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE (Chile)": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^[a-zA-Z0-9]{6}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "AA1234?=",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa la patente en uno de los siguientes formatos: AA1111 o AAAA11."
+        },
+        {
+          "regex": "^[a-zA-Z0-9]{3}$",
+          "mensaje": "Ingresa 6 caracteres."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Chile)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "REGIÓN": {
+      "descripcion": "REGIÓN",
+      "campo": "region",
+      "element_id": "region",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una región.",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Chile)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Seleccione una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Chile)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Chile)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS__2": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Esse campo é obrigatório.",
+      "dependencies": [],
+      "paises": [
+        "Argentina",
+        "Bolivia",
+        "Brasil",
+        "Chile",
+        "Colombia",
+        "Ecuador",
+        "Paraguay",
+        "Peru",
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "COMMENT": {
+      "descripcion": " ",
+      "campo": "comment",
+      "element_id": "comment",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    }
+  }
+}

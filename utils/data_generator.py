@@ -1,0 +1,261 @@
+"""Generadores de datos válidos por país para el tab 'Generar Excels'."""
+
+import random
+import unicodedata
+
+FIRST_NAMES = [
+    "Carlos", "Juan", "Luis", "Diego", "Miguel", "Andrés", "Pablo", "Sebastián",
+    "Matías", "Alejandro", "Fernando", "Gabriel", "Martín", "Ricardo", "Eduardo",
+    "Rafael", "Felipe", "Cristian", "Rodrigo", "Javier", "Marcelo", "Gonzalo",
+    "Nicolás", "Emilio", "Ramón", "Héctor", "Ignacio", "Tomás", "Agustín",
+    "María", "Ana", "Sofia", "Valentina", "Camila", "Isabella", "Daniela", "Laura",
+    "Carolina", "Andrea", "Fernanda", "Paula", "Gabriela", "Natalia", "Catalina",
+    "Lucía", "Valeria", "Claudia", "Monica", "Patricia", "Florencia", "Agustina",
+    "Romina", "Verónica", "Susana", "Lorena", "Paola", "Sandra", "Cecilia",
+]
+
+LAST_NAMES = [
+    "García", "Rodriguez", "Martinez", "Lopez", "Gonzalez", "Perez", "Sanchez",
+    "Ramirez", "Torres", "Flores", "Morales", "Herrera", "Mendoza", "Ortega",
+    "Castro", "Vargas", "Rojas", "Diaz", "Cruz", "Reyes", "Gutierrez", "Jimenez",
+    "Romero", "Alvarez", "Ruiz", "Navarro", "Molina", "Delgado", "Vega", "Soto",
+    "Rios", "Paredes", "Campos", "Fuentes", "Quispe", "Mamani", "Silva", "Medina",
+    "Aguilar", "Suarez", "Castillo", "Ramos", "Espinoza", "Acosta", "Miranda",
+    "Pinto", "Salazar", "Muñoz", "Ibáñez", "Figueroa", "Bravo", "Contreras",
+    "Villanueva", "Serrano", "Mora", "Guerrero", "Cabrera", "Nuñez", "Valdez",
+]
+
+PAIS_ABREV = {
+    "Argentina": "ar", "Bolivia": "bo", "Brasil": "br", "Chile": "cl",
+    "Colombia": "co", "Ecuador": "ec", "Paraguay": "py", "Peru": "pe", "Uruguay": "uy",
+}
+
+SPECIAL_CHARS = [".", "_"]
+
+
+def _strip_accents(text):
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn"
+    )
+
+
+def _clean(text):
+    """Elimina acentos, espacios y caracteres no alfanuméricos."""
+    return _strip_accents(text).lower().replace(" ", "")
+
+
+def generar_nombre():
+    count = random.choice([1, 2])
+    return " ".join(random.sample(FIRST_NAMES, count))
+
+
+def generar_apellido():
+    count = random.choice([1, 2])
+    return " ".join(random.sample(LAST_NAMES, count))
+
+
+def generar_email(nombre, apellido, pais=""):
+    """
+    Formato: {nombre_partes}{apellido_partes}{special}{pais_abrev}{nn}@mrm.com
+    Incluye todos los tokens de nombre y apellido, abreviatura de país, 2 dígitos y un carácter especial.
+    """
+    # Incluir todos los tokens (1 o 2) según cuántas palabras haya
+    nombre_parts = "".join(_clean(p) for p in nombre.split())
+    apellido_parts = "".join(_clean(p) for p in apellido.split())
+    abrev = PAIS_ABREV.get(pais, "")
+    special = random.choice(SPECIAL_CHARS)
+    numero = f"{random.randint(1, 99):02d}"
+    return f"{nombre_parts}{apellido_parts}{special}{abrev}{numero}@mrm.com"
+
+
+# ── Generadores de documento ─────────────────────────────────────────────────
+
+def generar_rut_chile():
+    """RUT chileno válido con dígito verificador (8-9 chars totales: 7-8 dígitos + DV)."""
+    while True:
+        num = random.randint(5_000_000, 25_000_000)
+        digits = [int(d) for d in str(num)]
+        multiplicadores = [2, 3, 4, 5, 6, 7]
+        suma = sum(d * multiplicadores[i % 6] for i, d in enumerate(reversed(digits)))
+        resto = 11 - (suma % 11)
+        dv = "0" if resto == 11 else ("K" if resto == 10 else str(resto))
+        rut = f"{num}{dv}"
+        if 8 <= len(rut) <= 9:
+            return rut
+
+
+def generar_rut_chile_con_k():
+    """RUT chileno válido cuyo dígito verificador es K."""
+    multiplicadores = [2, 3, 4, 5, 6, 7]
+    while True:
+        num = random.randint(5_000_000, 25_000_000)
+        digits = [int(d) for d in str(num)]
+        suma = sum(d * multiplicadores[i % 6] for i, d in enumerate(reversed(digits)))
+        if (11 - suma % 11) == 10 and 8 <= len(str(num)) + 1 <= 9:
+            return f"{num}K"
+
+
+def generar_ci_ecuador():
+    """Cédula de identidad ecuatoriana válida (10 dígitos)."""
+    provincia = random.randint(1, 24)
+    tercero = random.randint(0, 6)
+    resto = [random.randint(0, 9) for _ in range(6)]
+    dgts = [int(d) for d in f"{provincia:02d}"] + [tercero] + resto
+    coef = [2, 1, 2, 1, 2, 1, 2, 1, 2]
+    suma = 0
+    for d, c in zip(dgts, coef):
+        p = d * c
+        suma += (p - 9) if p >= 10 else p
+    check = (10 - (suma % 10)) % 10
+    return "".join(str(d) for d in dgts) + str(check)
+
+
+def generar_cpf_brasil():
+    """CPF brasileño válido (11 dígitos). Fallback local — rechaza dígitos todos iguales."""
+    while True:
+        nums = [random.randint(0, 9) for _ in range(9)]
+        if len(set(nums)) == 1:
+            continue
+        soma = sum((10 - i) * nums[i] for i in range(9))
+        resto = soma % 11
+        d1 = 0 if resto < 2 else 11 - resto
+        nums.append(d1)
+        soma = sum((11 - i) * nums[i] for i in range(10))
+        resto = soma % 11
+        d2 = 0 if resto < 2 else 11 - resto
+        nums.append(d2)
+        return "".join(str(d) for d in nums)
+
+
+def generar_documento_brasil_4devs(tipo: str = "cpf") -> str:
+    """Genera CPF, CNPJ o CEP via API de 4devs. Fallback local si falla la red."""
+    import urllib.request, urllib.parse, re as _re
+    def _fetch(acao, extra=None):
+        data = {"acao": acao}
+        if extra:
+            data.update(extra)
+        body = urllib.parse.urlencode(data).encode()
+        req = urllib.request.Request(
+            "https://www.4devs.com.br/ferramentas_online.php",
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded",
+                     "User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.read().decode("utf-8").strip()
+
+    tipo = (tipo or "cpf").lower()
+    try:
+        if tipo == "cnpj":
+            raw = _fetch("gerar_cnpj", {"pontuacao": "N"})
+            digits = "".join(c for c in raw if c.isdigit())
+            if len(digits) != 14:
+                raise ValueError(f"CNPJ inválido de API: {raw!r}")
+            return digits
+        if tipo == "cep":
+            html = _fetch("gerar_cep", {"estado": "", "cidade": "São Paulo",
+                                         "bairro": "", "tipo_cep": "residencial"})
+            m = _re.search(r'(\d{5}-\d{3})', html)
+            if m:
+                return m.group(1).replace("-", "")
+            m2 = _re.search(r'\d{8}', html)
+            if m2:
+                return m2.group(0)
+            raise ValueError("CEP inválido de API: " + repr(html[:100]))
+        # CPF (default)
+        raw = _fetch("gerar_cpf", {"pontuacao": "N"})
+        digits = "".join(c for c in raw if c.isdigit())
+        if len(digits) != 11:
+            raise ValueError(f"CPF inválido de API: {raw!r}")
+        return digits
+    except Exception:
+        return generar_cpf_brasil()
+
+
+def generar_documento(pais):
+    if pais == "Chile":
+        return generar_rut_chile()
+    if pais == "Ecuador":
+        return generar_ci_ecuador()
+    if pais == "Brasil":
+        return generar_cpf_brasil()
+    if pais == "Uruguay":
+        return str(random.randint(10_000_000, 99_999_999))
+    return str(random.randint(1_000_000, 99_999_999))
+
+
+# ── Generadores de celular ───────────────────────────────────────────────────
+
+def generar_celular(pais):
+    def digits(n):
+        return "".join(str(random.randint(0, 9)) for _ in range(n))
+
+    if pais == "Argentina":
+        area = random.choice(["11", "351", "261", "221", "341", "381", "299"])
+        return area + digits(10 - len(area))
+
+    if pais == "Bolivia":
+        prefix = random.choice(["6", "7"])
+        return prefix + digits(7)
+
+    if pais == "Brasil":
+        ddd = str(random.randint(11, 98))
+        return ddd + "9" + digits(8)
+
+    if pais == "Chile":
+        return "9" + digits(8)
+
+    if pais == "Colombia":
+        return "3" + digits(9)
+
+    if pais == "Ecuador":
+        return "09" + digits(8)
+
+    if pais == "Paraguay":
+        return "09" + digits(8)
+
+    if pais == "Peru":
+        return "9" + digits(8)
+
+    if pais == "Uruguay":
+        return "09" + digits(7)
+
+    return digits(9)
+
+
+# ── Generador de fila completa ───────────────────────────────────────────────
+
+def generar_fila_datos(pais):
+    """Devuelve dict {nombre_columna: valor} para el país dado."""
+    nombre = generar_nombre()
+    apellido = generar_apellido()
+    return {
+        "Modelo": "",
+        "Nombre": nombre,
+        "Apellido": apellido,
+        "Documento": generar_documento(pais),
+        "Celular": generar_celular(pais),
+        "Email": generar_email(nombre, apellido, pais),
+        # Campos de selección aleatoria en el formulario → vacíos
+        "Región": "",
+        "Region": "",
+        "Ciudad": "",
+        "Concesionario": "",
+        "Fecha estimada": "",
+        "Fecha estimada de compra": "",
+        "Fecha de compra": "",
+        # Campos extra opcionales → vacíos
+        "Patente": "",
+        "Evento": "",
+        "Chasis": "",
+        "Chasis/Vin": "",
+        "Código asesor": "",
+        "Comentario": "",
+        "Tipo de documento": "",
+        "Tipo de documento (Perú)": "",
+        "Kilometraje": "",
+        "Año de adquisición": "",
+        "Seguro": "",
+        "Color": "",
+        "Kit": "",
+    }
