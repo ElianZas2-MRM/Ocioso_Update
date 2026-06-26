@@ -80,6 +80,7 @@ class WeeklySchedulerDialog(Toplevel):
         self._val_lbl = None
         self._save_btn = None
         self._edit_all_days = False
+        self._custom_hour_var = StringVar()
 
         cfg = initial_config or {}
         self._schedule = {k: list(v) for k, v in cfg.get("horarios", {}).items()}
@@ -264,6 +265,24 @@ class WeeklySchedulerDialog(Toplevel):
             btn.bind("<MouseWheel>", _scroll_fwd)
             self._hour_btns[hour] = btn
 
+        # Custom time input row
+        cust_row = Frame(self._hours_outer, bg=SCH_BG)
+        cust_row.pack(fill="x", pady=(6, 0))
+        Label(cust_row, text="Personalizado:", font=("Segoe UI", 8),
+              bg=SCH_BG, fg=SCH_MUTED).pack(side=LEFT)
+        cust_entry = Entry(cust_row, textvariable=self._custom_hour_var,
+                           font=("Segoe UI", 9), width=7,
+                           bg=SCH_HOVER, fg=SCH_WHITE, insertbackground=SCH_WHITE,
+                           relief=FLAT)
+        cust_entry.pack(side=LEFT, padx=(4, 2))
+        cust_entry.bind("<Return>", lambda e: self._add_custom_hour(self._custom_hour_var.get()))
+        Label(cust_row, text="ej. 09:33", font=("Segoe UI", 8),
+              bg=SCH_BG, fg=SCH_MUTED).pack(side=LEFT, padx=(2, 6))
+        Button(cust_row, text="+ Agregar", font=("Segoe UI", 8, "bold"),
+               bg=SCH_HOVER, fg=SCH_PRIMARY, relief=FLAT, cursor="hand2",
+               padx=8, pady=2,
+               command=lambda: self._add_custom_hour(self._custom_hour_var.get())).pack(side=LEFT)
+
         # Badges row
         self._badges_frame = Frame(self._hours_outer, bg=SCH_BG)
         self._badges_frame.pack(fill="x", pady=(4, 0))
@@ -283,9 +302,15 @@ class WeeklySchedulerDialog(Toplevel):
         selected = sorted(self._schedule.get(self._selected_day, []))
         MAX_SHOW = 12
         for h in selected[:MAX_SHOW]:
-            Label(self._badges_frame, text=h, font=("Segoe UI", 9, "bold"),
-                  bg=SCH_BG, fg=SCH_PRIMARY, padx=6, pady=3,
-                  relief=SOLID, bd=1).pack(side=LEFT, padx=2)
+            is_custom = h not in HOURS
+            bg = "#4A1570" if is_custom else SCH_BG
+            fg = SCH_AMBER if is_custom else SCH_PRIMARY
+            btn = Button(self._badges_frame, text=f"✕ {h}",
+                         font=("Segoe UI", 9, "bold"),
+                         bg=bg, fg=fg, padx=6, pady=3,
+                         relief=SOLID, bd=1, cursor="hand2",
+                         command=lambda x=h: self._toggle_hour(x))
+            btn.pack(side=LEFT, padx=2)
         if len(selected) > MAX_SHOW:
             Label(self._badges_frame, text=f"+{len(selected) - MAX_SHOW} más",
                   font=("Segoe UI", 9), bg=SCH_BG, fg=SCH_MUTED).pack(side=LEFT, padx=4)
@@ -334,6 +359,36 @@ class WeeklySchedulerDialog(Toplevel):
         self._update_day_buttons()
         self._update_footer()
         if copy_visibility_changed:
+            self._build_copy_ui()
+
+    def _add_custom_hour(self, time_str):
+        time_str = time_str.strip()
+        try:
+            if ':' not in time_str:
+                raise ValueError
+            h, m = time_str.split(':', 1)
+            h, m = int(h), int(m)
+            if not (0 <= h <= 23 and 0 <= m <= 59):
+                raise ValueError
+            hora = f"{h:02d}:{m:02d}"
+        except (ValueError, TypeError):
+            messagebox.showwarning("Horario inválido",
+                                   "Ingresá un horario válido en formato HH:MM\n(ej: 09:33, 14:05)",
+                                   parent=self)
+            return
+        day = self._selected_day
+        if not day:
+            return
+        dh = self._schedule.setdefault(day, [])
+        if hora not in dh:
+            dh.append(hora)
+            dh.sort()
+        self._custom_hour_var.set("")
+        was_first = len(dh) == 1
+        self._refresh_badges()
+        self._update_day_buttons()
+        self._update_footer()
+        if was_first:
             self._build_copy_ui()
 
     def _update_day_buttons(self):
@@ -701,6 +756,8 @@ class WeeklySchedulerPanel(Frame):
         self._progress.pack_forget()
 
         icon, label, bg = self._STATUS_META.get(self._status, self._STATUS_META["idle"])
+        if self._status == "idle" and self._config:
+            icon, label, bg = "⚙", "Configurado", SCH_BORDER
         self._badge.config(text=f"{icon}  {label}", bg=bg)
 
         if self._config:
@@ -903,11 +960,11 @@ class WeeklySchedulerPanel(Frame):
 
     # ── Triggered persistence ──────────────────────────────────────────────────
 
-    _TRIGGERED_FILE = os.path.join(os.path.dirname(__file__), '..', 'json', 'scheduler_triggered.json')
-
     def _load_triggered(self):
         try:
-            with open(self._TRIGGERED_FILE, 'r', encoding='utf-8') as f:
+            from utils.paths import JSON_DIR
+            path = os.path.join(JSON_DIR, 'scheduler_triggered.json')
+            with open(path, 'r', encoding='utf-8') as f:
                 raw = json.load(f)
             return {tuple(k.split('|')): _date.fromisoformat(v) for k, v in raw.items()}
         except Exception:
@@ -915,8 +972,10 @@ class WeeklySchedulerPanel(Frame):
 
     def _save_triggered(self):
         try:
+            from utils.paths import JSON_DIR
+            path = os.path.join(JSON_DIR, 'scheduler_triggered.json')
             raw = {f"{k[0]}|{k[1]}": v.isoformat() for k, v in self._last_triggered.items()}
-            with open(self._TRIGGERED_FILE, 'w', encoding='utf-8') as f:
+            with open(path, 'w', encoding='utf-8') as f:
                 json.dump(raw, f)
         except Exception:
             pass
@@ -924,24 +983,26 @@ class WeeklySchedulerPanel(Frame):
     # ── Monitor loop ───────────────────────────────────────────────────────────
 
     def _monitor_loop(self):
-        startup = True  # primera iteración: marcar slots actuales sin ejecutar
         while True:
             try:
                 if self._is_active and self._status == "scheduled" and self._config:
-                    ahora      = datetime.now()
-                    dia        = DAYS_ES[ahora.weekday()]
-                    slot_min   = (ahora.minute // 15) * 15
-                    hora       = f"{ahora.hour:02d}:{slot_min:02d}"
+                    ahora       = datetime.now()
+                    dia         = DAYS_ES[ahora.weekday()]
+                    now_mins    = ahora.hour * 60 + ahora.minute
                     programados = self._config.get("horarios", {}).get(dia, [])
-                    if hora in programados:
-                        key = (dia, hora)
-                        if self._last_triggered.get(key) != ahora.date():
-                            self._last_triggered[key] = ahora.date()
-                            self._save_triggered()
-                            if not startup:
+                    for hora in list(programados):
+                        try:
+                            h_h, h_m = int(hora[:2]), int(hora[3:])
+                        except (ValueError, IndexError):
+                            continue
+                        slot_start = h_h * 60 + h_m
+                        if slot_start <= now_mins < slot_start + 15:
+                            key = (dia, hora)
+                            if self._last_triggered.get(key) != ahora.date():
+                                self._last_triggered[key] = ahora.date()
+                                self._save_triggered()
                                 self._stop_event.clear()
                                 self._execute_scheduled()
             except Exception as e:
                 print(f"⚠️  Error en monitor semanal: {e}")
-            startup = False
             time.sleep(60)
