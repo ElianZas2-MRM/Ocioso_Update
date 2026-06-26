@@ -95,6 +95,97 @@ Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 
 ---
 
+## Envío de email
+
+El envío se configura en la sección **Configuración Global** (parte superior de la app).
+
+**Destinatario(s)**
+- Campo "Email": ingresá una o varias direcciones separadas por coma.
+  ```
+  usuario@empresa.com, otro@empresa.com
+  ```
+- El valor se guarda automáticamente en `json/config_global.json`.
+
+**Activar el envío**
+- Checkbox **"Enviar mail"** — debe estar marcado antes de ejecutar. Arranca siempre desmarcado por seguridad.
+- **"Adjuntar resultados"**: incluye el Excel de resultados como adjunto.
+- **"Adjuntar screenshots"**: incluye las capturas de pantalla como adjunto.
+
+**Modo de envío**
+- **1 por país**: envía un email independiente al terminar cada país.
+- **Consolidado**: espera a que terminen todos los países y manda un único email con el resumen completo.
+
+**Método de envío (automático)**
+- Si Outlook Desktop está instalado y tiene una cuenta activa → usa Outlook COM (envía desde tu cuenta Outlook configurada).
+- Si no → usa SMTP (requiere credenciales configuradas en `json/config_global.json`).
+
+**Feedback visual**
+Junto al campo de email aparece el estado en tiempo real:
+- ⏳ Enviando email...
+- ✅ Email enviado correctamente
+- ❌ Error al enviar: [motivo]
+
+El asunto incluye resultado global, fecha y países ejecutados:
+```
+[PASS] Osocio — 26/06/2026 — AR CO BO ✓
+[FAILED] Osocio — 26/06/2026 — AR ✓ | CL ✗
+```
+
+---
+
+## Test programado
+
+El panel **"Test Automático"** (pestaña Testing) permite configurar ejecuciones recurrentes
+sin intervención manual. El schedule persiste entre sesiones y se repite cada semana.
+
+> **La app debe estar abierta** para que el monitor detecte el horario y dispare la ejecución.
+
+### Orden de configuración
+
+**Paso 1 — Navegador** (Configuración Global, obligatorio)
+
+Seleccioná al menos uno: **Chrome**, **Firefox** o **Edge** en modo **Desktop**.
+El test programado siempre corre en background (ventana fuera de pantalla), independientemente
+del checkbox "Ver navegador mientras corre". LambdaTest no es compatible con el modo programado.
+
+**Paso 2 — Email** (Configuración Global, opcional)
+
+Si querés recibir el resultado por email: ingresá el destinatario y marcá el checkbox "Enviar mail".
+El email del test programado es siempre consolidado (un solo email al terminar todos los países).
+
+**Paso 3 — Configurar el scheduler**
+
+1. Click en **"⚙ Configurar automatización"** → se abre el modal.
+2. Hacer click en un día (Lun–Dom) para abrirlo y seleccionar horarios:
+   - **Botones de cuartos de hora**: click en `09:00`, `09:15`, `09:30`, etc. para activar/desactivar.
+   - **Horario personalizado**: escribir cualquier hora (ej: `09:33`) en el campo "Personalizado" y presionar **Enter** o **"+ Agregar"**.
+   - Los horarios activos aparecen como badges `✕ HH:MM` — hacer click en uno para quitarlo.
+   - Click en **"✓ Listo"** para cerrar el panel de horas.
+3. **Modo de edición**:
+   - *Solo este día*: los cambios aplican únicamente al día seleccionado.
+   - *Todos los días*: replica íntegramente el schedule del día activo a todos los demás.
+4. **"Copiar a otros días"**: copia los horarios del día actual a días específicos que elijas.
+5. En la sección **"🌎 PAÍSES A TESTEAR"**: marcar los países a ejecutar.
+6. Click en **"💾 Guardar configuración"** → el badge del panel pasa a "⚙ Configurado".
+7. Click en **"▶ Programar test automático"** → badge pasa a "📅 Programado".
+
+Para detener: click en **"■ Desactivar"**.
+
+### Cómo funciona el monitor
+
+- Un hilo en background verifica cada **60 segundos** si hay un horario que coincida con la hora actual.
+- El test se dispara si el minuto actual cae en la ventana `[hora configurada, hora + 15 min)`.
+  Ejemplo: horario `09:33` → se dispara entre las `09:33` y las `09:47`.
+- Cada slot se ejecuta **como máximo una vez por día** (se persiste en `json/scheduler_triggered.json`).
+- Si la app estaba cerrada cuando llegó el horario, al reabrirla ejecuta el slot pendiente del mismo día.
+
+### Resetear el scheduler
+
+- Borrar `json/programacion_test.json` → el panel vuelve al estado "Sin configurar".
+- El portable siempre arranca sin schedule (ese archivo se excluye del build).
+
+---
+
 ## UPDATE — Historial de cambios (Ocioso_Update)
 
 ### Bloque 1 — Restauración, seguridad y correcciones base
