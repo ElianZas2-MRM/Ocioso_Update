@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Form Automation Project
 
 Automatización de formularios para varios países con Selenium, generación de resultados y UI de administración.
@@ -92,3 +93,7 @@ Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 - El proyecto ya usa `sys.executable` para ejecutar los scripts desde el entorno activo.
 - Se normalizó la carpeta `json` para evitar problemas de mayúsculas/minúsculas.
 - `requirements.txt` contiene las dependencias necesarias.
+=======
+# Ocioso_Update
+Test
+>>>>>>> a1230574bd37bac26ede39171cb98e7c8e1ab2e6
