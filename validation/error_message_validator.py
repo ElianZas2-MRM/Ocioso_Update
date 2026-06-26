@@ -1,3 +1,8 @@
+"""
+error_message_validator.py — Detecta y verifica mensajes de error en formularios.
+Busca elementos de error en el DOM después de ingresar un valor inválido y compara
+el texto del error con el esperado según las reglas de validación configuradas.
+"""
 import re
 import time
 import unicodedata

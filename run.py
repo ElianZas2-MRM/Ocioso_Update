@@ -1,3 +1,8 @@
+"""
+run.py — Punto de entrada principal de la aplicación.
+Lanza la interfaz gráfica (por defecto), permite correr un país directo por línea de comandos
+o iniciar el modo autónomo (ejecuta tests programados en background).
+"""
 import argparse
 import importlib
 import importlib.util
@@ -66,12 +71,42 @@ def _run_autonomous():
     return autonomous_main()
 
 
+def _run_lambdatest(lt_type, pais, build_name=""):
+    """Ejecuta LambdaTest Mac o Android para un país y muestra el resumen."""
+    lt_mac_dir = os.path.join(BASE_DIR, "lambdatest_mac")
+    lt_android_dir = os.path.join(BASE_DIR, "lambdatest_android")
+
+    if lt_type == "mac":
+        if lt_mac_dir not in sys.path:
+            sys.path.insert(0, lt_mac_dir)
+        import lt_controller
+        summary = lt_controller.run(pais=pais, build_name=build_name)
+    elif lt_type == "android":
+        if lt_android_dir not in sys.path:
+            sys.path.insert(0, lt_android_dir)
+        import lt_android_controller
+        summary = lt_android_controller.run(pais=pais, build_name=build_name)
+    else:
+        raise ValueError(f"Tipo LambdaTest no reconocido: {lt_type!r}")
+
+    ok = summary.get("ok", 0)
+    failed = summary.get("failed", 0)
+    total = summary.get("total", 0)
+    print(f"LambdaTest {lt_type} — {pais}: {ok}/{total} OK, {failed} errores")
+    return summary
+
+
 def _parse_args():
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--autonomous", action="store_true", help="Ejecuta el planificador autónomo")
     parser.add_argument("--run-country", dest="country_name", help="Ejecuta un país puntual sin abrir la UI")
     parser.add_argument("--environment", default="chrome_desktop", choices=sorted(ENVIRONMENTS.keys()))
     parser.add_argument("--no-email", action="store_true", help="No envía email al finalizar")
+    parser.add_argument("--run-lambdatest", dest="lt_type", choices=["mac", "android"],
+                        help="Ejecuta LambdaTest (mac o android) para el país indicado con --pais")
+    parser.add_argument("--pais", dest="lt_pais", help="País para --run-lambdatest")
+    parser.add_argument("--build-name", dest="lt_build_name", default="",
+                        help="Nombre del build en LambdaTest (opcional)")
     return parser.parse_args()
 
 
@@ -84,6 +119,11 @@ if __name__ == "__main__":
     args = _parse_args()
     if args.autonomous:
         _run_autonomous()
+    elif args.lt_type:
+        if not args.lt_pais:
+            print("Error: --run-lambdatest requiere también --pais <nombre_país>")
+            sys.exit(1)
+        _run_lambdatest(args.lt_type, args.lt_pais, build_name=args.lt_build_name)
     elif args.country_name:
         _run_country(
             args.country_name,

@@ -1,3 +1,8 @@
+"""
+text_field_validator.py — Valida reglas de texto en campos de formulario.
+Aplica las reglas configuradas (regex, largo mínimo/máximo, caracteres permitidos)
+ingresando valores de prueba en campos de texto via Selenium y verificando el resultado.
+"""
 import logging
 import re
 

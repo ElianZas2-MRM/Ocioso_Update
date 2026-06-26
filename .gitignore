@@ -17,3 +17,7 @@ json/programacion_test.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Credenciales sensibles - no versionar
+lambdatest_credentials.txt
+config_global.json

@@ -1,3 +1,8 @@
+"""
+paths.py — Resolución de rutas del proyecto.
+Detecta si la app corre como script Python normal o como EXE empaquetado con PyInstaller
+y devuelve las rutas correctas para datos, drivers, resultados y archivos JSON.
+"""
 import os
 import sys
 

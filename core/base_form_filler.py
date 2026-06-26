@@ -1,3 +1,8 @@
+"""
+base_form_filler.py — Motor central de llenado de formularios (todos los países).
+Maneja navegación multi-paso, dropdowns con dependencias, campos de texto, checkboxes,
+generación de documentos brasileños, captura de screenshots y escritura de resultados a Excel.
+"""
 import os
 import sys
 import time
@@ -568,7 +573,8 @@ class BaseFormFiller:
         self.driver = BrowserManager.create_browser(
             browser_type=self.config['browser'],
             viewport=self.config['viewport'],
-            headless=self.config.get('headless', False)
+            headless=self.config.get('headless', False),
+            background=self.config.get('background', True),
         )
         self.screenshot_manager = ScreenshotManager(self.driver, self.SCREENSHOT_DIR)
     

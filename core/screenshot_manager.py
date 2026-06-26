@@ -1,3 +1,8 @@
+"""
+screenshot_manager.py — Captura y combina screenshots del formulario.
+Chrome y Edge hacen scroll + captura + merge para página completa.
+Firefox usa su propia función nativa de screenshot de página entera.
+"""
 import os
 import time
 from PIL import Image

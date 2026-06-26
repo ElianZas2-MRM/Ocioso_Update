@@ -1,6 +1,6 @@
 {
-  "email_destinatario": "elianzas905@gmail.com",
-  "enviar_mail": false,
+  "email_destinatario": "elian.zas@mrm.com",
+  "enviar_mail": true,
   "adjuntar_resultados": false,
   "adjuntar_screenshots": false,
   "timeouts": {
@@ -13,5 +13,15 @@
   "lambdatest": {
     "username": "Elian.Zas",
     "access_key": "LT_VoC38f9VLDGgefcSa3RmSO87o1tiZvmUBjLANwpfldLdlOy"
+  },
+  "ui_prefs": {
+    "navegadores": [
+      "chrome"
+    ],
+    "viewports": [
+      "fullscreen"
+    ],
+    "visible_browser": false,
+    "email_modo": "consolidado"
   }
 }

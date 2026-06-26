@@ -1,3 +1,8 @@
+"""
+browser_manager.py — Fábrica de browsers Selenium (Chrome, Firefox, Edge).
+Crea y configura el navegador con las opciones correctas (headless, tamaño de ventana,
+anti-detección de bots). Usa solo los drivers locales de la carpeta /drivers/.
+"""
 import os
 import sys
 from selenium import webdriver
@@ -8,30 +13,14 @@ from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
 
-# Intentar usar webdriver-manager para descarga automática; si no está instalado
-# o falla (sin internet, EXE offline), se usa el driver local de /drivers/.
-try:
-    from webdriver_manager.chrome import ChromeDriverManager
-    from webdriver_manager.firefox import GeckoDriverManager
-    from webdriver_manager.microsoft import EdgeChromiumDriverManager
-    _WDM_AVAILABLE = True
-except ImportError:
-    _WDM_AVAILABLE = False
-
-
-def _resolve_driver(wdm_fn, local_name, drivers_dir):
-    """Descarga con webdriver-manager o cae al driver local si falla."""
-    if _WDM_AVAILABLE:
-        try:
-            return wdm_fn()
-        except Exception:
-            pass
+def _resolve_driver(local_name, drivers_dir):
+    """Busca el driver en la carpeta local /drivers/. No descarga nada de internet."""
     local = os.path.join(drivers_dir, local_name)
     if os.path.exists(local):
         return local
     raise FileNotFoundError(
-        f"No se encontró el driver '{local_name}'. "
-        "Instalá webdriver-manager (`pip install webdriver-manager`) o colocá el driver en /drivers/."
+        f"No se encontró el driver '{local_name}' en la carpeta /drivers/. "
+        "Descargá el driver manualmente desde el sitio oficial y colocálo en /drivers/."
     )
 
 
@@ -52,18 +41,20 @@ class BrowserManager:
             options.add_argument(arg)
     
     @staticmethod
-    def create_browser(browser_type="chrome", viewport="fullscreen", headless=False):
+    def create_browser(browser_type="chrome", viewport="fullscreen", headless=False, background=True):
         """
-        Crea y configura un navegador según los parámetros
+        Crea y configura un navegador según los parámetros.
+        background=True (default): el browser arranca fuera de pantalla para no molestar al usuario.
+        background=False: el browser abre en pantalla normalmente.
         """
         browser_type = browser_type.lower()
-        
+
         if browser_type == "chrome":
-            return BrowserManager._create_chrome(viewport, headless)
+            return BrowserManager._create_chrome(viewport, headless, background)
         elif browser_type == "firefox":
-            return BrowserManager._create_firefox(viewport, headless)
+            return BrowserManager._create_firefox(viewport, headless, background)
         elif browser_type == "edge":
-            return BrowserManager._create_edge(viewport, headless)
+            return BrowserManager._create_edge(viewport, headless, background)
         else:
             raise ValueError(f"Navegador no soportado: {browser_type}")
     
@@ -98,7 +89,7 @@ class BrowserManager:
             if "session not created" in str(e).lower():
                 raise Exception(
                     f"Driver desactualizado para {driver_name}.\n"
-                    "El sistema intentará descargarlo automáticamente la próxima vez si tiene internet."
+                    "Descargá la versión correcta del driver y reemplazálo en la carpeta /drivers/."
                 ) from e
             raise
 
@@ -143,7 +134,7 @@ class BrowserManager:
         return None
     
     @staticmethod
-    def _create_chrome(viewport, headless):
+    def _create_chrome(viewport, headless, background=True):
         options = ChromeOptions()
 
         if headless:
@@ -163,16 +154,18 @@ class BrowserManager:
                 pass
         else:
             if viewport == "fullscreen":
-                options.add_argument("--start-maximized")
+                options.add_argument("--window-size=1366,768")
             else:
                 width, height = viewport.split('x')
                 options.add_argument(f"--window-size={width},{height}")
+            if background:
+                # Fuera de pantalla: no roba el foco al usuario
+                options.add_argument("--window-position=10000,0")
 
         # Aplicar argumentos comunes
         BrowserManager._apply_common_args(options)
 
         driver_path = _resolve_driver(
-            lambda: ChromeDriverManager().install() if _WDM_AVAILABLE else None,
             'chromedriver.exe',
             BrowserManager._get_drivers_dir(),
         )
@@ -189,18 +182,10 @@ class BrowserManager:
                 })
             except Exception:
                 pass
-        else:
-            # Forzar tamaño desktop y mover fuera de pantalla para no interrumpir al usuario
-            try:
-                if viewport == "fullscreen":
-                    driver.set_window_size(1366, 768)
-                driver.set_window_position(10000, 0)
-            except Exception:
-                pass
         return driver
     
     @staticmethod
-    def _create_firefox(viewport, headless):
+    def _create_firefox(viewport, headless, background=True):
         options = FirefoxOptions()
 
         firefox_binary = BrowserManager._get_firefox_binary_path()
@@ -227,7 +212,6 @@ class BrowserManager:
                 options.add_argument(arg)
 
         driver_path = _resolve_driver(
-            lambda: GeckoDriverManager().install() if _WDM_AVAILABLE else None,
             'geckodriver.exe',
             BrowserManager._get_drivers_dir(),
         )
@@ -249,19 +233,19 @@ class BrowserManager:
             else:
                 width, height = viewport.split('x')
                 driver.set_window_size(int(width), int(height))
-            try:
-                driver.set_window_position(10000, 0)
-            except Exception:
-                pass
+            if background:
+                try:
+                    driver.set_window_position(10000, 0)
+                except Exception:
+                    pass
 
         return driver
 
     @staticmethod
-    def _create_edge(viewport, headless):
+    def _create_edge(viewport, headless, background=True):
         options = EdgeOptions()
 
         if headless:
-            # --start-maximized es ignorado en headless; forzar tamaño explícito
             if viewport == "fullscreen":
                 options.add_argument("--window-size=1920,1080")
             else:
@@ -270,30 +254,22 @@ class BrowserManager:
             options.add_argument("--headless")
         else:
             if viewport == "fullscreen":
-                options.add_argument("--start-maximized")
+                options.add_argument("--window-size=1366,768")
             else:
                 width, height = viewport.split('x')
                 options.add_argument(f"--window-size={width},{height}")
+            if background:
+                options.add_argument("--window-position=10000,0")
 
         # Aplicar argumentos comunes
         BrowserManager._apply_common_args(options)
-        
+
         driver_path = _resolve_driver(
-            lambda: EdgeChromiumDriverManager().install() if _WDM_AVAILABLE else None,
             'msedgedriver.exe',
             BrowserManager._get_drivers_dir(),
         )
         service = EdgeService(driver_path)
-        driver = BrowserManager._create_driver_with_message(
+        return BrowserManager._create_driver_with_message(
             lambda: webdriver.Edge(service=service, options=options),
             "msedgedriver.exe",
         )
-        if not headless:
-            try:
-                if viewport == "fullscreen":
-                    driver.set_window_size(1366, 768)
-                driver.set_window_position(10000, 0)
-            except Exception:
-                pass
-
-        return driver

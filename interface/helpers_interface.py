@@ -1,3 +1,8 @@
+"""
+helpers_interface.py — Utilidades de soporte para la interfaz gráfica.
+Incluye: sistema de envío de emails via Outlook (cola asíncrona + callbacks de estado),
+gestión de config global, lectura/escritura de Excels, IDs dinámicos y dependencias.
+"""
 import os
 import sys
 import ast
@@ -34,6 +39,13 @@ DEFAULT_EMAIL_DESTINATARIO = "ariel.melgratti@mrm.com"
 _cola_emails = queue.Queue()
 _outlook_instance = None
 _worker_thread = None
+_email_ui_callback = None  # Callback registrado por la UI para mostrar estado de envío
+
+
+def registrar_callback_ui_email(callback):
+    """Registra un handler de la UI que recibe ('pending'|'success'|'error', msg)."""
+    global _email_ui_callback
+    _email_ui_callback = callback
 
 
 def print(*args, **kwargs):
@@ -103,7 +115,7 @@ def _enviar_via_smtp(destinatarios, asunto, cuerpo, adjuntos):
 
 
 def _worker_envio_emails():
-    """Worker que envía emails via Outlook COM. Si Outlook no está instalado, loguea el error."""
+    """Worker que mantiene Outlook abierto y envía emails desde la cola."""
     global _outlook_instance
     pythoncom = None
     com_initialized = False
@@ -118,64 +130,96 @@ def _worker_envio_emails():
         except Exception as _get_err:
             builtins.print(f"⚠️ GetActiveObject falló ({_get_err}), intentando Dispatch...")
             _outlook_instance = win32.Dispatch("Outlook.Application")
+
+        while True:
+            try:
+                data = _cola_emails.get(timeout=5)
+                if data is None:
+                    break
+
+                # Soporta 4-tupla (legacy) y 5-tupla (con callback por email)
+                if len(data) == 5:
+                    destinatarios, asunto, cuerpo, adjuntos, _callback = data
+                else:
+                    destinatarios, asunto, cuerpo, adjuntos = data
+                    _callback = None
+
+                try:
+                    mail = _outlook_instance.CreateItem(0)
+                    mail.To = destinatarios if isinstance(destinatarios, str) else "; ".join(destinatarios)
+                    mail.Subject = asunto
+                    mail.Body = cuerpo
+                    if adjuntos:
+                        for i, archivo in enumerate(adjuntos, 1):
+                            if archivo and os.path.exists(archivo):
+                                mail.Attachments.Add(os.path.abspath(archivo))
+                            else:
+                                builtins.print(f"      ⚠️ [{i}] Adjunto no encontrado: {archivo}")
+                    _to = mail.To
+                    _subject = mail.Subject
+                    mail.Send()
+                    builtins.print(f"✅ Email enviado (Outlook) a: {_to} | Asunto: {_subject}")
+                    time.sleep(0.5)
+
+                    if _callback:
+                        try:
+                            _callback(True, "")
+                        except Exception:
+                            pass
+                    if _email_ui_callback:
+                        try:
+                            _email_ui_callback("success", "")
+                        except Exception:
+                            pass
+
+                    if adjuntos:
+                        for archivo in adjuntos:
+                            try:
+                                if archivo and archivo.endswith(".zip") and os.path.exists(archivo):
+                                    os.remove(archivo)
+                            except Exception:
+                                pass
+
+                except Exception as e:
+                    import traceback
+                    builtins.print(f"❌ Error al enviar email via Outlook: {e}")
+                    log_runtime(traceback.format_exc(), level="ERROR")
+                    if _callback:
+                        try:
+                            _callback(False, str(e))
+                        except Exception:
+                            pass
+                    if _email_ui_callback:
+                        try:
+                            _email_ui_callback("error", str(e))
+                        except Exception:
+                            pass
+
+                finally:
+                    _cola_emails.task_done()
+
+            except queue.Empty:
+                pass
+            except Exception as e:
+                builtins.print(f"❌ Error en worker de email: {e}")
+                log_runtime(str(e), level="ERROR")
+
     except Exception as e:
-        builtins.print(f"❌ No se puede enviar email: {e}")
-        log_runtime(f"Outlook no disponible: {e}", level="ERROR")
+        builtins.print(f"❌ ERROR CRÍTICO inicializando worker de email: {e}")
+        log_runtime(str(e), level="ERROR")
         while True:
             try:
                 _cola_emails.get_nowait()
                 _cola_emails.task_done()
             except queue.Empty:
                 break
-        return
 
-    while True:
-        try:
-            data = _cola_emails.get(timeout=5)
-            if data is None:
-                break
-
-            destinatarios, asunto, cuerpo, adjuntos = data
-
+    finally:
+        if com_initialized and pythoncom is not None:
             try:
-                mail = _outlook_instance.CreateItem(0)
-                mail.To = destinatarios if isinstance(destinatarios, str) else "; ".join(destinatarios)
-                mail.Subject = asunto
-                mail.Body = cuerpo
-                if adjuntos:
-                    for archivo in adjuntos:
-                        if archivo and os.path.exists(archivo):
-                            mail.Attachments.Add(os.path.abspath(archivo))
-                mail.Send()
-                builtins.print(f"✅ Email enviado (Outlook) a: {mail.To} | Asunto: {mail.Subject}")
-                time.sleep(0.5)
-
-                if adjuntos:
-                    for archivo in adjuntos:
-                        try:
-                            if archivo and archivo.endswith(".zip") and os.path.exists(archivo):
-                                os.remove(archivo)
-                        except Exception:
-                            pass
-
-            except Exception as e:
-                builtins.print(f"❌ Error al enviar email via Outlook: {e}")
-                log_runtime(str(e), level="ERROR")
-
-            finally:
-                _cola_emails.task_done()
-
-        except queue.Empty:
-            pass
-        except Exception as e:
-            builtins.print(f"❌ Error en worker de email: {e}")
-            log_runtime(str(e), level="ERROR")
-
-    if com_initialized and pythoncom is not None:
-        try:
-            pythoncom.CoUninitialize()
-        except Exception:
-            pass
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
 
 
 def _iniciar_worker_envio():
@@ -187,10 +231,15 @@ def _iniciar_worker_envio():
         _worker_thread.start()
 
 
-def _encolar_email(destinatarios, asunto, cuerpo, adjuntos=None):
+def _encolar_email(destinatarios, asunto, cuerpo, adjuntos=None, callback=None):
     """Encola un email para ser enviado por el worker."""
     _iniciar_worker_envio()
-    _cola_emails.put((destinatarios, asunto, cuerpo, adjuntos))
+    if _email_ui_callback:
+        try:
+            _email_ui_callback("pending", "")
+        except Exception:
+            pass
+    _cola_emails.put((destinatarios, asunto, cuerpo, adjuntos, callback))
 
 
 def cargar_config_global():
@@ -942,61 +991,64 @@ def crear_zip_de_carpeta(carpeta):
             pass
         return None
 
-def enviar_email_resultados(pais, excel_path, screenshots_dir):
+def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, viewport=None):
     """
     Envía un email con los resultados de la ejecución del formulario.
-    
+
     Args:
         pais: Nombre del país (ej: "Argentina")
         excel_path: Ruta al archivo Excel de resultados
         screenshots_dir: Ruta a la carpeta de screenshots
+        browser: Navegador usado (opcional, para mostrarlo en el email)
+        viewport: Viewport usado (opcional, para mostrarlo en el email)
     """
     try:
-        # Validar que existan los archivos
         if not os.path.exists(excel_path):
             print(f"❌ No se encontró el archivo Excel: {excel_path}")
             return False
-        
-        if not os.path.exists(screenshots_dir):
-            print(f"❌ No se encontró la carpeta de screenshots: {screenshots_dir}")
-            return False
-        
-        # Analizar errores del Excel
+
+        if screenshots_dir and not os.path.exists(screenshots_dir):
+            print(f"⚠️ No se encontró la carpeta de screenshots: {screenshots_dir}")
+
         errores = analizar_errores_excel(excel_path)
-        total_filas = errores.get('total', 0)
-        exitosos = errores.get('exitosos', 0)
-        con_errores = errores.get('con_errores', 0)
-        no_procesados = errores.get('no_procesados', 0)
-        
-        # Preparar asunto
+        exitosos = int(errores.get('exitosos', 0))
+        con_errores = int(errores.get('con_errores', 0))
+        no_procesados = int(errores.get('no_procesados', 0))
+        total_filas = int(errores.get('total', 0))
+
+        nav_label, vp_label = _label_navegador(browser or "", viewport or "")
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
-        asunto = f"Resultados Osocio {pais} {fecha_actual}"
-        
-        # Preparar cuerpo del mensaje
-        cuerpo = f"""Resultados de la ejecución de formularios - {pais}
-Fecha: {fecha_actual}
 
-=== RESUMEN ===
-Exitosos: {exitosos}
-Con errores: {con_errores}
+        resultado_global = "PASS" if con_errores == 0 else "FAILED"
+        asunto = f"[{resultado_global}] Osocio {pais} {fecha_actual} — {exitosos} OK / {con_errores} errores"
 
-"""
-        
+        encabezado = pais
+        if browser:
+            encabezado += f" — {nav_label} / {vp_label}"
+
+        icono = "✅" if con_errores == 0 else "❌"
+        estado_texto = "OK — todos los leads enviados correctamente" if con_errores == 0 else f"LEAD NO ENVIADO en {con_errores} formulario(s)"
+
+        cuerpo = f"{icono} {encabezado}\nFecha: {fecha_actual}\nEstado: {estado_texto}\n\n"
+        cuerpo += "=== RESUMEN ===\n"
+        cuerpo += f"  Exitosos:      {exitosos}\n"
+        cuerpo += f"  Con errores:   {con_errores}\n"
+        if no_procesados:
+            cuerpo += f"  No procesados: {no_procesados}\n"
+        cuerpo += f"  Total filas:   {total_filas}\n\n"
+
         if con_errores > 0 and errores.get('detalles'):
-            cuerpo += "=== ERRORES DETECTADOS ===\n\n"
-            for detalle in errores['detalles'][:10]:  # Máximo 10 errores en preview
+            cuerpo += "=== ERRORES DETECTADOS (lead NO enviado) ===\n\n"
+            for detalle in errores['detalles']:
                 url = detalle.get('url', 'N/A')
                 error = detalle.get('error', 'Sin descripción')
-                cuerpo += f"URL: {url}\nError: {error}\n\n"
-            
-            if len(errores['detalles']) > 10:
-                cuerpo += f"... y {len(errores['detalles']) - 10} errores más (ver Excel adjunto)\n\n"
+                linea = detalle.get('linea', '?')
+                cuerpo += f"  ❌ Linea {linea} | URL: {url}\n     Error: {error}\n\n"
         else:
             cuerpo += "✅ Todos los formularios se completaron exitosamente.\n\n"
-        
+
         cuerpo += "Saludos,\nAutomación de Formularios"
-        
-        # Respetar configuración global (enviar/no enviar + adjuntos)
+
         config = cargar_config_global()
         enviar_mail = bool(config.get("enviar_mail", False))
         adjuntar_resultados = bool(config.get("adjuntar_resultados", True))
@@ -1006,49 +1058,58 @@ Con errores: {con_errores}
             print("📭 Envío de email deshabilitado por Configuración Global. Se omite el envío.")
             return True
 
-        # Preparar adjuntos
         adjuntos = []
-        
-        # Agregar Excel
+
         if adjuntar_resultados:
-            if os.path.getsize(excel_path) < 24 * 1024 * 1024:  # Menor a 24 MB
+            if os.path.getsize(excel_path) < 24 * 1024 * 1024:
                 adjuntos.append(excel_path)
             else:
                 print(f"⚠️ Excel excede 24 MB, no se adjuntará")
                 cuerpo += f"\n⚠️ NOTA: El archivo Excel es muy grande y no se pudo adjuntar. Ubicación: {excel_path}"
-        else:
-            pass
-        
-        # Comprimir y agregar screenshots
-        zip_files = None
-        if adjuntar_screenshots:
+
+        if adjuntar_screenshots and screenshots_dir and os.path.exists(screenshots_dir):
             zip_files = crear_zip_de_carpeta(screenshots_dir)
-        
-        if adjuntar_screenshots:
             if zip_files:
-                # Agregar todos los ZIPs (límite de 18 MB por archivo ya se respeta en crear_zip_de_carpeta)
-                for zip_file in zip_files:
-                    adjuntos.append(zip_file)
+                adjuntos.extend(zip_files)
             else:
                 print(f"⚠️ No se pudieron comprimir los screenshots")
                 cuerpo += f"\n⚠️ NOTA: Los screenshots no se pudieron comprimir. Ubicación: {screenshots_dir}"
-        else:
-            pass
-        
-        # Enviar email
+
         destinatario = obtener_email_destinatario()
-        
+
         try:
             _encolar_email(destinatario, asunto, cuerpo, adjuntos)
         except Exception as e:
             print(f"❌ Error encolando email: {e}")
             return False
-        
+
         return True
-        
+
     except Exception as e:
         print(f"❌ Error al enviar email de resultados: {e}")
         return False
+
+
+def _label_navegador(navegador, viewport):
+    """Convierte los IDs internos a nombres legibles para el email."""
+    nav_map = {
+        "chrome": "Chrome",
+        "firefox": "Firefox",
+        "edge": "Edge",
+        "lambdatest_mac": "LambdaTest Mac",
+        "lambdatest_android": "LambdaTest Android",
+    }
+    vp_map = {
+        "desktop": "Desktop",
+        "mobile": "Mobile",
+        "mac": "Mac (Safari)",
+        "android": "Android (Chrome)",
+        "fullscreen": "Desktop",
+        "600x738": "Mobile",
+    }
+    nav_label = nav_map.get(str(navegador).lower(), str(navegador))
+    vp_label = vp_map.get(str(viewport).lower(), str(viewport))
+    return nav_label, vp_label
 
 
 def enviar_email_resultados_consolidados(resultados_ejecucion):
@@ -1070,7 +1131,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             return False
 
         config = cargar_config_global()
-        
+
         enviar_mail = bool(config.get("enviar_mail", False))
         adjuntar_resultados = bool(config.get("adjuntar_resultados", True))
         adjuntar_screenshots = bool(config.get("adjuntar_screenshots", True))
@@ -1080,93 +1141,95 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             return True
 
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
-        asunto = f"Resultados Osocio Programación {fecha_actual}"
 
-        total_corridas = 0
-        total_filas = 0
-        total_exitosos = 0
-        total_errores = 0
-        total_no_procesados = 0
-        detalles_cuerpo = []
+        # Acumular resultados por país para el resumen PASSED/FAILED
+        pais_errores = {}   # pais -> total con_errores sumado
+        pais_exitosos = {}  # pais -> total exitosos sumado
         adjuntos = []
+        detalles_fallidos = []   # bloques de detalle solo para países FAILED
+
         for idx, resultado in enumerate(resultados_ejecucion, start=1):
             pais = resultado.get("pais", "N/A")
             navegador = resultado.get("navegador", "N/A")
             viewport = resultado.get("viewport", "N/A")
-            estado = resultado.get("estado", "desconocido")
             excel_path = resultado.get("excel_path")
             screenshots_dir = resultado.get("screenshots_dir")
 
+            nav_label, vp_label = _label_navegador(navegador, viewport)
+
             if not excel_path or not os.path.exists(excel_path):
                 print(f"      ⚠️ ADVERTENCIA: Excel no encontrado - {excel_path}")
-                detalles_cuerpo.append(
-                    f"[{idx}] {pais} ({navegador}/{viewport})\n"
-                    f"Estado: {estado}\n"
-                    "⚠️ No se encontró archivo Excel de resultados.\n"
-                )
+                pais_errores[pais] = pais_errores.get(pais, 0) + 1
                 continue
 
-            total_corridas += 1
             errores = analizar_errores_excel(excel_path)
-            filas = int(errores.get("total", 0))
             exitosos = int(errores.get("exitosos", 0))
             con_errores = int(errores.get("con_errores", 0))
-            no_procesados = int(errores.get("no_procesados", 0))
 
-            total_filas += filas
-            total_exitosos += exitosos
-            total_errores += con_errores
-            total_no_procesados += no_procesados
+            pais_errores[pais] = pais_errores.get(pais, 0) + con_errores
+            pais_exitosos[pais] = pais_exitosos.get(pais, 0) + exitosos
 
-            bloque = f"Resultados de la ejecución de formularios - {pais} ({navegador}/{viewport})\nFecha: {fecha_actual}\n\n"
-            bloque += "=== RESUMEN ===\n"
-            bloque += f"Exitosos: {exitosos}\n"
-            bloque += f"Con errores: {con_errores}\n\n"
+            if con_errores > 0:
+                bloque = f"❌ {pais.upper()} — {nav_label} / {vp_label}\n"
+                bloque += f"   Errores: {con_errores} leads NO enviados, {exitosos} OK\n\n"
+                if errores.get("detalles"):
+                    for detalle in errores["detalles"]:
+                        url = detalle.get("url", "N/A")
+                        error = detalle.get("error", "Sin descripción")
+                        linea = detalle.get("linea", "?")
+                        bloque += f"   ❌ Linea {linea} | URL: {url}\n      Error: {error}\n\n"
+                detalles_fallidos.append(bloque)
 
-            if con_errores > 0 and errores.get("detalles"):
-                bloque += "=== ERRORES DETECTADOS ===\n\n"
-                for detalle in errores["detalles"][:10]:
-                    url = detalle.get("url", "N/A")
-                    error = detalle.get("error", "Sin descripción")
-                    bloque += f"URL: {url}\nError: {error}\n\n"
-                if len(errores["detalles"]) > 10:
-                    bloque += f"... y {len(errores['detalles']) - 10} errores más (ver Excel adjunto)\n\n"
-            else:
-                bloque += "✅ Todos los formularios se completaron exitosamente.\n\n"
-
-            bloque += "---\n\n"
-            detalles_cuerpo.append(bloque)
-
-            if adjuntar_resultados:
-                if os.path.getsize(excel_path) < 24 * 1024 * 1024:
-                    adjuntos.append(excel_path)
-                else:
-                    print(f"      ⚠️ Excel muy grande (>24MB), no se adjunta")
-                    detalles_cuerpo.append(
-                        f"⚠️ Excel muy grande y no adjuntado: {excel_path}\n"
-                    )
-
+            # Adjuntos
+            if adjuntar_resultados and os.path.getsize(excel_path) < 24 * 1024 * 1024:
+                adjuntos.append(excel_path)
             if adjuntar_screenshots and screenshots_dir and os.path.exists(screenshots_dir):
                 zip_files = crear_zip_de_carpeta(screenshots_dir)
                 if zip_files:
                     adjuntos.extend(zip_files)
-                else:
-                    print(f"      ⚠️ No se pudieron comprimir screenshots")
-                    detalles_cuerpo.append(
-                        f"⚠️ No se pudieron comprimir screenshots de: {screenshots_dir}\n"
-                    )
 
-        cuerpo = (
-            f"{''.join(detalles_cuerpo)}"
-            "Saludos,\nAutomación de Formularios"
+        # Clasificar países
+        todos_paises = list(dict.fromkeys(
+            [r.get("pais", "N/A") for r in resultados_ejecucion]
+        ))
+        paises_failed = [p for p in todos_paises if pais_errores.get(p, 0) > 0]
+        paises_passed = [p for p in todos_paises if pais_errores.get(p, 0) == 0]
+
+        total_exitosos = sum(pais_exitosos.values())
+        total_errores = sum(pais_errores.values())
+        resultado_global = "PASS" if not paises_failed else "FAILED"
+
+        failed_tag = f": {', '.join(paises_failed)}" if paises_failed else ""
+        asunto = (
+            f"[{resultado_global}] Osocio — {fecha_actual} — "
+            f"{len(paises_passed)} PASSED / {len(paises_failed)} FAILED{failed_tag}"
         )
 
+        icono_global = "✅" if resultado_global == "PASS" else "❌"
+        cuerpo = f"{icono_global} RESULTADO GLOBAL: {resultado_global}\n\n"
+        cuerpo += "=" * 50 + "\n\n"
+
+        if paises_passed:
+            cuerpo += f"✅ PASSED ({len(paises_passed)}): {', '.join(paises_passed)}\n"
+        if paises_failed:
+            cuerpo += f"❌ FAILED ({len(paises_failed)}): {', '.join(paises_failed)}\n"
+
+        cuerpo += "\n" + "=" * 50 + "\n\n"
+
+        if detalles_fallidos:
+            cuerpo += "DETALLE DE ERRORES:\n\n"
+            cuerpo += "\n".join(detalles_fallidos)
+        else:
+            cuerpo += "✅ Todos los leads se enviaron correctamente en todos los paises.\n\n"
+
+        cuerpo += "\nSaludos,\nAutomacion de Formularios"
+
         destinatario = obtener_email_destinatario()
-        
+
         if not destinatario or destinatario == "correo@example.com":
             print(f"❌ ERROR: Email destinatario no configurado o es el default. No se puede enviar.")
             return False
-        
+
         try:
             _encolar_email(destinatario, asunto, cuerpo, adjuntos)
             return True

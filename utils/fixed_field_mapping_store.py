@@ -1,3 +1,8 @@
+"""
+fixed_field_mapping_store.py — Carga y persiste los mappings de campos por país.
+Lee la configuración base desde country_configs.py y permite guardar ediciones
+del usuario en fixed_field_mappings.json, que tiene prioridad sobre la base.
+"""
 import json
 import os
 import re

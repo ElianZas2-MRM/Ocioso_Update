@@ -1,3 +1,8 @@
+"""
+_runner_common.py — Lógica compartida de ejecución para todos los países.
+Contiene run_country_form() (crea el formulario y lo corre), get_runner() (devuelve
+la función de runner dinámico por nombre de país) y run_cli() (soporte para línea de comandos).
+"""
 import os
 import sys
 
@@ -24,8 +29,8 @@ ENVIRONMENTS = {
 }
 
 
-def run_country_form(form_class, country_name, browser="chrome", viewport="fullscreen", headless=False, enviar_email=True):
-    formulario = form_class(browser=browser, viewport=viewport, headless=headless)
+def run_country_form(form_class, country_name, browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True):
+    formulario = form_class(browser=browser, viewport=viewport, headless=headless, background=background)
     formulario.run()
 
     if not enviar_email:
@@ -39,7 +44,7 @@ def run_country_form(form_class, country_name, browser="chrome", viewport="fulls
     try:
         from interface.helpers_interface import enviar_email_resultados
 
-        enviar_email_resultados(country_name, resultados_path, screenshot_dir)
+        enviar_email_resultados(country_name, resultados_path, screenshot_dir, browser=browser, viewport=viewport)
     except Exception:
         pass
 
@@ -53,10 +58,10 @@ def get_runner(country_name: str):
     """
     from generic_country_base import GenericCountryBase
 
-    def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True):
+    def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True):
         class _DynamicCountry(GenericCountryBase):
-            def __init__(self, browser=browser, viewport=viewport, headless=headless):
-                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless)
+            def __init__(self, browser=browser, viewport=viewport, headless=headless, background=background):
+                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background)
 
         return run_country_form(
             _DynamicCountry,
@@ -65,6 +70,7 @@ def get_runner(country_name: str):
             viewport=viewport,
             headless=headless,
             enviar_email=enviar_email,
+            background=background,
         )
 
     _runner.__name__ = f"run_formularios_{country_name}"

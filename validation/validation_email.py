@@ -1,3 +1,8 @@
+"""
+validation_email.py — Envía el reporte de validación de campos por email.
+Formatea el resumen (campos testeados, errores encontrados, resultados UI) y lo manda
+usando la misma infraestructura de email de la interfaz (cola Outlook asíncrona).
+"""
 from datetime import datetime
 
 
