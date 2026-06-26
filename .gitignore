@@ -12,7 +12,9 @@ __pycache__/
 
 # Runtime data
 temporales/
+resultados/
 json/programacion_test.json
+json/scheduler_triggered.json
 
 # OS files
 .DS_Store
@@ -21,3 +23,7 @@ Thumbs.db
 # Credenciales sensibles - no versionar
 lambdatest_credentials.txt
 config_global.json
+
+# PyInstaller output — regenerable con build.bat
+build/
+dist/

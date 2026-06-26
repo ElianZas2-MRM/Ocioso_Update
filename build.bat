@@ -97,13 +97,21 @@ mkdir "%PORTABLE_DIR%"
 copy /y "dist\%APP_NAME%.exe" "%PORTABLE_DIR%\%APP_NAME%.exe" >nul
 if errorlevel 1 goto :error
 
-for %%D in (data drivers json resultados temporales lambdatest_mac lambdatest_android resultados_lambdatestmac resultados_lambdatest_android) do (
+for %%D in (data drivers resultados temporales lambdatest_mac lambdatest_android resultados_lambdatestmac resultados_lambdatest_android) do (
     if exist ".\%%D" (
         robocopy ".\%%D" "%PORTABLE_DIR%\%%D" /E /NFL /NDL /NJH /NJS /NC /NS >nul
         if errorlevel 8 goto :error
     ) else (
         mkdir "%PORTABLE_DIR%\%%D"
     )
+)
+
+REM Copiar json/ sin los archivos de estado del scheduler (portable arranca sin schedule activo)
+if exist ".\json" (
+    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json >nul
+    if errorlevel 8 goto :error
+) else (
+    mkdir "%PORTABLE_DIR%\json"
 )
 
 (
