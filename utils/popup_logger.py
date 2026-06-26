@@ -1,3 +1,8 @@
+"""
+popup_logger.py — Logger centralizado para la aplicación.
+Escribe mensajes a json/runtime.log con timestamp y nivel (INFO/WARNING/ERROR).
+En modo debug (variable FORM_AUTOMATION_VERBOSE=1), también imprime en consola.
+"""
 import os
 import sys
 from datetime import datetime

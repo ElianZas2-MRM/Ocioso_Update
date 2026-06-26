@@ -1,3 +1,8 @@
+"""
+selenium_validation_runner.py — Testea las reglas de validación de campos via Selenium.
+Carga las reglas desde JSON, ingresa valores de prueba en el formulario real y verifica
+que los mensajes de error aparezcan (o no) según corresponda.
+"""
 import logging
 import re
 import time

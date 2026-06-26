@@ -1,3 +1,8 @@
+"""
+scheduling.py — Gestión de programación de tests automáticos.
+Carga, guarda y limpia el archivo json/programacion_test.json que define
+qué países, en qué horarios y con qué browser se ejecutan automáticamente.
+"""
 import os
 import sys
 import json

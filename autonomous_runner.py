@@ -1,3 +1,8 @@
+"""
+autonomous_runner.py — Ejecutor programado en background (sin interfaz gráfica).
+Revisa cada 60 segundos si hay tests programados y los lanza automáticamente.
+Usa un mutex de Windows para evitar que se corran dos instancias al mismo tiempo.
+"""
 import glob
 import os
 import subprocess
@@ -168,6 +173,20 @@ def _build_country_command(pais_nombre, env_param):
     return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), "--run-country", pais_nombre, "--environment", env_param]
 
 
+def _build_lambdatest_command(lt_type, pais_nombre):
+    build_name = f"Automatizado — {pais_nombre}"
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, "--run-lambdatest", lt_type, "--pais", pais_nombre, "--build-name", build_name]
+    return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), "--run-lambdatest", lt_type, "--pais", pais_nombre, "--build-name", build_name]
+
+
+def _get_lt_results_dir(lt_type):
+    """Devuelve el directorio de resultados de LambdaTest según el tipo."""
+    if lt_type == "mac":
+        return os.path.join(PROJECT_ROOT, "resultados_lambdatestmac")
+    return os.path.join(PROJECT_ROOT, "resultados_lambdatest_android")
+
+
 def ejecutar_tests(programacion):
     """Ejecuta los tests según la programación y recopila resultados."""
     try:
@@ -180,10 +199,15 @@ def ejecutar_tests(programacion):
         total_ejecutados = 0
         total_scripts = 0
 
+        _LT_TYPES = ("lambdatest_mac", "lambdatest_android")
+
         for pais_nombre in programacion["paises"]:
             for navegador in programacion["navegadores"]:
-                for viewport in programacion["viewports"]:
-                    total_scripts += 1
+                if navegador in _LT_TYPES:
+                    total_scripts += 1  # LambdaTest: una ejecución por país (sin loop de viewports)
+                else:
+                    for _ in programacion["viewports"]:
+                        total_scripts += 1
 
         viewport_nombres = {
             "fullscreen": "desktop",
@@ -192,64 +216,121 @@ def ejecutar_tests(programacion):
 
         for pais_nombre in programacion["paises"]:
             for navegador in programacion["navegadores"]:
-                for viewport in programacion["viewports"]:
+
+                if navegador in _LT_TYPES:
+                    # ── LambdaTest: no usa viewports ──────────────────────────
+                    lt_type = "mac" if navegador == "lambdatest_mac" else "android"
                     total_ejecutados += 1
-                    env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
-                    runner_name = f"Formulario_{pais_nombre}_Main"
+                    log_mensaje(f" Ejecutando {total_ejecutados}/{total_scripts}: LambdaTest {lt_type} — {pais_nombre}")
 
-                    log_mensaje(f" Ejecutando {total_ejecutados}/{total_scripts}: {runner_name} ({env_param})")
-
-                    num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel")
-                    num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots")
-                    log_mensaje(
-                        f"    Números previos - Excel: {num_anterior_excel}, Screenshots: {num_anterior_screenshots}"
-                    )
+                    lt_results_dir = _get_lt_results_dir(lt_type)
+                    archivos_antes = set(os.listdir(lt_results_dir)) if os.path.isdir(lt_results_dir) else set()
 
                     try:
                         result = subprocess.run(
-                            _build_country_command(pais_nombre, env_param),
+                            _build_lambdatest_command(lt_type, pais_nombre),
                             check=False,
                             capture_output=True,
                             text=True,
-                            timeout=300,
+                            timeout=600,
                             cwd=PROJECT_ROOT,
                             env=_build_subprocess_env(),
                         )
 
                         if result.returncode == 0:
-                            log_mensaje(f" Completado: {runner_name}")
+                            log_mensaje(f" Completado: LambdaTest {lt_type} — {pais_nombre}")
                         else:
-                            log_mensaje(f" Script con errores: {runner_name}")
+                            log_mensaje(f" Con errores: LambdaTest {lt_type} — {pais_nombre}")
                             if result.stderr:
                                 log_mensaje(f"   Error: {result.stderr.strip()}")
 
-                        num_nuevo_excel = obtener_numero_mayor_existente(pais_nombre, "excel")
-                        log_mensaje(f"    📊 Números después - Excel: {num_nuevo_excel}")
-
-                        if num_nuevo_excel > num_anterior_excel:
-                            excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{num_nuevo_excel}.xlsx")
-                            screenshots_dir = os.path.join(RESULTS_DIR, f"screenshots_{pais_nombre}{num_nuevo_excel}")
-                            resultado = {
-                                "pais": pais_nombre,
-                                "navegador": navegador,
-                                "viewport": viewport_nombres.get(viewport, viewport),
-                                "estado": "completado" if result.returncode == 0 else "con_errores",
-                                "excel_path": excel_file,
-                                "screenshots_dir": screenshots_dir,
-                            }
-                            resultados_ejecucion.append(resultado)
-                            log_mensaje(f"    ✅ Resultado registrado: {os.path.basename(excel_file)}")
-                        elif result.returncode == 0:
-                            log_mensaje(
-                                f"    ⚠️ No se detectó nuevo Excel (anterior: {num_anterior_excel}, actual: {num_nuevo_excel})"
-                            )
+                        # Detectar Excel nuevo en el directorio de LambdaTest
+                        if os.path.isdir(lt_results_dir):
+                            archivos_despues = set(os.listdir(lt_results_dir))
+                            nuevos_excels = [
+                                f for f in (archivos_despues - archivos_antes)
+                                if f.endswith(".xlsx")
+                            ]
+                            if nuevos_excels:
+                                excel_file = os.path.join(lt_results_dir, sorted(nuevos_excels)[-1])
+                                resultado = {
+                                    "pais": pais_nombre,
+                                    "navegador": navegador,
+                                    "viewport": lt_type,
+                                    "estado": "completado" if result.returncode == 0 else "con_errores",
+                                    "excel_path": excel_file,
+                                    "screenshots_dir": None,
+                                }
+                                resultados_ejecucion.append(resultado)
+                                log_mensaje(f"    ✅ Resultado LambdaTest registrado: {os.path.basename(excel_file)}")
 
                     except subprocess.TimeoutExpired:
-                        log_mensaje(f"⏰ Timeout: {runner_name}")
+                        log_mensaje(f"⏰ Timeout: LambdaTest {lt_type} — {pais_nombre}")
                     except Exception as exc:
-                        log_mensaje(f" Error ejecutando {runner_name}: {exc}")
+                        log_mensaje(f" Error en LambdaTest {lt_type} — {pais_nombre}: {exc}")
 
                     time.sleep(2)
+
+                else:
+                    # ── Browsers locales: loop de viewports ────────────────────
+                    for viewport in programacion["viewports"]:
+                        total_ejecutados += 1
+                        env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
+                        runner_name = f"Formulario_{pais_nombre}_Main"
+
+                        log_mensaje(f" Ejecutando {total_ejecutados}/{total_scripts}: {runner_name} ({env_param})")
+
+                        num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel")
+                        num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots")
+                        log_mensaje(
+                            f"    Números previos - Excel: {num_anterior_excel}, Screenshots: {num_anterior_screenshots}"
+                        )
+
+                        try:
+                            result = subprocess.run(
+                                _build_country_command(pais_nombre, env_param),
+                                check=False,
+                                capture_output=True,
+                                text=True,
+                                timeout=300,
+                                cwd=PROJECT_ROOT,
+                                env=_build_subprocess_env(),
+                            )
+
+                            if result.returncode == 0:
+                                log_mensaje(f" Completado: {runner_name}")
+                            else:
+                                log_mensaje(f" Script con errores: {runner_name}")
+                                if result.stderr:
+                                    log_mensaje(f"   Error: {result.stderr.strip()}")
+
+                            num_nuevo_excel = obtener_numero_mayor_existente(pais_nombre, "excel")
+                            log_mensaje(f"    📊 Números después - Excel: {num_nuevo_excel}")
+
+                            if num_nuevo_excel > num_anterior_excel:
+                                excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{num_nuevo_excel}.xlsx")
+                                screenshots_dir = os.path.join(RESULTS_DIR, f"screenshots_{pais_nombre}{num_nuevo_excel}")
+                                resultado = {
+                                    "pais": pais_nombre,
+                                    "navegador": navegador,
+                                    "viewport": viewport_nombres.get(viewport, viewport),
+                                    "estado": "completado" if result.returncode == 0 else "con_errores",
+                                    "excel_path": excel_file,
+                                    "screenshots_dir": screenshots_dir,
+                                }
+                                resultados_ejecucion.append(resultado)
+                                log_mensaje(f"    ✅ Resultado registrado: {os.path.basename(excel_file)}")
+                            elif result.returncode == 0:
+                                log_mensaje(
+                                    f"    ⚠️ No se detectó nuevo Excel (anterior: {num_anterior_excel}, actual: {num_nuevo_excel})"
+                                )
+
+                        except subprocess.TimeoutExpired:
+                            log_mensaje(f"⏰ Timeout: {runner_name}")
+                        except Exception as exc:
+                            log_mensaje(f" Error ejecutando {runner_name}: {exc}")
+
+                        time.sleep(2)
 
         log_mensaje(f" EJECUCIÓN AUTÓNOMA COMPLETADA: {total_ejecutados}/{total_scripts} scripts")
         log_mensaje(f" Resultados recopilados: {len(resultados_ejecucion)} ejecuciones")
