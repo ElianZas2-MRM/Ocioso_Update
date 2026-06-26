@@ -1,0 +1,391 @@
+{
+  "browser": "chrome",
+  "viewport": "fullscreen",
+  "selected_browsers": [
+    "chrome"
+  ],
+  "selected_viewports": [
+    "fullscreen"
+  ],
+  "url": "py",
+  "urls": [
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py"
+  ],
+  "landing_urls": [
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py",
+    "py"
+  ],
+  "form_urls": [
+    "https://www.chevrolet.com.py/autos/onix-plus-sedan-familiar",
+    "https://www.chevrolet.com.py/lanzamiento-revelacion-sonic",
+    "https://www.chevrolet.com.py/oportunidades",
+    "https://www.chevrolet.com.py/pickups/nueva-s10-high-country-4x4",
+    "https://www.chevrolet.com.py/pickups/silverado-camioneta-pickup",
+    "https://www.chevrolet.com.py/solicita-una-cotizacion",
+    "https://www.chevrolet.com.py/suvs/trailblazer-high-country-4x4",
+    "https://www.chevrolet.com.py/vehiculos-electricos",
+    "https://www.chevrolet.com.py/vehiculos-electricos/captiva-ev",
+    "https://www.chevrolet.com.py/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.py/vehiculos-electricos/spark-euv/accesorios/formulario"
+  ],
+  "selected_paises": [
+    "Paraguay"
+  ],
+  "fields": {
+    "NOMBRE (Paraguay)": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Paraguay)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÉDULA": {
+      "descripcion": "CÉDULA",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^(?!(.)(\\1+$))(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{7}$",
+      "regex_char": "[0-9]",
+      "test_text": "324Pó=?2452",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Ingresa al menos 7 dígitos."
+        },
+        {
+          "regex": "^([a\\-z])\\1{7}$",
+          "mensaje": "La cédula de identidad ingresada no parece vállida."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Paraguay)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?!(.)(\\1+$))[0-9]{10}$",
+      "regex_char": "[0-9]",
+      "test_text": "828382Pó=?2837",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu celular."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "mensaje": "Completa 10 números."
+        },
+        {
+          "regex": "^([a\\-z])\\1{10}$",
+          "mensaje": "No puede ingresar el mismo dígito más de 4 veces seguidas."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Paraguay)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "PATENTE (Paraguay)": {
+      "descripcion": "PATENTE",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "^(?!(.)(\\1+$))[a-zA-Z0-9]{2,50}$",
+      "regex_char": "[a-zA-Z0-9]",
+      "test_text": "a0a9a8s7s7s6d6d5f54=?2=\"$2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Paraguay)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Paraguay)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Paraguay)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Paraguay)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS__2": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Esse campo é obrigatório.",
+      "dependencies": [],
+      "paises": [
+        "Argentina",
+        "Bolivia",
+        "Brasil",
+        "Chile",
+        "Colombia",
+        "Ecuador",
+        "Paraguay",
+        "Peru",
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    }
+  }
+}

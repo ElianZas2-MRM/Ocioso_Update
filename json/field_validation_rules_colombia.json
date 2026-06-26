@@ -1,0 +1,394 @@
+{
+  "browser": "chrome",
+  "viewport": "fullscreen",
+  "selected_browsers": [
+    "chrome"
+  ],
+  "selected_viewports": [
+    "fullscreen"
+  ],
+  "url": "co",
+  "urls": [
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co"
+  ],
+  "landing_urls": [
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co",
+    "co"
+  ],
+  "form_urls": [
+    "https://www.chevrolet.com.co/camionetas/traverse-camioneta-suv",
+    "https://www.chevrolet.com.co/contacta-un-concesionario",
+    "https://www.chevrolet.com.co/convenioscorporativos/plan-educacion",
+    "https://www.chevrolet.com.co/flotas/portafolio",
+    "https://www.chevrolet.com.co/hibridos/captiva-phev",
+    "https://www.chevrolet.com.co/lanzamiento-revelacion-sonic",
+    "https://www.chevrolet.com.co/ofertas-oportunidades",
+    "https://www.chevrolet.com.co/plan-chevrolet-siempre",
+    "https://www.chevrolet.com.co/servicios/colision",
+    "https://www.chevrolet.com.co/teleperformance",
+    "https://www.chevrolet.com.co/test-drive-auto-show",
+    "https://www.chevrolet.com.co/vehiculos-electricos/spark-euv",
+    "https://www.chevrolet.com.co/vive-chevrolet"
+  ],
+  "selected_paises": [
+    "Colombia"
+  ],
+  "fields": {
+    "NOMBRE (Colombia)": {
+      "descripcion": "NOMBRE",
+      "campo": "firstname",
+      "element_id": "firstname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Alberto?=1",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "APELLIDO (Colombia)": {
+      "descripcion": "APELLIDO",
+      "campo": "lastname",
+      "element_id": "lastname",
+      "regex_full": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_char": "[a-zA-ZáéíóúÁÉÍÓÚñÑ ]",
+      "test_text": "Juán Pedro?=2",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÉDULA (Colombia)": {
+      "descripcion": "CÉDULA",
+      "campo": "ci",
+      "element_id": "ci",
+      "regex_full": "^[0-9]{7,10}$",
+      "regex_char": "[0-9]",
+      "test_text": "324Pó=?2452",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu cédula de identidad."
+        },
+        {
+          "regex": "^(?!(.)(\\1+$))[0-9]{3,4}$",
+          "mensaje": "Ingresa al menos 7 dígitos."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CELULAR (Colombia)": {
+      "descripcion": "CELULAR",
+      "campo": "telephone",
+      "element_id": "telephone",
+      "regex_full": "^(?=(?:3))[0-9]{10}$",
+      "regex_char": "[0-9]",
+      "test_text": "34123pó=?42321",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": true,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa los 10 dígitos de tu celular que empieza con 3."
+        },
+        {
+          "regex": "^(?=(?:2))[0-9]{10}$",
+          "mensaje": "El nùmero de celular debe comenzar con 3"
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "E-MAIL (Colombia)": {
+      "descripcion": "E-MAIL",
+      "campo": "email",
+      "element_id": "email",
+      "regex_full": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+      "regex_char": "[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]",
+      "test_text": "Ejemplo@mail.com",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu email."
+        },
+        {
+          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "mensaje": "El email ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CÓDIGO ASESOR": {
+      "descripcion": "CÓDIGO ASESOR",
+      "campo": "adviser",
+      "element_id": "adviser",
+      "regex_full": "^(00[1-9]|0[1-9][0-9]|100)$",
+      "regex_char": "[0-9]",
+      "test_text": "045p=?",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Completa con números entre el 001 y 100."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "FECHA ESTIMADA DE COMPRA (Colombia)": {
+      "descripcion": "FECHA ESTIMADA DE COMPRA",
+      "campo": "estimated-date-purchase",
+      "element_id": "estimated-date-purchase",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona la fecha estimada de compra.",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS (Colombia)": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un modelo.",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CIUDAD (Colombia)": {
+      "descripcion": "CIUDAD",
+      "campo": "city",
+      "element_id": "city",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona una ciudad.",
+      "dependencies": [
+        {
+          "element_id": "region"
+        }
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "CONCESIONARIO (Colombia)": {
+      "descripcion": "CONCESIONARIO",
+      "campo": "dealer",
+      "element_id": "dealer",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Selecciona un concesionario.",
+      "dependencies": [
+        {
+          "element_id": "city"
+        }
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    },
+    "MODELOS__2": {
+      "descripcion": "MODELOS",
+      "campo": "models",
+      "element_id": "models",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "Esse campo é obrigatório.",
+      "dependencies": [],
+      "paises": [
+        "Argentina",
+        "Bolivia",
+        "Brasil",
+        "Chile",
+        "Colombia",
+        "Ecuador",
+        "Paraguay",
+        "Peru",
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
+    }
+  }
+}
