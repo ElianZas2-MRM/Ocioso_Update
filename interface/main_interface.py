@@ -2487,39 +2487,7 @@ def iniciar_interfaz():
         selectcolor=APP_BG_COLOR,
     ).pack(side=LEFT, padx=5)
 
-    # LambdaTest en fila propia
-    frame_lambdatest = Frame(frame_izquierda, bg=APP_BG_COLOR)
-    frame_lambdatest.pack(anchor="w", pady=2)
-    Label(
-        frame_lambdatest,
-        text="LambdaTest:",
-        bg=APP_BG_COLOR,
-        fg="#A8D8EA",
-        width=10,
-        anchor="w",
-    ).pack(side=LEFT)
-    Checkbutton(
-        frame_lambdatest,
-        text="Mac (Safari)",
-        variable=lt_mac_var,
-        bg=APP_BG_COLOR,
-        fg="#A8D8EA",
-        activebackground=APP_BG_COLOR,
-        activeforeground="#A8D8EA",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-    Checkbutton(
-        frame_lambdatest,
-        text="Android",
-        variable=lt_android_var,
-        bg=APP_BG_COLOR,
-        fg="#A8D8EA",
-        activebackground=APP_BG_COLOR,
-        activeforeground="#A8D8EA",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-
-    # Viewport (fila debajo de LambdaTest)
+    # Viewport
     frame_viewport = Frame(frame_izquierda, bg=APP_BG_COLOR)
     frame_viewport.pack(anchor="w", pady=2)
     Label(
@@ -4294,12 +4262,14 @@ def iniciar_interfaz():
 
         resultados = []
         _LT_NAV = ("lambdatest_mac", "lambdatest_android")
+        # LambdaTest no compatible con ejecución programada por ahora — se omite
+        navegadores_prog = [n for n in programacion.get("navegadores", []) if n not in _LT_NAV]
 
         for pais_nombre in programacion.get("paises", []):
             if _stopped():
                 print("⛔ Ejecución detenida por el usuario.")
                 break
-            for navegador in programacion.get("navegadores", []):
+            for navegador in navegadores_prog:
                 if _stopped():
                     break
                 if navegador in _LT_NAV:
