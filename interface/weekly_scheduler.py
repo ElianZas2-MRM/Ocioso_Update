@@ -924,6 +924,7 @@ class WeeklySchedulerPanel(Frame):
     # ── Monitor loop ───────────────────────────────────────────────────────────
 
     def _monitor_loop(self):
+        startup = True  # primera iteración: marcar slots actuales sin ejecutar
         while True:
             try:
                 if self._is_active and self._status == "scheduled" and self._config:
@@ -937,8 +938,10 @@ class WeeklySchedulerPanel(Frame):
                         if self._last_triggered.get(key) != ahora.date():
                             self._last_triggered[key] = ahora.date()
                             self._save_triggered()
-                            self._stop_event.clear()
-                            self._execute_scheduled()
+                            if not startup:
+                                self._stop_event.clear()
+                                self._execute_scheduled()
             except Exception as e:
                 print(f"⚠️  Error en monitor semanal: {e}")
+            startup = False
             time.sleep(60)

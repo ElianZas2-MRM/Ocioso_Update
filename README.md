@@ -184,7 +184,9 @@ El body del email se enviaba como texto plano — Outlook clásico no mostraba �
 El campo de email ahora acepta varios emails separados por coma: `email1@dominio.com, email2@dominio.com`. El hint `(varios emails separados por coma)` aparece junto al campo. `obtener_email_destinatario()` parsea la lista y la pasa al enviador (ambos paths ya soportaban lista).
 
 **13. Fix: re-ejecución al reabrir la app**
-Al cerrar y reabrir la app dentro del mismo slot de 15 minutos, el monitor volvía a disparar el test porque `last_triggered` era en memoria y se reseteaba. Fix: se persiste en `json/scheduler_triggered.json`. Al iniciar, el monitor carga ese archivo y sabe qué slots ya corrieron hoy.
+Al cerrar y reabrir la app dentro del mismo slot de 15 minutos, el monitor volvía a disparar el test porque `last_triggered` era en memoria y se reseteaba. Fix en dos capas:
+- Se persiste en `json/scheduler_triggered.json` para sobrevivir reinicios.
+- En la primera iteración del monitor (startup), cualquier slot que coincida con la hora actual se registra como "ya visto" sin ejecutar. Esto evita el disparo falso si se abre la app justo en un horario programado. Los slots nuevos que llegan mientras la app está corriendo se detectan y ejecutan normalmente.
 
 **14. Build: spec actualizado**
 `FormAutomation.spec` ahora incluye `interface.weekly_scheduler` y todos los submodules de `validation/` en `hiddenimports`, necesarios para que el build portable funcione correctamente.
