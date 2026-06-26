@@ -127,8 +127,27 @@ def generar_cpf_brasil():
         return "".join(str(d) for d in nums)
 
 
+def generar_cnpj_brasil():
+    """CNPJ brasileño válido (14 dígitos sin puntuación). Fallback local con algoritmo oficial."""
+    b = [random.randint(0, 9) for _ in range(8)] + [0, 0, 0, 1]
+    w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    r1 = sum(v * w for v, w in zip(b, w1)) % 11
+    c1 = 0 if r1 < 2 else 11 - r1
+    w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    r2 = sum(v * w for v, w in zip(b + [c1], w2)) % 11
+    c2 = 0 if r2 < 2 else 11 - r2
+    return "".join(str(d) for d in b + [c1, c2])
+
+
+# CEPs válidos conocidos como último recurso si la API falla
+_CEPS_FALLBACK = [
+    "01310100", "04538133", "20040020", "30112010",
+    "40015970", "60060100", "80010010", "90010280",
+]
+
+
 def generar_documento_brasil_4devs(tipo: str = "cpf") -> str:
-    """Genera CPF, CNPJ o CEP via API de 4devs. Fallback local si falla la red."""
+    """Genera CPF, CNPJ o CEP via API de 4devs. Fallback local correcto por tipo si falla la red."""
     import urllib.request, urllib.parse, re as _re
     def _fetch(acao, extra=None):
         data = {"acao": acao}
@@ -169,6 +188,13 @@ def generar_documento_brasil_4devs(tipo: str = "cpf") -> str:
             raise ValueError(f"CPF inválido de API: {raw!r}")
         return digits
     except Exception:
+        # Fallback local con formato correcto por tipo (antes siempre devolvía CPF para todo)
+        from utils.popup_logger import log_runtime
+        log_runtime(f"⚠️ API 4devs falló para '{tipo}', usando generador local como fallback", level="WARNING")
+        if tipo == "cnpj":
+            return generar_cnpj_brasil()
+        if tipo == "cep":
+            return random.choice(_CEPS_FALLBACK)
         return generar_cpf_brasil()
 
 

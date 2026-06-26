@@ -1,3 +1,8 @@
+"""
+field_validation_ui.py — Pestaña de validación de campos en la interfaz gráfica.
+Permite testear las reglas de validación de cada campo del formulario (regex, largo, etc.)
+lanzando un browser Selenium contra la URL real del formulario.
+"""
 import json
 import logging
 import os

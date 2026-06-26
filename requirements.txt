@@ -1,8 +1,6 @@
 selenium
-webdriver-manager
 openpyxl
 pandas
 pillow
 pytz
 pywin32
-cpf-and-cnpj-generator

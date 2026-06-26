@@ -1,3 +1,8 @@
+"""
+main_interface.py — Interfaz gráfica principal de la aplicación (Tkinter).
+Pestañas: Carga de datos, Ejecución por país, Validación de campos, Programación y IDs Dinámicos.
+Permite cargar Excels, correr formularios, ver resultados y configurar el envío de emails.
+"""
 import os
 import sys
 import threading
@@ -1853,8 +1858,8 @@ def iniciar_interfaz():
     root = Tk()
     root.title("Osocio - Form Automation")
     # Tamaño optimizado: 980x768
-    root.geometry("980x768")
-    root.minsize(980, 640)
+    root.geometry("1200x800")
+    root.minsize(1100, 700)
     root.configure(bg=APP_BG_COLOR)
 
     # Uniformar estilos de tabs y botones para respetar la paleta definida
@@ -2347,7 +2352,10 @@ def iniciar_interfaz():
     
     # Variables globales para configuración - DEFINIR DESPUÉS DE CARGAR PROGRAMACIÓN
     global chrome_var, firefox_var, edge_var, desktop_var, mobile_var
+    global lt_mac_var, lt_android_var, visible_browser_var, email_modo_var
     global modo_ejecucion_var, pais_single_var
+
+    _ui_prefs = cargar_config_global().get("ui_prefs", {})
     
     # Inicializar variables según si hay programación existente o no
     if programacion_existente:
@@ -2362,12 +2370,17 @@ def iniciar_interfaz():
             test_programado_var = BooleanVar(value=False)
             guardar_programacion(None)  # Limpiar archivo
             
-            # Valores por defecto cuando se limpia
-            chrome_var = BooleanVar(value=True)
-            firefox_var = BooleanVar(value=False)
-            edge_var = BooleanVar(value=False)
-            desktop_var = BooleanVar(value=True)
-            mobile_var = BooleanVar(value=False)
+            # Valores por defecto cuando se limpia (usa prefs guardadas si existen)
+            _navs = _ui_prefs.get("navegadores", ["chrome"])
+            _vps = _ui_prefs.get("viewports", ["fullscreen"])
+            chrome_var = BooleanVar(value="chrome" in _navs)
+            firefox_var = BooleanVar(value="firefox" in _navs)
+            edge_var = BooleanVar(value="edge" in _navs)
+            lt_mac_var = BooleanVar(value="lambdatest_mac" in _navs)
+            lt_android_var = BooleanVar(value="lambdatest_android" in _navs)
+            visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
+            desktop_var = BooleanVar(value="fullscreen" in _vps)
+            mobile_var = BooleanVar(value="600x738" in _vps)
             modo_ejecucion_var = StringVar(value="consecutive")
             pais_single_var = StringVar(value="")
         else:
@@ -2379,6 +2392,9 @@ def iniciar_interfaz():
             chrome_var = BooleanVar(value="chrome" in programacion_actual["navegadores"])
             firefox_var = BooleanVar(value="firefox" in programacion_actual["navegadores"])
             edge_var = BooleanVar(value="edge" in programacion_actual["navegadores"])
+            lt_mac_var = BooleanVar(value="lambdatest_mac" in programacion_actual["navegadores"])
+            lt_android_var = BooleanVar(value="lambdatest_android" in programacion_actual["navegadores"])
+            visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
             desktop_var = BooleanVar(value="fullscreen" in programacion_actual["viewports"])
             mobile_var = BooleanVar(value="600x738" in programacion_actual["viewports"])
             modo_ejecucion_var = StringVar(value="consecutive")
@@ -2388,14 +2404,21 @@ def iniciar_interfaz():
         programacion_actual = None
         test_programado_var = BooleanVar(value=False)
 
-        # Valores por defecto
-        chrome_var = BooleanVar(value=True)
-        firefox_var = BooleanVar(value=False)
-        edge_var = BooleanVar(value=False)
-        desktop_var = BooleanVar(value=True)
-        mobile_var = BooleanVar(value=False)
+        # Valores por defecto (usa prefs guardadas si existen)
+        _navs = _ui_prefs.get("navegadores", ["chrome"])
+        _vps = _ui_prefs.get("viewports", ["fullscreen"])
+        chrome_var = BooleanVar(value="chrome" in _navs)
+        firefox_var = BooleanVar(value="firefox" in _navs)
+        edge_var = BooleanVar(value="edge" in _navs)
+        lt_mac_var = BooleanVar(value="lambdatest_mac" in _navs)
+        lt_android_var = BooleanVar(value="lambdatest_android" in _navs)
+        visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
+        desktop_var = BooleanVar(value="fullscreen" in _vps)
+        mobile_var = BooleanVar(value="600x738" in _vps)
         modo_ejecucion_var = StringVar(value="single")
         pais_single_var = StringVar(value="")
+
+    email_modo_var = StringVar(value=_ui_prefs.get("email_modo", "por_pais"))
 
     app_tabs_container = Frame(ui_root, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
     app_tabs_container.pack(fill="both", expand=True, padx=20, pady=(0, 0))
@@ -2423,7 +2446,7 @@ def iniciar_interfaz():
     guardar_config_global(cfg_global)
 
     email_var = StringVar(value=obtener_email_destinatario())
-    enviar_mail_var = BooleanVar(value=bool(cfg_global.get("enviar_mail", False)))
+    enviar_mail_var = BooleanVar(value=False)  # siempre inicia apagado por seguridad
     adjuntar_resultados_var = BooleanVar(value=bool(cfg_global.get("adjuntar_resultados", True)))
     adjuntar_screenshots_var = BooleanVar(value=bool(cfg_global.get("adjuntar_screenshots", True)))
 
@@ -2521,7 +2544,39 @@ def iniciar_interfaz():
         selectcolor=APP_BG_COLOR,
     ).pack(side=LEFT, padx=5)
 
-    # Viewport (segunda fila, debajo de navegador)
+    # LambdaTest en fila propia
+    frame_lambdatest = Frame(frame_izquierda, bg=APP_BG_COLOR)
+    frame_lambdatest.pack(anchor="w", pady=2)
+    Label(
+        frame_lambdatest,
+        text="LambdaTest:",
+        bg=APP_BG_COLOR,
+        fg="#A8D8EA",
+        width=10,
+        anchor="w",
+    ).pack(side=LEFT)
+    Checkbutton(
+        frame_lambdatest,
+        text="Mac (Safari)",
+        variable=lt_mac_var,
+        bg=APP_BG_COLOR,
+        fg="#A8D8EA",
+        activebackground=APP_BG_COLOR,
+        activeforeground="#A8D8EA",
+        selectcolor=APP_BG_COLOR,
+    ).pack(side=LEFT, padx=5)
+    Checkbutton(
+        frame_lambdatest,
+        text="Android",
+        variable=lt_android_var,
+        bg=APP_BG_COLOR,
+        fg="#A8D8EA",
+        activebackground=APP_BG_COLOR,
+        activeforeground="#A8D8EA",
+        selectcolor=APP_BG_COLOR,
+    ).pack(side=LEFT, padx=5)
+
+    # Viewport (fila debajo de LambdaTest)
     frame_viewport = Frame(frame_izquierda, bg=APP_BG_COLOR)
     frame_viewport.pack(anchor="w", pady=2)
     Label(
@@ -2553,6 +2608,35 @@ def iniciar_interfaz():
         activeforeground="white",
         selectcolor=APP_BG_COLOR,
     ).pack(side=LEFT, padx=5)
+
+    # Visibilidad del browser
+    frame_visibilidad = Frame(frame_izquierda, bg=APP_BG_COLOR)
+    frame_visibilidad.pack(anchor="w", pady=2)
+    Label(
+        frame_visibilidad,
+        text="Modo:",
+        bg=APP_BG_COLOR,
+        fg="white",
+        width=10,
+        anchor="w",
+    ).pack(side=LEFT)
+    Checkbutton(
+        frame_visibilidad,
+        text="Ver navegador mientras corre",
+        variable=visible_browser_var,
+        bg=APP_BG_COLOR,
+        fg="white",
+        activebackground=APP_BG_COLOR,
+        activeforeground="white",
+        selectcolor=APP_BG_COLOR,
+    ).pack(side=LEFT, padx=5)
+    Label(
+        frame_visibilidad,
+        text="ℹ️ Por defecto corre en segundo plano sin interrumpirte",
+        bg=APP_BG_COLOR,
+        fg="#888888",
+        font=("Segoe UI", 8),
+    ).pack(side=LEFT, padx=4)
 
     # Email (derecha contra el margen)
     frame_email_derecha = Frame(frame_controles, bg=APP_BG_COLOR)
@@ -3700,11 +3784,40 @@ def iniciar_interfaz():
     )
     chk_adj_screens.pack(side=LEFT, padx=5)
 
+    # Modo de envío: un email por país vs. uno consolidado al final
+    frame_email_modo = Frame(frame_email_derecha, bg=APP_BG_COLOR)
+    frame_email_modo.pack(anchor="e", pady=(2, 0))
+    Label(frame_email_modo, text="Modo email:", bg=APP_BG_COLOR, fg="white",
+          font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 4))
+    Radiobutton(frame_email_modo, text="1 por país", variable=email_modo_var,
+                value="por_pais", bg=APP_BG_COLOR, fg="white",
+                activebackground=APP_BG_COLOR, activeforeground="white",
+                selectcolor=APP_BG_COLOR, font=("Segoe UI", 9)).pack(side=LEFT)
+    Radiobutton(frame_email_modo, text="Consolidado al final", variable=email_modo_var,
+                value="consolidado", bg=APP_BG_COLOR, fg="white",
+                activebackground=APP_BG_COLOR, activeforeground="white",
+                selectcolor=APP_BG_COLOR, font=("Segui UI", 9)).pack(side=LEFT, padx=(6, 0))
+
     def _persistir_opciones_email(*_):
         cfg = cargar_config_global()
-        cfg["enviar_mail"] = bool(enviar_mail_var.get())
+        # "enviar_mail" NO se persiste: siempre inicia apagado para evitar envíos accidentales
         cfg["adjuntar_resultados"] = bool(adjuntar_resultados_var.get())
         cfg["adjuntar_screenshots"] = bool(adjuntar_screenshots_var.get())
+
+        # Guardar prefs de UI (browser, viewport, modo browser, modo email)
+        navs = [n for n, v in [
+            ("chrome", chrome_var), ("firefox", firefox_var), ("edge", edge_var),
+            ("lambdatest_mac", lt_mac_var), ("lambdatest_android", lt_android_var),
+        ] if v.get()]
+        vps = [vp for vp, v in [
+            ("fullscreen", desktop_var), ("600x738", mobile_var),
+        ] if v.get()]
+        cfg["ui_prefs"] = {
+            "navegadores": navs if navs else ["chrome"],
+            "viewports": vps if vps else ["fullscreen"],
+            "visible_browser": bool(visible_browser_var.get()),
+            "email_modo": email_modo_var.get(),
+        }
         guardar_config_global(cfg)
 
         estado = "normal" if enviar_mail_var.get() else "disabled"
@@ -3712,10 +3825,46 @@ def iniciar_interfaz():
         chk_adj_resultados.config(state=estado)
         chk_adj_screens.config(state=estado)
 
-    enviar_mail_var.trace_add("write", _persistir_opciones_email)
-    adjuntar_resultados_var.trace_add("write", _persistir_opciones_email)
-    adjuntar_screenshots_var.trace_add("write", _persistir_opciones_email)
+    for _var in (enviar_mail_var, adjuntar_resultados_var, adjuntar_screenshots_var,
+                 chrome_var, firefox_var, edge_var, lt_mac_var, lt_android_var,
+                 desktop_var, mobile_var, visible_browser_var, email_modo_var):
+        _var.trace_add("write", _persistir_opciones_email)
     _persistir_opciones_email()
+
+    # === Estado de envío de email (muestra ⏳ / ✅ / ❌ en tiempo real) ===
+    email_status_var = StringVar(value="")
+    email_status_label = Label(
+        frame_email_derecha,
+        textvariable=email_status_var,
+        font=("Segoe UI", 9, "italic"),
+        bg=APP_BG_COLOR,
+        fg="#7FFF7F",
+        anchor="e",
+    )
+    email_status_label.pack(anchor="e", pady=(0, 2))
+
+    def _set_email_status(success, error_msg=""):
+        if success:
+            email_status_var.set("✅ Email enviado correctamente")
+            email_status_label.config(fg="#7FFF7F")
+        else:
+            email_status_var.set(f"❌ Error al enviar: {error_msg}")
+            email_status_label.config(fg="#FF7F7F")
+
+    from interface.helpers_interface import registrar_callback_ui_email
+
+    def _global_email_ui_handler(estado, err_msg):
+        def _update():
+            if estado == "pending":
+                email_status_var.set("⏳ Enviando email...")
+                email_status_label.config(fg="#FFFF99")
+            elif estado == "success":
+                _set_email_status(True)
+            else:
+                _set_email_status(False, err_msg)
+        root.after(0, _update)
+
+    registrar_callback_ui_email(_global_email_ui_handler)
 
     #ttk.Separator(root, orient="horizontal", style="App.TSeparator").pack(fill="x", pady=10)
 
@@ -3836,12 +3985,34 @@ def iniciar_interfaz():
         _run_state["stop_event"] = stop_ev
         _set_running(True)
 
+        _background = not visible_browser_var.get()
+        _consolidado = email_modo_var.get() == "consolidado"
+        _resultados_consolidado = []
+        _resultados_lock = threading.Lock()
+
         def _run_combo(pais, nav, vp):
             if stop_ev.is_set():
                 return
             try:
                 run_func = _get_run_func(pais)
-                run_func(browser=nav, viewport=vp, headless=False)
+                formulario = run_func(
+                    browser=nav, viewport=vp, headless=False,
+                    background=_background,
+                    enviar_email=not _consolidado,
+                )
+                if _consolidado and formulario is not None:
+                    excel = getattr(formulario, "RESULTADOS_PATH", None)
+                    shots = getattr(formulario, "SCREENSHOT_DIR", None)
+                    if excel and os.path.exists(excel):
+                        with _resultados_lock:
+                            _resultados_consolidado.append({
+                                "pais": pais,
+                                "navegador": nav,
+                                "viewport": vp,
+                                "estado": "completado",
+                                "excel_path": excel,
+                                "screenshots_dir": shots,
+                            })
             except Exception as exc:
                 print(f"Error ejecutando {pais} ({nav}/{vp}): {exc}")
 
@@ -3860,6 +4031,12 @@ def iniciar_interfaz():
 
         def _done():
             _set_running(False)
+            if _consolidado and _resultados_consolidado:
+                from interface.helpers_interface import enviar_email_resultados_consolidados
+                threading.Thread(
+                    target=lambda: enviar_email_resultados_consolidados(_resultados_consolidado),
+                    daemon=True,
+                ).start()
 
         if modo == "parallel":
             def _run_parallel():
@@ -4376,6 +4553,10 @@ def iniciar_interfaz():
                 programacion_actual["navegadores"].append("firefox")
             if edge_var.get():
                 programacion_actual["navegadores"].append("edge")
+            if lt_mac_var.get():
+                programacion_actual["navegadores"].append("lambdatest_mac")
+            if lt_android_var.get():
+                programacion_actual["navegadores"].append("lambdatest_android")
             
             # Obtener viewports seleccionados en Configuración Global
             if desktop_var.get():
@@ -4460,66 +4641,108 @@ def iniciar_interfaz():
                             resultados_ejecucion = []
                             
                             # Ejecutar los formularios seleccionados
+                            _LT_NAV = ("lambdatest_mac", "lambdatest_android")
                             for pais_nombre in programacion_actual["paises"]:
                                 for navegador in programacion_actual["navegadores"]:
-                                    for viewport in programacion_actual["viewports"]:
-                                        env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
-                                        try:
-                                            # Obtener números previos de archivos
-                                            from glob import glob as glob_search
-                                            pattern_excel = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}*.xlsx")
-                                            matches_antes = glob_search(pattern_excel)
-                                            max_num_antes = 0
-                                            for m in matches_antes:
-                                                try:
-                                                    num_str = os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "")
-                                                    if num_str.isdigit():
-                                                        max_num_antes = max(max_num_antes, int(num_str))
-                                                except:
-                                                    pass
-                                            
-                                            env_config = _get_environments().get(env_param)
-                                            if env_config is None:
-                                                print(f"⚠️ Entorno no reconocido: {env_param}")
-                                                continue
 
-                                            run_func = _get_run_func(pais_nombre)
-                                            run_func(
-                                                browser=env_config["browser"],
-                                                viewport=env_config["viewport"],
-                                                headless=False,
-                                                enviar_email=False,
-                                            )
-                                            
-                                            # Buscar archivo Excel generado
-                                            matches_despues = glob_search(pattern_excel)
-                                            max_num_despues = 0
-                                            for m in matches_despues:
-                                                try:
-                                                    num_str = os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "")
-                                                    if num_str.isdigit():
-                                                        max_num_despues = max(max_num_despues, int(num_str))
-                                                except:
-                                                    pass
-                                            
-                                            if max_num_despues > max_num_antes:
-                                                excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{max_num_despues}.xlsx")
-                                                screenshots_dir = os.path.join(RESULTS_DIR, f"screenshots_{pais_nombre}{max_num_despues}")
-                                                
-                                                if os.path.exists(excel_file):
+                                    if navegador in _LT_NAV:
+                                        # ── LambdaTest: sin loop de viewports ────────────────
+                                        lt_type = "mac" if navegador == "lambdatest_mac" else "android"
+                                        try:
+                                            lt_dir = os.path.join(BASE_DIR, f"lambdatest_{lt_type if lt_type == 'mac' else 'android'}")
+                                            if lt_dir not in sys.path:
+                                                sys.path.insert(0, lt_dir)
+
+                                            from glob import glob as glob_search
+                                            lt_results_dir = os.path.join(BASE_DIR, "resultados_lambdatestmac" if lt_type == "mac" else "resultados_lambdatest_android")
+                                            archivos_antes = set(os.listdir(lt_results_dir)) if os.path.isdir(lt_results_dir) else set()
+
+                                            if lt_type == "mac":
+                                                import lt_controller
+                                                summary = lt_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}")
+                                            else:
+                                                import lt_android_controller
+                                                summary = lt_android_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}")
+
+                                            if os.path.isdir(lt_results_dir):
+                                                archivos_despues = set(os.listdir(lt_results_dir))
+                                                nuevos = [f for f in (archivos_despues - archivos_antes) if f.endswith(".xlsx")]
+                                                if nuevos:
+                                                    excel_file = os.path.join(lt_results_dir, sorted(nuevos)[-1])
                                                     resultado = {
                                                         "pais": pais_nombre,
                                                         "navegador": navegador,
-                                                        "viewport": viewport,
+                                                        "viewport": lt_type,
                                                         "estado": "completado",
                                                         "excel_path": excel_file,
-                                                        "screenshots_dir": screenshots_dir
+                                                        "screenshots_dir": None,
                                                     }
                                                     resultados_ejecucion.append(resultado)
-                                        
-                                        except Exception as ex_form:
-                                            print(f"⚠️ Error ejecutando {pais_nombre} ({env_param}): {ex_form}")
-                                        time.sleep(2)  # Pequeña pausa entre ejecuciones
+                                        except Exception as ex_lt:
+                                            print(f"⚠️ Error LambdaTest {lt_type} — {pais_nombre}: {ex_lt}")
+                                        time.sleep(2)
+
+                                    else:
+                                        # ── Browsers locales: loop de viewports ──────────────
+                                        for viewport in programacion_actual["viewports"]:
+                                            env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
+                                            try:
+                                                # Obtener números previos de archivos
+                                                from glob import glob as glob_search
+                                                pattern_excel = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}*.xlsx")
+                                                matches_antes = glob_search(pattern_excel)
+                                                max_num_antes = 0
+                                                for m in matches_antes:
+                                                    try:
+                                                        num_str = os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "")
+                                                        if num_str.isdigit():
+                                                            max_num_antes = max(max_num_antes, int(num_str))
+                                                    except:
+                                                        pass
+
+                                                env_config = _get_environments().get(env_param)
+                                                if env_config is None:
+                                                    print(f"⚠️ Entorno no reconocido: {env_param}")
+                                                    continue
+
+                                                run_func = _get_run_func(pais_nombre)
+                                                run_func(
+                                                    browser=env_config["browser"],
+                                                    viewport=env_config["viewport"],
+                                                    headless=False,
+                                                    enviar_email=False,
+                                                    background=True,
+                                                )
+
+                                                # Buscar archivo Excel generado
+                                                matches_despues = glob_search(pattern_excel)
+                                                max_num_despues = 0
+                                                for m in matches_despues:
+                                                    try:
+                                                        num_str = os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "")
+                                                        if num_str.isdigit():
+                                                            max_num_despues = max(max_num_despues, int(num_str))
+                                                    except:
+                                                        pass
+
+                                                if max_num_despues > max_num_antes:
+                                                    excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{max_num_despues}.xlsx")
+                                                    screenshots_dir = os.path.join(RESULTS_DIR, f"screenshots_{pais_nombre}{max_num_despues}")
+
+                                                    if os.path.exists(excel_file):
+                                                        resultado = {
+                                                            "pais": pais_nombre,
+                                                            "navegador": navegador,
+                                                            "viewport": viewport,
+                                                            "estado": "completado",
+                                                            "excel_path": excel_file,
+                                                            "screenshots_dir": screenshots_dir
+                                                        }
+                                                        resultados_ejecucion.append(resultado)
+
+                                            except Exception as ex_form:
+                                                print(f"⚠️ Error ejecutando {pais_nombre} ({env_param}): {ex_form}")
+                                            time.sleep(2)
 
                             # Enviar email consolidado si hay resultados
                             if resultados_ejecucion:

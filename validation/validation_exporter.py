@@ -1,3 +1,8 @@
+"""
+validation_exporter.py — Exporta los resultados de validación de campos a Excel.
+Genera un archivo con colores (verde/rojo) por campo y resultado, listo para revisar
+o adjuntar al email de reporte de validación.
+"""
 import os
 import sys
 
