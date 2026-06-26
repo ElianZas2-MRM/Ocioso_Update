@@ -79,12 +79,12 @@ def _run_lambdatest(lt_type, pais, build_name=""):
     if lt_type == "mac":
         if lt_mac_dir not in sys.path:
             sys.path.insert(0, lt_mac_dir)
-        import lt_controller
+        import lt_controller  # type: ignore[import]
         summary = lt_controller.run(pais=pais, build_name=build_name)
     elif lt_type == "android":
         if lt_android_dir not in sys.path:
             sys.path.insert(0, lt_android_dir)
-        import lt_android_controller
+        import lt_android_controller  # type: ignore[import]
         summary = lt_android_controller.run(pais=pais, build_name=build_name)
     else:
         raise ValueError(f"Tipo LambdaTest no reconocido: {lt_type!r}")

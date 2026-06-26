@@ -16,32 +16,38 @@ else:
 JSON_DIR = os.path.join(BASE_DIR, "json")
 
 def guardar_programacion(programacion):
-    """Guarda la programación en un archivo JSON en carpeta json/ o limpia el archivo si programacion es None"""
+    """Guarda la programación en archivo JSON. None = eliminar. Soporta esquema semanal y legado."""
     try:
-        # Si programacion es None, simplemente limpiar el archivo
         if programacion is None:
             json_path = os.path.join(JSON_DIR, "programacion_test.json")
             if os.path.exists(json_path):
                 os.remove(json_path)
-                print("✅ Archivo de programación eliminado (guardar_programacion(None))")
+                print("✅ Archivo de programación eliminado")
             return True
-        
-        # Crear carpeta json si no existe
+
         if not os.path.exists(JSON_DIR):
             os.makedirs(JSON_DIR)
-            print(f"📁 Carpeta '{JSON_DIR}' creada")
 
-        # Convertir datetime a string para JSON
-        programacion_serializable = {
-            "fecha_hora": programacion["fecha_hora"].strftime("%Y-%m-%d %H:%M:%S"),
-            "paises": programacion["paises"],
-            "navegadores": programacion["navegadores"],
-            "viewports": programacion["viewports"]
-        }
+        if programacion.get("tipo") == "semanal":
+            serializable = {
+                "tipo": "semanal",
+                "horarios":    programacion["horarios"],
+                "paises":      programacion["paises"],
+                "navegadores": programacion.get("navegadores", []),
+                "viewports":   programacion.get("viewports", []),
+            }
+        else:
+            # Formato legado (fecha_hora única)
+            serializable = {
+                "fecha_hora": programacion["fecha_hora"].strftime("%Y-%m-%d %H:%M:%S"),
+                "paises":      programacion["paises"],
+                "navegadores": programacion["navegadores"],
+                "viewports":   programacion["viewports"],
+            }
 
         json_path = os.path.join(JSON_DIR, "programacion_test.json")
-        with open(json_path, "w", encoding='utf-8') as f:
-            json.dump(programacion_serializable, f, indent=2)
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, indent=2, ensure_ascii=False)
 
         print(f"✅ Programación guardada en {json_path}")
         return True
@@ -50,23 +56,25 @@ def guardar_programacion(programacion):
         return False
 
 def cargar_programacion():
-    """Carga la programación desde archivo JSON en carpeta json/"""
+    """Carga la programación desde archivo JSON. Retorna dict con tipo='semanal' o None."""
     try:
         json_path = os.path.join(JSON_DIR, "programacion_test.json")
-        if os.path.exists(json_path):
-            with open(json_path, "r", encoding='utf-8') as f:
-                data = json.load(f)
+        if not os.path.exists(json_path):
+            return None
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-            # Convertir string a datetime
-            programacion = {
-                "fecha_hora": datetime.strptime(data["fecha_hora"], "%Y-%m-%d %H:%M:%S"),
-                "paises": data["paises"],
-                "navegadores": data["navegadores"],
-                "viewports": data["viewports"]
+        if data.get("tipo") == "semanal":
+            return {
+                "tipo":        "semanal",
+                "horarios":    data["horarios"],
+                "paises":      data["paises"],
+                "navegadores": data.get("navegadores", []),
+                "viewports":   data.get("viewports", []),
             }
 
-            print(f"Programación cargada desde {json_path}")
-            return programacion
+        # Formato legado (fecha_hora): ignorar para no romper la nueva UI
+        print("⚠️ Programación en formato antiguo detectada — se ignorará.")
         return None
     except Exception as e:
         print(f"Error cargando programación: {e}")

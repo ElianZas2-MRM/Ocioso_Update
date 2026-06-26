@@ -3,9 +3,11 @@ weekly_scheduler.py — Panel y diálogo de programación semanal recurrente.
 WeeklySchedulerPanel: tarjeta de estado embebida en la pestaña de testing.
 WeeklySchedulerDialog: modal de configuración (días, horarios, países).
 """
+import json
+import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, date as _date
 from tkinter import *
 from tkinter import messagebox
 
@@ -35,7 +37,7 @@ DAYS_OF_WEEK = [
     ("Dom", "Domingo"),
 ]
 
-HOURS = [f"{h:02d}:00" for h in range(24)]
+HOURS = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 15, 30, 45)]
 
 COUNTRIES = [
     "Argentina", "Bolivia", "Brasil",
@@ -75,6 +77,9 @@ class WeeklySchedulerDialog(Toplevel):
         self._hour_btns = {}
         self._badges_frame = None
         self._copy_frame_inner = None
+        self._val_lbl = None
+        self._save_btn = None
+        self._edit_all_days = False
 
         cfg = initial_config or {}
         self._schedule = {k: list(v) for k, v in cfg.get("horarios", {}).items()}
@@ -92,7 +97,7 @@ class WeeklySchedulerDialog(Toplevel):
     # ── Build ──────────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Header
+        # Header (top)
         header = Frame(self, bg=SCH_CARD)
         header.pack(fill="x")
         Label(header, text="⚙  Configurar automatización",
@@ -103,8 +108,13 @@ class WeeklySchedulerDialog(Toplevel):
         btn_x.pack(side=RIGHT, padx=12, pady=8)
         Frame(self, bg=SCH_BORDER, height=1).pack(fill="x")
 
-        # Scrollable body
+        # Footer fixed at bottom (packed before canvas so it stays pinned)
+        self._build_footer(self, dict(padx=14, pady=10))
+        Frame(self, bg=SCH_BORDER, height=1).pack(fill="x", side=BOTTOM)
+
+        # Scrollable body (fills remaining space between header and footer)
         canvas = Canvas(self, bg=SCH_BG, highlightthickness=0)
+        self._scroll_canvas = canvas  # kept for child widgets to bind scroll
         vsb = Scrollbar(self, orient=VERTICAL, command=canvas.yview)
         canvas.configure(yscrollcommand=vsb.set)
         vsb.pack(side=RIGHT, fill=Y)
@@ -127,7 +137,6 @@ class WeeklySchedulerDialog(Toplevel):
         p = dict(padx=14, pady=8)
         self._build_days_section(body, p)
         self._build_countries_section(body, p)
-        self._build_footer(body, p)
 
     def _card_frame(self, parent):
         f = Frame(parent, bg=SCH_CARD, highlightbackground=SCH_BORDER,
@@ -205,26 +214,54 @@ class WeeklySchedulerDialog(Toplevel):
                relief=FLAT, cursor="hand2", bd=0,
                command=self._close_hours_panel).pack(side=RIGHT)
         Button(h_hdr, text="✓ Listo", font=("Segoe UI", 8, "bold"),
-               bg=SCH_CARD, fg=SCH_PRIMARY, relief=FLAT, cursor="hand2",
+               bg=SCH_GREEN, fg=SCH_WHITE, relief=FLAT, cursor="hand2",
                padx=8, pady=3,
                command=self._close_hours_panel).pack(side=RIGHT, padx=(0, 6))
 
-        # Hour grid (6 cols)
+        # Edit mode toggle: Solo este día / Todos los días
+        mode_row = Frame(self._hours_outer, bg=SCH_BG)
+        mode_row.pack(fill="x", pady=(0, 4))
+        Label(mode_row, text="Modo:", font=("Segoe UI", 8),
+              bg=SCH_BG, fg=SCH_MUTED).pack(side=LEFT)
+        Button(mode_row, text="Solo este día",
+               font=("Segoe UI", 8, "bold"),
+               bg=SCH_PRIMARY if not self._edit_all_days else SCH_HOVER,
+               fg=SCH_PFG if not self._edit_all_days else SCH_MUTED,
+               relief=FLAT, cursor="hand2", padx=6, pady=2,
+               command=lambda: self._set_edit_mode(False)).pack(side=LEFT, padx=(4, 2))
+        Button(mode_row, text="Todos los días",
+               font=("Segoe UI", 8, "bold"),
+               bg=SCH_AMBER if self._edit_all_days else SCH_HOVER,
+               fg=SCH_WHITE if self._edit_all_days else SCH_MUTED,
+               relief=FLAT, cursor="hand2", padx=6, pady=2,
+               command=lambda: self._set_edit_mode(True)).pack(side=LEFT, padx=2)
+        if self._edit_all_days:
+            Label(mode_row, text="⚠ Cambios aplican a TODOS los días",
+                  font=("Segoe UI", 8), bg=SCH_BG, fg=SCH_AMBER).pack(side=LEFT, padx=8)
+
+        # Hour grid (6 cols × 16 rows: comfortable size, readable font)
         grid = Frame(self._hours_outer, bg=SCH_BG)
         grid.pack(fill="x", pady=4)
         current = self._schedule.get(self._selected_day, [])
         self._hour_btns = {}
+        for c in range(6):
+            grid.columnconfigure(c, weight=1)
+
+        def _scroll_fwd(e):
+            if hasattr(self, "_scroll_canvas"):
+                self._scroll_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
         for idx, hour in enumerate(HOURS):
             r, c = divmod(idx, 6)
             picked = hour in current
-            btn = Button(grid, text=hour, font=("Segoe UI", 8),
+            btn = Button(grid, text=hour, font=("Segoe UI", 9),
                          bg=SCH_PRIMARY if picked else SCH_HOVER,
                          fg=SCH_PFG if picked else SCH_MUTED,
                          relief=RAISED if picked else FLAT,
-                         cursor="hand2", padx=3, pady=5, width=5)
+                         cursor="hand2", padx=4, pady=6, width=5)
             btn.grid(row=r, column=c, padx=2, pady=2, sticky="ew")
-            grid.columnconfigure(c, weight=1)
             btn.config(command=lambda h=hour: self._toggle_hour(h))
+            btn.bind("<MouseWheel>", _scroll_fwd)
             self._hour_btns[hour] = btn
 
         # Badges row
@@ -243,20 +280,51 @@ class WeeklySchedulerDialog(Toplevel):
             return
         for w in self._badges_frame.winfo_children():
             w.destroy()
-        for h in sorted(self._schedule.get(self._selected_day, [])):
-            Label(self._badges_frame, text=h, font=("Segoe UI", 8, "bold"),
-                  bg=SCH_BG, fg=SCH_PRIMARY, padx=6, pady=2,
+        selected = sorted(self._schedule.get(self._selected_day, []))
+        MAX_SHOW = 12
+        for h in selected[:MAX_SHOW]:
+            Label(self._badges_frame, text=h, font=("Segoe UI", 9, "bold"),
+                  bg=SCH_BG, fg=SCH_PRIMARY, padx=6, pady=3,
                   relief=SOLID, bd=1).pack(side=LEFT, padx=2)
+        if len(selected) > MAX_SHOW:
+            Label(self._badges_frame, text=f"+{len(selected) - MAX_SHOW} más",
+                  font=("Segoe UI", 9), bg=SCH_BG, fg=SCH_MUTED).pack(side=LEFT, padx=4)
 
     def _toggle_hour(self, hour):
         day = self._selected_day
-        hours = self._schedule.setdefault(day, [])
-        if hour in hours:
-            hours.remove(hour)
+        currently_picked = hour in self._schedule.get(day, [])
+
+        # Always modify the selected day first
+        dh = self._schedule.setdefault(day, [])
+        if currently_picked:
+            dh.remove(hour)
         else:
-            hours.append(hour)
-            hours.sort()
-        picked = hour in hours
+            dh.append(hour)
+            dh.sort()
+
+        if self._edit_all_days:
+            # Replace ALL other days with the exact schedule of the selected day
+            new_hours = list(self._schedule.get(day, []))
+            for _, full in DAYS_OF_WEEK:
+                if full == day:
+                    continue
+                if new_hours:
+                    self._schedule[full] = list(new_hours)
+                else:
+                    self._schedule.pop(full, None)
+
+        # Clean empty selected day
+        if not self._schedule.get(day):
+            self._schedule.pop(day, None)
+
+        has_hours_now = bool(self._schedule.get(day))
+        # True when visibility of copy section must change (0→1 or N→0 hours)
+        copy_visibility_changed = (
+            (currently_picked and not has_hours_now) or          # removed last hour
+            (not currently_picked and len(self._schedule.get(day, [])) == 1)  # added first hour
+        )
+
+        picked = hour in self._schedule.get(day, [])
         btn = self._hour_btns.get(hour)
         if btn:
             btn.config(bg=SCH_PRIMARY if picked else SCH_HOVER,
@@ -265,7 +333,8 @@ class WeeklySchedulerDialog(Toplevel):
         self._refresh_badges()
         self._update_day_buttons()
         self._update_footer()
-        self._build_copy_ui()
+        if copy_visibility_changed:
+            self._build_copy_ui()
 
     def _update_day_buttons(self):
         total = sum(len(v) for v in self._schedule.values())
@@ -310,13 +379,19 @@ class WeeklySchedulerDialog(Toplevel):
             return
 
         if not self._copy_open_state:
-            btn = Button(self._copy_frame_inner,
-                         text="📅  Aplicar estos horarios a otros días",
-                         font=("Segoe UI", 9, "bold"), bg=SCH_BG, fg=SCH_PRIMARY,
-                         relief=FLAT, cursor="hand2", pady=6, bd=1,
-                         highlightbackground=SCH_PRIMARY, highlightthickness=1,
-                         command=self._open_copy_ui)
-            btn.pack(fill="x", pady=2)
+            quick_row = Frame(self._copy_frame_inner, bg=SCH_BG)
+            quick_row.pack(fill="x", pady=2)
+            Button(quick_row,
+                   text="📅  Aplicar a otros días",
+                   font=("Segoe UI", 9, "bold"), bg=SCH_BG, fg=SCH_PRIMARY,
+                   relief=FLAT, cursor="hand2", pady=6, bd=1,
+                   highlightbackground=SCH_PRIMARY, highlightthickness=1,
+                   command=self._open_copy_ui).pack(side=LEFT, fill="x", expand=True, padx=(0, 4))
+            Button(quick_row,
+                   text="⚡ TODOS",
+                   font=("Segoe UI", 9, "bold"), bg=SCH_AMBER, fg=SCH_WHITE,
+                   relief=FLAT, cursor="hand2", pady=6,
+                   command=self._apply_copy_all).pack(side=LEFT)
         else:
             Label(self._copy_frame_inner,
                   text=f"Copiar horarios de {self._selected_day} a:",
@@ -348,6 +423,24 @@ class WeeklySchedulerDialog(Toplevel):
                         bg=SCH_BG, fg=SCH_MUTED, cursor="hand2")
             lnk.pack(side=LEFT)
             lnk.bind("<Button-1>", lambda e: self._close_copy_ui())
+
+    def _set_edit_mode(self, all_days):
+        self._edit_all_days = all_days
+        self._build_hours_panel()
+
+    def _apply_copy_all(self):
+        src = self._schedule.get(self._selected_day, [])
+        if not src:
+            return
+        for _, full in DAYS_OF_WEEK:
+            if full != self._selected_day:
+                merged = sorted(set(self._schedule.get(full, [])) | set(src))
+                self._schedule[full] = merged
+        self._update_day_buttons()
+        self._update_footer()
+        messagebox.showinfo("Copiado",
+                            f"Horarios de {self._selected_day} copiados a todos los días.",
+                            parent=self)
 
     def _open_copy_ui(self):
         self._copy_open_state = True
@@ -467,10 +560,10 @@ class WeeklySchedulerDialog(Toplevel):
 
     def _build_footer(self, parent, pad):
         footer = Frame(parent, bg=SCH_BG)
-        footer.pack(fill="x", **pad)
+        footer.pack(fill="x", side=BOTTOM, **pad)
 
         self._val_lbl = Label(footer, text="", font=("Segoe UI", 9),
-                               bg="#F59E0B22", fg=SCH_AMBER,
+                               bg=SCH_BG, fg=SCH_AMBER,
                                padx=10, pady=6, justify="left", anchor="w",
                                wraplength=500, relief=FLAT)
 
@@ -485,6 +578,8 @@ class WeeklySchedulerDialog(Toplevel):
         self._update_footer()
 
     def _update_footer(self):
+        if self._val_lbl is None:
+            return
         total = sum(len(v) for v in self._schedule.values())
         n = len(self._countries)
         can = total > 0 and n > 0
@@ -548,7 +643,8 @@ class WeeklySchedulerPanel(Frame):
         self._config    = None   # saved weekly config (horarios, paises)
         self._status    = "idle"
         self._is_active = False
-        self._last_triggered = {}   # {(day_str, hour_str): date}
+        self._last_triggered = self._load_triggered()  # {(day_str, hour_str): date}
+        self._stop_event = threading.Event()
 
         # Load saved config draft from config_global
         cfg_g = cargar_config_global()
@@ -748,6 +844,7 @@ class WeeklySchedulerPanel(Frame):
             self._on_change(False)
 
     def _stop(self):
+        self._stop_event.set()  # signals _execute_scheduled to abort
         self._is_active = False
         self._status    = "stopped"
         self._refresh_ui()
@@ -778,6 +875,7 @@ class WeeklySchedulerPanel(Frame):
         self._refresh_ui()
 
     def _run_now(self):
+        self._stop_event.clear()
         threading.Thread(target=self._execute_scheduled, daemon=True).start()
 
     # ── Execution ──────────────────────────────────────────────────────────────
@@ -785,10 +883,14 @@ class WeeklySchedulerPanel(Frame):
     def _execute_scheduled(self):
         if not self._config or not self._execute_cb:
             return
+        self._stop_event.clear()
         root = self._root or self.winfo_toplevel()
         root.after(0, lambda: self.set_status("running"))
         try:
-            resultados = self._execute_cb(self._config)
+            resultados = self._execute_cb(self._config, self._stop_event)
+            if self._stop_event.is_set():
+                print("⛔ Ejecución detenida por el usuario.")
+                return
             if resultados and self._send_email_cb:
                 try:
                     self._send_email_cb(resultados)
@@ -796,7 +898,28 @@ class WeeklySchedulerPanel(Frame):
                     print(f"❌ Error enviando email consolidado: {e}")
         except Exception as e:
             print(f"❌ Error durante ejecución programada: {e}")
-        root.after(0, lambda: self.set_status("completed"))
+        if not self._stop_event.is_set():
+            root.after(0, lambda: self.set_status("completed"))
+
+    # ── Triggered persistence ──────────────────────────────────────────────────
+
+    _TRIGGERED_FILE = os.path.join(os.path.dirname(__file__), '..', 'json', 'scheduler_triggered.json')
+
+    def _load_triggered(self):
+        try:
+            with open(self._TRIGGERED_FILE, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            return {tuple(k.split('|')): _date.fromisoformat(v) for k, v in raw.items()}
+        except Exception:
+            return {}
+
+    def _save_triggered(self):
+        try:
+            raw = {f"{k[0]}|{k[1]}": v.isoformat() for k, v in self._last_triggered.items()}
+            with open(self._TRIGGERED_FILE, 'w', encoding='utf-8') as f:
+                json.dump(raw, f)
+        except Exception:
+            pass
 
     # ── Monitor loop ───────────────────────────────────────────────────────────
 
@@ -806,12 +929,15 @@ class WeeklySchedulerPanel(Frame):
                 if self._is_active and self._status == "scheduled" and self._config:
                     ahora      = datetime.now()
                     dia        = DAYS_ES[ahora.weekday()]
-                    hora       = ahora.strftime("%H:00")
+                    slot_min   = (ahora.minute // 15) * 15
+                    hora       = f"{ahora.hour:02d}:{slot_min:02d}"
                     programados = self._config.get("horarios", {}).get(dia, [])
                     if hora in programados:
                         key = (dia, hora)
                         if self._last_triggered.get(key) != ahora.date():
                             self._last_triggered[key] = ahora.date()
+                            self._save_triggered()
+                            self._stop_event.clear()
                             self._execute_scheduled()
             except Exception as e:
                 print(f"⚠️  Error en monitor semanal: {e}")

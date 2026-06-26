@@ -67,7 +67,6 @@ from utils.fixed_field_mapping_store import (
     load_effective_country_form_config,
     save_country_fixed_field_mapping,
 )
-from utils.scheduling import guardar_programacion, cargar_programacion, limpiar_programacion
 
 # === RUTAS BASE ===
 from utils.paths import BASE_DIR, BUNDLE_DIR, FORMS_DIR, DATA_DIR, ASSET_DIR, RESULTS_DIR, JSON_DIR
@@ -1696,7 +1695,7 @@ def _build_lambdatest_tab(parent):
 
         def _run_pais_mac(pais):
             try:
-                import lt_controller
+                import lt_controller  # type: ignore[import]
                 summary = lt_controller.run(
                     pais=pais,
                     platform="mac",
@@ -1816,7 +1815,7 @@ def _build_lambdatest_tab(parent):
 
         def _run_pais_android(pais):
             try:
-                import lt_android_controller
+                import lt_android_controller  # type: ignore[import]
                 summary = lt_android_controller.run(
                     pais=pais,
                     device_name=device_name,
@@ -2179,8 +2178,6 @@ def iniciar_interfaz():
 
     def _append_console(text):
         try:
-            if not _console_expanded[0]:
-                _toggle_console()
             _console_text.configure(state="normal")
             _console_text.insert(END, text)
             _console_text.see(END)
@@ -2346,77 +2343,24 @@ def iniciar_interfaz():
     canvas.bind("<Enter>", _bind_mousewheel)
     canvas.bind("<Leave>", _unbind_mousewheel)
 
-    # === VERIFICAR Y CARGAR PROGRAMACIÓN EXISTENTE AL INICIAR ===
-    global programacion_actual, test_programado_var
-    programacion_existente = cargar_programacion()
-    
-    # Variables globales para configuración - DEFINIR DESPUÉS DE CARGAR PROGRAMACIÓN
+    # === INICIALIZAR VARIABLES DE CONFIGURACIÓN ===
     global chrome_var, firefox_var, edge_var, desktop_var, mobile_var
     global lt_mac_var, lt_android_var, visible_browser_var, email_modo_var
     global modo_ejecucion_var, pais_single_var
 
     _ui_prefs = cargar_config_global().get("ui_prefs", {})
-    
-    # Inicializar variables según si hay programación existente o no
-    if programacion_existente:
-        # Verificar si la programación ya pasó (más de 2 minutos)
-        ahora = datetime.now()
-        fecha_hora_programada = programacion_existente["fecha_hora"]
-        diferencia = (ahora - fecha_hora_programada).total_seconds()
-        
-        if diferencia > 120:  # Pasaron más de 2 minutos desde la hora programada
-            print("⚠️ Programación expirada detectada, limpiando...")
-            programacion_actual = None
-            test_programado_var = BooleanVar(value=False)
-            guardar_programacion(None)  # Limpiar archivo
-            
-            # Valores por defecto cuando se limpia (usa prefs guardadas si existen)
-            _navs = _ui_prefs.get("navegadores", ["chrome"])
-            _vps = _ui_prefs.get("viewports", ["fullscreen"])
-            chrome_var = BooleanVar(value="chrome" in _navs)
-            firefox_var = BooleanVar(value="firefox" in _navs)
-            edge_var = BooleanVar(value="edge" in _navs)
-            lt_mac_var = BooleanVar(value="lambdatest_mac" in _navs)
-            lt_android_var = BooleanVar(value="lambdatest_android" in _navs)
-            visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
-            desktop_var = BooleanVar(value="fullscreen" in _vps)
-            mobile_var = BooleanVar(value="600x738" in _vps)
-            modo_ejecucion_var = StringVar(value="consecutive")
-            pais_single_var = StringVar(value="")
-        else:
-            programacion_actual = programacion_existente
-            programacion_actual["paises"] = normalizar_paises_programacion(programacion_actual.get("paises"))
-            test_programado_var = BooleanVar(value=True)
-
-            # Configurar según la programación cargada
-            chrome_var = BooleanVar(value="chrome" in programacion_actual["navegadores"])
-            firefox_var = BooleanVar(value="firefox" in programacion_actual["navegadores"])
-            edge_var = BooleanVar(value="edge" in programacion_actual["navegadores"])
-            lt_mac_var = BooleanVar(value="lambdatest_mac" in programacion_actual["navegadores"])
-            lt_android_var = BooleanVar(value="lambdatest_android" in programacion_actual["navegadores"])
-            visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
-            desktop_var = BooleanVar(value="fullscreen" in programacion_actual["viewports"])
-            mobile_var = BooleanVar(value="600x738" in programacion_actual["viewports"])
-            modo_ejecucion_var = StringVar(value="consecutive")
-            pais_single_var = StringVar(value="")
-
-    else:
-        programacion_actual = None
-        test_programado_var = BooleanVar(value=False)
-
-        # Valores por defecto (usa prefs guardadas si existen)
-        _navs = _ui_prefs.get("navegadores", ["chrome"])
-        _vps = _ui_prefs.get("viewports", ["fullscreen"])
-        chrome_var = BooleanVar(value="chrome" in _navs)
-        firefox_var = BooleanVar(value="firefox" in _navs)
-        edge_var = BooleanVar(value="edge" in _navs)
-        lt_mac_var = BooleanVar(value="lambdatest_mac" in _navs)
-        lt_android_var = BooleanVar(value="lambdatest_android" in _navs)
-        visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
-        desktop_var = BooleanVar(value="fullscreen" in _vps)
-        mobile_var = BooleanVar(value="600x738" in _vps)
-        modo_ejecucion_var = StringVar(value="single")
-        pais_single_var = StringVar(value="")
+    _navs = _ui_prefs.get("navegadores", ["chrome"])
+    _vps  = _ui_prefs.get("viewports",   ["fullscreen"])
+    chrome_var          = BooleanVar(value="chrome"             in _navs)
+    firefox_var         = BooleanVar(value="firefox"            in _navs)
+    edge_var            = BooleanVar(value="edge"               in _navs)
+    lt_mac_var          = BooleanVar(value="lambdatest_mac"     in _navs)
+    lt_android_var      = BooleanVar(value="lambdatest_android" in _navs)
+    visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
+    desktop_var         = BooleanVar(value="fullscreen" in _vps)
+    mobile_var          = BooleanVar(value="600x738"    in _vps)
+    modo_ejecucion_var  = StringVar(value="consecutive")
+    pais_single_var     = StringVar(value="")
 
     email_modo_var = StringVar(value=_ui_prefs.get("email_modo", "por_pais"))
 
@@ -2437,8 +2381,7 @@ def iniciar_interfaz():
 
     # Configuración global compartida entre tabs
     cfg_global = cargar_config_global()
-    if "enviar_mail" not in cfg_global:
-        cfg_global["enviar_mail"] = False
+    cfg_global["enviar_mail"] = False  # siempre arranca desactivado, sin importar sesión anterior
     if "adjuntar_resultados" not in cfg_global:
         cfg_global["adjuntar_resultados"] = True
     if "adjuntar_screenshots" not in cfg_global:
@@ -3734,6 +3677,8 @@ def iniciar_interfaz():
 
     entry_email = Entry(frame_email, font=("Segoe UI", 10), width=50, textvariable=email_var)
     entry_email.pack(side=LEFT, padx=5)
+    Label(frame_email, text="(varios emails separados por coma)",
+          font=("Segoe UI", 8), bg=APP_BG_COLOR, fg="#888").pack(side=LEFT)
 
     def _persistir_email_destinatario(*_):
         config = cargar_config_global()
@@ -3789,18 +3734,20 @@ def iniciar_interfaz():
     frame_email_modo.pack(anchor="e", pady=(2, 0))
     Label(frame_email_modo, text="Modo email:", bg=APP_BG_COLOR, fg="white",
           font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 4))
-    Radiobutton(frame_email_modo, text="1 por país", variable=email_modo_var,
+    rb_por_pais = Radiobutton(frame_email_modo, text="1 por país", variable=email_modo_var,
                 value="por_pais", bg=APP_BG_COLOR, fg="white",
                 activebackground=APP_BG_COLOR, activeforeground="white",
-                selectcolor=APP_BG_COLOR, font=("Segoe UI", 9)).pack(side=LEFT)
-    Radiobutton(frame_email_modo, text="Consolidado al final", variable=email_modo_var,
+                selectcolor=APP_BG_COLOR, font=("Segoe UI", 9))
+    rb_por_pais.pack(side=LEFT)
+    rb_consolidado = Radiobutton(frame_email_modo, text="Consolidado al final", variable=email_modo_var,
                 value="consolidado", bg=APP_BG_COLOR, fg="white",
                 activebackground=APP_BG_COLOR, activeforeground="white",
-                selectcolor=APP_BG_COLOR, font=("Segui UI", 9)).pack(side=LEFT, padx=(6, 0))
+                selectcolor=APP_BG_COLOR, font=("Segoe UI", 9))
+    rb_consolidado.pack(side=LEFT, padx=(6, 0))
 
     def _persistir_opciones_email(*_):
         cfg = cargar_config_global()
-        # "enviar_mail" NO se persiste: siempre inicia apagado para evitar envíos accidentales
+        cfg["enviar_mail"] = bool(enviar_mail_var.get())  # sincroniza archivo con checkbox
         cfg["adjuntar_resultados"] = bool(adjuntar_resultados_var.get())
         cfg["adjuntar_screenshots"] = bool(adjuntar_screenshots_var.get())
 
@@ -3824,6 +3771,8 @@ def iniciar_interfaz():
         entry_email.config(state=estado)
         chk_adj_resultados.config(state=estado)
         chk_adj_screens.config(state=estado)
+        rb_por_pais.config(state=estado)
+        rb_consolidado.config(state=estado)
 
     for _var in (enviar_mail_var, adjuntar_resultados_var, adjuntar_screenshots_var,
                  chrome_var, firefox_var, edge_var, lt_mac_var, lt_android_var,
@@ -4295,7 +4244,7 @@ def iniciar_interfaz():
 
     #ttk.Separator(root, orient="horizontal", style="App.TSeparator").pack(fill="x", pady=10)
 
-    # === COMPONENTE MEJORADO PARA PROGRAMAR TESTS ===
+    # === CALENDARIO SEMANAL DE AUTOMATIZACIÓN ===
     programar_container = Frame(
         testing_tab,
         bg=SECTION_CONTAINER_BG_COLOR,
@@ -4304,206 +4253,30 @@ def iniciar_interfaz():
     )
     programar_container.pack(fill="x", padx=20, pady=15)
 
-    frame_programar_tests = Frame(programar_container, bg=HEADER_BG_COLOR)
-    frame_programar_tests.pack(fill="x", padx=4, pady=4)
+    from interface.weekly_scheduler import WeeklySchedulerPanel
 
-    # Frame principal para programar tests
-    frame_3_columnas = Frame(frame_programar_tests, bg=HEADER_BG_COLOR)
-    frame_3_columnas.pack(fill="x")
-    
-    # Configurar grid para 3 columnas de igual peso
-    frame_3_columnas.columnconfigure(0, weight=1)  # Columna 1: Checkbox
-    frame_3_columnas.columnconfigure(1, weight=4)
-    frame_3_columnas.columnconfigure(2, weight=1)  # Columna 3: (reservada para expansión)
+    def _get_navegadores_seleccionados():
+        navs = []
+        if chrome_var.get():     navs.append("chrome")
+        if firefox_var.get():    navs.append("firefox")
+        if edge_var.get():       navs.append("edge")
+        if lt_mac_var.get():     navs.append("lambdatest_mac")
+        if lt_android_var.get(): navs.append("lambdatest_android")
+        return navs
 
-    # ===== COLUMNA 1: CHECKBOX (IZQUIERDA) =====
-    frame_col1 = Frame(frame_3_columnas, bg=HEADER_BG_COLOR)
-    frame_col1.grid(row=0, column=0, sticky="w", padx=10)
+    def _get_viewports_seleccionados():
+        vps = []
+        if desktop_var.get(): vps.append("fullscreen")
+        if mobile_var.get():  vps.append("600x738")
+        return vps
 
-    check_test_programado = Checkbutton(
-        frame_col1,
-        text="Programar Test Automático",
-        variable=test_programado_var,
-        command=lambda: manejar_check_test(),
-        bg=HEADER_BG_COLOR,
-        font=("Segoe UI", 12, "bold"),
-        fg="black",
-        activeforeground="black",
-        selectcolor=HEADER_BG_COLOR,
-    )
-    check_test_programado.pack(anchor="w")
+    # Referencia forward para que actualizar_estado_botones funcione antes de crear el panel
+    _scheduler_ref = {}
 
-    Label(
-        frame_col1,
-        text="Al activar se bloquearán los botones\nde ejecución manual",
-        bg=HEADER_BG_COLOR,
-        font=("Segoe UI", 9),
-        fg="#333333",
-        justify="left",
-    ).pack(anchor="w", pady=(5, 0))
-
-    # ===== COLUMNA 2: CONTENEDOR PARA CONFIGURACIÓN E INFORMACIÓN (CENTRO) =====
-    frame_col2 = Frame(frame_3_columnas, bg=HEADER_BG_COLOR)
-    frame_col2.grid(row=0, column=1, sticky="nsew", padx=10)
-    frame_col2.columnconfigure(0, weight=1)
-
-    # === VISTA DE CONFIGURACIÓN (se muestra cuando NO hay test programado) ===
-    frame_configuracion = Frame(frame_col2, bg=HEADER_BG_COLOR)
-
-    # Configurar grid para frame_configuracion
-    frame_configuracion.grid_rowconfigure(0, weight=1)
-    frame_configuracion.grid_rowconfigure(1, weight=1)
-    frame_configuracion.grid_columnconfigure(0, weight=1)
-
-    # Frame para fecha y hora - CENTRADO
-    frame_fecha_hora = Frame(frame_configuracion, bg=HEADER_BG_COLOR)
-    frame_fecha_hora.grid(row=0, column=0, sticky="nsew", pady=10)
-
-    # Contenedor centrado para fecha y hora
-    frame_centro_fecha_hora = Frame(frame_fecha_hora, bg=HEADER_BG_COLOR)
-    frame_centro_fecha_hora.pack(expand=True, fill="x")
-
-    # Fecha (HOY por defecto) - CENTRADA
-    hoy = datetime.now()
-    frame_fecha = Frame(frame_centro_fecha_hora, bg=HEADER_BG_COLOR)
-    frame_fecha.pack(pady=5)
-    Label(frame_fecha, text="Fecha (YYYY-MM-DD):", bg=HEADER_BG_COLOR, font=("Segoe UI", 10)).pack(side=LEFT, padx=(0, 10))
-    entry_fecha = Entry(frame_fecha, font=("Segoe UI", 10), width=15)
-    entry_fecha.pack(side=LEFT)
-    entry_fecha.insert(0, hoy.strftime("%Y-%m-%d"))
-
-    # Hora (09:00 por defecto) - CENTRADA
-    frame_hora = Frame(frame_centro_fecha_hora, bg=HEADER_BG_COLOR)
-    frame_hora.pack(pady=5)
-    Label(frame_hora, text="Hora (HH:MM):", bg=HEADER_BG_COLOR, font=("Segoe UI", 10)).pack(side=LEFT, padx=(0, 10))
-    entry_hora = Entry(frame_hora, font=("Segoe UI", 10), width=10)
-    entry_hora.pack(side=LEFT)
-    entry_hora.insert(0, "09:00")
-
-    frame_paises_programacion = Frame(frame_configuracion, bg=HEADER_BG_COLOR)
-    frame_paises_programacion.grid(row=1, column=0, sticky="nsew", pady=(0, 12))
-
-    Label(
-        frame_paises_programacion,
-        text="Países a testear:",
-        bg=HEADER_BG_COLOR,
-        font=("Segoe UI", 10, "bold"),
-        fg="black",
-    ).pack(anchor="center", pady=(0, 6))
-
-    frame_paises_checks = Frame(frame_paises_programacion, bg=HEADER_BG_COLOR)
-    frame_paises_checks.pack(anchor="center")
-
-    paises_programados_actuales = set(programacion_actual["paises"]) if programacion_actual else set()
-    paises_programacion_vars = {}
-    paises_disponibles_programacion = list(MAPEO_PAISES.keys())
-
-    for col in range(3):
-        frame_paises_checks.grid_columnconfigure(col, weight=1)
-
-    for idx, pais in enumerate(paises_disponibles_programacion):
-        row = idx % 3
-        col = idx // 3
-        pais_var = BooleanVar(value=pais in paises_programados_actuales)
-        paises_programacion_vars[pais] = pais_var
-        Checkbutton(
-            frame_paises_checks,
-            text=pais,
-            variable=pais_var,
-            bg=HEADER_BG_COLOR,
-            fg="black",
-            activebackground=HEADER_BG_COLOR,
-            activeforeground="black",
-            selectcolor=HEADER_BG_COLOR,
-            anchor="w",
-        ).grid(row=row, column=col, sticky="w", padx=12, pady=2)
-
-    # === VISTA DE INFORMACIÓN (se muestra cuando HAY test programado) ===
-    frame_informacion = Frame(frame_col2, bg=HEADER_BG_COLOR)
-    frame_informacion.grid_columnconfigure(0, weight=1)
-    frame_informacion.grid_rowconfigure(0, weight=1)
-
-    # Frame para información del test programado con borde y fondo destacado - MÁS ANCHO
-    frame_info_container = Frame(frame_informacion, bg="#F0F8FF", relief="solid", borderwidth=2)
-    frame_info_container.grid(row=0, column=0, sticky="nsew", padx=5, pady=10)
-
-    # Configurar para que ocupe todo el ancho disponible
-    frame_info_container.grid_columnconfigure(0, weight=1)
-    frame_info_container.grid_rowconfigure(0, weight=1)
-
-    label_info_test = Label(frame_info_container, text="", bg="#F0F8FF", font=("Segoe UI", 11, "bold"), 
-                        wraplength=600, justify="center", fg="green")
-    label_info_test.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
-
-    # ===== COLUMNA 3: BOTÓN CANCELAR (DERECHA) - Solo visible cuando hay test programado =====
-    frame_col3 = Frame(frame_3_columnas, bg=HEADER_BG_COLOR)
-    frame_col3.grid(row=0, column=2, sticky="e", padx=10)
-
-    # Botón para cancelar test programado
-    btn_cancelar_test = ttk.Button(
-        frame_col3,
-        text="Cancelar Test Programado",
-        command=lambda: cancelar_test(),
-        style="Cancel.TButton"
-    )
-
-    # Estilo para el botón de cancelar
-    cancel_style = ttk.Style()
-    cancel_style.configure(
-        "Cancel.TButton",
-        foreground="white",
-        background=APP_BG_COLOR,
-        font=("Segoe UI", 12, "bold"),
-        borderwidth=0,
-    )
-
-    # Función para alternar entre vista de configuración y vista de información
-    def alternar_vista_programacion():
-        # Ocultar ambas vistas primero
-        frame_configuracion.grid_forget()
-        frame_informacion.grid_forget()
-        
-        if test_programado_var.get() and programacion_actual is not None:
-            # Mostrar vista de información
-            frame_informacion.grid(row=0, column=0, sticky="nsew")
-            actualizar_info_test()
-        else:
-            # Mostrar vista de configuración
-            frame_configuracion.grid(row=0, column=0, sticky="nsew")
-
-    # Función para actualizar la visibilidad del botón cancelar
-    def actualizar_visibilidad_botones():
-        if test_programado_var.get() and programacion_actual is not None:
-            btn_cancelar_test.pack(side=RIGHT, padx=5)
-        else:
-            btn_cancelar_test.pack_forget()
-
-    # Función para actualizar la información del test programado
-    def actualizar_info_test():
-        if test_programado_var.get() and programacion_actual is not None:
-            fecha_str = programacion_actual["fecha_hora"].strftime("%d/%m/%Y")
-            hora_str = programacion_actual["fecha_hora"].strftime("%H:%M")
-            paises_str = ", ".join(programacion_actual["paises"])
-            navegadores_str = ", ".join(programacion_actual["navegadores"])
-            viewports_str = ", ".join(programacion_actual["viewports"])
-            
-            info_text = (f"TEST PROGRAMADO\n\n"
-                        f"Fecha: {fecha_str}\n"
-                        f"Hora: {hora_str}\n"
-                        f"Países: {paises_str}\n"
-                        f"Navegadores: {navegadores_str}\n"
-                        f"Viewports: {viewports_str}\n"
-                        f"Los tests se ejecutarán automáticamente\na la hora programada.")
-            
-            label_info_test.config(text=info_text, fg="#000000")
-        else:
-            label_info_test.config(text="No hay test programado\n\nActiva la opción y configura\ntu test automático", fg="gray")
-
-    # Función para actualizar estado de botones
     def actualizar_estado_botones():
-        estado = "disabled" if test_programado_var.get() and programacion_actual is not None else "normal"
-
-        # Ajustar botones "Enviar Leads" en cada pestaña
+        panel = _scheduler_ref.get("panel")
+        activo = panel.is_active() if panel else False
+        estado = "disabled" if activo else "normal"
         for widget in root.winfo_children():
             if isinstance(widget, ttk.Notebook):
                 for tab_id in widget.tabs():
@@ -4512,280 +4285,116 @@ def iniciar_interfaz():
                         if isinstance(child, ttk.Button) and "Enviar Leads" in child.cget("text"):
                             child.config(state=estado)
 
-    # Función para programar test
-    def programar_test():
-        # Validar fecha y hora
-        fecha_str = entry_fecha.get()
-        hora_str = entry_hora.get()
-        paises_seleccionados = [
-            pais for pais, pais_var in paises_programacion_vars.items() if pais_var.get()
-        ]
-        
-        try:
-            # Combinar fecha y hora
-            datetime_str = f"{fecha_str} {hora_str}"
-            fecha_hora_programada = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
-            
-            # Verificar que no sea en el pasado
-            ahora = datetime.now()
-            if fecha_hora_programada <= ahora:
-                messagebox.showerror("Error", "No se pueden programar tests en el pasado")
-                test_programado_var.set(False)
-                return
+    def _ejecutar_programacion(programacion, stop_event=None):
+        """Ejecuta todos los tests del schedule semanal y retorna lista de resultados."""
+        from glob import glob as glob_search
 
-            if not paises_seleccionados:
-                messagebox.showerror("Error", "Selecciona al menos un país para el test automático")
-                test_programado_var.set(False)
-                return
-            
-            global programacion_actual
-            programacion_actual = {
-                "fecha_hora": fecha_hora_programada,
-                "paises": paises_seleccionados,
-                "navegadores": [],
-                "viewports": []
-            }
-            
-            # Obtener navegadores seleccionados en Configuración Global
-            if chrome_var.get():
-                programacion_actual["navegadores"].append("chrome")
-            if firefox_var.get():
-                programacion_actual["navegadores"].append("firefox")
-            if edge_var.get():
-                programacion_actual["navegadores"].append("edge")
-            if lt_mac_var.get():
-                programacion_actual["navegadores"].append("lambdatest_mac")
-            if lt_android_var.get():
-                programacion_actual["navegadores"].append("lambdatest_android")
-            
-            # Obtener viewports seleccionados en Configuración Global
-            if desktop_var.get():
-                programacion_actual["viewports"].append("fullscreen")
-            if mobile_var.get():
-                programacion_actual["viewports"].append("600x738")
-            
-            # ✅ GUARDAR EN ARCHIVO JSON
-            if guardar_programacion(programacion_actual):
-                pass
-            else:
-                messagebox.showerror("Error", "No se pudo guardar la programación en archivo")
-                test_programado_var.set(False)
-                return
-            
-            # Actualizar las vistas
-            alternar_vista_programacion()
-            actualizar_estado_botones()
-            actualizar_visibilidad_botones()
-            
-            # Messagebox removido para no bloquear la ejecución
-            
-        except ValueError:
-            messagebox.showerror("Error", "Formato de fecha/hora inválido. Usa YYYY-MM-DD y HH:MM")
-            test_programado_var.set(False)
+        def _stopped():
+            return stop_event is not None and stop_event.is_set()
 
-    # Función para cancelar test programado
-    def cancelar_test():
-        global programacion_actual
-        # LIMPIAR ARCHIVO JSON
-        limpiar_programacion()
-        programacion_actual = None
-        test_programado_var.set(False)
-        
-        # Actualizar las vistas
-        alternar_vista_programacion()
-        actualizar_estado_botones()
-        actualizar_visibilidad_botones()
-        
-    # Función para manejar el checkbox (programar o cancelar)
-    def manejar_check_test():
-        if test_programado_var.get():
-            # Si se activa, programar el test
-            programar_test()
-        else:
-            # Si se desactiva, cancelar el test
-            cancelar_test()
+        resultados = []
+        _LT_NAV = ("lambdatest_mac", "lambdatest_android")
 
-    # Configurar trace para actualizar la interfaz
-    test_programado_var.trace("w", lambda *args: (
-        actualizar_estado_botones(), 
-        alternar_vista_programacion(),
-        actualizar_visibilidad_botones(),
-        actualizar_info_test()
-    ))
-
-    # INICIALIZAR LA INTERFAZ CON EL ESTADO CORRECTO
-    # Esto es crucial - forzar la actualización inicial
-    actualizar_estado_botones()
-    alternar_vista_programacion()
-    actualizar_visibilidad_botones()
-    actualizar_info_test()
-
-    # === REEMPLAZAR LA FUNCIÓN monitor_programacion() COMPLETA ===
-    def monitor_programacion():
-        """Monitorea cada 30 segundos si hay un test programado para ejecutar."""
-        def loop():
-            # Acceder a la variable global dentro del hilo
-            global programacion_actual
-            while True:
-                # Verificar si hay programación actual (usando la variable global)
-                if programacion_actual is not None:
-                    ahora = datetime.now()
-                    fecha_hora_programada = programacion_actual["fecha_hora"]
-                    
-                    # CORRECCIÓN: Verificar si ya pasó la hora programada (con margen de 60 segundos)
-                    diferencia = (ahora - fecha_hora_programada).total_seconds()
-                    
-                    if -60 <= diferencia <= 60:  # Permite 60 segundos de margen antes y después
+        for pais_nombre in programacion.get("paises", []):
+            if _stopped():
+                print("⛔ Ejecución detenida por el usuario.")
+                break
+            for navegador in programacion.get("navegadores", []):
+                if _stopped():
+                    break
+                if navegador in _LT_NAV:
+                    lt_type = "mac" if navegador == "lambdatest_mac" else "android"
+                    try:
+                        lt_dir = os.path.join(BASE_DIR,
+                            "lambdatest_mac" if lt_type == "mac" else "lambdatest_android")
+                        if lt_dir not in sys.path:
+                            sys.path.insert(0, lt_dir)
+                        lt_results_dir = os.path.join(BASE_DIR,
+                            "resultados_lambdatestmac" if lt_type == "mac"
+                            else "resultados_lambdatest_android")
+                        antes = set(os.listdir(lt_results_dir)) if os.path.isdir(lt_results_dir) else set()
+                        if lt_type == "mac":
+                            import lt_controller  # type: ignore[import]
+                            summary = lt_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}", stop_event=stop_event)
+                        else:
+                            import lt_android_controller  # type: ignore[import]
+                            summary = lt_android_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}", stop_event=stop_event)
+                        if summary.get("error"):
+                            print(f"⚠️ LambdaTest {lt_type} — {pais_nombre}: {summary['error']}")
+                        else:
+                            excel_file = summary.get("results_excel")
+                            if not excel_file or not os.path.exists(excel_file):
+                                # Fallback: scan directory for new xlsx
+                                if os.path.isdir(lt_results_dir):
+                                    despues = set(os.listdir(lt_results_dir))
+                                    nuevos = [f for f in (despues - antes) if f.endswith(".xlsx")]
+                                    if nuevos:
+                                        excel_file = os.path.join(lt_results_dir, sorted(nuevos)[-1])
+                            if excel_file and os.path.exists(excel_file):
+                                resultados.append({
+                                    "pais": pais_nombre, "navegador": navegador,
+                                    "viewport": lt_type, "estado": "completado",
+                                    "excel_path": excel_file,
+                                    "screenshots_dir": None,
+                                })
+                    except Exception as ex:
+                        print(f"⚠️ Error LambdaTest {lt_type} — {pais_nombre}: {ex}")
+                    time.sleep(2)
+                else:
+                    for viewport in programacion.get("viewports", []):
+                        if _stopped():
+                            break
+                        env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
                         try:
-                            # Recopilar resultados para envío de emails
-                            resultados_ejecucion = []
-                            
-                            # Ejecutar los formularios seleccionados
-                            _LT_NAV = ("lambdatest_mac", "lambdatest_android")
-                            for pais_nombre in programacion_actual["paises"]:
-                                for navegador in programacion_actual["navegadores"]:
+                            pattern = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}*.xlsx")
+                            antes_m = glob_search(pattern)
+                            max_antes = max(
+                                (int(os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", ""))
+                                 for m in antes_m
+                                 if os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "").isdigit()),
+                                default=0)
+                            env_config = _get_environments().get(env_param)
+                            if env_config is None:
+                                print(f"⚠️ Entorno no reconocido: {env_param}")
+                                continue
+                            run_func = _get_run_func(pais_nombre)
+                            run_func(browser=env_config["browser"], viewport=env_config["viewport"],
+                                     headless=False, enviar_email=False, background=True)
+                            despues_m = glob_search(pattern)
+                            max_despues = max(
+                                (int(os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", ""))
+                                 for m in despues_m
+                                 if os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "").isdigit()),
+                                default=0)
+                            if max_despues > max_antes:
+                                excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{max_despues}.xlsx")
+                                if os.path.exists(excel_file):
+                                    resultados.append({
+                                        "pais": pais_nombre, "navegador": navegador,
+                                        "viewport": viewport, "estado": "completado",
+                                        "excel_path": excel_file,
+                                        "screenshots_dir": os.path.join(
+                                            RESULTS_DIR, f"screenshots_{pais_nombre}{max_despues}"),
+                                    })
+                        except Exception as ex:
+                            print(f"⚠️ Error ejecutando {pais_nombre} ({env_param}): {ex}")
+                        time.sleep(2)
+        return resultados
 
-                                    if navegador in _LT_NAV:
-                                        # ── LambdaTest: sin loop de viewports ────────────────
-                                        lt_type = "mac" if navegador == "lambdatest_mac" else "android"
-                                        try:
-                                            lt_dir = os.path.join(BASE_DIR, f"lambdatest_{lt_type if lt_type == 'mac' else 'android'}")
-                                            if lt_dir not in sys.path:
-                                                sys.path.insert(0, lt_dir)
+    from interface.helpers_interface import enviar_email_resultados_consolidados as _send_consolidated
 
-                                            from glob import glob as glob_search
-                                            lt_results_dir = os.path.join(BASE_DIR, "resultados_lambdatestmac" if lt_type == "mac" else "resultados_lambdatest_android")
-                                            archivos_antes = set(os.listdir(lt_results_dir)) if os.path.isdir(lt_results_dir) else set()
-
-                                            if lt_type == "mac":
-                                                import lt_controller
-                                                summary = lt_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}")
-                                            else:
-                                                import lt_android_controller
-                                                summary = lt_android_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}")
-
-                                            if os.path.isdir(lt_results_dir):
-                                                archivos_despues = set(os.listdir(lt_results_dir))
-                                                nuevos = [f for f in (archivos_despues - archivos_antes) if f.endswith(".xlsx")]
-                                                if nuevos:
-                                                    excel_file = os.path.join(lt_results_dir, sorted(nuevos)[-1])
-                                                    resultado = {
-                                                        "pais": pais_nombre,
-                                                        "navegador": navegador,
-                                                        "viewport": lt_type,
-                                                        "estado": "completado",
-                                                        "excel_path": excel_file,
-                                                        "screenshots_dir": None,
-                                                    }
-                                                    resultados_ejecucion.append(resultado)
-                                        except Exception as ex_lt:
-                                            print(f"⚠️ Error LambdaTest {lt_type} — {pais_nombre}: {ex_lt}")
-                                        time.sleep(2)
-
-                                    else:
-                                        # ── Browsers locales: loop de viewports ──────────────
-                                        for viewport in programacion_actual["viewports"]:
-                                            env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
-                                            try:
-                                                # Obtener números previos de archivos
-                                                from glob import glob as glob_search
-                                                pattern_excel = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}*.xlsx")
-                                                matches_antes = glob_search(pattern_excel)
-                                                max_num_antes = 0
-                                                for m in matches_antes:
-                                                    try:
-                                                        num_str = os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "")
-                                                        if num_str.isdigit():
-                                                            max_num_antes = max(max_num_antes, int(num_str))
-                                                    except:
-                                                        pass
-
-                                                env_config = _get_environments().get(env_param)
-                                                if env_config is None:
-                                                    print(f"⚠️ Entorno no reconocido: {env_param}")
-                                                    continue
-
-                                                run_func = _get_run_func(pais_nombre)
-                                                run_func(
-                                                    browser=env_config["browser"],
-                                                    viewport=env_config["viewport"],
-                                                    headless=False,
-                                                    enviar_email=False,
-                                                    background=True,
-                                                )
-
-                                                # Buscar archivo Excel generado
-                                                matches_despues = glob_search(pattern_excel)
-                                                max_num_despues = 0
-                                                for m in matches_despues:
-                                                    try:
-                                                        num_str = os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "")
-                                                        if num_str.isdigit():
-                                                            max_num_despues = max(max_num_despues, int(num_str))
-                                                    except:
-                                                        pass
-
-                                                if max_num_despues > max_num_antes:
-                                                    excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{max_num_despues}.xlsx")
-                                                    screenshots_dir = os.path.join(RESULTS_DIR, f"screenshots_{pais_nombre}{max_num_despues}")
-
-                                                    if os.path.exists(excel_file):
-                                                        resultado = {
-                                                            "pais": pais_nombre,
-                                                            "navegador": navegador,
-                                                            "viewport": viewport,
-                                                            "estado": "completado",
-                                                            "excel_path": excel_file,
-                                                            "screenshots_dir": screenshots_dir
-                                                        }
-                                                        resultados_ejecucion.append(resultado)
-
-                                            except Exception as ex_form:
-                                                print(f"⚠️ Error ejecutando {pais_nombre} ({env_param}): {ex_form}")
-                                            time.sleep(2)
-
-                            # Enviar email consolidado si hay resultados
-                            if resultados_ejecucion:
-                                try:
-                                    from interface.helpers_interface import enviar_email_resultados_consolidados
-                                    envio_exitoso = enviar_email_resultados_consolidados(resultados_ejecucion)
-                                    if not envio_exitoso:
-                                        print("⚠️ No se pudo enviar el email")
-                                except Exception as e_email:
-                                    print(f"❌ Error al enviar email: {e_email}")
-                                
-                                # Esperar a que Outlook procese
-                                time.sleep(3)
-                            
-                        except Exception as e:
-                            print(f"❌ Error durante ejecución programada: {e}")
-                        
-                        # Limpiar la programación después de ejecutar (éxito o error)
-                        programacion_actual = None
-                        guardar_programacion(None)
-                        test_programado_var.set(False)
-                        actualizar_estado_botones()
-                        alternar_vista_programacion()
-                        actualizar_visibilidad_botones()
-                        actualizar_info_test()
-                    
-                    elif diferencia > 120:  # Pasaron más de 2 minutos sin ejecutar
-                        print("⚠️ Test programado expirado, limpiando...")
-                        # Limpiar la programación expirada
-                        programacion_actual = None
-                        guardar_programacion(None)
-                        test_programado_var.set(False)
-                        actualizar_estado_botones()
-                        alternar_vista_programacion()
-                        actualizar_visibilidad_botones()
-                        actualizar_info_test()
-                        
-                time.sleep(30)  # Verifica cada 30 segundos
-
-        threading.Thread(target=loop, daemon=True).start()
-
-    # Iniciar el monitor apenas se carga la interfaz
-    monitor_programacion()
+    scheduler_panel = WeeklySchedulerPanel(
+        programar_container,
+        get_navegadores_cb=_get_navegadores_seleccionados,
+        get_viewports_cb=_get_viewports_seleccionados,
+        on_scheduling_change=lambda active: actualizar_estado_botones(),
+        execute_cb=lambda prog, ev: _ejecutar_programacion(prog, ev),
+        send_email_cb=lambda r: _send_consolidated(r) if enviar_mail_var.get() else None,
+        root=root,
+    )
+    scheduler_panel.pack(fill="x", padx=4, pady=4)
+    _scheduler_ref["panel"] = scheduler_panel
+    actualizar_estado_botones()
 
     # === FOOTER STICKY (siempre visible abajo) ===
     frame_footer = Frame(outer_container, bg=APP_BG_COLOR)
