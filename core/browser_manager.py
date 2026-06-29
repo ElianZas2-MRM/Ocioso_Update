@@ -182,6 +182,11 @@ class BrowserManager:
                 })
             except Exception:
                 pass
+        elif background:
+            try:
+                driver.minimize_window()
+            except Exception:
+                pass
         return driver
     
     @staticmethod
@@ -236,6 +241,7 @@ class BrowserManager:
             if background:
                 try:
                     driver.set_window_position(10000, 0)
+                    driver.minimize_window()
                 except Exception:
                     pass
 
@@ -269,7 +275,13 @@ class BrowserManager:
             BrowserManager._get_drivers_dir(),
         )
         service = EdgeService(driver_path)
-        return BrowserManager._create_driver_with_message(
+        driver = BrowserManager._create_driver_with_message(
             lambda: webdriver.Edge(service=service, options=options),
             "msedgedriver.exe",
         )
+        if background and not headless:
+            try:
+                driver.minimize_window()
+            except Exception:
+                pass
+        return driver

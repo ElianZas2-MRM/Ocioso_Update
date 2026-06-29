@@ -62,6 +62,17 @@ except ImportError:
 
 from lt_excel_reader import read_osocio_excel, find_osocio_excels, LeadRow
 
+# Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
+_VISID_ID_ALIASES: dict = {
+    "firstname":               "name",
+    "models":                  "model",
+    "model_1":                 "model",
+    "model_2":                 "model",
+    "estimated-date-purchase": "estimated-day",
+    "estimated-date":          "estimated-day",
+    "estimated_date_purchase": "estimated-day",
+}
+
 # ── Rutas base ────────────────────────────────────────────────────────────────
 _THIS_DIR   = os.path.dirname(os.path.abspath(__file__))   # lambdatest_mac/
 _OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # Form_Automation_Project/
@@ -382,25 +393,19 @@ def _fill_text_js(driver, element, value: str):
 
 def _fill_text_android(driver, element, value: str):
     """
-    Ingreso de texto para Android real device.
-    Click para abrir el teclado virtual → clear → send_keys carácter a carácter.
-    Luego dispara eventos React/Angular para que el formulario registre el valor.
+    Ingreso de texto para Android real device via JS puro.
+    Sin click ni send_keys (evita abrir teclado y escribir char a char).
+    Usa native setter + touch events para que React/Angular registre el valor.
     """
-    try:
-        element.click()
-        time.sleep(0.3)
-        element.clear()
-        element.send_keys(str(value))
-        time.sleep(0.1)
-    except Exception:
-        pass
-    # Disparar eventos React/Angular por si acaso
     driver.execute_script(
+        "const el = arguments[0];"
         "var n = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');"
-        "if (n && n.set) { n.set.call(arguments[0], arguments[1]); }"
-        "arguments[0].dispatchEvent(new Event('input',  {bubbles:true}));"
-        "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));"
-        "arguments[0].dispatchEvent(new Event('blur',   {bubbles:true}));",
+        "if (n && n.set) { n.set.call(el, arguments[1]); } else { el.value = arguments[1]; }"
+        "el.dispatchEvent(new Event('touchstart', {bubbles:true}));"
+        "el.dispatchEvent(new Event('touchend',   {bubbles:true}));"
+        "el.dispatchEvent(new Event('input',      {bubbles:true}));"
+        "el.dispatchEvent(new Event('change',     {bubbles:true}));"
+        "el.dispatchEvent(new Event('blur',       {bubbles:true}));",
         element, str(value),
     )
 
@@ -935,8 +940,13 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
     _ids_batch = []
     for _fc in field_mapping:
         _fid = _fc.get("id", "")
-        _ids = _fid if isinstance(_fid, list) else [_fid]
-        _ids_batch.append([f for f in _ids if f])
+        _ids = [f for f in (_fid if isinstance(_fid, list) else [_fid]) if f]
+        # Agregar alias visid si existe (para coexistencia old/new forms)
+        for _f in list(_ids):
+            _alias = _VISID_ID_ALIASES.get(_f)
+            if _alias and _alias not in _ids:
+                _ids.append(_alias)
+        _ids_batch.append(_ids)
     try:
         _batch_raw = driver.execute_script("""
             var cfgs=arguments[0],res={};
@@ -2017,7 +2027,7 @@ def _setup_results_excel(pais: str, source_excel_path: str) -> tuple:
 
     required_cols = [
         "Resultado", "Formulario Inserto", "Formulario Completado",
-        "TY Page", "Form URL encontrada", "Form coincide",
+        "TY Page", "Form URL esperada", "Form URL encontrada", "Form coincide",
         "Video LT", "Dashboard LT",
     ]
     headers = [cell.value for cell in ws[1] if cell.value]
@@ -2071,9 +2081,11 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
     ws.cell(row=row_num, column=col_idx.get("TY Page", 4)).value = (
         "✓ TY detectada" if ty_confirmed else "-"
     )
+    if "Form URL esperada" in col_idx and iframe_url_expected:
+        ws.cell(row=row_num, column=col_idx["Form URL esperada"]).value = iframe_url_expected
     if "Form URL encontrada" in col_idx:
         ws.cell(row=row_num, column=col_idx["Form URL encontrada"]).value = iframe_url_found or ""
-    if "Form coincide" in col_idx and iframe_url_found and iframe_url_expected:
+    if "Form coincide" in col_idx and iframe_url_expected:
         coincide = "SI" if iframe_url_found.strip() == iframe_url_expected.strip() else "NO"
         coincide_cell = ws.cell(row=row_num, column=col_idx["Form coincide"])
         coincide_cell.value = coincide
@@ -2204,35 +2216,46 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             except Exception:
                 pass
             time.sleep(1)
-            try:
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(0.8)
-            except Exception:
-                pass
             _handle_cookie_popups(driver, log)
-            for _a in range(2):
+
+            def _android_find_iframe():
                 for _if in driver.find_elements(By.TAG_NAME, "iframe"):
                     try:
                         src = _if.get_attribute("src") or ""
                         if lead.secure_url and lead.secure_url.strip() in src:
-                            iframe_el = _if
-                            break
+                            return _if
                         if any(kw in src for kw in ("gm_forms", "gm_admin", "gm_front")):
-                            iframe_el = _if
-                            break
+                            return _if
                     except Exception:
                         continue
+                return None
+
+            # Scroll escalonado: mitad → fondo (el form puede estar en cualquier posición)
+            for _scroll_pct in (0.5, 1.0):
+                try:
+                    driver.execute_script(
+                        f"window.scrollTo(0, document.body.scrollHeight * {_scroll_pct});"
+                    )
+                    time.sleep(0.8)
+                except Exception:
+                    pass
+                iframe_el = _android_find_iframe()
                 if iframe_el:
                     break
-                time.sleep(1)
 
         if not iframe_el:
-            result["result_text"] = "✗ Formulario no encontrado (iframe ausente)"
+            result["result_text"] = "[Error] Formulario no encontrado — iframe ausente"
             log("  ✗ No se encontró iframe del formulario")
             return result
 
         result["iframe_found"] = True
         result["iframe_url_found"] = iframe_el.get_attribute("src") or ""
+
+        # Detectar si la URL del iframe encontrado coincide con la esperada
+        _expected_url = (lead.secure_url or "").strip()
+        result["form_url_mismatch"] = bool(
+            _expected_url and result["iframe_url_found"].strip() != _expected_url
+        )
 
         # Posicionar scroll igual que Osocio
         try:
@@ -2430,7 +2453,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             submitted_click = _click_submit(driver, log, is_android=is_android)
 
             if not submitted_click:
-                result["result_text"] = "✗ No se pudo encontrar/clickear el botón de envío"
+                result["result_text"] = "[Error] No se pudo encontrar el botón de envío"
                 result["submitted"] = False
                 break
 
@@ -2631,6 +2654,16 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             driver.switch_to.default_content()
         except Exception:
             pass
+
+    if result.get("form_url_mismatch"):
+        _found_str = result.get("iframe_url_found") or "ninguno"
+        _lead_str = "lead enviado igualmente" if result.get("submitted") else "lead no enviado"
+        result["result_text"] = (
+            f"[Error Form] Formulario no inserto — "
+            f"URL esperada: {lead.secure_url or '?'} | "
+            f"URL encontrada: {_found_str} | {_lead_str}"
+        )
+        result["submitted"] = False
 
     return result
 

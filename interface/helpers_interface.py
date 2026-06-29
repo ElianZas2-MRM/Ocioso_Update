@@ -559,6 +559,9 @@ def analizar_errores_excel(ruta_excel):
         columnas = [c.lower() for c in df.columns]
         col_url = next((c for c in df.columns if c.lower() == "url"), None)
         col_resultado = next((c for c in df.columns if c.lower() == "resultado"), None)
+        col_form_url_esperada   = next((c for c in df.columns if c.lower() == "formulario"), None)
+        col_form_url_encontrada = next((c for c in df.columns if c.lower() == "form url encontrada"), None)
+        col_form_coincide       = next((c for c in df.columns if c.lower() == "form coincide"), None)
 
         total_filas = len(df)
 
@@ -582,6 +585,12 @@ def analizar_errores_excel(ruta_excel):
         procesados = int(procesados_mask.sum())
         exitosos = procesados - con_errores
         no_procesados = total_filas - procesados
+
+        exitosos_df = df[procesados_mask & ~errores_mask]
+        detalles_ok = []
+        for _i, _fila in exitosos_df.iterrows():
+            _url = str(_fila[col_url]) if col_url and pd.notna(_fila[col_url]) else "(sin URL)"
+            detalles_ok.append({'url': _url, 'linea': _i + 2})
 
         # Construir detalles estructurados
         detalles = []
@@ -607,6 +616,21 @@ def analizar_errores_excel(ruta_excel):
                 f"   ❌ {mensaje_limpio}"
             )
 
+        # Detectar formularios no insertados (Form coincide == NO)
+        detalles_form = []
+        if col_form_coincide:
+            form_no_coincide_mask = df[col_form_coincide].astype(str).str.strip().str.upper() == "NO"
+            for idx, fila in df[form_no_coincide_mask].iterrows():
+                url_landing    = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
+                url_esperada   = str(fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(fila.get(col_form_url_esperada, float('nan'))) else "?"
+                url_encontrada = str(fila[col_form_url_encontrada]) if col_form_url_encontrada and pd.notna(fila.get(col_form_url_encontrada, float('nan'))) else "ninguna"
+                detalles_form.append({
+                    'linea': idx + 2,
+                    'url_landing': url_landing,
+                    'url_esperada': url_esperada,
+                    'url_encontrada': url_encontrada,
+                })
+
         if con_errores == 0:
             if no_procesados > 0:
                 mensaje = (
@@ -622,6 +646,8 @@ def analizar_errores_excel(ruta_excel):
                 'con_errores': 0,
                 'no_procesados': no_procesados,
                 'detalles': [],
+                'detalles_ok': detalles_ok,
+                'detalles_form': detalles_form,
                 'mensaje': mensaje
             }
 
@@ -643,6 +669,8 @@ def analizar_errores_excel(ruta_excel):
             'con_errores': con_errores,
             'no_procesados': no_procesados,
             'detalles': detalles,
+            'detalles_ok': detalles_ok,
+            'detalles_form': detalles_form,
             'mensaje': mensaje
         }
 
@@ -652,6 +680,7 @@ def analizar_errores_excel(ruta_excel):
             'exitosos': 0,
             'con_errores': 0,
             'detalles': [],
+            'detalles_ok': [],
             'mensaje': f"❌ No se pudo analizar {ruta_excel}: {e}"
         }
 
@@ -1051,7 +1080,20 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             encabezado += f" — {nav_label} / {vp_label}"
 
         icono = "✅" if con_errores == 0 else "❌"
-        estado_texto = "OK — todos los leads enviados correctamente" if con_errores == 0 else f"LEAD NO ENVIADO en {con_errores} formulario(s)"
+        if con_errores == 0:
+            estado_texto = "OK — todos los formularios insertados y leads enviados correctamente"
+        else:
+            _hay_form_error = bool(errores.get('detalles_form'))
+            _hay_envio_error = any(
+                not d.get('error', '').startswith('[Error Form]')
+                for d in (errores.get('detalles') or [])
+            )
+            if _hay_form_error and not _hay_envio_error:
+                estado_texto = f"FORMULARIO NO INSERTO en {len(errores['detalles_form'])} fila(s)"
+            elif _hay_form_error and _hay_envio_error:
+                estado_texto = f"ERRORES MÚLTIPLES: formulario(s) no inserto + {con_errores - len(errores['detalles_form'])} error(es) de envío"
+            else:
+                estado_texto = f"LEAD NO ENVIADO en {con_errores} formulario(s)"
 
         cuerpo = f"{icono} {encabezado}\nFecha: {fecha_actual}\nEstado: {estado_texto}\n\n"
         cuerpo += "=== RESUMEN ===\n"
@@ -1061,15 +1103,38 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             cuerpo += f"  No procesados: {no_procesados}\n"
         cuerpo += f"  Total filas:   {total_filas}\n\n"
 
-        if con_errores > 0 and errores.get('detalles'):
-            cuerpo += "=== ERRORES DETECTADOS (lead NO enviado) ===\n\n"
-            for detalle in errores['detalles']:
+        if errores.get('detalles_form'):
+            cuerpo += "=== FORMULARIOS NO INSERTADOS CORRECTAMENTE ===\n\n"
+            for item in errores['detalles_form']:
+                cuerpo += f"  ⚠️  Línea {item['linea']} | Landing: {item['url_landing']}\n"
+                cuerpo += f"      URL Form esperada:   {item['url_esperada']}\n"
+                cuerpo += f"      URL Form encontrada: {item['url_encontrada']}\n\n"
+
+        errores_envio = [d for d in (errores.get('detalles') or []) if not d.get('error', '').startswith('[Error Form]')]
+        if errores_envio:
+            cuerpo += "=== ERRORES DE ENVÍO ===\n\n"
+            for detalle in errores_envio:
                 url = detalle.get('url', 'N/A')
                 error = detalle.get('error', 'Sin descripción')
                 linea = detalle.get('linea', '?')
-                cuerpo += f"  ❌ Linea {linea} | URL: {url}\n     Error: {error}\n\n"
-        else:
+                cuerpo += f"  ❌ Línea {linea} | URL: {url}\n     Error: {error}\n\n"
+
+        if not errores.get('detalles_form') and con_errores == 0:
             cuerpo += "✅ Todos los formularios se completaron exitosamente.\n\n"
+
+        _ok_items = [{'linea': d['linea'], 'url': d['url'], 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
+        _err_items = [{'linea': d['linea'], 'url': d['url'], 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
+        _todos_urls = sorted(_ok_items + _err_items, key=lambda x: x['linea'])
+        if _todos_urls:
+            cuerpo += "=== DETALLE POR URL ===\n\n"
+            for _item in _todos_urls:
+                if _item['ok']:
+                    cuerpo += f"  ✅  {_item['url']}\n"
+                else:
+                    cuerpo += f"  ❌  {_item['url']}\n"
+                    if _item['error']:
+                        cuerpo += f"       → {_item['error']}\n"
+            cuerpo += "\n"
 
         cuerpo += "Saludos,\nAutomación de Formularios"
 
@@ -1171,6 +1236,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
         pais_exitosos = {}  # pais -> total exitosos sumado
         adjuntos = []
         detalles_fallidos = []   # bloques de detalle solo para países FAILED
+        detalles_url_pais = []   # [(pais, nav_label, vp_label, todos_urls)] para tabla por URL
 
         for idx, resultado in enumerate(resultados_ejecucion, start=1):
             pais = resultado.get("pais", "N/A")
@@ -1192,6 +1258,12 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
 
             pais_errores[pais] = pais_errores.get(pais, 0) + con_errores
             pais_exitosos[pais] = pais_exitosos.get(pais, 0) + exitosos
+
+            _ok_items_c = [{'linea': d['linea'], 'url': d['url'], 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
+            _err_items_c = [{'linea': d['linea'], 'url': d['url'], 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
+            _todos_c = sorted(_ok_items_c + _err_items_c, key=lambda x: x['linea'])
+            if _todos_c:
+                detalles_url_pais.append((pais, nav_label, vp_label, _todos_c))
 
             if con_errores > 0:
                 bloque = f"❌ {pais.upper()} — {nav_label} / {vp_label}\n"
@@ -1246,6 +1318,19 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             cuerpo += "\n".join(detalles_fallidos)
         else:
             cuerpo += "✅ Todos los leads se enviaron correctamente en todos los paises.\n\n"
+
+        if detalles_url_pais:
+            cuerpo += "=== DETALLE POR URL ===\n\n"
+            for _pais, _nav, _vp, _urls in detalles_url_pais:
+                cuerpo += f"  {_pais.upper()} — {_nav} / {_vp}\n"
+                for _item in _urls:
+                    if _item['ok']:
+                        cuerpo += f"    ✅  {_item['url']}\n"
+                    else:
+                        cuerpo += f"    ❌  {_item['url']}\n"
+                        if _item['error']:
+                            cuerpo += f"         → {_item['error']}\n"
+                cuerpo += "\n"
 
         cuerpo += "\nSaludos,\nAutomacion de Formularios"
 

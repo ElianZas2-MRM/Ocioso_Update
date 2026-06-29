@@ -64,6 +64,19 @@ class BaseFormFiller:
         "lo siento, ocurrió",
     )
 
+    # Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
+    # Si el ID del mapping no se encuentra en el DOM, se prueba el alias visid.
+    # Agregar aquí si en la migración aparecen nuevos IDs que difieren del estándar actual.
+    _VISID_ID_ALIASES: dict = {
+        "firstname":               "name",
+        "models":                  "model",
+        "model_1":                 "model",
+        "model_2":                 "model",
+        "estimated-date-purchase": "estimated-day",
+        "estimated-date":          "estimated-day",
+        "estimated_date_purchase": "estimated-day",
+    }
+
     # Adobe AEM Adaptive Form (Guide) — términos / checkbox
     _GUIDE_CHECKBOX_CONTAINER_ID = "guideContainer-rootPanel-guidecheckbox___guide-item"
     _GUIDE_CHECKBOX_INPUT_ID_PREFIX = "guideContainer-rootPanel-guidecheckbox___"
@@ -677,6 +690,16 @@ class BaseFormFiller:
                         return fid
                 except Exception:
                     continue
+        # Fallback visid: si ningún ID del mapping fue encontrado, probar alias estandarizado
+        for fid in ids or []:
+            alias = self._VISID_ID_ALIASES.get(fid if isinstance(fid, str) else "")
+            if alias and self._element_exists_by_id(alias):
+                try:
+                    el = self.driver.find_element(By.ID, alias)
+                    if el.is_displayed():
+                        return alias
+                except Exception:
+                    continue
         return None
 
     def _is_next_button_element(self, element):
@@ -704,6 +727,7 @@ class BaseFormFiller:
     def _find_next_button(self):
         """Devuelve el primer botón visible que parezca avanzar al siguiente paso."""
         selectors = [
+            "button.btn-steps-submit",   # visid multi-step
             ".button.next.pulsate.stat-button-link",
             "button[class*='next']",
             "button[data-dtm*='next']",
@@ -3391,6 +3415,7 @@ class BaseFormFiller:
     def _mark_required_checkboxes(self):
         known_names = {
             "terms",
+            "terms-and-conditions",    # visid standard
             "terms-contact",
             "terms_contact",
             "termscontact",
@@ -3405,6 +3430,7 @@ class BaseFormFiller:
 
         priority_map = {
             "terms": 3,
+            "terms-and-conditions": 3, # visid — misma prioridad que "terms"
             "terms-platform": 2,
             "terms_platform": 2,
             "termsplatform": 2,
@@ -4100,7 +4126,7 @@ class BaseFormFiller:
             # Verificar y crear columnas necesarias
             headers = [cell.value for cell in sheet[1] if cell.value]
             required_columns = ["Resultado", "Formulario Inserto", "Formulario Completado", "TY Page",
-                                "Form URL encontrada", "Form coincide"]
+                                "Form URL esperada", "Form URL encontrada", "Form coincide"]
 
             for col_name in required_columns:
                 if col_name not in headers:
@@ -4116,6 +4142,7 @@ class BaseFormFiller:
             form_inserto_col = headers.index("Formulario Inserto") + 1
             form_completado_col = headers.index("Formulario Completado") + 1
             ty_page_col = headers.index("TY Page") + 1
+            form_url_esperada_col   = headers.index("Form URL esperada") + 1
             form_url_encontrada_col = headers.index("Form URL encontrada") + 1
             form_coincide_col = headers.index("Form coincide") + 1
             
@@ -4391,7 +4418,14 @@ class BaseFormFiller:
                 _lead_ok = (result_text == "Lead enviado correctamente")
 
                 if form_url_mismatch:
-                    result_text = f"[Form incorrecto] {result_text}".strip() if result_text else "[Form incorrecto, se envió igualmente]"
+                    _found_for_msg = getattr(self, "_url_form_encontrado", "") or "ninguno"
+                    _lead_str = "lead enviado igualmente" if _lead_ok else "lead no enviado"
+                    result_text = (
+                        f"[Error Form] Formulario no inserto — "
+                        f"URL esperada: {expected_form_url or '?'} | "
+                        f"URL encontrada: {_found_for_msg} | {_lead_str}"
+                    )
+                    _lead_ok = False
                 _sin_mapeo = getattr(self, "_campos_sin_mapeo_exitoso", [])
                 if _sin_mapeo:
                     result_text = (result_text or "") + f" | Sin mapear: {', '.join(_sin_mapeo)}"
@@ -4402,10 +4436,12 @@ class BaseFormFiller:
                 sheet.cell(row=i, column=form_inserto_col).value = form_inserto_name
                 sheet.cell(row=i, column=form_completado_col).value = form_completado_name if form_completado_name else "-"
                 sheet.cell(row=i, column=ty_page_col).value = ty_page_name if ty_page_name else "-"
+                if expected_form_url:
+                    sheet.cell(row=i, column=form_url_esperada_col).value = expected_form_url
                 _found_url = getattr(self, "_url_form_encontrado", "")
                 sheet.cell(row=i, column=form_url_encontrada_col).value = _found_url
                 _form_coincide_val = ""
-                if _found_url and expected_form_url:
+                if expected_form_url:
                     _form_coincide_val = "SI" if _found_url == expected_form_url else "NO"
                 sheet.cell(row=i, column=form_coincide_col).value = _form_coincide_val
                 self.write_tracked_fields_to_sheet(sheet, i)

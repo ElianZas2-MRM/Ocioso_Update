@@ -138,7 +138,7 @@ def _setup_android_results_excel(pais: str, source_excel_path: str) -> tuple:
 
     required_cols = [
         "Resultado", "Formulario Inserto", "Formulario Completado",
-        "TY Page", "Form URL encontrada", "Form coincide",
+        "TY Page", "Form URL esperada", "Form URL encontrada", "Form coincide",
         "Video LT", "Dashboard LT",
     ]
     headers = [cell.value for cell in ws[1] if cell.value]
