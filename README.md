@@ -87,6 +87,26 @@ Dentro de `dist/OsocioFormAutomation_portable/` se crean:
 
 Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 
+## Migración a formularios visid
+
+Los nuevos formularios estandarizados (contenedor `.visid-form-content` / `.visid-fields-grid`) son soportados automáticamente — no se necesita cambiar el Excel ni la configuración por país cuando un mercado migra.
+
+**Cómo funciona la coexistencia:**
+El engine tiene un mapa de aliases: si el ID del campo configurado no aparece en el DOM del nuevo form, automáticamente prueba el ID equivalente del estándar visid. Funciona en Desktop, LambdaTest Mac y Android.
+
+| Campo | ID actual (forms viejos) | ID visid |
+|-------|--------------------------|----------|
+| Nombre | `firstname`, variantes AEM | `name` |
+| Modelo | `models`, `model_1` | `model` |
+| Fecha estimada | `estimated-date-purchase` | `estimated-day` |
+| Resto de campos | `lastname`, `document`, `phone`, `email`, `city`, `dealer` | iguales ✓ |
+
+**Submit button:** `.btn-visid-submit` — ya soportado.
+**Form de 3 pasos:** `.btn-steps-submit` — ya soportado.
+**Checkbox términos:** `#terms-and-conditions` — detectado automáticamente.
+
+**Si un campo no se llena en un form visid nuevo:** agregar el mapping viejo → nuevo en `_VISID_ID_ALIASES` dentro de `core/base_form_filler.py` y `lambdatest_mac/lt_runner.py`.
+
 ## Notas importantes
 
 - El proyecto ya usa `sys.executable` para ejecutar los scripts desde el entorno activo.
@@ -130,6 +150,56 @@ El asunto incluye resultado global, fecha y países ejecutados:
 [PASS] Osocio — 26/06/2026 — AR CO BO ✓
 [FAILED] Osocio — 26/06/2026 — AR ✓ | CL ✗
 ```
+
+**Qué se reporta en el cuerpo del email**
+
+El email diferencia tres tipos de situaciones:
+
+**1. Todo OK**
+```
+✅ OK — todos los formularios insertados y leads enviados correctamente
+
+=== RESUMEN ===
+  Exitosos:    5
+  Con errores: 0
+  Total filas: 5
+
+✅ Todos los formularios se completaron exitosamente.
+```
+
+**2. Formulario no inserto correctamente** — el Excel tiene una URL en columna B (form URL) pero esa URL no se encontró como iframe en la landing page. El test falla aunque el lead haya podido enviarse por un iframe alternativo.
+```
+❌ FORMULARIO NO INSERTO en 1 fila(s)
+
+=== RESUMEN ===
+  Exitosos:    4
+  Con errores: 1
+  Total filas: 5
+
+=== FORMULARIOS NO INSERTADOS CORRECTAMENTE ===
+
+  ⚠️  Línea 3 | Landing: https://www.marca.com/ar/modelo
+      URL Form esperada:   https://forms.hubspot.com/form/abc123
+      URL Form encontrada: ninguna
+```
+> La columna "Form coincide" en el Excel de resultados muestra **NO** en esa fila, con la URL real del iframe encontrado (si hubo alguno).
+
+**3. Error de envío** — el formulario estaba correctamente inserto pero el lead no se pudo enviar (timeout, error del servidor, etc.).
+```
+❌ LEAD NO ENVIADO en 1 formulario(s)
+
+=== RESUMEN ===
+  Exitosos:    4
+  Con errores: 1
+  Total filas: 5
+
+=== ERRORES DE ENVÍO ===
+
+  ❌ Línea 2 | URL: https://www.marca.com/ar/modelo
+     Error: Timeout esperando página de confirmación (div#thank-you no apareció)
+```
+
+**4. Ambos tipos de error** — si hay filas con form no inserto Y filas con fallo de envío, el email muestra ambas secciones y el estado indica `ERRORES MÚLTIPLES`.
 
 ---
 
@@ -275,3 +345,33 @@ Al cerrar y reabrir la app dentro del mismo slot de 15 minutos, el monitor volv�
 
 **14. Build: spec actualizado**
 `FormAutomation.spec` ahora incluye `interface.weekly_scheduler` y todos los submodules de `validation/` en `hiddenimports`, necesarios para que el build portable funcione correctamente.
+
+---
+
+### Bloque 6 — LambdaTest email, Excel de resultados y optimización Android
+
+**15. Email al terminar LambdaTest Mac y Android**
+LambdaTest Mac y Android no enviaban email al terminar — solo lo hacía Desktop. Ahora, al completar todos los países seleccionados, se envía automáticamente el email consolidado con los resultados, igual que Desktop en modo consolidado. El email usa los labels "LambdaTest Mac" / "LambdaTest Android" en el asunto y cuerpo.
+
+**16. Columna "Form URL esperada" en Excel de resultados**
+Se agregó la columna `Form URL esperada` (antes de `Form URL encontrada`) en el Excel de resultados de Desktop, LambdaTest Mac y LambdaTest Android. Muestra la URL del formulario que debería estar inserto (columna B del Excel de origen), para poder comparar a simple vista qué se esperaba vs qué se encontró sin tener que cruzar con el Excel original.
+
+**17. Fix: "Form coincide" ahora siempre escribe SI/NO**
+Antes, si no se encontraba ningún iframe (`Form URL encontrada` vacía), la celda `Form coincide` quedaba en blanco aunque hubiera una URL esperada. Ahora escribe "NO" en esa fila siempre que exista una URL esperada, independientemente de si se encontró algo.
+
+**18. Fix: browser en background nunca roba el foco**
+`--window-position=10000,0` movía la ventana fuera de pantalla visualmente, pero Windows igual le daba foco brevemente al abrirla. Ahora, después de crear el driver en modo background, se llama `minimize_window()` → la ventana queda minimizada en la barra de tareas y nunca interrumpe al usuario mientras escribe o trabaja. Aplica a Chrome, Firefox y Edge.
+
+**19. Android — llenado de campos por JS (sin teclado virtual)**
+`_fill_text_android` usaba `click()` + `send_keys` carácter a carácter, lo que abría el teclado virtual y escribía lento. Ahora usa JS puro con `native setter` + eventos `touchstart/touchend/input/change/blur`, igual que la versión iOS. Sin teclado, sin esperas de animación, una sola llamada de red por campo.
+
+### Bloque 7 — Overlay semi-transparente, ejecución programada con overlay y detalle de URLs en email
+
+**20. Overlay semi-transparente con fondo visible**
+El overlay que bloquea la UI durante la ejecución cambió de un Frame sólido a un `Toplevel` con `alpha=0.88`. El fondo de la ventana se ve levemente a través del overlay, lo que queda visualmente más limpio. El botón "Detener ejecución" sigue siendo completamente opaco y visible. El overlay se reposiciona automáticamente si se mueve o redimensiona la ventana.
+
+**21. Overlay también aparece durante ejecución programada (Test Automático)**
+Cuando el scheduler semanal dispara una ejecución, ahora aparece el mismo overlay con progreso por país y el botón "Detener ejecución". Al presionar Detener, se cancela la ejecución programada inmediatamente y el overlay desaparece.
+
+**22. Detalle por URL en el cuerpo del email**
+El email de resultados ahora incluye una sección `=== DETALLE POR URL ===` al final del cuerpo, listando cada URL testeada con ✅ (PASS) o ❌ (FAIL → motivo del error), ordenadas por fila del Excel. Aplica tanto al email individual (Desktop) como al email consolidado (LambdaTest Mac/Android, múltiples países).

@@ -780,22 +780,27 @@ def aplicar_colores_filas(tree_widget):
 _run_state = {
     "running": False,
     "stop_event": None,
-    "enviar_btn": None,   # botón "Enviar Leads"
-    "lt_btn": None,       # botón "Ejecutar en LambdaTest"
-    "stop_btn": None,     # botón "Detener"
+    "enviar_btn": None,       # botón "Enviar Leads"
+    "lt_btn": None,           # botón "Ejecutar en Mac"
+    "lt_android_btn": None,   # botón "Ejecutar en Android"
+    "stop_btn": None,         # botón "Detener" (consola)
     "root": None,
+    "overlay": None,          # Frame oscuro que cubre el contenido mientras corre
+    "progress_frame": None,   # Frame interno del overlay con filas por país
+    "progress": {},           # {pais: {"done":0,"total":0,"ok":0,"status":"waiting"}}
+    "progress_widgets": {},   # {pais: {"status_lbl":..., "count_lbl":...}}
 }
 
 
 def _set_running(running: bool):
-    """Habilita/deshabilita botones según si hay una ejecución activa."""
+    """Habilita/deshabilita botones y muestra/oculta el overlay según si hay ejecución activa."""
     _run_state["running"] = running
     _set_manual_input_callback(running)
     root = _run_state.get("root")
 
     def _apply():
         state = "disabled" if running else "normal"
-        for key in ("enviar_btn", "lt_btn"):
+        for key in ("enviar_btn", "lt_btn", "lt_android_btn"):
             btn = _run_state.get(key)
             if btn:
                 try:
@@ -811,6 +816,20 @@ def _set_running(running: bool):
                     stop_btn.pack_forget()
             except Exception:
                 pass
+        # Overlay semi-transparente (Toplevel)
+        overlay = _run_state.get("overlay")
+        if overlay:
+            if running:
+                r = _run_state.get("root")
+                if r:
+                    r.update_idletasks()
+                    overlay.geometry(
+                        f"{r.winfo_width()}x{r.winfo_height()}+{r.winfo_x()}+{r.winfo_y()}"
+                    )
+                overlay.deiconify()
+                overlay.lift()
+            else:
+                overlay.withdraw()
 
     if root:
         root.after(0, _apply)
@@ -822,7 +841,72 @@ def _request_stop():
     ev = _run_state.get("stop_event")
     if ev:
         ev.set()
-        print("⛔ Detención solicitada — la ejecución se detendrá al finalizar el lead actual.")
+        print("⛔ Detención solicitada.")
+    # Liberar la UI inmediatamente — el hilo de fondo termina el lead actual sin bloquear
+    _set_running(False)
+
+
+def _init_overlay_countries(paises_keys):
+    """Rellena las filas de progreso del overlay. Llamar desde UI thread antes de _set_running(True)."""
+    _run_state["progress"] = {k: {"done": 0, "total": 0, "ok": 0, "status": "waiting"} for k in paises_keys}
+    _run_state["progress_widgets"] = {}
+    pf = _run_state.get("progress_frame")
+    if not pf:
+        return
+    for w in pf.winfo_children():
+        w.destroy()
+    for key in paises_keys:
+        row = Frame(pf, bg="#1e1133", pady=2)
+        row.pack(fill="x", padx=30)
+        Label(row, text=key, bg="#1e1133", fg="#c9b8e8",
+              font=("Segoe UI", 10, "bold"), width=16, anchor="w").pack(side=LEFT)
+        status_lbl = Label(row, text="En espera...", bg="#1e1133", fg="#666",
+                           font=("Segoe UI", 10), width=16, anchor="w")
+        status_lbl.pack(side=LEFT, padx=(6, 0))
+        count_lbl = Label(row, text="", bg="#1e1133", fg="#c9b8e8",
+                          font=("Segoe UI", 10), width=10, anchor="w")
+        count_lbl.pack(side=LEFT, padx=(4, 0))
+        _run_state["progress_widgets"][key] = {"status_lbl": status_lbl, "count_lbl": count_lbl}
+
+
+def _update_progress(key, done=None, total=None, ok=None, status=None):
+    """Actualiza el progreso de un país en el overlay. Thread-safe."""
+    root = _run_state.get("root")
+    if not root:
+        return
+    def _apply():
+        p = _run_state["progress"].get(key)
+        if p is None:
+            return
+        if done is not None:
+            p["done"] = done
+        if total is not None:
+            p["total"] = total
+        if ok is not None:
+            p["ok"] = ok
+        if status is not None:
+            p["status"] = status
+        w = _run_state["progress_widgets"].get(key)
+        if not w:
+            return
+        s = p["status"]
+        d, t, o = p["done"], p["total"], p["ok"]
+        if s == "waiting":
+            w["status_lbl"].configure(text="En espera...", fg="#666")
+            w["count_lbl"].configure(text="")
+        elif s == "running":
+            w["status_lbl"].configure(text="⚡ En curso", fg="#f59e0b")
+            w["count_lbl"].configure(text=f"{d}/{t}" if t else "...")
+        elif s == "done_ok":
+            w["status_lbl"].configure(text="✓ Completado", fg="#10b981")
+            w["count_lbl"].configure(text=f"{o}/{t} OK" if t else "OK")
+        elif s == "done_error":
+            w["status_lbl"].configure(text="✗ Con errores", fg="#ef4444")
+            w["count_lbl"].configure(text=f"{o}/{t} OK" if t else "")
+        elif s == "stopped":
+            w["status_lbl"].configure(text="⛔ Detenido", fg="#888")
+            w["count_lbl"].configure(text="")
+    root.after(0, _apply)
 
 
 # ── Broker de input manual — conecta el hilo selenium con la UI de tkinter ──
@@ -1670,51 +1754,87 @@ def _build_lambdatest_tab(parent):
 
         stop_ev = threading.Event()
         _run_state["stop_event"] = stop_ev
+        _init_overlay_countries(paises_sel)
         _set_running(True)
 
         import sys as _sys
+        import re as _re
         _lt_dir = os.path.join(BASE_DIR, "lambdatest_mac")
         if _lt_dir not in _sys.path:
             _sys.path.insert(0, _lt_dir)
 
         remaining = [len(paises_sel)]
         remaining_lock = threading.Lock()
+        summaries_mac = []
 
-        def _lt_log(msg):
-            msg = str(msg).strip()
-            if not msg:
-                return
-            if (
-                "LEAD " in msg
-                or msg.lstrip().startswith("→")
-                or msg.lstrip().startswith("✗")
-                or msg.lstrip().startswith("⛔")
-                or msg.lstrip().startswith("⚠ Error")
-            ):
-                print(msg.strip())
+        def _make_lt_mac_log(pais_nombre):
+            def _lt_log(msg):
+                msg = str(msg).strip()
+                if not msg:
+                    return
+                if (
+                    "LEAD " in msg
+                    or msg.lstrip().startswith("→")
+                    or msg.lstrip().startswith("✗")
+                    or msg.lstrip().startswith("⛔")
+                    or msg.lstrip().startswith("⚠ Error")
+                ):
+                    print(msg.strip())
+                m = _re.search(r'LEAD\s+(\d+)/(\d+)', msg)
+                if m:
+                    _update_progress(pais_nombre, done=int(m.group(1)),
+                                     total=int(m.group(2)), status="running")
+            return _lt_log
 
         def _run_pais_mac(pais):
+            _update_progress(pais, status="running")
             try:
                 import lt_controller  # type: ignore[import]
                 summary = lt_controller.run(
                     pais=pais,
                     platform="mac",
-                    log_fn=_lt_log,
+                    log_fn=_make_lt_mac_log(pais),
                     stop_event=stop_ev,
                 )
+                ok = summary.get("ok", 0)
+                total = summary.get("total", 0)
                 if summary.get("error"):
                     print(f"✗ {pais}: {summary['error']}")
+                    _update_progress(pais, total=total, ok=ok,
+                                     status="stopped" if stop_ev.is_set() else "done_error")
                 else:
-                    ok = summary.get("ok", 0)
-                    total = summary.get("total", 0)
                     print(f"✓ Leads de {pais} enviados ({ok}/{total})")
+                    failed = summary.get("failed", 0)
+                    _update_progress(pais, done=total, total=total, ok=ok,
+                                     status="done_ok" if failed == 0 else "done_error")
+                with remaining_lock:
+                    summaries_mac.append({
+                        "pais": pais,
+                        "navegador": "lambdatest_mac",
+                        "viewport": "mac",
+                        "estado": "completado",
+                        "excel_path": summary.get("results_excel"),
+                        "screenshots_dir": None,
+                    })
             except Exception as e:
                 print(f"✗ Error Mac [{pais}]: {e}")
+                _update_progress(pais, status="done_error")
+                with remaining_lock:
+                    summaries_mac.append({
+                        "pais": pais, "navegador": "lambdatest_mac", "viewport": "mac",
+                        "estado": "error", "excel_path": None, "screenshots_dir": None,
+                    })
             finally:
                 with remaining_lock:
                     remaining[0] -= 1
                     if remaining[0] == 0:
                         _set_running(False)
+                        if summaries_mac and not stop_ev.is_set():
+                            from interface.helpers_interface import enviar_email_resultados_consolidados
+                            threading.Thread(
+                                target=lambda: enviar_email_resultados_consolidados(summaries_mac),
+                                daemon=True,
+                            ).start()
 
         print(f"▶ Enviando leads de: {', '.join(paises_sel)}")
         for pais in paises_sel:
@@ -1787,9 +1907,11 @@ def _build_lambdatest_tab(parent):
 
         stop_ev = threading.Event()
         _run_state["stop_event"] = stop_ev
+        _init_overlay_countries(paises_sel)
         _set_running(True)
 
         import sys as _sys
+        import re as _re
         _lt_android_dir = os.path.join(BASE_DIR, "lambdatest_android")
         _lt_mac_dir     = os.path.join(BASE_DIR, "lambdatest_mac")
         for _d in (_lt_android_dir, _lt_mac_dir):
@@ -1799,43 +1921,77 @@ def _build_lambdatest_tab(parent):
         device_name = lt_android_device_var.get()
         remaining = [len(paises_sel)]
         remaining_lock = threading.Lock()
+        summaries_android = []
 
-        def _lt_log_android(msg):
-            msg = str(msg).strip()
-            if not msg:
-                return
-            if (
-                "LEAD " in msg
-                or msg.lstrip().startswith("→")
-                or msg.lstrip().startswith("✗")
-                or msg.lstrip().startswith("⛔")
-                or msg.lstrip().startswith("⚠ Error")
-            ):
-                print(msg.strip())
+        def _make_lt_android_log(pais_nombre):
+            def _lt_log_android(msg):
+                msg = str(msg).strip()
+                if not msg:
+                    return
+                if (
+                    "LEAD " in msg
+                    or msg.lstrip().startswith("→")
+                    or msg.lstrip().startswith("✗")
+                    or msg.lstrip().startswith("⛔")
+                    or msg.lstrip().startswith("⚠ Error")
+                ):
+                    print(msg.strip())
+                m = _re.search(r'LEAD\s+(\d+)/(\d+)', msg)
+                if m:
+                    _update_progress(pais_nombre, done=int(m.group(1)),
+                                     total=int(m.group(2)), status="running")
+            return _lt_log_android
 
         def _run_pais_android(pais):
+            _update_progress(pais, status="running")
             try:
                 import lt_android_controller  # type: ignore[import]
                 summary = lt_android_controller.run(
                     pais=pais,
                     device_name=device_name,
                     with_screenshots=lt_android_screenshots_var.get(),
-                    log_fn=_lt_log_android,
+                    log_fn=_make_lt_android_log(pais),
                     stop_event=stop_ev,
                 )
+                ok = summary.get("ok", 0)
+                total = summary.get("total", 0)
                 if summary.get("error"):
                     print(f"✗ {pais}: {summary['error']}")
+                    _update_progress(pais, total=total, ok=ok,
+                                     status="stopped" if stop_ev.is_set() else "done_error")
                 else:
-                    ok = summary.get("ok", 0)
-                    total = summary.get("total", 0)
                     print(f"✓ Leads de {pais} enviados ({ok}/{total})")
+                    failed = summary.get("failed", 0)
+                    _update_progress(pais, done=total, total=total, ok=ok,
+                                     status="done_ok" if failed == 0 else "done_error")
+                with remaining_lock:
+                    summaries_android.append({
+                        "pais": pais,
+                        "navegador": "lambdatest_android",
+                        "viewport": "android",
+                        "estado": "completado",
+                        "excel_path": summary.get("results_excel"),
+                        "screenshots_dir": None,
+                    })
             except Exception as e:
                 print(f"✗ Error Android [{pais}]: {e}")
+                _update_progress(pais, status="done_error")
+                with remaining_lock:
+                    summaries_android.append({
+                        "pais": pais, "navegador": "lambdatest_android", "viewport": "android",
+                        "estado": "error", "excel_path": None, "screenshots_dir": None,
+                    })
             finally:
                 with remaining_lock:
                     remaining[0] -= 1
                     if remaining[0] == 0:
                         _set_running(False)
+                        if summaries_android and not stop_ev.is_set():
+                            from interface.helpers_interface import enviar_email_resultados_consolidados
+                            threading.Thread(
+                                target=lambda: enviar_email_resultados_consolidados(summaries_android),
+                                daemon=True,
+                            ).start()
 
         print(f"▶ Enviando leads de: {', '.join(paises_sel)} ({device_name})")
         for pais in paises_sel:
@@ -1844,6 +2000,7 @@ def _build_lambdatest_tab(parent):
     btn_lt_android = ttk.Button(frame_btns_android, text="Ejecutar en Android",
                                 command=_ejecutar_lt_android, style="Section.TButton")
     btn_lt_android.pack(side=LEFT, pady=(4, 0))
+    _run_state["lt_android_btn"] = btn_lt_android
 
     Label(tab_android, text="Los logs aparecen en la consola global (parte inferior).",
           font=("Segoe UI", 8, "italic"), bg=APP_BG_COLOR, fg="#aaa").pack(anchor="w", pady=(10, 0))
@@ -2190,6 +2347,38 @@ def iniciar_interfaz():
     # === CONTENEDOR SCROLLEABLE (evita colapso al achicar ventana) ===
     outer_container = Frame(root, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
     outer_container.pack(fill="both", expand=True)
+    _run_state["outer_container"] = outer_container
+
+    # === OVERLAY (Toplevel semi-transparente que cubre la ventana durante ejecución) ===
+    _OV_BG = "#160d24"
+    _overlay = Toplevel(root)
+    _overlay.overrideredirect(True)   # sin barra de título
+    _overlay.attributes("-alpha", 0.88)
+    _overlay.configure(bg=_OV_BG)
+    _overlay.withdraw()               # oculto hasta que inicie ejecución
+    _overlay_inner = Frame(_overlay, bg=_OV_BG)
+    _overlay_inner.place(relx=0.5, rely=0.45, anchor="center")
+    Label(_overlay_inner, text="⚡ Ejecución en curso",
+          bg=_OV_BG, fg="white", font=("Segoe UI", 14, "bold")).pack(pady=(0, 18))
+    _progress_frame = Frame(_overlay_inner, bg=_OV_BG)
+    _progress_frame.pack(fill="x", pady=(0, 22))
+    _run_state["progress_frame"] = _progress_frame
+    Button(
+        _overlay_inner, text="⏹  Detener ejecución",
+        bg="#c0392b", fg="white", font=("Segoe UI", 11, "bold"),
+        relief="flat", bd=0, padx=22, pady=10,
+        command=_request_stop, cursor="hand2",
+        activebackground="#e74c3c", activeforeground="white",
+    ).pack()
+    _run_state["overlay"] = _overlay
+
+    def _sync_overlay_pos(event=None):
+        ov = _run_state.get("overlay")
+        if ov and ov.winfo_viewable():
+            r = _run_state.get("root")
+            if r:
+                ov.geometry(f"{r.winfo_width()}x{r.winfo_height()}+{r.winfo_x()}+{r.winfo_y()}")
+    root.bind("<Configure>", _sync_overlay_pos)
 
     canvas = Canvas(outer_container, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
     v_scroll = ttk.Scrollbar(outer_container, orient="vertical", style="Section.Vertical.TScrollbar")
@@ -3900,6 +4089,7 @@ def iniciar_interfaz():
 
         stop_ev = threading.Event()
         _run_state["stop_event"] = stop_ev
+        _init_overlay_countries(paises_sel)
         _set_running(True)
 
         _background = not visible_browser_var.get()
@@ -3934,10 +4124,12 @@ def iniciar_interfaz():
                 print(f"Error ejecutando {pais} ({nav}/{vp}): {exc}")
 
         def _run_pais_con_browsers(pais):
+            _update_progress(pais, status="running")
             browser_combos = [(nav, vp) for nav in navegadores for vp in viewports]
             if len(browser_combos) <= 1:
                 if browser_combos:
                     _run_combo(pais, *browser_combos[0])
+                _update_progress(pais, status="stopped" if stop_ev.is_set() else "done_ok")
                 return
             with ThreadPoolExecutor(max_workers=len(browser_combos)) as ex:
                 for f in [ex.submit(_run_combo, pais, nav, vp) for nav, vp in browser_combos]:
@@ -3945,6 +4137,7 @@ def iniciar_interfaz():
                         f.result()
                     except Exception:
                         pass
+            _update_progress(pais, status="stopped" if stop_ev.is_set() else "done_ok")
 
         def _done():
             _set_running(False)
@@ -4260,6 +4453,16 @@ def iniciar_interfaz():
         def _stopped():
             return stop_event is not None and stop_event.is_set()
 
+        # Mostrar overlay y registrar stop_event para que "Detener" funcione
+        _run_state["stop_event"] = stop_event
+        _paises_prog_all = list(programacion.get("paises", []))
+        _root_sched = _run_state.get("root")
+        if _root_sched and _paises_prog_all:
+            _root_sched.after(0, lambda ps=_paises_prog_all: (
+                _init_overlay_countries(ps),
+                _set_running(True),
+            ))
+
         resultados = []
         _LT_NAV = ("lambdatest_mac", "lambdatest_android")
         # LambdaTest no compatible con ejecución programada por ahora — se omite
@@ -4349,6 +4552,9 @@ def iniciar_interfaz():
                         except Exception as ex:
                             print(f"⚠️ Error ejecutando {pais_nombre} ({env_param}): {ex}")
                         time.sleep(2)
+
+        if _root_sched:
+            _root_sched.after(0, lambda: _set_running(False))
         return resultados
 
     from interface.helpers_interface import enviar_email_resultados_consolidados as _send_consolidated
