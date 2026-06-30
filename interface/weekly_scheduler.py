@@ -458,7 +458,7 @@ class WeeklySchedulerDialog(Toplevel):
             for d in other_days:
                 is_sel = d in self._copy_selected_days
                 has = bool(self._schedule.get(d))
-                label = f"{d} (ya tiene)" if has and not is_sel else d
+                label = f"{d} (se reemplaza)" if has and not is_sel else d
                 b = Button(days_row, text=label, font=("Segoe UI", 8),
                            bg=SCH_PRIMARY if is_sel else SCH_HOVER,
                            fg=SCH_PFG if is_sel else SCH_MUTED,
@@ -489,8 +489,7 @@ class WeeklySchedulerDialog(Toplevel):
             return
         for _, full in DAYS_OF_WEEK:
             if full != self._selected_day:
-                merged = sorted(set(self._schedule.get(full, [])) | set(src))
-                self._schedule[full] = merged
+                self._schedule[full] = list(src)
         self._update_day_buttons()
         self._update_footer()
         messagebox.showinfo("Copiado",
@@ -519,8 +518,7 @@ class WeeklySchedulerDialog(Toplevel):
             return
         src = self._schedule.get(self._selected_day, [])
         for d in self._copy_selected_days:
-            merged = sorted(set(self._schedule.get(d, [])) | set(src))
-            self._schedule[d] = merged
+            self._schedule[d] = list(src)
         n = len(self._copy_selected_days)
         names = ", ".join(self._copy_selected_days)
         self._close_copy_ui()
@@ -727,9 +725,14 @@ class WeeklySchedulerPanel(Frame):
         title_row.pack(fill="x", padx=16, pady=(14, 2))
         Label(title_row, text="Test Automático", font=("Segoe UI", 12, "bold"),
               bg=SCH_CARD, fg=SCH_WHITE).pack(side=LEFT)
+        self._cfg_btn = Button(title_row, text="⚙  Configuración",
+                               font=("Segoe UI", 8, "bold"), bg=SCH_HOVER, fg=SCH_WHITE,
+                               relief=FLAT, cursor="hand2", padx=10, pady=3,
+                               command=self._open_dialog)
+        self._cfg_btn.pack(side=RIGHT)
         self._badge = Label(title_row, text="", font=("Segoe UI", 8, "bold"),
                              bg=SCH_HOVER, fg=SCH_WHITE, padx=10, pady=3)
-        self._badge.pack(side=RIGHT)
+        self._badge.pack(side=RIGHT, padx=(0, 8))
 
         Label(self, text="Automatización de leads por país y horario",
               font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_MUTED).pack(anchor="w", padx=16)
@@ -755,10 +758,18 @@ class WeeklySchedulerPanel(Frame):
             w.destroy()
         self._progress.pack_forget()
 
-        icon, label, bg = self._STATUS_META.get(self._status, self._STATUS_META["idle"])
-        if self._status == "idle" and self._config:
-            icon, label, bg = "⚙", "Configurado", SCH_BORDER
-        self._badge.config(text=f"{icon}  {label}", bg=bg)
+        locked = self._status in ("running", "scheduled")
+        self._cfg_btn.config(state=DISABLED if locked else NORMAL,
+                             cursor="arrow" if locked else "hand2")
+
+        if self._status in ("idle", "stopped"):
+            if self._config:
+                self._badge.config(text="✓  Configurado", bg=SCH_BORDER)
+            else:
+                self._badge.config(text="", bg=SCH_HOVER)
+        else:
+            icon, label, bg = self._STATUS_META.get(self._status, self._STATUS_META["idle"])
+            self._badge.config(text=f"{icon}  {label}", bg=bg)
 
         if self._config:
             self._render_summary()
@@ -775,8 +786,9 @@ class WeeklySchedulerPanel(Frame):
                   font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_GREEN).pack(anchor="w")
         elif self._status == "stopped":
             self._progress.pack(fill="x", padx=16, pady=(0, 6))
-            Label(self._progress, text="■  El test fue detenido manualmente.",
-                  font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_RED).pack(anchor="w")
+            Label(self._progress,
+                  text="■  Detenido. El navegador se cerrará solo al terminar el lead en curso (si no, cerralo manualmente).",
+                  font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_RED, wraplength=520, justify="left").pack(anchor="w")
 
         self._render_actions()
 
@@ -817,17 +829,6 @@ class WeeklySchedulerPanel(Frame):
                       bg=SCH_BG, fg=SCH_PRIMARY, padx=5, pady=1).pack(side=LEFT, padx=2)
 
     def _render_actions(self):
-        locked = self._status in ("running", "scheduled")
-
-        if self._status != "running":
-            cfg_text = "⚙  Editar configuración" if self._config else "⚙  Configurar automatización"
-            Button(self._actions, text=cfg_text,
-                   font=("Segoe UI", 9, "bold"), bg=SCH_HOVER, fg=SCH_WHITE,
-                   relief=FLAT, cursor="hand2" if not locked else "arrow",
-                   padx=12, pady=6,
-                   state=DISABLED if locked else NORMAL,
-                   command=self._open_dialog).pack(side=LEFT, padx=(0, 8))
-
         if self._status == "idle":
             Button(self._actions, text="▶  Programar test automático",
                    font=("Segoe UI", 9, "bold"), bg=SCH_PRIMARY, fg=SCH_PFG,
@@ -836,13 +837,7 @@ class WeeklySchedulerPanel(Frame):
                    state=NORMAL if self._config else DISABLED,
                    command=self._activate).pack(side=LEFT)
 
-        elif self._status in ("completed", "stopped"):
-            Button(self._actions, text="■  Desactivar",
-                   font=("Segoe UI", 9, "bold"), bg=SCH_HOVER, fg=SCH_RED,
-                   relief=FLAT, cursor="hand2", padx=12, pady=6,
-                   command=self._deactivate).pack(side=LEFT)
-
-        elif self._status == "scheduled":
+        elif self._status in ("completed", "stopped", "scheduled"):
             Button(self._actions, text="▶  Iniciar ahora",
                    font=("Segoe UI", 9, "bold"), bg=SCH_AMBER, fg=SCH_WHITE,
                    relief=FLAT, cursor="hand2", padx=12, pady=6,
@@ -900,13 +895,20 @@ class WeeklySchedulerPanel(Frame):
         if self._on_change:
             self._on_change(False)
 
-    def _stop(self):
+    def request_stop(self):
+        """Detiene la ejecución en curso y refresca el estado. Puede llamarse
+        desde fuera del panel (p.ej. el overlay global de 'Detener ejecución')."""
+        if self._status != "running":
+            return
         self._stop_event.set()  # signals _execute_scheduled to abort
         self._is_active = False
         self._status    = "stopped"
         self._refresh_ui()
         if self._on_change:
             self._on_change(False)
+
+    def _stop(self):
+        self.request_stop()
 
     def _open_dialog(self):
         root = self._root or self.winfo_toplevel()

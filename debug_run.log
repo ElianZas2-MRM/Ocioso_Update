@@ -29,3 +29,41 @@
 [12:39:39] fill_form_fields() OK — fila 4
 [12:39:56] fill_form_fields() iniciando — fila 5
 [12:39:59] fill_form_fields() OK — fila 5
+[16:51:11] run() iniciado — Bolivia
+[16:51:24] fill_form_fields() iniciando — fila 2
+[16:51:28] fill_form_fields() OK — fila 2
+[16:51:57] fill_form_fields() iniciando — fila 3
+[16:52:00] fill_form_fields() OK — fila 3
+[16:52:14] fill_form_fields() iniciando — fila 4
+[16:52:17] fill_form_fields() OK — fila 4
+[16:57:40] run() iniciado — Bolivia
+[17:00:03] run() iniciado — Bolivia
+[17:00:10] run() iniciado — Bolivia
+[17:00:14] fill_form_fields() iniciando — fila 2
+[17:00:14] fill_form_fields() OK — fila 2
+[17:00:14] EXCEPTION fila 2: [InvalidSessionIdException] Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessionidexception
+Stacktrace:
+	chromedriver!GetHandleVerifier [0x7ff78b403435+14875]
+	chromedriver!GetHandleVerifier [0x7ff78b403490+148d0]
+	chromedriver!(No symbol) [0x7ff78af57576]
+	chromedriver!(No symbol) [0x7ff78afa2ea6]
+	chromedriver!(No symbol) [0x7ff78afda182]
+	chromedriver!(No symbol) [0x7ff78afd3f82]
+	chromedriver!(No symbol) [0x7ff78afd3742]
+	chromedriver!(No symbol) [0x7ff78af20255]
+	chromedriver!GetHandleVerifier [0x7ff78b9e6c91+5f80d1]
+	chromedriver!GetHandleVerifier [0x7ff78b9e101b+5f245b]
+	chromedriver!GetHandleVerifier [0x7ff78ba06305+617745]
+	chromedriver!GetHandleVerifier [0x7ff78b4203ee+3182e]
+	chromedriver!GetHandleVerifier [0x7ff78b428b0c+39f4c]
+	chromedriver!(No symbol) [0x7ff78af1eff8]
+	chromedriver!GetHandleVerifier [0x7ff78bbbf358+7d0798]
+	KERNEL32!BaseThreadInitThunk [0x7ffef23ee957+17]
+	ntdll!RtlUserThreadStart [0x7ffef2be7c1c+2c]
+
+[17:00:40] run() iniciado — Bolivia
+[17:02:41] run() iniciado — Bolivia
+[17:02:53] fill_form_fields() iniciando — fila 2
+[17:02:56] fill_form_fields() OK — fila 2
+[17:03:22] run() iniciado — Bolivia
+[17:04:25] run() iniciado — Bolivia
