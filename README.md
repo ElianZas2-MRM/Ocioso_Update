@@ -373,5 +373,8 @@ El overlay que bloquea la UI durante la ejecución cambió de un Frame sólido a
 **21. Overlay también aparece durante ejecución programada (Test Automático)**
 Cuando el scheduler semanal dispara una ejecución, ahora aparece el mismo overlay con progreso por país y el botón "Detener ejecución". Al presionar Detener, se cancela la ejecución programada inmediatamente y el overlay desaparece.
 
-**22. Detalle por URL en el cuerpo del email**
-El email de resultados ahora incluye una sección `=== DETALLE POR URL ===` al final del cuerpo, listando cada URL testeada con ✅ (PASS) o ❌ (FAIL → motivo del error), ordenadas por fila del Excel. Aplica tanto al email individual (Desktop) como al email consolidado (LambdaTest Mac/Android, múltiples países).
+**22. Tabla de URLs en el cuerpo del email (HTML)**
+El email de resultados incluye al final una tabla HTML con columnas `URL Landing | URL Secure / Stage` y el ícono ✅/❌ por fila. Si hay error, aparece en rojo debajo de la fila correspondiente. Las filas se ordenan por número de línea del Excel. El campo "Formulario" (Desktop) y "Form URL esperada" (LambdaTest) se mapean automáticamente a la columna Secure/Stage. Aplica a email individual y consolidado.
+
+**23. Consola eliminada de la interfaz**
+El panel "Consola" en la parte inferior fue removido. Los logs internos se emiten al stdout nativo (visible en la terminal si se corre con Python, no en el exe). El overlay con progreso por país cubre la necesidad de feedback visual durante la ejecución.

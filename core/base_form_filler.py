@@ -1141,6 +1141,7 @@ class BaseFormFiller:
                     "(DOM sin cambios visibles). Revisar selectores o validaciones."
                 )
                 print(f" ERROR: {msg}")
+                self._log(f"STUCK en iteracion {iteration}: {msg}")
                 raise RuntimeError(msg)
         else:
             raise RuntimeError(f"auto_step: se alcanzó el máximo de iteraciones ({max_iter})")
@@ -4105,11 +4106,22 @@ class BaseFormFiller:
             print(result_text)
             return result_text, None
     
-    def run(self):
+    def _log(self, msg):
+        """Escribe a archivo de log para diagnóstico cuando no hay consola."""
+        try:
+            log_path = os.path.join(self.BASE_DIR, "debug_run.log")
+            import datetime
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+        except Exception:
+            pass
+
+    def run(self, progress_callback=None):
         """Ejecuta el proceso completo - MÉTODO UNIFICADO PARA TODOS LOS PAÍSES"""
         try:
             # Configuración inicial
             self.setup_directories_and_files()
+            self._log(f"run() iniciado — {self.config.get('pais','?')}")
             self.initialize_browser()
             
             print(f"\nINICIANDO EJECUCIÓN #{self.RUN_NUMBER} - {self.config['pais'].upper()}")
@@ -4145,9 +4157,11 @@ class BaseFormFiller:
             form_url_esperada_col   = headers.index("Form URL esperada") + 1
             form_url_encontrada_col = headers.index("Form URL encontrada") + 1
             form_coincide_col = headers.index("Form coincide") + 1
-            
+
             ss_counter = 1
-            
+            _total_leads = max(0, sheet.max_row - 1)
+            _done_leads = 0
+
             # Procesar cada fila
             for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
                 self.begin_row_tracking()
@@ -4287,7 +4301,9 @@ class BaseFormFiller:
                             print("URL libro-reclamaciones detectada: llenando nombre/teléfono/email directamente.")
                             form_completado_name = self._fill_libro_reclamaciones_direct(form_data)
                         else:
+                            self._log(f"fill_form_fields() iniciando — fila {i}")
                             form_completado_name = self.fill_form_fields(form_data)
+                            self._log(f"fill_form_fields() OK — fila {i}")
 
                         # 5. Enviar y verificar formulario
                         result_text, ty_page_name = self.submit_and_verify_form(ss_counter, expected_form_url)
@@ -4384,15 +4400,17 @@ class BaseFormFiller:
 
                     except Exception as e:
                         # Errores durante llenado o envío (iframe o documento principal)
+                        _exc_info = f"[{type(e).__name__}] {e}"
+                        print(f"Error en fill/submit: {_exc_info}")
+                        self._log(f"EXCEPTION fila {i}: {_exc_info}")
                         try:
                             desc_errores = self._describir_errores_visuales()
                             if desc_errores:
-                                result_text = f" Error completando: {desc_errores}"
-                                print(f"Error visual capturado: {desc_errores}")
+                                result_text = f" Error completando {_exc_info}: {desc_errores}"
                             else:
-                                result_text = f" Error completando: {e}"
-                        except Exception as error_captura:
-                            result_text = f" Error completando: {e}"
+                                result_text = f" Error completando: {_exc_info}"
+                        except Exception:
+                            result_text = f" Error completando: {_exc_info}"
                     finally:
                         if _original_field_mapping is not None:
                             self.field_mapping = _original_field_mapping
@@ -4450,8 +4468,14 @@ class BaseFormFiller:
                 self._apply_row_color(sheet, i, _lead_ok, form_coincide_col, _form_coincide_val)
 
                 self.safe_save_workbook(wb, self.RESULTADOS_PATH)
+                _done_leads += 1
+                if progress_callback:
+                    try:
+                        progress_callback(_done_leads, _total_leads)
+                    except Exception:
+                        pass
                 ss_counter += 1
-            
+
             print(f"\nProceso finalizado. Ejecución #{self.RUN_NUMBER} completada")
             print(f"Screenshots guardados en: {self.SCREENSHOT_DIR}")
             print(f"Resultados guardados en: {self.RESULTADOS_PATH}")

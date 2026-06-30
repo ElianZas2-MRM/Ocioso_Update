@@ -1,0 +1,31 @@
+[12:33:51] run() iniciado — Bolivia
+[12:34:03] fill_form_fields() iniciando — fila 2
+[12:34:04] EXCEPTION fila 2: [UnicodeEncodeError] 'charmap' codec can't encode character '\U0001f539' in position 0: character maps to <undefined>
+[12:34:28] fill_form_fields() iniciando — fila 3
+[12:34:28] EXCEPTION fila 3: [UnicodeEncodeError] 'charmap' codec can't encode character '\U0001f539' in position 0: character maps to <undefined>
+[12:34:38] fill_form_fields() iniciando — fila 4
+[12:34:38] EXCEPTION fila 4: [UnicodeEncodeError] 'charmap' codec can't encode character '\U0001f539' in position 0: character maps to <undefined>
+[12:35:52] run() iniciado — Bolivia
+[12:36:03] fill_form_fields() iniciando — fila 2
+[12:36:06] fill_form_fields() OK — fila 2
+[12:36:34] fill_form_fields() iniciando — fila 3
+[12:36:37] fill_form_fields() OK — fila 3
+[12:36:51] fill_form_fields() iniciando — fila 4
+[12:36:54] fill_form_fields() OK — fila 4
+[12:37:18] run() iniciado — Argentina
+[12:37:36] run() iniciado — Argentina
+[12:37:36] run() iniciado — Bolivia
+[12:37:47] fill_form_fields() iniciando — fila 2
+[12:37:50] fill_form_fields() iniciando — fila 2
+[12:37:50] fill_form_fields() OK — fila 2
+[12:37:53] fill_form_fields() OK — fila 2
+[12:38:19] fill_form_fields() iniciando — fila 3
+[12:38:22] fill_form_fields() OK — fila 3
+[12:38:36] fill_form_fields() iniciando — fila 4
+[12:38:36] fill_form_fields() iniciando — fila 3
+[12:38:36] fill_form_fields() OK — fila 3
+[12:38:39] fill_form_fields() OK — fila 4
+[12:39:37] fill_form_fields() iniciando — fila 4
+[12:39:39] fill_form_fields() OK — fila 4
+[12:39:56] fill_form_fields() iniciando — fila 5
+[12:39:59] fill_form_fields() OK — fila 5
