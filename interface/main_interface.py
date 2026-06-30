@@ -792,6 +792,7 @@ _run_state = {
     "lt_android_btn": None,   # botón "Ejecutar en Android"
     "stop_btn": None,         # botón "Detener" (consola)
     "root": None,
+    "scheduler_panel": None,  # WeeklySchedulerPanel — para sincronizar su UI al detener desde el overlay
     "overlay": None,          # Frame oscuro que cubre el contenido mientras corre
     "progress_frame": None,   # Frame interno del overlay con filas por país
     "progress": {},           # {pais: {"done":0,"total":0,"ok":0,"status":"waiting"}}
@@ -854,6 +855,9 @@ def _request_stop():
         kill_active_drivers()
     except Exception:
         pass
+    panel = _run_state.get("scheduler_panel")
+    if panel:
+        panel.request_stop()
     _set_running(False)
 
 
@@ -1192,19 +1196,25 @@ def _build_generar_excels_tab(parent):
 
     frame_pais_checks = Frame(frame, bg=APP_BG_COLOR)
     frame_pais_checks.pack(anchor="w", pady=(0, 8))
+    _pais_dots = {}
     for _idx, _pnombre in enumerate(paises_disponibles):
-        Radiobutton(
-            frame_pais_checks,
-            text=_pnombre,
-            variable=pais_var,
-            value=_pnombre,
-            bg=APP_BG_COLOR,
-            fg="white",
-            selectcolor=APP_BG_COLOR,
-            activebackground=APP_BG_COLOR,
-            activeforeground="white",
-            font=("Segoe UI", 9),
-        ).grid(row=_idx // 5, column=_idx % 5, sticky="w", padx=6, pady=1)
+        _rb = Frame(frame_pais_checks, bg=APP_BG_COLOR, cursor="hand2")
+        _rb.grid(row=_idx // 5, column=_idx % 5, sticky="w", padx=6, pady=1)
+        _dot = Label(_rb, text="○", font=("Segoe UI", 9),
+                     bg=APP_BG_COLOR, fg="white", cursor="hand2")
+        _dot.pack(side=LEFT)
+        Label(_rb, text=_pnombre, font=("Segoe UI", 9),
+              bg=APP_BG_COLOR, fg="white", cursor="hand2").pack(side=LEFT, padx=(3, 0))
+        _pais_dots[_pnombre] = _dot
+
+        def _on_pais_click(v=_pnombre):
+            pais_var.set(v)
+            for _v, _d in _pais_dots.items():
+                _d.config(text="●" if _v == v else "○")
+
+        for _w in _rb.winfo_children():
+            _w.bind("<Button-1>", lambda e, f=_on_pais_click: f())
+        _rb.bind("<Button-1>", lambda e, f=_on_pais_click: f())
 
     # ── Modo de URLs ─────────────────────────────────────────────────────────
     url_mode_var = StringVar(value="landing_form")
@@ -1212,16 +1222,28 @@ def _build_generar_excels_tab(parent):
     frame_url_mode.pack(anchor="w", pady=(0, 6))
     Label(frame_url_mode, text="Tipo de URLs:", bg=APP_BG_COLOR, fg="white",
           font=("Segoe UI", 9, "bold")).pack(side=LEFT, padx=(0, 10))
-    Radiobutton(frame_url_mode, text="Landing + Form (pares)",
-                variable=url_mode_var, value="landing_form",
-                bg=APP_BG_COLOR, fg="white", selectcolor=APP_BG_COLOR,
-                activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 14))
-    Radiobutton(frame_url_mode, text="Solo Forms",
-                variable=url_mode_var, value="solo_forms",
-                bg=APP_BG_COLOR, fg="white", selectcolor=APP_BG_COLOR,
-                activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT)
+    _url_dots = {}
+    for _modo_val, _modo_txt in [
+        ("landing_form", "Landing + Form (pares)"),
+        ("solo_forms", "Solo Forms"),
+    ]:
+        _rb = Frame(frame_url_mode, bg=APP_BG_COLOR, cursor="hand2")
+        _rb.pack(side=LEFT, padx=(0, 14))
+        _dot = Label(_rb, text="●" if url_mode_var.get() == _modo_val else "○",
+                     font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="white", cursor="hand2")
+        _dot.pack(side=LEFT)
+        Label(_rb, text=_modo_txt, font=("Segoe UI", 9),
+              bg=APP_BG_COLOR, fg="white", cursor="hand2").pack(side=LEFT, padx=(3, 0))
+        _url_dots[_modo_val] = _dot
+
+        def _on_url_click(v=_modo_val):
+            url_mode_var.set(v)
+            for _v, _d in _url_dots.items():
+                _d.config(text="●" if _v == v else "○")
+
+        for _w in _rb.winfo_children():
+            _w.bind("<Button-1>", lambda e, f=_on_url_click: f())
+        _rb.bind("<Button-1>", lambda e, f=_on_url_click: f())
 
     # Warning de discrepancia país seleccionado vs URLs
     url_country_warning_var = StringVar(value="")
@@ -2608,7 +2630,7 @@ def iniciar_interfaz():
     ).pack(side=LEFT, padx=5)
     Checkbutton(
         frame_viewport,
-        text="Mobile emulado",
+        text="Mobile Emulado-Navegador",
         variable=mobile_var,
         bg=APP_BG_COLOR,
         fg="white",
@@ -3923,23 +3945,28 @@ def iniciar_interfaz():
 
     frame_modos = Frame(frame_selector, bg=SECTION_BG_COLOR)
     frame_modos.pack(anchor="w")
+    _modo_dots = {}
     for _modo_val, _modo_txt in [
         ("consecutive", "Múltiples países (consecutivo por sesión)"),
         ("parallel", "Múltiples países (en paralelo por sesión)"),
     ]:
-        Radiobutton(
-            frame_modos,
-            text=_modo_txt,
-            variable=_lt_modo_var,
-            value=_modo_val,
-            bg=SECTION_BG_COLOR,
-            fg="white",
-            selectcolor=SECTION_BG_COLOR,
-            activebackground=SECTION_BG_COLOR,
-            activeforeground="white",
-            font=("Segoe UI", 9),
-            cursor="hand2",
-        ).pack(side=LEFT, padx=(0, 16))
+        _rb = Frame(frame_modos, bg=SECTION_BG_COLOR, cursor="hand2")
+        _rb.pack(side=LEFT, padx=(0, 16))
+        _dot = Label(_rb, text="○", font=("Segoe UI", 10),
+                     bg=SECTION_BG_COLOR, fg="white", cursor="hand2")
+        _dot.pack(side=LEFT)
+        Label(_rb, text=_modo_txt, font=("Segoe UI", 9),
+              bg=SECTION_BG_COLOR, fg="white", cursor="hand2").pack(side=LEFT, padx=(3, 0))
+        _modo_dots[_modo_val] = _dot
+
+        def _on_modo_click(v=_modo_val):
+            _lt_modo_var.set(v)
+            for _v, _d in _modo_dots.items():
+                _d.config(text="●" if _v == v else "○")
+
+        for _w in _rb.winfo_children():
+            _w.bind("<Button-1>", lambda e, f=_on_modo_click: f())
+        _rb.bind("<Button-1>", lambda e, f=_on_modo_click: f())
 
     # Contenedor dinámico de selectores de país
     frame_seleccion_pais = Frame(frame_selector, bg=SECTION_BG_COLOR)
@@ -4491,6 +4518,7 @@ def iniciar_interfaz():
     )
     scheduler_panel.pack(fill="x", padx=4, pady=4)
     _scheduler_ref["panel"] = scheduler_panel
+    _run_state["scheduler_panel"] = scheduler_panel
     actualizar_estado_botones()
 
     # === FOOTER STICKY (siempre visible abajo) ===
