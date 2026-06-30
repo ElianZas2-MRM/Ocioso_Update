@@ -256,6 +256,96 @@ Para detener: click en **"■ Desactivar"**.
 
 ---
 
+## Guía de uso — desde cero
+
+### Paso previo: preparar el Excel de datos
+
+La app necesita un archivo Excel con las URLs y datos para rellenar los formularios.
+
+1. Abrí la app: `python run.py`
+2. En la sección de datos (botón "Abrir/Crear Excel"):
+   - Primera vez: hacé click en **"Crear Excel"** → se genera un archivo con las columnas correctas en `data/`.
+   - Ya tenés un Excel: hacé click en **"Cargar Excel"** y seleccioná tu archivo.
+3. Completá las columnas requeridas:
+   - **URL Landing**: la página donde está inserto el formulario.
+   - **URL Form**: la URL del iframe del formulario (ej. HubSpot, Marketo, etc.).
+   - Datos del lead: nombre, apellido, documento, teléfono, email, ciudad, modelo, dealer, fecha estimada, etc.
+4. Hacé click en **"Guardar"** para persistir los cambios.
+
+---
+
+### Pestaña: Desktop
+
+Automatiza el rellenado de formularios directamente desde tu PC usando Chrome, Firefox o Edge.
+
+**Cómo usarla:**
+
+1. **Configuración Global** (parte superior):
+   - Seleccioná el navegador: Chrome, Firefox o Edge.
+   - Viewport: Desktop (1366×768) o Mobile (600×738).
+   - Checkbox **"Ver navegador mientras corre"**: si lo marcás, el browser abre en pantalla. Por defecto corre en background sin robar el foco.
+   - Campo **"Email"**: ingresá el/los destinatarios separados por coma.
+   - Checkbox **"Enviar mail"**: debe estar marcado si querés recibir el resultado por email. Arranca siempre desmarcado.
+   - **"Adjuntar resultados"** / **"Adjuntar screenshots"**: incluyen archivos al email.
+   - Modo de envío: **"1 por país"** (email al terminar cada país) o **"Consolidado"** (un solo email al final de todos).
+
+2. **Selección de países**: marcá los países que querés ejecutar.
+
+3. **Botón "Ejecutar"**: inicia la automatización. Aparece un overlay semitransparente con el progreso por país:
+   - `En curso → 1/5 → 2/5 → ... → 5/5`
+   - Al terminar, si hay email: `📧 Enviando email...` → `✉ Email enviado` / `✉ Email no enviado`
+
+4. **Botón "Detener"**: cancela la ejecución en curso. Si "Enviar mail" estaba activo, no envía email al detener manualmente (no es un fallo real).
+
+5. Al terminar: los resultados quedan en `resultados/<País>/` con el Excel de resultados y capturas de pantalla. Si configuraste email, llega un resumen con tabla de URLs (fails primero, pasados después).
+
+---
+
+### Pestaña: LambdaTest Mac
+
+Ejecuta los formularios en Safari/Chrome/Firefox sobre macOS real via LambdaTest (requiere credenciales en `lambdatest_credentials.txt`).
+
+**Cómo usarla:**
+
+1. Asegurate de tener `lambdatest_credentials.txt` con tu username y access key de LambdaTest.
+2. Seleccioná el navegador y la versión de macOS.
+3. Seleccioná los países y hacé click en **"Ejecutar"**.
+4. El progreso aparece en el overlay igual que en Desktop.
+5. Al terminar se envía el email consolidado con los resultados si configuraste email.
+
+> Las credenciales de LambdaTest nunca se suben al repositorio — están en `.gitignore`.
+
+---
+
+### Pestaña: LambdaTest Android
+
+Igual que Mac pero ejecuta en dispositivos Android reales via LambdaTest.
+
+- Los campos se rellenan por JS puro (sin teclado virtual, más rápido y sin animaciones).
+- Útil para verificar que el formulario funciona en móvil antes de lanzar una campaña.
+
+---
+
+### Pestaña: Test Automático
+
+Configura ejecuciones recurrentes semanales sin intervención manual.
+
+**Cómo usarla desde cero:**
+
+1. **Configurar email** (Configuración Global): ingresá destinatario y marcá "Enviar mail".
+2. **Abrir el modal**: click en **"⚙ Configurar automatización"**.
+3. **Seleccionar días y horarios**:
+   - Click en un día (Lun–Dom) para expandirlo.
+   - Click en los botones de cuarto de hora (ej: `09:00`, `09:15`...) para activar ese slot.
+   - O escribí un horario personalizado (ej: `09:33`) y presioná Enter.
+4. **Seleccionar países** en la sección "🌎 PAÍSES A TESTEAR".
+5. Click en **"💾 Guardar configuración"**.
+6. Click en **"▶ Programar test automático"** → el test se dispara automáticamente cada semana a la hora configurada.
+
+> La app debe estar abierta para que el monitor detecte el horario y dispare la ejecución. Al dispararse aparece el mismo overlay con progreso y botón Detener.
+
+---
+
 ## UPDATE — Historial de cambios (Ocioso_Update)
 
 ### Bloque 1 — Restauración, seguridad y correcciones base
@@ -378,3 +468,52 @@ El email de resultados incluye al final una tabla HTML con columnas `URL Landing
 
 **23. Consola eliminada de la interfaz**
 El panel "Consola" en la parte inferior fue removido. Los logs internos se emiten al stdout nativo (visible en la terminal si se corre con Python, no en el exe). El overlay con progreso por país cubre la necesidad de feedback visual durante la ejecución.
+
+---
+
+### Bloque 8 — Progreso por lead, estado de email en overlay y correcciones de estabilidad
+
+**24. Progreso por lead en el overlay**
+El overlay ahora muestra cuántos leads se enviaron en tiempo real: `En curso → 1/5 → 2/5 → 3/5...`. Al completar todos los leads, el contador muestra el total correcto (`5/5`) en lugar de quedarse en `0/5`. El contador se actualiza después de cada fila procesada del Excel, sin importar si el lead fue exitoso o tuvo error.
+
+**25. Estado del email en el overlay**
+Al terminar la ejecución de un país, si "Enviar mail" está activo, el overlay muestra el estado del email en tiempo real:
+- `📧 Enviando email...` — mientras se envía
+- `✉ Email enviado` (verde) — si llegó correctamente
+- `✉ Email no enviado` (rojo) — si hubo error al enviar
+
+El estado del email es el estado final del overlay y no es sobreescrito por "Completado".
+
+**26. No se envía email si el usuario detiene la ejecución**
+Si se presiona "Detener", el email no se envía aunque "Enviar mail" estuviera activo. Una detención manual no es un fallo real y no merece reportarse.
+
+**27. Rediseño de la tabla de URLs en el email**
+- Headers renombrados: `URL LANDING | URL FORM` (antes `URL Landing | URL Secure / Stage`).
+- Las filas fallidas aparecen primero, luego las exitosas.
+- El cuerpo del email usa un resumen compacto: `FAILED (2): /ar/modelo | /cl/modelo` y `PASSED (4): /co/... | ...` en lugar de secciones verbosas de detalle de errores.
+
+**28. Fix: formularios no se rellenaban (UnicodeEncodeError en stdout)**
+Al eliminar el panel de consola, Windows restauró el stdout con encoding `cp1252`. Los `print()` con emojis (ej. `🔹 Procesando select...`) crasheaban con `UnicodeEncodeError` antes de que los campos se rellenaran, lo que dejaba el formulario vacío y disparaba los errores de validación del form. Fix: `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` al inicio de la app.
+
+El diagnóstico se hizo via `debug_run.log` — un archivo de log que el engine escribe en el directorio raíz del proyecto cuando ocurre una excepción durante el rellenado. Si un formulario no se llena y no hay error visible, revisar ese archivo.
+
+---
+
+### Bloque 9 — Radio buttons en Windows 11, sincronización del botón Detener y ajustes del scheduler
+
+**29. Fix: radio buttons aparecían "marcados" sin selección real (Windows 11)**
+En Windows 11, el `selectcolor` de `Radiobutton` es ignorado por el tema nativo, haciendo que todo el grupo se vea seleccionado aunque no haya ninguna opción elegida. Se reemplazaron los `Radiobutton` nativos por un indicador custom (○ no seleccionado / ● seleccionado) en: "Modo de envío" (Envío de Leads), selector de País y "Tipo de URLs" (Generar Excels con Datos).
+
+**30. Renombrado "Mobile emulado" → "Mobile Emulado-Navegador"**
+
+**31. Fix: el botón Detener del overlay no sincronizaba la tarjeta de Test Automático**
+Detener desde el overlay global y detener desde la tarjeta del scheduler eran dos caminos independientes que no se avisaban entre sí. Ahora ambos comparten el mismo `request_stop()`, y al detener la tarjeta muestra: "Detenido. El navegador se cerrará solo al terminar el lead en curso (si no, cerralo manualmente)."
+
+**32. Tarjeta de Test Automático: acciones tras detener**
+Después de detener (o al completar), si sigue habiendo una configuración guardada, la tarjeta vuelve a mostrar "▶ Iniciar ahora" y "■ Desactivar" en vez de ofrecer solo "Desactivar".
+
+**33. Se quitó el badge "Detenido" de la tarjeta**
+Podía confundirse con "la programación no se va a ejecutar más". Ahora, mientras exista una configuración guardada, se muestra el badge normal "✓ Configurado".
+
+**34. Fix: copiar horarios a otros días ahora reemplaza en vez de fusionar**
+Al desmarcar/borrar horarios de un día y aplicar "para todos los días" o "para días seleccionados", los días destino ahora quedan exactamente iguales al día origen (incluyendo las horas borradas), en lugar de solo sumar horarios nuevos sin quitar los removidos.
