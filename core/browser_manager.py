@@ -5,7 +5,47 @@ anti-detección de bots). Usa solo los drivers locales de la carpeta /drivers/.
 """
 import os
 import sys
+import threading
+import subprocess
 from selenium import webdriver
+
+# ── Registro de PIDs de drivers activos ───────────────────────────────────────
+_active_pids: list = []
+_pids_lock = threading.Lock()
+
+
+def _reg_pid(service):
+    """Registra el PID del proceso driver (chromedriver, geckodriver, etc.)."""
+    try:
+        pid = service.process.pid
+        with _pids_lock:
+            if pid not in _active_pids:
+                _active_pids.append(pid)
+    except Exception:
+        pass
+
+
+def clear_active_drivers():
+    """Limpia la lista de PIDs (llamar al iniciar una nueva ejecución)."""
+    with _pids_lock:
+        _active_pids.clear()
+
+
+def kill_active_drivers():
+    """Mata los procesos driver + browser (árbol de procesos) que abrió esta app."""
+    _NO_WIN = 0x08000000  # CREATE_NO_WINDOW
+    with _pids_lock:
+        pids = list(_active_pids)
+        _active_pids.clear()
+    for pid in pids:
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                capture_output=True,
+                creationflags=_NO_WIN,
+            )
+        except Exception:
+            pass
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.edge.options import Options as EdgeOptions
@@ -187,6 +227,7 @@ class BrowserManager:
                 driver.minimize_window()
             except Exception:
                 pass
+        _reg_pid(service)
         return driver
     
     @staticmethod
@@ -225,6 +266,7 @@ class BrowserManager:
             lambda: webdriver.Firefox(service=service, options=options),
             "geckodriver.exe",
         )
+        _reg_pid(service)
         # Aplicar tamaño después de crear el driver
         if headless:
             if viewport == "fullscreen":
@@ -279,6 +321,7 @@ class BrowserManager:
             lambda: webdriver.Edge(service=service, options=options),
             "msedgedriver.exe",
         )
+        _reg_pid(service)
         if background and not headless:
             try:
                 driver.minimize_window()

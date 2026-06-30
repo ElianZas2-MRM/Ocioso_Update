@@ -6,6 +6,13 @@ Permite cargar Excels, correr formularios, ver resultados y configurar el envío
 import os
 import sys
 import threading
+
+# Forzar UTF-8 en stdout/stderr para que los print() con emojis no rompan en Windows (cp1252)
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 import subprocess
 import importlib
 import importlib.util
@@ -796,6 +803,12 @@ def _set_running(running: bool):
     """Habilita/deshabilita botones y muestra/oculta el overlay según si hay ejecución activa."""
     _run_state["running"] = running
     _set_manual_input_callback(running)
+    if running:
+        try:
+            from core.browser_manager import clear_active_drivers
+            clear_active_drivers()
+        except Exception:
+            pass
     root = _run_state.get("root")
 
     def _apply():
@@ -816,20 +829,14 @@ def _set_running(running: bool):
                     stop_btn.pack_forget()
             except Exception:
                 pass
-        # Overlay semi-transparente (Toplevel)
+        # Overlay (Frame sólido sobre root)
         overlay = _run_state.get("overlay")
         if overlay:
             if running:
-                r = _run_state.get("root")
-                if r:
-                    r.update_idletasks()
-                    overlay.geometry(
-                        f"{r.winfo_width()}x{r.winfo_height()}+{r.winfo_x()}+{r.winfo_y()}"
-                    )
-                overlay.deiconify()
+                overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
                 overlay.lift()
             else:
-                overlay.withdraw()
+                overlay.place_forget()
 
     if root:
         root.after(0, _apply)
@@ -841,8 +848,12 @@ def _request_stop():
     ev = _run_state.get("stop_event")
     if ev:
         ev.set()
-        print("⛔ Detención solicitada.")
-    # Liberar la UI inmediatamente — el hilo de fondo termina el lead actual sin bloquear
+    # Mata solo los drivers/browsers que abrió esta app (por PID registrado)
+    try:
+        from core.browser_manager import kill_active_drivers
+        kill_active_drivers()
+    except Exception:
+        pass
     _set_running(False)
 
 
@@ -899,12 +910,21 @@ def _update_progress(key, done=None, total=None, ok=None, status=None):
             w["count_lbl"].configure(text=f"{d}/{t}" if t else "...")
         elif s == "done_ok":
             w["status_lbl"].configure(text="✓ Completado", fg="#10b981")
-            w["count_lbl"].configure(text=f"{o}/{t} OK" if t else "OK")
+            w["count_lbl"].configure(text=f"{t}/{t}" if t else "")
         elif s == "done_error":
             w["status_lbl"].configure(text="✗ Con errores", fg="#ef4444")
-            w["count_lbl"].configure(text=f"{o}/{t} OK" if t else "")
+            w["count_lbl"].configure(text=f"{t}/{t}" if t else "")
         elif s == "stopped":
             w["status_lbl"].configure(text="⛔ Detenido", fg="#888")
+            w["count_lbl"].configure(text="")
+        elif s == "emailing":
+            w["status_lbl"].configure(text="📧 Enviando email...", fg="#f59e0b")
+            w["count_lbl"].configure(text="")
+        elif s == "email_ok":
+            w["status_lbl"].configure(text="✉ Email enviado", fg="#10b981")
+            w["count_lbl"].configure(text="")
+        elif s == "email_fail":
+            w["status_lbl"].configure(text="✉ Email no enviado", fg="#ef4444")
             w["count_lbl"].configure(text="")
     root.after(0, _apply)
 
@@ -2241,121 +2261,16 @@ def iniciar_interfaz():
     _broker = _ManualInputBroker(root)
     _broker.start_polling()
     _run_state["broker"] = _broker
-    _console_expanded = [False]   # estado: cerrado por defecto
-
-    # Franja inferior fija (siempre visible) — contiene el toggle y, si está abierto, el panel
-    _console_wrapper = Frame(root, bg="#2b1d3a")
-    _console_wrapper.pack(fill="x", side="bottom")
-
-    # ── Toggle bar ──────────────────────────────────────────────────────────
-    _toggle_bar = Frame(_console_wrapper, bg="#3d2a52", cursor="hand2")
-    _toggle_bar.pack(fill="x", padx=20, pady=(2, 0))
-
-    _toggle_lbl = Label(
-        _toggle_bar, text="▶  Consola", bg="#3d2a52", fg="#c9b8e8",
-        font=("Segoe UI", 9), padx=8, pady=4, cursor="hand2",
-    )
-    _toggle_lbl.pack(side=LEFT)
-
-    # Botón DETENER (oculto hasta que haya ejecución)
-    _stop_btn = Button(
-        _toggle_bar, text="⛔ Detener", bg="#c0392b", fg="white",
-        font=("Segoe UI", 9, "bold"), relief="flat", bd=0, cursor="hand2",
-        command=_request_stop,
-        activebackground="#e74c3c", activeforeground="white",
-        padx=8, pady=3,
-    )
-    _run_state["stop_btn"] = _stop_btn
-
-    # ── Panel de texto (oculto por defecto) ─────────────────────────────────
-    _console_panel = Frame(_console_wrapper, bg="#3d2a52", padx=1, pady=1)
-    # NO se empaca aquí — se muestra/oculta con toggle
-
-    _console_panel_header = Frame(_console_panel, bg="#3d2a52")
-    _console_panel_header.pack(fill="x")
-
-    def _clear_console():
-        _console_text.configure(state="normal")
-        _console_text.delete("1.0", END)
-        _console_text.configure(state="disabled")
-
-    Button(_console_panel_header, text="Limpiar", bg="#3d2a52", fg="#aaa",
-           font=("Consolas", 8), relief="flat", bd=0, cursor="hand2",
-           command=_clear_console,
-           activebackground="#3d2a52", activeforeground="white").pack(side=RIGHT, padx=6, pady=2)
-
-    _console_inner = Frame(_console_panel, bg="#1a1a2e")
-    _console_inner.pack(fill="both", expand=True, padx=1, pady=(0, 1))
-    _console_vscroll = ttk.Scrollbar(_console_inner, orient="vertical",
-                                     style="Section.Vertical.TScrollbar")
-    _console_vscroll.pack(side=RIGHT, fill="y")
-    _console_text = Text(
-        _console_inner, height=8, bg="#1a1a2e", fg="#d4d4d4",
-        font=("Consolas", 9), relief="flat", bd=0,
-        yscrollcommand=_console_vscroll.set,
-        state="disabled", wrap="word",
-    )
-    _console_text.pack(fill="both", expand=True, padx=4, pady=4)
-    _console_vscroll.config(command=_console_text.yview)
-
-    def _toggle_console(_event=None):
-        if _console_expanded[0]:
-            _console_panel.pack_forget()
-            _toggle_lbl.configure(text="▶  Consola")
-            _console_expanded[0] = False
-        else:
-            _console_panel.pack(fill="both", expand=True, padx=20, pady=(0, 8))
-            _toggle_lbl.configure(text="▼  Consola")
-            _console_expanded[0] = True
-
-    _toggle_bar.bind("<Button-1>", _toggle_console)
-    _toggle_lbl.bind("<Button-1>", _toggle_console)
-
-    # Redirigir sys.stdout al widget de consola (TeeStream thread-safe)
-    _original_stdout = sys.stdout
-
-    class _TeeStream:
-        def write(self, text):
-            if text:
-                try:
-                    root.after(0, _append_console, text)
-                except Exception:
-                    pass
-                try:
-                    _original_stdout.write(text)
-                except Exception:
-                    pass
-        def flush(self):
-            try:
-                _original_stdout.flush()
-            except Exception:
-                pass
-        def isatty(self):
-            return False
-
-    def _append_console(text):
-        try:
-            _console_text.configure(state="normal")
-            _console_text.insert(END, text)
-            _console_text.see(END)
-            _console_text.configure(state="disabled")
-        except Exception:
-            pass
-
-    sys.stdout = _TeeStream()
 
     # === CONTENEDOR SCROLLEABLE (evita colapso al achicar ventana) ===
     outer_container = Frame(root, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
     outer_container.pack(fill="both", expand=True)
     _run_state["outer_container"] = outer_container
 
-    # === OVERLAY (Toplevel semi-transparente que cubre la ventana durante ejecución) ===
+    # === OVERLAY (Frame sólido sobre root — cubre la ventana durante ejecución) ===
+    # Se coloca en root (no en outer_container) para evitar problemas de z-order con Canvas nativo
     _OV_BG = "#160d24"
-    _overlay = Toplevel(root)
-    _overlay.overrideredirect(True)   # sin barra de título
-    _overlay.attributes("-alpha", 0.88)
-    _overlay.configure(bg=_OV_BG)
-    _overlay.withdraw()               # oculto hasta que inicie ejecución
+    _overlay = Frame(root, bg=_OV_BG, bd=0)
     _overlay_inner = Frame(_overlay, bg=_OV_BG)
     _overlay_inner.place(relx=0.5, rely=0.45, anchor="center")
     Label(_overlay_inner, text="⚡ Ejecución en curso",
@@ -2371,14 +2286,7 @@ def iniciar_interfaz():
         activebackground="#e74c3c", activeforeground="white",
     ).pack()
     _run_state["overlay"] = _overlay
-
-    def _sync_overlay_pos(event=None):
-        ov = _run_state.get("overlay")
-        if ov and ov.winfo_viewable():
-            r = _run_state.get("root")
-            if r:
-                ov.geometry(f"{r.winfo_width()}x{r.winfo_height()}+{r.winfo_x()}+{r.winfo_y()}")
-    root.bind("<Configure>", _sync_overlay_pos)
+    # El overlay empieza oculto — se muestra con place() en _set_running(True)
 
     canvas = Canvas(outer_container, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
     v_scroll = ttk.Scrollbar(outer_container, orient="vertical", style="Section.Vertical.TScrollbar")
@@ -4102,10 +4010,17 @@ def iniciar_interfaz():
                 return
             try:
                 run_func = _get_run_func(pais)
+                def _prog(done, total, _pais=pais):
+                    _update_progress(_pais, done=done, total=total, status="running")
+                def _email_cb(ev, _pais=pais):
+                    _update_progress(_pais, status="emailing" if ev == "sending" else ("email_ok" if ev == "ok" else "email_fail"))
                 formulario = run_func(
                     browser=nav, viewport=vp, headless=False,
                     background=_background,
                     enviar_email=not _consolidado,
+                    progress_callback=_prog,
+                    email_callback=_email_cb,
+                    stop_event=stop_ev,
                 )
                 if _consolidado and formulario is not None:
                     excel = getattr(formulario, "RESULTADOS_PATH", None)
@@ -4129,7 +4044,10 @@ def iniciar_interfaz():
             if len(browser_combos) <= 1:
                 if browser_combos:
                     _run_combo(pais, *browser_combos[0])
-                _update_progress(pais, status="stopped" if stop_ev.is_set() else "done_ok")
+                if stop_ev.is_set():
+                    _update_progress(pais, status="stopped")
+                elif _consolidado:
+                    _update_progress(pais, status="done_ok")
                 return
             with ThreadPoolExecutor(max_workers=len(browser_combos)) as ex:
                 for f in [ex.submit(_run_combo, pais, nav, vp) for nav, vp in browser_combos]:
@@ -4137,7 +4055,10 @@ def iniciar_interfaz():
                         f.result()
                     except Exception:
                         pass
-            _update_progress(pais, status="stopped" if stop_ev.is_set() else "done_ok")
+            if stop_ev.is_set():
+                _update_progress(pais, status="stopped")
+            elif _consolidado:
+                _update_progress(pais, status="done_ok")
 
         def _done():
             _set_running(False)
@@ -4965,8 +4886,16 @@ def iniciar_interfaz():
     #label_ejemplos.bind("<Button-1>", lambda e: mostrar_ejemplos_formularios())
 
     def _on_close():
-        sys.stdout = _original_stdout
-        root.destroy()
+        try:
+            from core.browser_manager import kill_active_drivers
+            kill_active_drivers()
+        except Exception:
+            pass
+        try:
+            root.destroy()
+        except Exception:
+            pass
+        os._exit(0)
 
     root.protocol("WM_DELETE_WINDOW", _on_close)
     root.mainloop()

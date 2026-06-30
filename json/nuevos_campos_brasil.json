@@ -1,0 +1,12 @@
+{
+  "pais": "Brasil",
+  "ultima_deteccion": "2026-06-30T11:33:10",
+  "campos_nuevos": [
+    {
+      "id": "categories",
+      "type": "select",
+      "required": false,
+      "label": "categories"
+    }
+  ]
+}

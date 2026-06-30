@@ -337,6 +337,26 @@
         "min_length",
         "max_length"
       ]
+    },
+    "CATEGORIES": {
+      "descripcion": "categories",
+      "campo": "categories",
+      "element_id": "categories",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }
