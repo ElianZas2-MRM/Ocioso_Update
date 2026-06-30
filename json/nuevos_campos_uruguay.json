@@ -1,0 +1,12 @@
+{
+  "pais": "Uruguay",
+  "ultima_deteccion": "2026-06-30T11:32:30",
+  "campos_nuevos": [
+    {
+      "id": "patent",
+      "type": "text",
+      "required": false,
+      "label": " "
+    }
+  ]
+}

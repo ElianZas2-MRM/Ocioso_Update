@@ -80,7 +80,7 @@ def _abrev_paises(lista):
     return " ".join(_PAIS_ABREV.get(p, p[:2].upper()) for p in lista)
 
 
-def _cuerpo_a_html(texto):
+def _cuerpo_a_html(texto, html_extra=""):
     """Convierte cuerpo de texto plano a HTML con fuente Segoe UI Emoji para Outlook clásico."""
     import html as _html
     escaped = _html.escape(texto).replace('\n', '<br>\n')
@@ -88,7 +88,7 @@ def _cuerpo_a_html(texto):
         '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>'
         '<body style="font-family:\'Segoe UI Emoji\',\'Segoe UI\',Arial,sans-serif;'
         'font-size:13px;color:#222;line-height:1.6;">'
-        f'{escaped}</body></html>'
+        f'{escaped}{html_extra}</body></html>'
     )
 
 
@@ -159,18 +159,22 @@ def _worker_envio_emails():
                 if data is None:
                     break
 
-                # Soporta 4-tupla (legacy) y 5-tupla (con callback por email)
-                if len(data) == 5:
+                # Soporta 4-tupla (legacy), 5-tupla (callback) y 6-tupla (html_extra)
+                if len(data) == 6:
+                    destinatarios, asunto, cuerpo, adjuntos, _callback, _html_extra = data
+                elif len(data) == 5:
                     destinatarios, asunto, cuerpo, adjuntos, _callback = data
+                    _html_extra = ""
                 else:
                     destinatarios, asunto, cuerpo, adjuntos = data
                     _callback = None
+                    _html_extra = ""
 
                 try:
                     mail = _outlook_instance.CreateItem(0)
                     mail.To = destinatarios if isinstance(destinatarios, str) else "; ".join(destinatarios)
                     mail.Subject = asunto
-                    mail.HTMLBody = _cuerpo_a_html(cuerpo)
+                    mail.HTMLBody = _cuerpo_a_html(cuerpo, html_extra=_html_extra)
                     if adjuntos:
                         for i, archivo in enumerate(adjuntos, 1):
                             if archivo and os.path.exists(archivo):
@@ -253,7 +257,7 @@ def _iniciar_worker_envio():
         _worker_thread.start()
 
 
-def _encolar_email(destinatarios, asunto, cuerpo, adjuntos=None, callback=None):
+def _encolar_email(destinatarios, asunto, cuerpo, adjuntos=None, callback=None, html_extra=""):
     """Encola un email para ser enviado por el worker."""
     _iniciar_worker_envio()
     if _email_ui_callback:
@@ -261,7 +265,7 @@ def _encolar_email(destinatarios, asunto, cuerpo, adjuntos=None, callback=None):
             _email_ui_callback("pending", "")
         except Exception:
             pass
-    _cola_emails.put((destinatarios, asunto, cuerpo, adjuntos, callback))
+    _cola_emails.put((destinatarios, asunto, cuerpo, adjuntos, callback, html_extra))
 
 
 def cargar_config_global():
@@ -559,7 +563,7 @@ def analizar_errores_excel(ruta_excel):
         columnas = [c.lower() for c in df.columns]
         col_url = next((c for c in df.columns if c.lower() == "url"), None)
         col_resultado = next((c for c in df.columns if c.lower() == "resultado"), None)
-        col_form_url_esperada   = next((c for c in df.columns if c.lower() == "formulario"), None)
+        col_form_url_esperada   = next((c for c in df.columns if c.lower() in ("formulario", "form url esperada")), None)
         col_form_url_encontrada = next((c for c in df.columns if c.lower() == "form url encontrada"), None)
         col_form_coincide       = next((c for c in df.columns if c.lower() == "form coincide"), None)
 
@@ -589,24 +593,27 @@ def analizar_errores_excel(ruta_excel):
         exitosos_df = df[procesados_mask & ~errores_mask]
         detalles_ok = []
         for _i, _fila in exitosos_df.iterrows():
-            _url = str(_fila[col_url]) if col_url and pd.notna(_fila[col_url]) else "(sin URL)"
-            detalles_ok.append({'url': _url, 'linea': _i + 2})
+            _url = str(_fila[col_url]) if col_url and pd.notna(_fila[col_url]) else ""
+            _url_sec = str(_fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(_fila.get(col_form_url_esperada, float('nan'))) else ""
+            detalles_ok.append({'url': _url, 'url_secure': _url_sec, 'linea': _i + 2})
 
         # Construir detalles estructurados
         detalles = []
         detalles_texto = []
         
         for i, fila in errores.iterrows():
-            url = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
+            url = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else ""
+            url_sec = str(fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(fila.get(col_form_url_esperada, float('nan'))) else ""
             mensaje_error = str(fila[col_resultado]).strip()
-            
+
             # Limpiar el mensaje de error
             mensaje_limpio = limpiar_mensaje_error(mensaje_error)
-            
+
             linea_excel = i + 2  # +2 porque Excel empieza en 1 y la fila 1 son los encabezados
 
             detalles.append({
                 'url': url,
+                'url_secure': url_sec,
                 'error': mensaje_limpio,
                 'linea': linea_excel
             })
@@ -1044,6 +1051,70 @@ def crear_zip_de_carpeta(carpeta):
             pass
         return None
 
+def _url_short(url):
+    """Extrae solo el path de una URL para mostrar en resumen."""
+    try:
+        from urllib.parse import urlparse
+        path = urlparse(url).path.rstrip('/')
+        parts = [p for p in path.split('/') if p]
+        return '/' + '/'.join(parts[-2:]) if parts else url
+    except Exception:
+        return url
+
+
+def _build_url_table_html(items):
+    """Construye un bloque HTML con tabla URL LANDING | URL FORM para el email.
+    items: lista de {ok, url, url_secure, error, linea}
+    Falls first, then passes.
+    """
+    import html as _h
+    if not items:
+        return ""
+
+    # Fails first, then passes; within each group keep original order
+    sorted_items = [i for i in items if not i['ok']] + [i for i in items if i['ok']]
+
+    _TD = 'style="padding:7px 10px;border:1px solid #ddd;vertical-align:top"'
+    _TD_IC = 'style="padding:7px 8px;border:1px solid #ddd;vertical-align:top;text-align:center;width:28px"'
+
+    rows_html = ""
+    for item in sorted_items:
+        landing = _h.escape(item.get('url', '') or '—')
+        form_url = _h.escape(item.get('url_secure', '') or '—')
+        error   = _h.escape(item.get('error', ''))
+        icon    = "✅" if item['ok'] else "❌"
+        row_bg  = "#f0fff4" if item['ok'] else "#fff5f5"
+
+        rows_html += (
+            f'<tr style="background:{row_bg}">'
+            f'<td {_TD_IC}>{icon}</td>'
+            f'<td {_TD}>{landing}</td>'
+            f'<td {_TD}>{form_url}</td>'
+            '</tr>'
+        )
+        if not item['ok'] and error:
+            rows_html += (
+                f'<tr style="background:{row_bg}">'
+                '<td style="border:1px solid #ddd;border-top:none"></td>'
+                f'<td colspan="2" style="padding:3px 10px 8px 10px;border:1px solid #ddd;'
+                f'border-top:none;color:#c0392b;font-size:12px">↳ {error}</td>'
+                '</tr>'
+            )
+
+    _TH = 'style="text-align:left;padding:7px 10px;border:1px solid #ddd;background:#f0f0f0;color:#555;font-weight:bold"'
+    return (
+        '<hr style="border:none;border-top:1px solid #ddd;margin:18px 0">'
+        '<table style="border-collapse:collapse;width:100%;font-size:13px">'
+        '<thead><tr>'
+        f'<th {_TH} style="width:28px;text-align:center"> </th>'
+        f'<th {_TH}>URL LANDING</th>'
+        f'<th {_TH}>URL FORM</th>'
+        '</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        '</table>'
+    )
+
+
 def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, viewport=None):
     """
     Envía un email con los resultados de la ejecución del formulario.
@@ -1096,47 +1167,19 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
                 estado_texto = f"LEAD NO ENVIADO en {con_errores} formulario(s)"
 
         cuerpo = f"{icono} {encabezado}\nFecha: {fecha_actual}\nEstado: {estado_texto}\n\n"
-        cuerpo += "=== RESUMEN ===\n"
-        cuerpo += f"  Exitosos:      {exitosos}\n"
-        cuerpo += f"  Con errores:   {con_errores}\n"
-        if no_procesados:
-            cuerpo += f"  No procesados: {no_procesados}\n"
-        cuerpo += f"  Total filas:   {total_filas}\n\n"
 
-        if errores.get('detalles_form'):
-            cuerpo += "=== FORMULARIOS NO INSERTADOS CORRECTAMENTE ===\n\n"
-            for item in errores['detalles_form']:
-                cuerpo += f"  ⚠️  Línea {item['linea']} | Landing: {item['url_landing']}\n"
-                cuerpo += f"      URL Form esperada:   {item['url_esperada']}\n"
-                cuerpo += f"      URL Form encontrada: {item['url_encontrada']}\n\n"
+        _fail_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles') or [])]
+        _pass_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles_ok') or [])]
+        if _fail_urls:
+            cuerpo += f"FAILED ({len(_fail_urls)}): {' | '.join(_fail_urls)}\n"
+        if _pass_urls:
+            cuerpo += f"PASSED ({len(_pass_urls)}): {' | '.join(_pass_urls)}\n"
 
-        errores_envio = [d for d in (errores.get('detalles') or []) if not d.get('error', '').startswith('[Error Form]')]
-        if errores_envio:
-            cuerpo += "=== ERRORES DE ENVÍO ===\n\n"
-            for detalle in errores_envio:
-                url = detalle.get('url', 'N/A')
-                error = detalle.get('error', 'Sin descripción')
-                linea = detalle.get('linea', '?')
-                cuerpo += f"  ❌ Línea {linea} | URL: {url}\n     Error: {error}\n\n"
+        cuerpo += "\nSaludos,\nAutomación de Formularios"
 
-        if not errores.get('detalles_form') and con_errores == 0:
-            cuerpo += "✅ Todos los formularios se completaron exitosamente.\n\n"
-
-        _ok_items = [{'linea': d['linea'], 'url': d['url'], 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
-        _err_items = [{'linea': d['linea'], 'url': d['url'], 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
-        _todos_urls = sorted(_ok_items + _err_items, key=lambda x: x['linea'])
-        if _todos_urls:
-            cuerpo += "=== DETALLE POR URL ===\n\n"
-            for _item in _todos_urls:
-                if _item['ok']:
-                    cuerpo += f"  ✅  {_item['url']}\n"
-                else:
-                    cuerpo += f"  ❌  {_item['url']}\n"
-                    if _item['error']:
-                        cuerpo += f"       → {_item['error']}\n"
-            cuerpo += "\n"
-
-        cuerpo += "Saludos,\nAutomación de Formularios"
+        _ok_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
+        _err_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
+        _url_table_html = _build_url_table_html(_ok_items + _err_items)
 
         config = cargar_config_global()
         enviar_mail = bool(config.get("enviar_mail", False))
@@ -1167,7 +1210,7 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         destinatario = obtener_email_destinatario()
 
         try:
-            _encolar_email(destinatario, asunto, cuerpo, adjuntos)
+            _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=_url_table_html)
         except Exception as e:
             print(f"❌ Error encolando email: {e}")
             return False
@@ -1259,11 +1302,10 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             pais_errores[pais] = pais_errores.get(pais, 0) + con_errores
             pais_exitosos[pais] = pais_exitosos.get(pais, 0) + exitosos
 
-            _ok_items_c = [{'linea': d['linea'], 'url': d['url'], 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
-            _err_items_c = [{'linea': d['linea'], 'url': d['url'], 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
-            _todos_c = sorted(_ok_items_c + _err_items_c, key=lambda x: x['linea'])
-            if _todos_c:
-                detalles_url_pais.append((pais, nav_label, vp_label, _todos_c))
+            _ok_items_c = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
+            _err_items_c = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
+            if _ok_items_c or _err_items_c:
+                detalles_url_pais.append((pais, nav_label, vp_label, _err_items_c + _ok_items_c))
 
             if con_errores > 0:
                 bloque = f"❌ {pais.upper()} — {nav_label} / {vp_label}\n"
@@ -1304,35 +1346,23 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
 
         icono_global = "✅" if resultado_global == "PASS" else "❌"
         cuerpo = f"{icono_global} RESULTADO GLOBAL: {resultado_global}\n\n"
-        cuerpo += "=" * 50 + "\n\n"
 
-        if paises_passed:
-            cuerpo += f"✅ PASSED ({len(paises_passed)}): {', '.join(paises_passed)}\n"
         if paises_failed:
-            cuerpo += f"❌ FAILED ({len(paises_failed)}): {', '.join(paises_failed)}\n"
-
-        cuerpo += "\n" + "=" * 50 + "\n\n"
-
-        if detalles_fallidos:
-            cuerpo += "DETALLE DE ERRORES:\n\n"
-            cuerpo += "\n".join(detalles_fallidos)
-        else:
-            cuerpo += "✅ Todos los leads se enviaron correctamente en todos los paises.\n\n"
-
-        if detalles_url_pais:
-            cuerpo += "=== DETALLE POR URL ===\n\n"
-            for _pais, _nav, _vp, _urls in detalles_url_pais:
-                cuerpo += f"  {_pais.upper()} — {_nav} / {_vp}\n"
-                for _item in _urls:
-                    if _item['ok']:
-                        cuerpo += f"    ✅  {_item['url']}\n"
-                    else:
-                        cuerpo += f"    ❌  {_item['url']}\n"
-                        if _item['error']:
-                            cuerpo += f"         → {_item['error']}\n"
-                cuerpo += "\n"
+            cuerpo += f"FAILED ({len(paises_failed)}): {' | '.join(paises_failed)}\n"
+        if paises_passed:
+            cuerpo += f"PASSED ({len(paises_passed)}): {' | '.join(paises_passed)}\n"
 
         cuerpo += "\nSaludos,\nAutomacion de Formularios"
+
+        _consolidado_html = ""
+        if detalles_url_pais:
+            for _pais, _nav, _vp, _urls in detalles_url_pais:
+                import html as _h
+                _consolidado_html += (
+                    f'<p style="font-weight:bold;margin:14px 0 6px 0">'
+                    f'{_h.escape(_pais.upper())} — {_h.escape(_nav)} / {_h.escape(_vp)}</p>'
+                )
+                _consolidado_html += _build_url_table_html(_urls)
 
         destinatario = obtener_email_destinatario()
 
@@ -1341,7 +1371,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             return False
 
         try:
-            _encolar_email(destinatario, asunto, cuerpo, adjuntos)
+            _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=_consolidado_html)
             return True
         except Exception as e_cola:
             print(f"❌ Error al encolar email: {e_cola}")

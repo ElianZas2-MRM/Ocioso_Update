@@ -410,6 +410,26 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "ESTIMATED-MILEAGE": {
+      "descripcion": "estimated-mileage",
+      "campo": "estimated-mileage",
+      "element_id": "estimated-mileage",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

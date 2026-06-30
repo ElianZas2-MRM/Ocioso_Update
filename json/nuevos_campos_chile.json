@@ -1,10 +1,22 @@
 {
   "pais": "Chile",
-  "ultima_deteccion": "2026-06-11T20:04:14",
+  "ultima_deteccion": "2026-06-30T11:32:29",
   "campos_nuevos": [
     {
       "id": "comment",
       "type": "textarea",
+      "required": false,
+      "label": " "
+    },
+    {
+      "id": "estimated-mileage",
+      "type": "select",
+      "required": false,
+      "label": "estimated-mileage"
+    },
+    {
+      "id": "patent",
+      "type": "text",
       "required": false,
       "label": " "
     }
