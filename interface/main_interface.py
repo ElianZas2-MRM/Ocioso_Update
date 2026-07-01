@@ -4218,6 +4218,9 @@ def iniciar_interfaz():
         }
     ]
 
+    # Recolectar loaders para auto-refresh al cambiar de pestaña
+    _excel_reloaders = []
+
     # Crear pestañas para cada país
     for pais in paises:
         frame_pais = Frame(notebook, bg=SECTION_BG_COLOR)
@@ -4362,7 +4365,8 @@ def iniciar_interfaz():
                 ce.finish_edit()
                 guardar_desde_tabla(n, tw)
             btn_guardar_tabla.config(command=_guardar_con_edit)
-            
+            _excel_reloaders.append((excel_nombre, tree_excel, cell_editor))
+
             # Cargar el Excel si existe
             if os.path.exists(excel_ruta):
                 cargar_excel_a_tabla(excel_nombre, tree_excel, cell_editor)
@@ -4375,6 +4379,14 @@ def iniciar_interfaz():
                 tree_excel.insert("", "end", values=["Cree el Excel primero usando el botón 'Crear Excel'"])
 
     #ttk.Separator(root, orient="horizontal", style="App.TSeparator").pack(fill="x", pady=10)
+
+    def _on_leads_tab_activated(event):
+        selected = app_notebook.select()
+        if app_notebook.tab(selected, "text") == "Envio de Leads":
+            for _n, _tw, _ce in _excel_reloaders:
+                if os.path.exists(os.path.join(DATA_DIR, f"{_n}.xlsx")):
+                    cargar_excel_a_tabla(_n, _tw, _ce)
+    app_notebook.bind("<<NotebookTabChanged>>", _on_leads_tab_activated)
 
     # === CALENDARIO SEMANAL DE AUTOMATIZACIÓN ===
     programar_container = Frame(
