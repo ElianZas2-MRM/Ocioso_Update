@@ -314,89 +314,74 @@ class CellEditor:
         self.entry = None
         self.current_item = None
         self.current_column = None
-        
+
     def start_edit(self, event):
-        """Inicia la edición de una celda al hacer click"""
-        # Identificar el ítem y columna clickeada
         item = self.tree.identify_row(event.y)
         columna = self.tree.identify_column(event.x)
-        
+
         if not item or not columna or columna == '#0':
             return
-            
-        # No permitir editar en encabezados
         if item == "":
             return
-            
+
         col_index = int(columna.replace('#', '')) - 1
-        
-        # Verificar que la columna existe
         columnas = self.tree["columns"]
         if col_index >= len(columnas) or columnas[0] in ["info", "error"]:
             return
-        
+
+        # Guardar celda anterior ANTES de actualizar current_item/current_column
+        if self.entry:
+            self.finish_edit()
+
         self.current_item = item
         self.current_column = col_index
-        
-        # Obtener el valor actual (quitar prefijo de protección si existe)
+
         valores = list(self.tree.item(item)["values"])
         valor_actual = valores[col_index] if col_index < len(valores) else ""
         valor_actual = str(valor_actual)
         if valor_actual.startswith("\x00"):
             valor_actual = valor_actual[1:]
-        
-        # Obtener la posición y dimensiones de la celda
-        bbox = self.tree.bbox(item, col_index)
+
+        bbox = self.tree.bbox(item, columna)
         if not bbox:
             return
-            
-        # Crear el Entry para editar
-        if self.entry:
-            self.entry.destroy()
-            
+
         self.entry = Entry(self.tree, font=("Segoe UI", 9))
         self.entry.place(x=bbox[0], y=bbox[1], width=bbox[2], height=bbox[3])
         self.entry.insert(0, str(valor_actual))
         self.entry.select_range(0, END)
         self.entry.focus()
-        
-        # Bind eventos
+
         self.entry.bind('<Return>', self.finish_edit)
         self.entry.bind('<Escape>', self.cancel_edit)
-        self.entry.bind('<FocusOut>', self.finish_edit)
-        
+
     def finish_edit(self, event=None):
-        """Termina la edición y guarda el valor"""
         if not self.entry or not self.current_item:
             return
-            
+
         nuevo_valor = self.entry.get()
-        # Re-aplicar protección si el nuevo valor empieza con 0 seguido de dígitos
         if len(nuevo_valor) >= 2 and nuevo_valor.startswith("0") and nuevo_valor[1:].isdigit():
             nuevo_valor_tree = "\x00" + nuevo_valor
         else:
             nuevo_valor_tree = nuevo_valor
 
-        # Actualizar los valores en el treeview
-        valores = list(self.tree.item(self.current_item)["values"])
-        if self.current_column < len(valores):
-            valores[self.current_column] = nuevo_valor_tree
-        else:
-            # Si la columna no existe en los valores, extender la lista
-            while len(valores) <= self.current_column:
-                valores.append("")
-            valores[self.current_column] = nuevo_valor_tree
-            
-        self.tree.item(self.current_item, values=valores)
-        
+        try:
+            valores = list(self.tree.item(self.current_item)["values"])
+            if self.current_column < len(valores):
+                valores[self.current_column] = nuevo_valor_tree
+            else:
+                while len(valores) <= self.current_column:
+                    valores.append("")
+                valores[self.current_column] = nuevo_valor_tree
+            self.tree.item(self.current_item, values=valores)
+        except Exception:
+            pass
         self.cleanup()
-        
+
     def cancel_edit(self, event=None):
-        """Cancela la edición"""
         self.cleanup()
-        
+
     def cleanup(self):
-        """Limpia el editor"""
         if self.entry:
             self.entry.destroy()
             self.entry = None
@@ -825,9 +810,16 @@ def _set_running(running: bool):
         if stop_btn:
             try:
                 if running:
+                    stop_btn.config(state="normal", text="⏹  Detener ejecución")
                     stop_btn.pack(side=RIGHT, padx=6)
                 else:
                     stop_btn.pack_forget()
+            except Exception:
+                pass
+        stop_msg_lbl = _run_state.get("stop_msg_lbl")
+        if stop_msg_lbl and running:
+            try:
+                stop_msg_lbl.config(text="")
             except Exception:
                 pass
         # Overlay (Frame sólido sobre root)
@@ -849,6 +841,19 @@ def _request_stop():
     ev = _run_state.get("stop_event")
     if ev:
         ev.set()
+    # Mostrar disclaimer en el overlay antes de cerrar
+    btn = _run_state.get("stop_btn")
+    lbl = _run_state.get("stop_msg_lbl")
+    if btn:
+        try:
+            btn.config(state="disabled", text="⏹  Deteniendo...")
+        except Exception:
+            pass
+    if lbl:
+        try:
+            lbl.config(text="■  Detenido. El lead en curso terminará de enviarse y el navegador se cerrará solo al finalizar.")
+        except Exception:
+            pass
     # Mata solo los drivers/browsers que abrió esta app (por PID registrado)
     try:
         from core.browser_manager import kill_active_drivers
@@ -2300,14 +2305,23 @@ def iniciar_interfaz():
     _progress_frame = Frame(_overlay_inner, bg=_OV_BG)
     _progress_frame.pack(fill="x", pady=(0, 22))
     _run_state["progress_frame"] = _progress_frame
-    Button(
+    _btn_detener = Button(
         _overlay_inner, text="⏹  Detener ejecución",
         bg="#c0392b", fg="white", font=("Segoe UI", 11, "bold"),
         relief="flat", bd=0, padx=22, pady=10,
         command=_request_stop, cursor="hand2",
         activebackground="#e74c3c", activeforeground="white",
-    ).pack()
+    )
+    _btn_detener.pack()
+    _stop_msg_lbl = Label(
+        _overlay_inner, text="",
+        bg=_OV_BG, fg="#f39c12", font=("Segoe UI", 9),
+        wraplength=420, justify="center",
+    )
+    _stop_msg_lbl.pack(pady=(10, 0))
     _run_state["overlay"] = _overlay
+    _run_state["stop_btn"] = _btn_detener
+    _run_state["stop_msg_lbl"] = _stop_msg_lbl
     # El overlay empieza oculto — se muestra con place() en _set_running(True)
 
     canvas = Canvas(outer_container, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
@@ -3983,6 +3997,7 @@ def iniciar_interfaz():
         for widget in frame_seleccion_pais.winfo_children():
             widget.destroy()
         _paises_multi_vars.clear()
+        _modo_ok = _lt_modo_var.get() != ""
         for _col_idx, _pais_nombre in enumerate(MAPEO_PAISES.keys()):
             _var = BooleanVar(value=False)
             _paises_multi_vars[_pais_nombre] = _var
@@ -3991,11 +4006,13 @@ def iniciar_interfaz():
                 frame_seleccion_pais,
                 text=_pais_nombre,
                 variable=_var,
+                state="normal" if _modo_ok else "disabled",
                 bg=SECTION_BG_COLOR,
                 fg="white",
                 activebackground=SECTION_BG_COLOR,
                 activeforeground="white",
                 selectcolor=SECTION_BG_COLOR,
+                disabledforeground="#9b7fc7",
                 font=("Segoe UI", 8),
             ).grid(row=_col_idx // 5, column=_col_idx % 5, sticky="w", padx=6, pady=1)
         _actualizar_estado_btn_enviar()
@@ -4305,6 +4322,9 @@ def iniciar_interfaz():
         
         # Crear editor de celdas
         cell_editor = CellEditor(tree_excel)
+
+        # Cerrar el entry al scrollear con rueda
+        tree_excel.bind('<MouseWheel>', lambda e: cell_editor.finish_edit(), add=True)
         
         # Botones de formulario y Excel en la barra superior derecha
         for i, script in enumerate(pais["scripts"], start=1):
@@ -4338,7 +4358,10 @@ def iniciar_interfaz():
             btn_eliminar_fila.config(command=lambda tw=tree_excel: eliminar_fila(tw))
             btn_clonar_fila.config(command=lambda tw=tree_excel: clonar_fila(tw))
             btn_actualizar_tabla.config(command=lambda n=excel_nombre, tw=tree_excel, ce=cell_editor: cargar_excel_a_tabla(n, tw, ce))
-            btn_guardar_tabla.config(command=lambda n=excel_nombre, tw=tree_excel: guardar_desde_tabla(n, tw))
+            def _guardar_con_edit(n=excel_nombre, tw=tree_excel, ce=cell_editor):
+                ce.finish_edit()
+                guardar_desde_tabla(n, tw)
+            btn_guardar_tabla.config(command=_guardar_con_edit)
             
             # Cargar el Excel si existe
             if os.path.exists(excel_ruta):

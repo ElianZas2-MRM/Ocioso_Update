@@ -222,14 +222,9 @@ class BrowserManager:
                 })
             except Exception:
                 pass
-        elif background:
-            try:
-                driver.minimize_window()
-            except Exception:
-                pass
         _reg_pid(service)
         return driver
-    
+
     @staticmethod
     def _create_firefox(viewport, headless, background=True):
         options = FirefoxOptions()
@@ -283,7 +278,6 @@ class BrowserManager:
             if background:
                 try:
                     driver.set_window_position(10000, 0)
-                    driver.minimize_window()
                 except Exception:
                     pass
 
@@ -322,9 +316,4 @@ class BrowserManager:
             "msedgedriver.exe",
         )
         _reg_pid(service)
-        if background and not headless:
-            try:
-                driver.minimize_window()
-            except Exception:
-                pass
         return driver
