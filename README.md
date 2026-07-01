@@ -517,3 +517,32 @@ Podía confundirse con "la programación no se va a ejecutar más". Ahora, mient
 
 **34. Fix: copiar horarios a otros días ahora reemplaza en vez de fusionar**
 Al desmarcar/borrar horarios de un día y aplicar "para todos los días" o "para días seleccionados", los días destino ahora quedan exactamente iguales al día origen (incluyendo las horas borradas), en lugar de solo sumar horarios nuevos sin quitar los removidos.
+
+---
+
+### Bloque 10 — Editor de celdas, auto-refresh, compatibilidad gm_front y mejoras de overlay
+
+**35. Editor de celdas inline en tabla Excel (Envío de Leads)**
+Se reemplazó el comportamiento anterior (que borraba el valor al moverse de celda) por un editor inline basado en un `Entry` flotante:
+- Click en cualquier celda abre el editor directamente sobre esa celda.
+- El valor se preserva al moverse a otra celda, al scrollear con la rueda del mouse, o al presionar "Guardar Cambios".
+- Fixes específicos: posición del `Entry` usaba `bbox(item, col_index)` con entero en vez de `"#N"` string (causaba que apareciera en la posición incorrecta); la celda guardada era la nueva en vez de la anterior (se invierte el orden: `finish_edit()` primero, luego actualizar celda activa).
+
+**36. Auto-refresh de la pestaña "Envío de Leads" al cambiar de pestaña**
+Al generar o regenerar un Excel en "Generar Excels con Datos" y luego cambiar a "Envío de Leads", la tabla se recarga automáticamente desde disco sin necesidad de presionar "Actualizar". Implementado mediante `<<NotebookTabChanged>>` en el notebook principal.
+
+**37. Fix definitivo: browser en background no roba el foco**
+Se eliminó `minimize_window()` de los tres drivers (Chrome, Firefox, Edge). En Windows, `minimize_window()` hacia que el sistema restaurara el foco brevemente cada vez que Selenium interactuaba con la ventana. El reemplazo es exclusivamente `--window-position=10000,0` (Chrome/Edge) y `driver.set_window_position(10000, 0)` (Firefox), que mantiene la ventana fuera de pantalla sin que Windows le asigne foco en ningún momento.
+
+**38. Modo de envío desbloquea checkboxes de países y botón Enviar**
+En la sección "Envío de Leads", los checkboxes de países y el botón "Enviar Leads" aparecen deshabilitados hasta que el usuario selecciona "Múltiples países consecutivos" o "Múltiples países paralelos". Evita errores de configuración incompleta.
+
+**39. Disclaimer al detener ejecución desde el overlay**
+Al presionar "Detener ejecución" en el overlay de envío de leads, el botón pasa a "Deteniendo..." (deshabilitado) y aparece el mensaje: _"El lead en curso terminará de enviarse y el navegador se cerrará solo al finalizar."_ Mismo comportamiento ya existente en el Test Automático, ahora también en el overlay de ejecución manual.
+
+**40. Compatibilidad con formularios React/SPA (gm_front y similares)**
+El motor de llenado ahora maneja correctamente formularios basados en React u otros frameworks modernos:
+- **Aliases extendidos**: `telephone → phone`, `cellphone → phone`, `ci → document` — cubre los IDs que usan los nuevos formularios sin romper los existentes.
+- **`_fill_and_dispatch` para todos los campos de texto**: antes los campos mapeados usaban `send_keys` (que no dispara los eventos que React necesita); ahora usan el setter nativo de `HTMLInputElement` + `input`/`change`/`blur` synthetic events.
+- **Espera adaptativa para SPAs standalone**: cuando la URL del formulario va directo en columna A (sin iframe en columna B), el engine espera hasta que haya al menos un `input`/`select` visible en el DOM (hasta 8s) antes de iniciar el discovery y el llenado.
+- **Extra wait para URLs `gm_front`**: 3 segundos adicionales tras el scroll inicial para que React monte los componentes antes de escanear el formulario.

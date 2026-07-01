@@ -75,6 +75,10 @@ class BaseFormFiller:
         "estimated-date-purchase": "estimated-day",
         "estimated-date":          "estimated-day",
         "estimated_date_purchase": "estimated-day",
+        # gm_front / alianzas modernas
+        "telephone":               "phone",
+        "cellphone":               "phone",
+        "ci":                      "document",
     }
 
     # Adobe AEM Adaptive Form (Guide) — términos / checkbox
@@ -1009,19 +1013,12 @@ class BaseFormFiller:
                                         field_value,
                                     )
                                 else:
-                                    element.clear()
-                                    element.send_keys(field_value)
+                                    self._fill_and_dispatch(element, field_value)
                             except Exception:
-                                # Fallback JS para textareas que no aceptan send_keys directamente
-                                self.driver.execute_script(
-                                    "arguments[0].focus();"
-                                    "arguments[0].value = arguments[1];"
-                                    "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));"
-                                    "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));"
-                                    "arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));",
-                                    element,
-                                    field_value,
-                                )
+                                try:
+                                    self._fill_and_dispatch(element, field_value)
+                                except Exception:
+                                    pass
                             print(f"{field_name} completado ({field_id}): {field_value}")
                             self._record_field_value(field_id, field_value)
                             processed_ids.add(field_id)
@@ -1108,6 +1105,22 @@ class BaseFormFiller:
 
         # Guardar form_data para que _auto_fill_unmapped_dropdowns pueda usarlo
         self._current_form_data = form_data or {}
+
+        # Para forms sin iframe (gm_front y similares React/SPA): esperar a que el
+        # framework monte los componentes antes de escanear el DOM.
+        _is_standalone = not bool(getattr(self, "expected_form_url", ""))
+        if _is_standalone:
+            try:
+                from selenium.webdriver.support.ui import WebDriverWait as _WDW
+                _WDW(self.driver, 8).until(
+                    lambda d: bool(
+                        d.find_elements(By.CSS_SELECTOR,
+                            "input:not([type='hidden']):not([type='submit']):not([type='button']), select"
+                        )
+                    )
+                )
+            except Exception:
+                time.sleep(2)
 
         # Detectar y mapear campos nuevos antes de comenzar
         try:
@@ -1788,6 +1801,10 @@ class BaseFormFiller:
 
         # En headless el JS necesita más tiempo para procesar los eventos de scroll e inyectar el iframe
         if self.config.get('headless', False):
+            time.sleep(3)
+
+        # gm_front (React SPA): esperar a que los componentes monten tras el scroll
+        if "gm_front" in (landing_url or "").lower():
             time.sleep(3)
 
         self.handle_cookie_popups()
