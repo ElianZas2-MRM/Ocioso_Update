@@ -32,7 +32,6 @@ from core.dealer_comparator_runner import (
     compare_dealers,
     export_results_excel,
     filter_rows,
-    find_duplicate_dealers,
     find_extra_dealers,
     get_country_level_defaults,
     list_model_options,
@@ -440,7 +439,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         excel_filter_mode_var, default="with_filter", on_select=_refresh_filter_mode_visibility,
     )
 
-    CONDITION_LABELS = ["Incluir", "Excluir", "Incluir + buscar extras"]
+    CONDITION_LABELS = ["Incluir", "Excluir", "Buscar extras"]
     condition_mode_var = StringVar(value="Incluir")
     cond_col = Frame(filter_row, bg=CARD_BG)
     cond_col.pack(side="left", padx=6, pady=3)
@@ -491,8 +490,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 activebackground=CARD_BG).pack(anchor="w")
     find_extras_var = BooleanVar(value=False)
     Checkbutton(opts_row,
-                text="También buscar dealers EXTRA (no listados en el Excel) y DUPLICADOS (repetidos "
-                     "en el Excel) — mismo efecto que elegir \"Incluir + buscar extras\" en Condición",
+                text="También buscar dealers EXTRA (en el form pero no en el Excel) y DUPLICADOS "
+                     "(repetidos en el <select> del form) — mismo efecto que elegir \"Buscar extras\" "
+                     "en Condición",
                 variable=find_extras_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
                 activebackground=CARD_BG).pack(anchor="w")
 
@@ -797,7 +797,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         return headers, filtered
 
     def _should_find_extras():
-        return find_extras_var.get() or condition_mode_var.get() == "Incluir + buscar extras"
+        return find_extras_var.get() or condition_mode_var.get() == "Buscar extras"
 
     # ── Modal de ejecución (mismo lenguaje visual que "Envío de Leads") ──────
     def _open_run_modal():
@@ -987,12 +987,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             screenshots = []
             output_mode = output_mode_var.get()
             total_pairs = len(url_pairs)
-
-            if _should_find_extras():
-                dups = find_duplicate_dealers(filtered_rows, column_map)
-                if dups:
-                    ui_log(f"Duplicados detectados en el Excel: {len(dups)}", "warn")
-                all_results.extend(dups)
 
             for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
                 if state["stop_event"].is_set():

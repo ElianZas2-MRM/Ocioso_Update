@@ -572,41 +572,6 @@ def compare_dealers(
     return results
 
 
-def find_duplicate_dealers(rows, column_map):
-    """Detecta dealers duplicados (mismo nombre normalizado) dentro de las filas ya filtradas
-    del Excel. Chequeo puro de datos, no necesita el browser."""
-    dealer_key = column_map.get("dealer")
-    if not dealer_key:
-        return []
-
-    groups = {}
-    for row in rows:
-        name = row.get(dealer_key, "")
-        key = normalize_text(name)
-        if not key:
-            continue
-        groups.setdefault(key, []).append(row)
-
-    duplicates = []
-    for group in groups.values():
-        if len(group) <= 1:
-            continue
-        filas = ", ".join(str(r.get("__row__")) for r in group)
-        duplicates.append({
-            "status": "DUPLICADO",
-            "modelo": "",
-            "region": "",
-            "city": "",
-            "dealer": group[0].get(dealer_key, ""),
-            "bac_excel": "",
-            "bac_ok": None,
-            "extra_results": {},
-            "fails": [f"Aparece {len(group)} veces en el Excel (filas: {filas})"],
-            "fila": filas,
-        })
-    return duplicates
-
-
 def find_extra_dealers(
     driver,
     rows,
@@ -618,8 +583,11 @@ def find_extra_dealers(
     progress_cb=None,
     stop_flag=None,
 ):
-    """Recorre las combinaciones región/ciudad presentes en el Excel y reporta los dealers que
-    aparecen en el <select> del form pero NO están en la lista esperada del Excel (EXTRA)."""
+    """Recorre las combinaciones región/ciudad presentes en el Excel (filtrado o no, según
+    corresponda) y reporta, mirando el <select> real del form:
+    - EXTRA: dealers que aparecen en el form pero no están en la lista esperada del Excel.
+    - DUPLICADO: dealers que aparecen más de una vez como <option> en el mismo <select> del
+      form (no importa si el Excel tiene duplicados — lo que importa es el form)."""
     level_ids = level_ids or DEFAULT_SELECT_IDS
     log = log_cb or (lambda *_a, **_k: None)
 
@@ -660,16 +628,29 @@ def find_extra_dealers(
             if dealer_el is None:
                 continue
             expected = expected_by_combo[(region_text, city_text)]
+            seen_in_form = {}
             for opt in _valid_options(dealer_el):
                 if _is_placeholder(opt.text):
                     continue
-                if normalize_text(opt.text) not in expected:
+                norm = normalize_text(opt.text)
+                seen_in_form.setdefault(norm, []).append(opt.text.strip())
+                if norm not in expected:
                     log(f"  EXTRA: {opt.text} ({region_text}/{city_text})", "warn")
                     extra_results.append({
                         "status": "EXTRA",
                         "region": region_text,
                         "city": city_text,
                         "dealer": opt.text.strip(),
+                    })
+            for norm, texts in seen_in_form.items():
+                if len(texts) > 1:
+                    log(f"  DUPLICADO en el form: {texts[0]} x{len(texts)} ({region_text}/{city_text})", "warn")
+                    extra_results.append({
+                        "status": "DUPLICADO",
+                        "region": region_text,
+                        "city": city_text,
+                        "dealer": texts[0],
+                        "fails": [f"Aparece {len(texts)} veces en el <select> del form"],
                     })
         except StopRequested:
             raise
