@@ -96,21 +96,13 @@ echo Compilando con PyInstaller...
 %PY% -m PyInstaller --clean FormAutomation.spec
 if errorlevel 1 goto :error
 
-echo Copiando lambdatest_mac a dist\...
-robocopy ".\lambdatest_mac" "dist\lambdatest_mac" /E /NFL /NDL /NJH /NJS /NC /NS /XD __pycache__ >nul
-if errorlevel 8 goto :error
-
-echo Copiando lambdatest_android a dist\...
-robocopy ".\lambdatest_android" "dist\lambdatest_android" /E /NFL /NDL /NJH /NJS /NC /NS /XD __pycache__ >nul
-if errorlevel 8 goto :error
-
 echo Armando carpeta portable...
 if exist "%PORTABLE_DIR%" rmdir /s /q "%PORTABLE_DIR%"
 mkdir "%PORTABLE_DIR%"
 copy /y "dist\%APP_NAME%.exe" "%PORTABLE_DIR%\%APP_NAME%.exe" >nul
 if errorlevel 1 goto :error
 
-for %%D in (data drivers resultados temporales Dealerscheck_resultados lambdatest_mac lambdatest_android resultados_lambdatestmac resultados_lambdatest_android) do (
+for %%D in (data drivers resultados temporales Dealerscheck_resultados resultados_lambdatestmac resultados_lambdatest_android) do (
     if exist ".\%%D" (
         robocopy ".\%%D" "%PORTABLE_DIR%\%%D" /E /NFL /NDL /NJH /NJS /NC /NS >nul
         if errorlevel 8 goto :error
