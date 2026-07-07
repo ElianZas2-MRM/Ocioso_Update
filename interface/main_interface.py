@@ -2856,7 +2856,7 @@ def iniciar_interfaz():
 
         title_lbl = tk.Label(title_info, text="Ejecutando...", font=("Segoe UI", 12, "bold"), bg=MODAL_BG, fg="white")
         title_lbl.pack(anchor="w")
-        subtitle_lbl = tk.Label(title_info, text=f"0/{total_sessions} lead(s) completados", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
+        subtitle_lbl = tk.Label(title_info, text=f"0/{total_sessions} mercado(s) completados", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
         subtitle_lbl.pack(anchor="w")
         rotate_icon()
         
@@ -2897,7 +2897,7 @@ def iniciar_interfaz():
         else:
             make_pill(badges_row, f" Mercados: {'Paralelo' if mercados_par else 'Consecutivo'}", icon="link_lav.png")
             make_pill(badges_row, f" Excels: {'Paralelo' if excels_par else 'Consecutivo'}", icon="gear_lav.png")
-        make_pill(badges_row, f" {total_sessions} lead(s)", icon="monitor_lav.png")
+        make_pill(badges_row, f" {total_sessions} mercado(s)", icon="monitor_lav.png")
 
         # Aviso durante la ejecución (se quita al completar)
         run_note = tk.Label(modal, text="⚠ No podés cerrar esta ventana mientras se ejecuta. Para correr otro test ahora, abrí otra ventana de la app.",
@@ -3071,7 +3071,7 @@ def iniciar_interfaz():
                 done, total = _st["done"], total_sessions
             def _u():
                 if modal.winfo_exists():
-                    subtitle_lbl.config(text=f"{done}/{total} lead(s) completados")
+                    subtitle_lbl.config(text=f"{done}/{total} mercado(s) completados")
                     _paint_pais(pais)
             _ui(_u)
 
