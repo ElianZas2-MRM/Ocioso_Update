@@ -791,7 +791,7 @@ def iniciar_interfaz():
     root.configure(bg=APP_BG_COLOR)
 
     # Establecer el icono del oso de Ocioso
-    icon_path = os.path.join(BASE_DIR, "Asset", "icon.ico")
+    icon_path = os.path.join(ASSET_DIR, "icon.ico")
     if os.path.exists(icon_path):
         try:
             root.iconbitmap(icon_path)
@@ -1011,10 +1011,10 @@ def iniciar_interfaz():
     email_entry.config(state="disabled")  # Habilitado sólo al activar "Enviar mail"
 
     # Variables de control para las opciones de email
-    var_enviar_email = tk.BooleanVar(value=False)
-    var_adjuntar_res = tk.BooleanVar(value=False)
-    var_adjuntar_ss = tk.BooleanVar(value=False)
-    var_modo_email = tk.StringVar(value="consolidado")
+    var_enviar_email = tk.BooleanVar(value=bool(_cfg.get("enviar_mail", False)))
+    var_adjuntar_res = tk.BooleanVar(value=bool(_cfg.get("adjuntar_resultados", False)))
+    var_adjuntar_ss = tk.BooleanVar(value=bool(_cfg.get("adjuntar_screenshots", False)))
+    var_modo_email = tk.StringVar(value=_cfg.get("email_modo", "consolidado"))
 
     # Frame para las opciones extras de email
     opts_frame = tk.Frame(email_frame, bg=APP_BG_COLOR)
@@ -1225,13 +1225,17 @@ def iniciar_interfaz():
         sub_lbl.pack(anchor="w", pady=(3, 0))
         return selected_val
 
+    saved_mercados_mode = _ui_prefs.get("mercados_mode", "consecutivo")
+    saved_excels_mode = _ui_prefs.get("excels_mode", "consecutivo")
+
     mercados_mode = make_pill_group(
-        row_config, "MERCADOS", "", ["Consecutivo", "Paralelo"], "consecutivo",
-        sub_texts={"consecutivo": "Un mercado a la vez (AR → BO → …)", "paralelo": "Todos los mercados a la vez"})
+        row_config, "MERCADOS", "", ["Consecutivo", "Paralelo"], saved_mercados_mode,
+        sub_texts={"consecutivo": "Un mercado a la vez (AR → BO → …)", "paralelo": "Todos los mercados a la vez"},
+        on_change=lambda v: _save_ui_prefs())
     excels_mode = make_pill_group(
-        row_config, "EXCELS POR MERCADO", "", ["Consecutivo", "Paralelo"], "consecutivo",
+        row_config, "EXCELS POR MERCADO", "", ["Consecutivo", "Paralelo"], saved_excels_mode,
         sub_texts={"consecutivo": "Los Excels del mercado, uno tras otro", "paralelo": "Todos a la vez (solo browsers locales Chrome/FF/Edge)"},
-        on_change=lambda v: _refresh_excel_par_warning())
+        on_change=lambda v: [_refresh_excel_par_warning(), _save_ui_prefs()])
 
     # Dispositivos y Navegadores
     disp_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
@@ -1244,8 +1248,14 @@ def iniciar_interfaz():
     disp_btn_row.pack(anchor="w")
 
     dispositivos = ["Chrome", "Firefox", "Edge", "Mac LT", "Android LT"]
+    saved_disp = _ui_prefs.get("selected_disp", {})
     selected_disp = {d.lower(): False for d in dispositivos}
-    selected_disp["chrome"] = True
+    if saved_disp:
+        for k in selected_disp:
+            if k in saved_disp:
+                selected_disp[k] = bool(saved_disp[k])
+    else:
+        selected_disp["chrome"] = True
     disp_btns = {}
 
     status_lbl = tk.Label(disp_frame, text="1 dispositivo seleccionado.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF")
@@ -1300,12 +1310,14 @@ def iniciar_interfaz():
             pass
 
         refresh_ver_nav_state()
+        _save_ui_prefs()
 
     for disp in dispositivos:
         d_key = disp.lower()
-        init_bg = BUTTON_ACTIVE if d_key == "chrome" else BUTTON_INACTIVE
-        init_fg = "white" if d_key == "chrome" else TEXT_SECONDARY
-        init_hb = ACCENT_COLOR if d_key == "chrome" else BUTTON_INACTIVE
+        is_sel = selected_disp[d_key]
+        init_bg = BUTTON_ACTIVE if is_sel else BUTTON_INACTIVE
+        init_fg = "white" if is_sel else TEXT_SECONDARY
+        init_hb = ACCENT_COLOR if is_sel else BUTTON_INACTIVE
         
         b = tk.Button(disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
                       relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
@@ -1331,23 +1343,53 @@ def iniciar_interfaz():
     # "Ver navegador" y "Minimizar a la bandeja al cerrar" viven en Configuración
     # avanzada (botón "Configurar"). Acá sólo quedan las variables persistentes.
 
-    def _persistir_prefs(*_):
+    def _save_ui_prefs(*_):
         try:
             cfg = cargar_config_global()
             if "ui_prefs" not in cfg:
                 cfg["ui_prefs"] = {}
             cfg["ui_prefs"]["visible_browser"] = bool(var_ver_navegador.get())
             cfg["ui_prefs"]["minimizar_a_bandeja"] = bool(var_minimizar_a_bandeja.get())
+            cfg["ui_prefs"]["selected_disp"] = selected_disp
+            if 'mercados_mode' in globals() or 'mercados_mode' in locals():
+                cfg["ui_prefs"]["mercados_mode"] = mercados_mode[0]
+            if 'excels_mode' in globals() or 'excels_mode' in locals():
+                cfg["ui_prefs"]["excels_mode"] = excels_mode[0]
+            if 'var_url_parallel' in globals() or 'var_url_parallel' in locals():
+                cfg["ui_prefs"]["url_parallel"] = bool(var_url_parallel.get())
+            if 'url_max_var' in globals() or 'url_max_var' in locals():
+                cfg["ui_prefs"]["url_max"] = url_max_var.get()
+            if 'var_t3' in globals() or 'var_t3' in locals():
+                cfg["ui_prefs"]["t3"] = bool(var_t3.get())
+            
+            # Email fields (in both root and ui_prefs)
+            enviar_mail = bool(var_enviar_email.get())
+            dest = email_entry.get().strip()
+            adj_res = bool(var_adjuntar_res.get())
+            adj_ss = bool(var_adjuntar_ss.get())
+            email_modo = var_modo_email.get()
+            
+            cfg["enviar_mail"] = enviar_mail
+            cfg["email_destinatario"] = dest
+            cfg["adjuntar_resultados"] = adj_res
+            cfg["adjuntar_screenshots"] = adj_ss
+            cfg["email_modo"] = email_modo
+            
+            cfg["ui_prefs"]["enviar_mail"] = enviar_mail
+            cfg["ui_prefs"]["adjuntar_resultados"] = adj_res
+            cfg["ui_prefs"]["adjuntar_screenshots"] = adj_ss
+            cfg["ui_prefs"]["email_modo"] = email_modo
+            
             guardar_config_global(cfg)
         except Exception:
             pass
 
-    var_ver_navegador.trace_add("write", _persistir_prefs)
-    var_minimizar_a_bandeja.trace_add("write", _persistir_prefs)
+    var_ver_navegador.trace_add("write", _save_ui_prefs)
+    var_minimizar_a_bandeja.trace_add("write", _save_ui_prefs)
 
     # Enviar en paralelo POR URL: una sesión (navegador) por URL, todas en simultáneo
-    var_url_parallel = tk.BooleanVar(value=False)
-    url_max_var = tk.StringVar(value="6")
+    var_url_parallel = tk.BooleanVar(value=bool(_ui_prefs.get("url_parallel", False)))
+    url_max_var = tk.StringVar(value=_ui_prefs.get("url_max", "6"))
     url_par_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
     url_par_row.pack(anchor="w", pady=(2, 0))
     cb_url_par = tk.Checkbutton(url_par_row, text="⚡ Enviar en paralelo por URL (una sesión por URL)", variable=var_url_parallel,
@@ -1360,7 +1402,7 @@ def iniciar_interfaz():
              bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, justify="center").pack(side="left", ipady=1)
 
     # Formularios T3 2.0 (Adobe AEM): usa los Excels con nombre …_T3.xlsx
-    var_t3 = tk.BooleanVar(value=False)
+    var_t3 = tk.BooleanVar(value=bool(_ui_prefs.get("t3", False)))
     t3_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
     t3_row.pack(anchor="w", pady=(2, 0))
     tk.Checkbutton(t3_row, text="🧩 Formularios T3 2.0 (usa los Excels …_T3)", variable=var_t3,
@@ -1375,6 +1417,15 @@ def iniciar_interfaz():
         if not any(selected_disp.get(b) for b in ("chrome", "firefox", "edge")):
             var_ver_navegador.set(False)
     refresh_ver_nav_state()
+
+    var_url_parallel.trace_add("write", _save_ui_prefs)
+    url_max_var.trace_add("write", _save_ui_prefs)
+    var_t3.trace_add("write", _save_ui_prefs)
+    var_enviar_email.trace_add("write", _save_ui_prefs)
+    var_adjuntar_res.trace_add("write", _save_ui_prefs)
+    var_adjuntar_ss.trace_add("write", _save_ui_prefs)
+    var_modo_email.trace_add("write", _save_ui_prefs)
+    email_entry.bind("<FocusOut>", lambda e: _save_ui_prefs())
 
     # Disclaimer dinámico: "Excels en paralelo" no aplica a LambdaTest.
     excel_par_warn_lbl = tk.Label(config_card, text="", font=("Segoe UI", 8, "bold"),
@@ -1398,7 +1449,10 @@ def iniciar_interfaz():
 
     # CREDENCIALES LAMBDATEST INLINE
     lt_creds_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
-    lt_creds_frame.pack_forget()
+    if selected_disp["mac lt"] or selected_disp["android lt"]:
+        lt_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
+    else:
+        lt_creds_frame.pack_forget()
 
     tk.Label(lt_creds_frame, text="CREDENCIALES LT", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, columnspan=3, sticky="w")
     
@@ -3213,7 +3267,7 @@ def iniciar_interfaz():
         threading.Thread(target=_worker, daemon=True).start()
 
     def view_results_dialog():
-        carpeta = os.path.join(_APP_BASE, "resultados")
+        carpeta = os.path.join(BASE_DIR, "resultados")
         try:
             os.makedirs(carpeta, exist_ok=True)
             os.startfile(carpeta)

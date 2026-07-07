@@ -12,6 +12,8 @@ a = Analysis(
         ('Asset/icon.ico', 'Asset'),
         ('Asset/osopng.png', 'Asset'),
         ('Asset/tabler_icons', 'Asset/tabler_icons'),
+        ('lambdatest_mac', 'lambdatest_mac'),
+        ('lambdatest_android', 'lambdatest_android'),
     ],
     hiddenimports=[
         'autonomous_runner',

@@ -30,3 +30,10 @@ config_global.json
 build/
 dist/
 build_output*.log
+
+# Config local de Claude Code - no versionar
+CLAUDE.md
+
+# Logs de ejecucion - se regeneran solos
+debug_run.log
+json/ejecutor_autonomo.log
