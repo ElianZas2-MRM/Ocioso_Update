@@ -357,6 +357,326 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "CUSTOMSLIDER": {
+      "descripcion": "customSlider",
+      "campo": "customSlider",
+      "element_id": "customSlider",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL1701281776810-GUIDEDROPDOWNLIST___WIDGET": {
+      "descripcion": "Modelo:",
+      "campo": "guideContainer-rootPanel-panel1701281776810-guidedropdownlist___widget",
+      "element_id": "guideContainer-rootPanel-panel1701281776810-guidedropdownlist___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL1701281776810-GUIDEDROPDOWNLIST_658578335___WIDGET": {
+      "descripcion": "Essas informações são pessoais ou de uma empresa?",
+      "campo": "guideContainer-rootPanel-panel1701281776810-guidedropdownlist_658578335___widget",
+      "element_id": "guideContainer-rootPanel-panel1701281776810-guidedropdownlist_658578335___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL1701281776810-GUIDETEXTBOX_1352010797___WIDGET": {
+      "descripcion": "Número de veículos:",
+      "campo": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1352010797___widget",
+      "element_id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1352010797___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL1701281776810-GUIDETEXTBOX_1283491___WIDGET": {
+      "descripcion": "Comentários adicionais:",
+      "campo": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1283491___widget",
+      "element_id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1283491___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-GUIDEDROPDOWNLIST___WIDGET": {
+      "descripcion": "Data estimada da compra",
+      "campo": "guideContainer-rootPanel-guidedropdownlist___widget",
+      "element_id": "guideContainer-rootPanel-guidedropdownlist___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-FIRSTNAME___WIDGET": {
+      "descripcion": "Nome",
+      "campo": "guideContainer-rootPanel-firstName___widget",
+      "element_id": "guideContainer-rootPanel-firstName___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-LASTNAME___WIDGET": {
+      "descripcion": "Sobrenome",
+      "campo": "guideContainer-rootPanel-lastName___widget",
+      "element_id": "guideContainer-rootPanel-lastName___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-GUIDETELEPHONE___WIDGET": {
+      "descripcion": "guideContainer-rootPanel-guidetelephone___jqName",
+      "campo": "guideContainer-rootPanel-guidetelephone___widget",
+      "element_id": "guideContainer-rootPanel-guidetelephone___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-EMAILFRAGMENT-GUIDEEMAIL___WIDGET": {
+      "descripcion": "E-MAIL",
+      "campo": "guideContainer-rootPanel-emailFragment-guideemail___widget",
+      "element_id": "guideContainer-rootPanel-emailFragment-guideemail___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-CPF___WIDGET": {
+      "descripcion": "CPF",
+      "campo": "guideContainer-rootPanel-cpf___widget",
+      "element_id": "guideContainer-rootPanel-cpf___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-SIMPLEDEALERSELECTOR___WIDGET": {
+      "descripcion": "simpleDealerSelector",
+      "campo": "guideContainer-rootPanel-simpleDealerSelector___widget",
+      "element_id": "guideContainer-rootPanel-simpleDealerSelector___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "ACQUISITION-METHOD": {
+      "descripcion": "acquisition-method",
+      "campo": "acquisition-method",
+      "element_id": "acquisition-method",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "ACTIVITY-AREA": {
+      "descripcion": "activity-area",
+      "campo": "activity-area",
+      "element_id": "activity-area",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "FLEET-SIZE": {
+      "descripcion": "fleet-size",
+      "campo": "fleet-size",
+      "element_id": "fleet-size",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "COMPANY-NAME": {
+      "descripcion": " ",
+      "campo": "company-name",
+      "element_id": "company-name",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

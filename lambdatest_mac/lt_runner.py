@@ -71,6 +71,10 @@ _VISID_ID_ALIASES: dict = {
     "estimated-date-purchase": "estimated-day",
     "estimated-date":          "estimated-day",
     "estimated_date_purchase": "estimated-day",
+    # gm_front / alianzas modernas
+    "telephone":               "phone",
+    "cellphone":               "phone",
+    "ci":                      "document",
 }
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
@@ -381,14 +385,61 @@ def _load_field_dependencies() -> Dict[str, str]:
 def _fill_text_js(driver, element, value: str):
     """Una sola llamada de red. Usa native setter para React/Angular + dispara eventos."""
     driver.execute_script(
-        "var n = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');"
-        "if (n && n.set) { n.set.call(arguments[0], arguments[1]); }"
-        "else { arguments[0].value = arguments[1]; }"
-        "arguments[0].dispatchEvent(new Event('input',  {bubbles:true}));"
-        "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));"
-        "arguments[0].dispatchEvent(new Event('blur',   {bubbles:true}));",
+        "var el = arguments[0], val = arguments[1];"
+        "el.focus();"
+        "try {"
+        "  var proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;"
+        "  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);"
+        "} catch(e) { el.value = val; }"
+        "el.dispatchEvent(new Event('input',  {bubbles:true}));"
+        "el.dispatchEvent(new Event('change', {bubbles:true}));"
+        "el.dispatchEvent(new Event('blur',   {bubbles:true}));",
         element, str(value),
     )
+
+
+def _fill_required_synthetic_lt(driver, log=print):
+    """Rellena con valores sintéticos aleatorios los campos REQUERIDOS visibles que
+    quedaron vacíos (ej. Rua, Número, Data de Nascimento). Una sola llamada JS (rápido en LT).
+    Fecha → DD/MM/AAAA >18; número → dígitos; email → @mrm.com; resto → alfanumérico."""
+    try:
+        filled = driver.execute_script(r"""
+            function ri(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+            function rs(n){var c='abcdefghijklmnopqrstuvwxyz0123456789',s='';for(var i=0;i<n;i++)s+=c[ri(0,c.length-1)];return s;}
+            function pad(n){return (n<10?'0':'')+n;}
+            var out=[];
+            var els=document.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=reset]),textarea');
+            for(var i=0;i<els.length;i++){
+                var el=els[i];
+                if(!el.offsetParent||el.disabled) continue;
+                if((el.value||'').trim()) continue;
+                var req=el.required||el.getAttribute('aria-required')==='true';
+                if(!req){var id=el.id; if(id){var l=document.querySelector('label[for="'+((window.CSS&&CSS.escape)?CSS.escape(id):id)+'"]'); if(l&&(l.textContent||'').indexOf('*')>=0)req=true;} var p=el.closest('label'); if(p&&(p.textContent||'').indexOf('*')>=0)req=true;}
+                if(!req) continue;
+                var hints=((el.id||'')+' '+(el.name||'')+' '+(el.placeholder||'')+' '+(el.getAttribute('aria-label')||'')).toLowerCase();
+                var type=(el.getAttribute('type')||'text').toLowerCase();
+                var dateH=['nascimento','nacimiento','birth','dob','aniversario','fecha','data-de','cumple'];
+                var isDate=type==='date'||dateH.some(function(h){return hints.indexOf(h)>=0;});
+                var numH=['numero','número','number','quantidade','cantidad'];
+                var val;
+                if(isDate){var y=ri(1975,2003),m=ri(1,12),d=ri(1,28); val=(type==='date')?(y+'-'+pad(m)+'-'+pad(d)):(pad(d)+'/'+pad(m)+'/'+y);}
+                else if(type==='email'){val='auto'+rs(6)+ri(10,99)+'@mrm.com';}
+                else if(type==='number'||type==='tel'||numH.some(function(h){return hints.indexOf(h)>=0;})){val=''+ri(1,9999);}
+                else{val=rs(8);}
+                try{var proto=el.tagName==='TEXTAREA'?window.HTMLTextAreaElement.prototype:window.HTMLInputElement.prototype; el.removeAttribute('maxlength'); Object.getOwnPropertyDescriptor(proto,'value').set.call(el,val);}catch(e){el.value=val;}
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+                el.dispatchEvent(new Event('change',{bubbles:true}));
+                el.dispatchEvent(new Event('blur',{bubbles:true}));
+                out.push((el.id||el.name||'?')+'='+val);
+            }
+            return out;
+        """) or []
+        for f in filled:
+            log(f"  🧩 Requerido sin dato completado (sintético): {f}")
+        return len(filled)
+    except Exception as e:
+        log(f"  ⚠ Auto-relleno sintético: {e}")
+        return 0
 
 
 def _fill_text_android(driver, element, value: str):
@@ -398,9 +449,12 @@ def _fill_text_android(driver, element, value: str):
     Usa native setter + touch events para que React/Angular registre el valor.
     """
     driver.execute_script(
-        "const el = arguments[0];"
-        "var n = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');"
-        "if (n && n.set) { n.set.call(el, arguments[1]); } else { el.value = arguments[1]; }"
+        "const el = arguments[0], val = arguments[1];"
+        "el.focus();"
+        "try {"
+        "  var proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;"
+        "  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);"
+        "} catch(e) { el.value = val; }"
         "el.dispatchEvent(new Event('touchstart', {bubbles:true}));"
         "el.dispatchEvent(new Event('touchend',   {bubbles:true}));"
         "el.dispatchEvent(new Event('input',      {bubbles:true}));"
@@ -416,9 +470,12 @@ def _fill_text_js_mobile(driver, element, value: str):
     Usa native setter + touch events para que Safari móvil registre la interacción.
     """
     driver.execute_script(
-        "const el = arguments[0];"
-        "var n = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');"
-        "if (n && n.set) { n.set.call(el, arguments[1]); } else { el.value = arguments[1]; }"
+        "const el = arguments[0], val = arguments[1];"
+        "el.focus();"
+        "try {"
+        "  var proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;"
+        "  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);"
+        "} catch(e) { el.value = val; }"
         "el.dispatchEvent(new Event('touchstart', {bubbles:true}));"
         "el.dispatchEvent(new Event('touchend',   {bubbles:true}));"
         "el.dispatchEvent(new Event('input',      {bubbles:true}));"
@@ -518,11 +575,62 @@ def _tap_and_type_native(driver, iframe_el, field_id: str,
         return False
 
 
-def _scroll_to(driver, element):
+def _scroll_to(driver, element, known_iframe=None):
+    if not element:
+        return
     try:
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block:'center'});", element
-        )
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", element)
+        time.sleep(0.1)
+    except Exception:
+        pass
+
+    try:
+        # Comprobar si estamos dentro de un iframe
+        in_iframe = driver.execute_script("return window.self !== window.top;")
+        if in_iframe:
+            rect = driver.execute_script(
+                "const r = arguments[0].getBoundingClientRect(); return {top: r.top, height: r.height};",
+                element
+            )
+            element_top_in_iframe = rect["top"]
+            element_height = rect["height"]
+
+            # Cambiar temporalmente al contenido principal
+            driver.switch_to.default_content()
+
+            try:
+                # Usar el iframe CONOCIDO del form (la landing puede tener varios iframes de
+                # marketing y agarrar el primero visible scrollea al lugar equivocado).
+                target_iframe = known_iframe
+                if target_iframe is None:
+                    iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                    for iframe in iframes:
+                        if iframe.is_displayed():
+                            target_iframe = iframe
+                            break
+
+                if target_iframe:
+                    # Obtener la posición del iframe en el parent
+                    iframe_rect = driver.execute_script(
+                        "const r = arguments[0].getBoundingClientRect(); return {top: r.top, yOffset: window.pageYOffset};",
+                        target_iframe
+                    )
+                    iframe_top = iframe_rect["top"]
+                    parent_y_offset = iframe_rect["yOffset"]
+
+                    viewport_height = driver.execute_script("return window.innerHeight;")
+                    
+                    target_y_on_parent = parent_y_offset + iframe_top + element_top_in_iframe
+                    # Centrar el elemento en la pantalla
+                    scroll_y = target_y_on_parent - (viewport_height / 2) + (element_height / 2)
+                    scroll_y = max(0, scroll_y)
+
+                    driver.execute_script(f"window.scrollTo(0, {scroll_y});")
+                    time.sleep(0.15)
+            finally:
+                # Siempre volver al iframe
+                if target_iframe:
+                    driver.switch_to.frame(target_iframe)
     except Exception:
         pass
 
@@ -633,6 +741,51 @@ def _refill_brasil_doc_sendkeys(driver, field_mapping: list, pais: str,
     return rellenados > 0
 
 
+def _tiene_thankyou_texto_2_0(driver) -> bool:
+    """TY de forms 2.0 (/tools/forms): confirmación de envío.
+    No basta el texto (el encabezado '...e entraremos em contato' daría falso
+    positivo): sólo es TY si el botón Enviar ya NO está visible (form reemplazado)
+    y aparece una frase fuerte de confirmación.
+    """
+    try:
+        _cur = (driver.current_url or "").lower()
+    except Exception:
+        _cur = ""
+    if "/tools/" not in _cur:
+        return False
+    try:
+        _submit_visible = driver.execute_script("""
+            var els = document.querySelectorAll("button, input[type='submit'], input[type='button']");
+            for (var i=0;i<els.length;i++){
+                var e=els[i];
+                var t=((e.innerText||e.value||"")+"").trim().toLowerCase();
+                if(e.offsetParent!==null && (t==='enviar' || t.indexOf('enviar')===0)){ return true; }
+            }
+            return false;
+        """)
+        if _submit_visible:
+            return False
+    except Exception:
+        pass
+    try:
+        _txt = driver.execute_script(
+            "return (document.body && document.body.innerText) ? document.body.innerText : '';"
+        ) or ""
+    except Exception:
+        _txt = ""
+    _txt = _txt.lower()
+    _markers = (
+        "obrigado", "obrigada",
+        "recebemos sua solicit", "recebemos seu contato",
+        "sua solicitação foi recebida", "solicitação enviada",
+        "recebido com sucesso", "recebida com sucesso",
+        "enviado com sucesso", "cadastro realizado",
+        "dados enviados", "mensagem enviada",
+        "gracias por", "thank you for",
+    )
+    return any(m in _txt for m in _markers)
+
+
 def _describir_errores_visuales(driver) -> str:
     """Devuelve todos los errores visuales con el campo asociado: 'campo: mensaje, ...'"""
     try:
@@ -716,7 +869,7 @@ def _generate_valid_cnpj() -> str:
 
 
 def _generate_brazil_document(field_id: str) -> str:
-    """Genera CPF (sin puntos), CNPJ (con puntos) o CEP (sin puntos) via API 4devs."""
+    """Genera CPF (sin puntos), CNPJ (con puntos) o CEP (sin puntos) via API 4devs con fallback local."""
     import re as _re
     fid = field_id.lower()
     is_cep  = "cep" in fid or "zip" in fid or "postal" in fid
@@ -736,11 +889,24 @@ def _generate_brazil_document(field_id: str) -> str:
         return random.choice(_VALID_CEPS)
 
     if is_cnpj:
-        return _fetch_4devs("gerar_cnpj", {"pontuacao": "S"})
+        try:
+            raw = _fetch_4devs("gerar_cnpj", {"pontuacao": "S"})
+            digits = "".join(c for c in (raw or "") if c.isdigit())
+            if len(digits) >= 14:
+                return raw
+        except Exception:
+            pass
+        return _generate_valid_cnpj()
 
     # CPF — solo dígitos
-    raw = _fetch_4devs("gerar_cpf", {"pontuacao": "N"})
-    return "".join(c for c in raw if c.isdigit())
+    try:
+        raw = _fetch_4devs("gerar_cpf", {"pontuacao": "N"})
+        digits = "".join(c for c in (raw or "") if c.isdigit())
+        if len(digits) >= 11:
+            return digits
+    except Exception:
+        pass
+    return _generate_valid_cpf()
 
 
 def _sanitize_peru_document(doc_type_value: str, raw_value: str) -> str:
@@ -794,7 +960,7 @@ if(!el)return{ok:false,r:'notfound'};
 var cs=getComputedStyle(el);
 if(cs.display==='none'||cs.visibility==='hidden')return{ok:false,r:'hidden'};
 el.removeAttribute('disabled');el.disabled=false;
-el.scrollIntoView({block:'nearest',behavior:'instant'});
+el.scrollIntoView({block:'center',behavior:'instant'});
 var bad=/^(selec|eligi|choos|escolh|--)/i;
 var opts=Array.from(el.options).filter(function(o){
     return o.value&&o.value!=='0'&&!o.disabled&&o.text&&o.text.trim()!==''&&!bad.test(o.text.trim());
@@ -816,6 +982,30 @@ el.dispatchEvent(new Event('blur',{bubbles:true}));
 return{ok:true,text:target.text,wasRandom:!arguments[1]||!target};
 """
 
+def _scroll_to_bottom_parent_aware(driver, log: Callable = print):
+    """
+    Scrollea al fondo de la página de forma segura y parent-aware sin cambiar el contexto del iframe
+    (evitando saltos a la parte superior en Safari Mac).
+    """
+    try:
+        from selenium.webdriver.common.action_chains import ActionChains
+        ActionChains(driver).scroll_by_amount(0, 900).perform()
+        time.sleep(0.3)
+    except Exception as e:
+        log(f"  ⚠ Error scroll bottom parent-aware: {e}")
+
+def _scroll_to_element_parent_aware(driver, element, log: Callable = print):
+    """
+    Scrollea incrementalmente hacia abajo a medida que se completan los campos
+    (evitando saltos a la parte superior en Safari Mac).
+    """
+    try:
+        from selenium.webdriver.common.action_chains import ActionChains
+        ActionChains(driver).scroll_by_amount(0, 90).perform()
+        time.sleep(0.15)
+    except Exception as e:
+        log(f"  ⚠ Error scroll element parent-aware: {e}")
+
 def _select_option(driver, select_id: str, value: str, field_name: str,
                    is_dependent: bool = False,
                    log: Callable = print,
@@ -830,6 +1020,12 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
 
     for attempt in range(1, _DEP_RETRIES + 1):
         try:
+            try:
+                el_select = driver.find_element(By.ID, select_id)
+                if el_select:
+                    _scroll_to_element_parent_aware(driver, el_select, log)
+            except Exception:
+                pass
             res = driver.execute_script(_SELECT_JS, select_id, value or "", is_empty)
             if not res:
                 return False
@@ -978,6 +1174,26 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
         fname     = fc.get("name", str(fid_raw))
         ftype     = fc.get("type", "text")
         resolved  = _batch.get(i)
+        if not resolved:
+            # Re-chequeo simple SIN scrollear: si el campo no está visible en el DOM actual,
+            # se saltea. NO scroll-search agresivo: en forms multi-step (gm_forms) roaba toda
+            # la página buscando campos de pasos siguientes y perdía los del paso actual
+            # (ej. VIN/Modelo del paso 1 en clubemyev). El loop multi-step los llena cuando
+            # aparecen tras 'Siguiente'.
+            try:
+                resolved = driver.execute_script("""
+                    var ids=arguments[0];
+                    for(var j=0;j<ids.length;j++){
+                        var e=document.getElementById(ids[j]);
+                        if(e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden')return ids[j];
+                        var all=document.querySelectorAll('input[id^="'+ids[j]+'-"],select[id^="'+ids[j]+'-"],textarea[id^="'+ids[j]+'-"]');
+                        for(var k=0;k<all.length;k++){if(getComputedStyle(all[k]).display!=='none'&&getComputedStyle(all[k]).visibility!=='hidden')return all[k].id;}
+                    }
+                    return null;
+                """, _ids_batch[i])
+            except Exception:
+                resolved = None
+
         if not resolved or resolved in processed:
             continue
 
@@ -1039,7 +1255,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
                     "var e=document.getElementById(arguments[0]);"
                     "if(!e||e.disabled||getComputedStyle(e).display==='none'"
                     "||getComputedStyle(e).visibility==='hidden')return null;"
-                    "e.scrollIntoView({block:'nearest',behavior:'instant'});"
+                    "e.scrollIntoView({block:'center',behavior:'instant'});"
                     "return e;",
                     resolved
                 )
@@ -1049,6 +1265,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
                         tracked[fname] = value
                         processed.add(resolved)
                     continue
+                _scroll_to_element_parent_aware(driver, el, log)
                 ml = _get_maxlength(el)
                 if ml and len(value) > ml:
                     value = value[:ml]
@@ -1093,12 +1310,13 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
                 "var e=document.getElementById(arguments[0]);"
                 "if(!e||e.disabled||getComputedStyle(e).display==='none'"
                 "||getComputedStyle(e).visibility==='hidden')return null;"
-                "e.scrollIntoView({block:'nearest',behavior:'instant'});"
+                "e.scrollIntoView({block:'center',behavior:'instant'});"
                 "return e;",
                 dyn_id
             )
             if not el:
                 continue
+            _scroll_to_element_parent_aware(driver, el, log)
             tag = el.tag_name.lower()
             if tag == "select":
                 _select_option(driver, dyn_id, dyn_value, dyn_id, log=log)
@@ -1110,6 +1328,13 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
             processed.add(dyn_id)
         except Exception:
             continue
+
+    # Scroll al fondo al terminar de llenar para revelar checkboxes/botón Enviar en Mac/Safari
+    try:
+        if not is_android:
+            _scroll_to_bottom_parent_aware(driver, log)
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1646,8 +1871,61 @@ def _ensure_terms_marked_before_submit(driver, log: Callable = print):
         log(f"  Error verificando checkboxes pre-submit: {e}")
 
 
+_INFER_DATAKEY_MAP = {
+    "firstname":  ("nombre", "name", "first", "fname", "nome", "given"),
+    "lastname":   ("apellido", "lastname", "surname", "lname", "sobrenome", "family"),
+    "email":      ("email", "correo", "mail", "e-mail", "emailaddress"),
+    "phone":      ("telefono", "celular", "phone", "mobile", "cel", "tel", "fono", "movil",
+                   "whatsapp", "celphone", "telefone"),
+    "document":   ("documento", "doc", "cedula", "dni", "rut", "ci", "cpf",
+                   "rfc", "identif", "passport", "pasaporte"),
+    "model":      ("modelo", "model", "vehiculo", "veiculo", "auto", "car"),
+}
+
+
+def _normalize_for_infer(text):
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", (text or "").lower())
+    ascii_str = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return ascii_str.replace(" ", "").replace("-", "").replace("_", "")
+
+
+def _infer_data_key(field_id, field_name, field_placeholder=""):
+    tokens = [
+        _normalize_for_infer(field_id),
+        _normalize_for_infer(field_name),
+        _normalize_for_infer(field_placeholder),
+    ]
+    for data_key, keywords in _INFER_DATAKEY_MAP.items():
+        for token in tokens:
+            if token and any(kw in token or token in kw for kw in keywords):
+                return data_key
+    return None
+
+
+def _get_inferred_value(inferred_key: str, lead) -> str:
+    if not lead or not inferred_key:
+        return ""
+    lead_lower = {k.lower().strip(): v for k, v in lead.data.items()}
+    INFERRED_TO_HEADERS = {
+        "firstname": ["firstname", "name", "nombre", "nombres", "fullname", "full_name"],
+        "lastname":  ["lastname", "apellido", "apellidos", "last_name"],
+        "email":     ["email", "correo", "e-mail"],
+        "phone":     ["phone", "celular", "telefono", "cellphone", "telephone", "telephone-mask"],
+        "document":  ["document", "documento", "cpf", "cnpj", "dni", "rut", "ci"],
+        "model":     ["model", "modelo", "models"],
+    }
+    headers = INFERRED_TO_HEADERS.get(inferred_key, [inferred_key])
+    for h in headers:
+        val = lead_lower.get(h, "")
+        if val and str(val).strip().lower() not in ("", "none"):
+            return str(val)
+    return str(lead_lower.get(inferred_key, ""))
+
+
 def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
                                       ids_dinamicos: Dict[str, str],
+                                      lead=None,
                                       log: Callable = print) -> bool:
     """
     Completa selects e inputs visibles que no están en el field_mapping.
@@ -1721,7 +1999,7 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
             log(f"  Select no mapeado '{sel_id}' error: {e}")
             continue
 
-    # ── Inputs/textareas requeridos no mapeados ───────────────────────────────
+    # ── Inputs/textareas no mapeados ──────────────────────────────────────────
     try:
         text_elements = driver.find_elements(
             By.XPATH,
@@ -1745,7 +2023,31 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
             if current_val:
                 continue
 
-            fill_value = ids_dinamicos.get(field_id, "")
+            fill_value = None
+            source_label = ""
+
+            # Prioridad 1: IDs dinámicos
+            if field_id in ids_dinamicos:
+                fill_value = ids_dinamicos.get(field_id, "")
+                source_label = "ID dinámico"
+
+            # Prioridad 2: inferir data_key y tomar valor del lead
+            if not fill_value and lead:
+                field_name = (
+                    element.get_attribute("aria-label")
+                    or element.get_attribute("placeholder")
+                    or element.get_attribute("name")
+                    or field_id
+                )
+                placeholder = element.get_attribute("placeholder") or ""
+                inferred_key = _infer_data_key(field_id, field_name, placeholder)
+                if inferred_key:
+                    inferred_val = _get_inferred_value(inferred_key, lead)
+                    if inferred_val:
+                        fill_value = inferred_val
+                        source_label = f"inferido→{inferred_key}"
+
+            # Prioridad 3: probe numérico → alfa para inputs requeridos sin valor
             if not fill_value:
                 cls = element.get_attribute("class") or ""
                 has_error_class = any(c in cls for c in ("error", "invalid", "is-invalid", "ng-invalid"))
@@ -1762,20 +2064,32 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
                 likely_num = inputmode in ("numeric", "tel", "decimal") or input_type == "tel"
                 probes = ["12345678", "Carlos"] if likely_num else ["Carlos", "12345678"]
 
+                ml = _get_maxlength(element)
                 fill_value = probes[0]
+                if ml and len(fill_value) > ml:
+                    fill_value = fill_value[:ml]
+
                 for probe in probes:
+                    if ml and len(probe) > ml:
+                        probe = probe[:ml]
                     _fill_text_js(driver, element, probe)
                     time.sleep(0.15)
                     cls_after = element.get_attribute("class") or ""
                     if not any(c in cls_after for c in ("error", "invalid", "is-invalid", "ng-invalid")):
                         fill_value = probe
+                        source_label = "auto-probe"
                         break
-                log(f"  📌 Input no mapeado '{field_id}' → '{fill_value}' (probe)")
+
+                log(f"  📌 Input no mapeado '{field_id}' → '{fill_value}' ({source_label})")
                 filled_any = True
                 continue
 
+            # Rellenar con valor dinámico o inferido respetando maxlength
+            ml = _get_maxlength(element)
+            if ml and len(fill_value) > ml:
+                fill_value = fill_value[:ml]
             _fill_text_js(driver, element, fill_value)
-            log(f"  📌 Input no mapeado '{field_id}' → '{fill_value}'")
+            log(f"  📌 Input no mapeado '{field_id}' → '{fill_value}' ({source_label})")
             filled_any = True
         except Exception as e:
             log(f"  Input no mapeado '{field_id}' error: {e}")
@@ -1818,6 +2132,7 @@ _SUBMIT_SELECTORS = [
     "button[type='submit']",
     "input[type='submit']",
     "button[class*='submit']",
+    "button[type='button'][class*='submit']",
 ]
 
 
@@ -1935,6 +2250,16 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
     Android usa timeout reducido (1s vs 3s) ya que Chrome es más rápido que Safari.
     """
     _timeout = 1.0 if is_android else 3
+
+    # Mac/Safari: el botón Enviar suele quedar por debajo del fold y el click no
+    # registra si no está en viewport. Revelamos el fondo del formulario primero
+    # (equivalente a "scrollear un poco más abajo" que hacía el usuario a mano).
+    if not is_android:
+        try:
+            _scroll_to_bottom_parent_aware(driver, log)
+        except Exception:
+            pass
+
     # Selectores CSS específicos de GM (igual que Osocio)
     for sel in _SUBMIT_SELECTORS:
         try:
@@ -1976,6 +2301,77 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
     except Exception:
         pass
 
+    # Si no se encontró inicialmente, scrolleamos al fondo e intentamos una vez más
+    log("  ✗ No se encontró botón de envío inicialmente, scrolleando abajo e intentando de nuevo...")
+    try:
+        _scroll_to_bottom_parent_aware(driver, log)
+    except Exception:
+        pass
+
+    for sel in _SUBMIT_SELECTORS:
+        try:
+            btn = WebDriverWait(driver, _timeout).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
+            )
+            driver.execute_script(
+                "arguments[0].scrollIntoView({behavior:'smooth',block:'center'});", btn
+            )
+            time.sleep(0.3 if is_android else 0.5)
+            try:
+                btn.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", btn)
+            log(f"  ✓ Enviar clickeado ({sel}) tras scroll")
+            return True
+        except Exception:
+            continue
+
+    try:
+        for xpath in [
+            "//button[contains(@class,'submit')][.//span[contains(normalize-space(.),'Enviar')] or contains(normalize-space(.),'Enviar')]",
+            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑ','abcdefghijklmnopqrstuvwxyzáéíóúñ'),'enviar')]",
+            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'submit')]",
+            "//button[contains(@class,'submit') and not(contains(@class,'next'))]",
+        ]:
+            try:
+                btn = WebDriverWait(driver, _timeout).until(
+                    EC.element_to_be_clickable((By.XPATH, xpath))
+                )
+                driver.execute_script("arguments[0].click();", btn)
+                log(f"  ✓ Enviar clickeado (XPath) tras scroll")
+                return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Último recurso (Mac/Safari): reducir el zoom para que el botón entre en el
+    # viewport (equivalente a "sacarle zoom al navegador" que hacía el usuario).
+    if not is_android:
+        try:
+            log("  ⤺ Reduciendo zoom del navegador para revelar el botón Enviar...")
+            driver.execute_script("document.body.style.zoom='0.7';")
+            time.sleep(0.6)
+            _scroll_to_bottom_parent_aware(driver, log)
+            time.sleep(0.4)
+            for sel in _SUBMIT_SELECTORS:
+                try:
+                    btn = WebDriverWait(driver, _timeout).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
+                    )
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+                    time.sleep(0.4)
+                    try:
+                        btn.click()
+                    except Exception:
+                        driver.execute_script("arguments[0].click();", btn)
+                    log(f"  ✓ Enviar clickeado ({sel}) tras reducir zoom")
+                    return True
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
     log("  ✗ No se encontró botón de envío")
     return False
 
@@ -1984,14 +2380,14 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
 # RESULTADOS (lógica de Osocio: mismo Excel, mismas columnas)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _get_run_number(pais: str) -> int:
+def _get_run_number(pais: str, plat_clean: str, prefix: str = "resultados_") -> int:
     """Número incremental igual que Osocio."""
     import glob
-    pattern = os.path.join(_RESULTADOS_DIR, f"resultados_{pais}*.xlsx")
+    pattern = os.path.join(_RESULTADOS_DIR, f"{prefix}{pais}_{plat_clean}*.xlsx")
     matches = glob.glob(pattern)
     max_n = 0
     for m in matches:
-        base = os.path.basename(m).replace(f"resultados_{pais}", "").replace(".xlsx", "")
+        base = os.path.basename(m).replace(f"{prefix}{pais}_{plat_clean}", "").replace(".xlsx", "")
         if base.isdigit():
             max_n = max(max_n, int(base))
     return max_n + 1
@@ -2013,14 +2409,16 @@ def _fetch_lt_video_url(session_id: str, username: str, access_key: str) -> str:
         return ""
 
 
-def _setup_results_excel(pais: str, source_excel_path: str) -> tuple:
+def _setup_results_excel(pais: str, source_excel_path: str, platform: str, build_name: str = "") -> tuple:
     """
     Copia el Excel de entrada y agrega columnas de resultado:
     Form Encontrado, Enviado, Resultado, Video LT
     """
     os.makedirs(_RESULTADOS_DIR, exist_ok=True)
-    run_number   = _get_run_number(pais)
-    results_path = os.path.join(_RESULTADOS_DIR, f"resultados_{pais}{run_number}.xlsx")
+    plat_clean = "Mac" if "mac" in platform.lower() else ("Android" if "android" in platform.lower() else ("Iphone" if "iphone" in platform.lower() else platform.capitalize()))
+    prefix = "Automatizacion_" if "Automatización" in build_name else "resultados_"
+    run_number   = _get_run_number(pais, plat_clean, prefix=prefix)
+    results_path = os.path.join(_RESULTADOS_DIR, f"{prefix}{pais}_{plat_clean}{run_number}.xlsx")
 
     wb = load_workbook(source_excel_path)
     ws = wb.active
@@ -2086,10 +2484,15 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
     if "Form URL encontrada" in col_idx:
         ws.cell(row=row_num, column=col_idx["Form URL encontrada"]).value = iframe_url_found or ""
     if "Form coincide" in col_idx and iframe_url_expected:
-        coincide = "SI" if iframe_url_found.strip() == iframe_url_expected.strip() else "NO"
+        def _norm(u):
+            if not u: return ""
+            u = u.strip().split("?")[0].split("#")[0]
+            if u.endswith("/"): u = u[:-1]
+            return u.lower()
+        coincide_ok = _norm(iframe_url_found) == _norm(iframe_url_expected)
         coincide_cell = ws.cell(row=row_num, column=col_idx["Form coincide"])
-        coincide_cell.value = coincide
-        if coincide == "SI":
+        coincide_cell.value = "PASS" if coincide_ok else "FAIL"
+        if coincide_ok:
             _mark_green(coincide_cell)
         else:
             _mark_red(coincide_cell)
@@ -2173,137 +2576,209 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             _pre_scroll_for_dynamic_content(driver)
         _handle_cookie_popups(driver, log)
 
-        # ── 2. Encontrar y posicionar iframe ─────────────────────────────────
-        iframe_el = None
-        for attempt in range(2):
-            iframes = driver.find_elements(By.TAG_NAME, "iframe")
-            for iframe in iframes:
-                try:
-                    src = iframe.get_attribute("src") or ""
-                    if lead.secure_url and lead.secure_url.strip() in src:
-                        iframe_el = iframe
-                        break
-                    if "gm_forms" in src or "gm_admin" in src or "gm_front" in src:
-                        iframe_el = iframe
-                except Exception:
-                    continue
-            if iframe_el:
-                break
-            time.sleep(1)
+        # gm_front (React SPA): esperar a que los componentes monten tras el scroll
+        if "gm_front" in lead.public_url.lower():
+            time.sleep(3)
 
-        if not iframe_el:
-            # Último recurso: cualquier iframe visible con keyword GM en su src
-            try:
+        # ── 2. Encontrar y posicionar iframe ─────────────────────────────────
+        use_iframe = bool(lead.secure_url and lead.secure_url.strip())
+        iframe_el = None
+
+        if use_iframe:
+            def _buscar_iframe():
                 for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
                     try:
                         src = iframe.get_attribute("src") or ""
-                        if any(kw in src for kw in ("gm_forms", "gm_admin", "gm_front")):
-                            iframe_el = iframe
-                            log(f"  ⚠ Iframe fallback por keyword: {src[:80]}")
-                            break
-                    except Exception:
-                        continue
-            except Exception:
-                pass
-
-        if not iframe_el and is_android:
-            log("  ↺ Iframe no encontrado — recargando landing (Android)...")
-            driver.get(lead.public_url)
-            try:
-                WebDriverWait(driver, 8).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
-            except Exception:
-                pass
-            time.sleep(1)
-            _handle_cookie_popups(driver, log)
-
-            def _android_find_iframe():
-                for _if in driver.find_elements(By.TAG_NAME, "iframe"):
-                    try:
-                        src = _if.get_attribute("src") or ""
                         if lead.secure_url and lead.secure_url.strip() in src:
-                            return _if
-                        if any(kw in src for kw in ("gm_forms", "gm_admin", "gm_front")):
-                            return _if
+                            return iframe
+                        if "gm_forms" in src or "gm_admin" in src or "gm_front" in src:
+                            return iframe
                     except Exception:
                         continue
                 return None
 
-            # Scroll escalonado: mitad → fondo (el form puede estar en cualquier posición)
-            for _scroll_pct in (0.5, 1.0):
+            # Scroll INCREMENTAL: bajar de a un viewport y frenar APENAS aparece el iframe,
+            # así el scroll queda posicionado en él (NO seguir hasta el footer, si no el
+            # botón Enviar queda fuera de vista). Una sola pasada — sin reintentos (lento en LT).
+            iframe_el = _buscar_iframe()
+            if not iframe_el:
                 try:
-                    driver.execute_script(
-                        f"window.scrollTo(0, document.body.scrollHeight * {_scroll_pct});"
-                    )
-                    time.sleep(0.8)
+                    _h = driver.execute_script("return document.body.scrollHeight") or 3000
+                    _step = int((driver.execute_script("return window.innerHeight") or 800) * 0.8)
+                    _y = 0
+                    while _y < _h:
+                        _y += _step
+                        driver.execute_script(f"window.scrollTo(0, {_y});")
+                        time.sleep(0.4)
+                        iframe_el = _buscar_iframe()
+                        if iframe_el:
+                            break
                 except Exception:
                     pass
-                iframe_el = _android_find_iframe()
-                if iframe_el:
-                    break
 
-        if not iframe_el:
+            if not iframe_el:
+                # Último recurso: cualquier iframe visible con keyword GM en su src
+                try:
+                    for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
+                        try:
+                            src = iframe.get_attribute("src") or ""
+                            if any(kw in src for kw in ("gm_forms", "gm_admin", "gm_front")):
+                                iframe_el = iframe
+                                log(f"  ⚠ Iframe fallback por keyword: {src[:80]}")
+                                break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+
+            if not iframe_el and is_android:
+                log("  ↺ Iframe no encontrado — recargando landing (Android)...")
+                driver.get(lead.public_url)
+                try:
+                    WebDriverWait(driver, 8).until(
+                        lambda d: d.execute_script("return document.readyState") == "complete"
+                    )
+                except Exception:
+                    pass
+                time.sleep(1)
+                _handle_cookie_popups(driver, log)
+
+                def _android_find_iframe():
+                    for _if in driver.find_elements(By.TAG_NAME, "iframe"):
+                        try:
+                            src = _if.get_attribute("src") or ""
+                            if lead.secure_url and lead.secure_url.strip() in src:
+                                return _if
+                            if any(kw in src for kw in ("gm_forms", "gm_admin", "gm_front")):
+                                return _if
+                        except Exception:
+                            continue
+                    return None
+
+                # Scroll escalonado: mitad → fondo (el form puede estar en cualquier posición)
+                for _scroll_pct in (0.5, 1.0):
+                    try:
+                        driver.execute_script(
+                            f"window.scrollTo(0, document.body.scrollHeight * {_scroll_pct});"
+                        )
+                        time.sleep(0.8)
+                    except Exception:
+                        pass
+                    iframe_el = _android_find_iframe()
+                    if iframe_el:
+                        break
+
+        if use_iframe and not iframe_el:
             result["result_text"] = "[Error] Formulario no encontrado — iframe ausente"
             log("  ✗ No se encontró iframe del formulario")
             return result
 
-        result["iframe_found"] = True
-        result["iframe_url_found"] = iframe_el.get_attribute("src") or ""
+        _iframe_src = ""
+        if iframe_el:
+            try:
+                _iframe_src = iframe_el.get_attribute("src") or ""
+            except Exception:
+                pass
+            if not _iframe_src or _iframe_src.strip() == "" or _iframe_src.startswith("about:"):
+                try:
+                    driver.switch_to.frame(iframe_el)
+                    _iframe_src = driver.execute_script("return window.location.href;") or ""
+                    driver.switch_to.parent_frame()
+                except Exception:
+                    pass
+            if _iframe_src and not _iframe_src.startswith("http"):
+                try:
+                    from urllib.parse import urljoin
+                    _iframe_src = urljoin(driver.current_url, _iframe_src)
+                except Exception:
+                    pass
+
+        result["iframe_found"] = bool(iframe_el) if use_iframe else True
+        result["iframe_url_found"] = _iframe_src
 
         # Detectar si la URL del iframe encontrado coincide con la esperada
         _expected_url = (lead.secure_url or "").strip()
+        
+        # Comparación normalizada para mismatch
+        def _norm(u):
+            if not u: return ""
+            u = u.strip().split("?")[0].split("#")[0]
+            if u.endswith("/"): u = u[:-1]
+            return u.lower()
+            
         result["form_url_mismatch"] = bool(
-            _expected_url and result["iframe_url_found"].strip() != _expected_url
+            iframe_el and _expected_url and _norm(result["iframe_url_found"]) != _norm(_expected_url)
         )
 
         # Posicionar scroll igual que Osocio
-        try:
-            loc = iframe_el.location
-            vph = driver.execute_script("return window.innerHeight")
-            elem_y = loc.get('y', 0)
-            if elem_y > vph:
-                scroll_to = elem_y - (vph * 0.3)
-            else:
-                scroll_to = max(elem_y - 100, 0)
-            driver.execute_script(f"window.scrollTo(0, {scroll_to});")
-            time.sleep(0.5)
-        except Exception:
-            pass
+        if iframe_el:
+            try:
+                loc = iframe_el.location
+                vph = driver.execute_script("return window.innerHeight")
+                elem_y = loc.get('y', 0)
+                if elem_y > vph:
+                    scroll_to = elem_y - (vph * 0.3)
+                else:
+                    scroll_to = max(elem_y - 100, 0)
+                driver.execute_script(f"window.scrollTo(0, {scroll_to});")
+                time.sleep(0.5)
+            except Exception:
+                pass
+        else:
+            # Form standalone (sin iframe): puede estar más abajo y renderizar recién al
+            # scrollear (lazy). En Safari, si el campo no está en viewport no se detecta/llena
+            # bien → recorrer toda la página y posicionar en el PRIMER campo visible del form.
+            try:
+                for _pct in (0.35, 0.7, 1.0):
+                    driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight*{_pct});")
+                    time.sleep(0.6)
+                driver.execute_script("""
+                    var sel='input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]),select,textarea';
+                    for (var el of document.querySelectorAll(sel)){
+                        if(el.offsetParent){ el.scrollIntoView({block:'center',behavior:'instant'}); return; }
+                    }
+                    window.scrollTo(0, 0);
+                """)
+                time.sleep(0.6)
+            except Exception:
+                pass
 
         log(f"  ✓ Iframe encontrado")
         if screenshot_manager:
             screenshot_manager.captura_landing_inicial()
 
         # ── 3. Entrar al iframe ──────────────────────────────────────────────
-        if is_mobile:
-            # iOS Safari: switch_to.frame() falla por cross-origin.
-            # Solución: scrollear la landing hasta que el iframe ocupe el
-            # viewport y operar via NATIVE_APP + tap en coordenadas.
-            log("  📱 iOS: usando scroll al iframe (no switch_to.frame)")
-            try:
-                driver.execute_script("""
-                    const iframe = arguments[0];
-                    const rect   = iframe.getBoundingClientRect();
-                    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-                    const targetY = rect.top + scrollY - 10;
-                    window.scrollTo({ top: Math.max(0, targetY), behavior: 'instant' });
-                """, iframe_el)
-                time.sleep(1.5)
-                log("  ✓ Iframe posicionado en viewport (iOS)")
-            except Exception as e:
-                log(f"  ⚠ Error posicionando iframe: {e}")
+        if iframe_el:
+            if is_mobile:
+                # iOS Safari: switch_to.frame() falla por cross-origin.
+                # Solución: scrollear la landing hasta que el iframe ocupe el
+                # viewport y operar via NATIVE_APP + tap en coordenadas.
+                log("  📱 iOS: usando scroll al iframe (no switch_to.frame)")
+                try:
+                    driver.execute_script("""
+                        const iframe = arguments[0];
+                        const rect   = iframe.getBoundingClientRect();
+                        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+                        const targetY = rect.top + scrollY - 10;
+                        window.scrollTo({ top: Math.max(0, targetY), behavior: 'instant' });
+                    """, iframe_el)
+                    time.sleep(1.5)
+                    log("  ✓ Iframe posicionado en viewport (iOS)")
+                except Exception as e:
+                    log(f"  ⚠ Error posicionando iframe: {e}")
+            else:
+                # Desktop: switch_to.frame() normal
+                driver.switch_to.frame(iframe_el)
+                try:
+                    WebDriverWait(driver, 10).until(
+                        lambda d: d.execute_script("return document.readyState") == "complete"
+                    )
+                except Exception:
+                    pass
+                time.sleep(0.3)
+                log("  ✓ Dentro del iframe")
         else:
-            # Desktop: switch_to.frame() normal
-            driver.switch_to.frame(iframe_el)
-            try:
-                WebDriverWait(driver, 10).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
-            except Exception:
-                pass
-            time.sleep(0.3)
-            log("  ✓ Dentro del iframe")
+            log("  ✓ Formulario embebido en documento principal (sin iframe)")
 
         # ── EXCEPCIÓN RAQ BRASIL ─────────────────────────────────────────────
         # El formulario RAQ de Brasil muestra primero una pantalla de selección
@@ -2345,6 +2820,53 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         max_iter = 15  # igual que auto_step_max_iterations de Osocio
         _xp: set = set()  # IDs ya llenados — se pasa entre iteraciones para no repetir
 
+        # Para forms sin iframe (gm_front y similares React/SPA): esperar a que el
+        # framework monte los componentes antes de escanear el DOM.
+        if not use_iframe:
+            try:
+                WebDriverWait(driver, 8).until(
+                    lambda d: bool(
+                        d.find_elements(By.CSS_SELECTOR,
+                            "input:not([type='hidden']):not([type='submit']):not([type='button']), select"
+                        )
+                    )
+                )
+            except Exception:
+                time.sleep(2)
+
+        # T3/AEM (forms 2.0): IDs volátiles → se llena por keyword del <label> con el
+        # motor compartido (utils/aem_fill). Misma lógica que desktop.
+        from utils import aem_fill as _aem
+        _is_aem_form = _aem.is_aem_adaptive_form(driver)
+        _is_brasil_aem = str(pais).lower() in ("brasil", "brazil", "br")
+
+        def _aem_form_data():
+            _ll = {str(k).lower().strip(): v for k, v in lead.data.items()}
+            def _pick(*keys):
+                for k in keys:
+                    v = _ll.get(k, "")
+                    if v and str(v).lower() not in ("", "none"):
+                        return str(v)
+                return ""
+            return {
+                "firstname": _pick("nombre", "nombres", "nome"),
+                "lastname":  _pick("apellido", "apellidos", "sobrenome"),
+                "email":     _pick("email", "correo"),
+                "phone":     _pick("celular", "telefono", "teléfono"),
+                "document":  _pick("documento", "cpf", "cnpj"),
+                "cpf":       _pick("cpf"),
+                "cnpj":      _pick("cnpj"),
+                "cep":       _pick("cep", "zip", "postal"),
+                "vin":       _pick("vin", "chasis", "chassi", "chassis"),
+                "comment":   _pick("comentario", "comentarios"),
+                "model":     _pick("modelo"),
+                "city":      _pick("ciudad", "cidade"),
+                "dealer":    _pick("concesionario", "concessionaria"),
+            }
+
+        if _is_aem_form:
+            log("🧩 [LT] Formulario AEM/T3 detectado → llenado por keyword (motor compartido)")
+
         for iteration in range(max_iter):
             log(f"\n  --- Iteración {iteration + 1} ---")
 
@@ -2361,16 +2883,28 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
 
             # Llenar campos visibles del paso actual (saltando los ya llenados en pasos anteriores)
             step_tracked: Dict[str, str] = {}
-            fill_form_fields(
-                driver, lead, pais, field_mapping,
-                dependencies, ids_dinamicos, step_tracked, log=log,
-                is_mobile=is_mobile,
-                is_android=is_android,
-                iframe_el=iframe_el if is_mobile else None,
-                brasil_doc_type=brasil_doc_type,
-                cross_processed=_xp,
-            )
-            _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, log=log)
+            if _is_aem_form:
+                # No usar _auto_fill_unmapped_dropdowns_lt en AEM: re-randomizaría el
+                # select persona → Pessoa y ocultaría CNPJ/empresa que ya llenamos.
+                _aem.fill_aem_form(
+                    driver, _aem_form_data(), _is_brasil_aem,
+                    gen_doc=_generate_brazil_document, log=log,
+                    record=lambda k, v: step_tracked.__setitem__(k, v),
+                )
+                _aem.mark_aem_terms(driver, log=log)
+            else:
+                fill_form_fields(
+                    driver, lead, pais, field_mapping,
+                    dependencies, ids_dinamicos, step_tracked, log=log,
+                    is_mobile=is_mobile,
+                    is_android=is_android,
+                    iframe_el=iframe_el if is_mobile else None,
+                    brasil_doc_type=brasil_doc_type,
+                    cross_processed=_xp,
+                )
+                _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
+                # Requeridos sin dato (Rua/Número/Data de Nascimento, etc.) → sintético random
+                _fill_required_synthetic_lt(driver, log=log)
             paso_num = iteration + 1
             for _k, _v in step_tracked.items():
                 all_tracked[f"Paso{paso_num}::{_k}"] = _v
@@ -2473,7 +3007,14 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                         d.find_element(By.CSS_SELECTOR, "div.rp-wrapper")
                         return True
                     except Exception:
-                        return False
+                        pass
+                    # Forms 2.0 (/tools/forms): la TY es un mensaje de agradecimiento.
+                    try:
+                        if _tiene_thankyou_texto_2_0(d):
+                            return True
+                    except Exception:
+                        pass
+                    return False
                 WebDriverWait(driver, 15).until(_ty_visible)
                 ty_confirmed = True
                 log("  ✓ TY div detectado.")
@@ -2487,7 +3028,24 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     except Exception:
                         pass
                 else:
-                    time.sleep(1)
+                    try:
+                        driver.switch_to.default_content()
+                        iframe_el = None
+                        for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
+                            try:
+                                src = iframe.get_attribute("src") or ""
+                                if any(kw in src for kw in ("gm_forms", "gm_admin", "gm_front")):
+                                    iframe_el = iframe
+                                    break
+                            except Exception:
+                                continue
+                        if iframe_el:
+                            driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'smooth'});", iframe_el)
+                        else:
+                            driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 3);")
+                        time.sleep(6.0)  # Wait 6 seconds so the thank you page is visible in the video
+                    except Exception:
+                        pass
                 if screenshot_manager:
                     screenshot_manager.captura_ty_page()
             except TimeoutException:
@@ -2524,7 +3082,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
 
             # Intento 1: rellenar campos con error class visible y reintentar sin reload
             if _submit_attempt == 1:
-                _filled_post = _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, log=log)
+                _filled_post = _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
                 if _filled_post:
                     log("  ↺ Campos con error rellenados — reintentando submit sin reload...")
                     _ensure_terms_marked_before_submit(driver, log)
@@ -2622,7 +3180,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                         brasil_doc_type=brasil_doc_type,
                         cross_processed=_xp_r,
                     )
-                    _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, log=log)
+                    _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
                     _paso_r = _iter + 1
                     for _k, _v in _iter_tracked.items():
                         _step_tracked[f"Reintento{_paso_r}::{_k}"] = _v
@@ -2710,7 +3268,7 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
         log(f"  IDs dinámicos: {list(ids_dinamicos.keys())}")
 
         wb, ws, run_number, results_path, col_idx = _setup_results_excel(
-            opts.pais, opts.excel_path
+            opts.pais, opts.excel_path, opts.platform, build_name
         )
         summary["results_excel"] = results_path
         log(f"Resultados: {results_path} (Run #{run_number})")

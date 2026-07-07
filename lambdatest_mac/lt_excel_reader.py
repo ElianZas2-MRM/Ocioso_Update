@@ -101,7 +101,14 @@ def read_osocio_excel(excel_path: str, inherit_urls: bool = True) -> List[LeadRo
         if secure_url:
             last_secure_url = secure_url
 
-        # Si no hay URL pública después de herencia, saltar fila
+        # Form suelto / standalone (URL fuera de plataforma, form 2.0 sin iframe):
+        # sólo viene la URL del formulario (columna B) sin landing. Se navega
+        # directo al form sin buscar iframe — igual que el runner local.
+        if not public_url and secure_url:
+            public_url = secure_url
+            secure_url = ""
+
+        # Si tras herencia/standalone sigue sin URL pública, saltar fila
         if not public_url:
             continue
 

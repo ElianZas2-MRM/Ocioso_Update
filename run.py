@@ -32,26 +32,33 @@ def _ensure_form_paths():
 def _load_country_run_function(country_name):
     _ensure_form_paths()
 
-    module_name = f"Formulario_{country_name}_Main"
-    script_path = os.path.join(FORMS_DIR, f"{module_name}.py")
+    try:
+        try:
+            from forms._runner_common import get_runner
+        except ImportError:
+            from _runner_common import get_runner
+        return get_runner(country_name)
+    except (ImportError, AttributeError):
+        module_name = f"Formulario_{country_name}_Main"
+        script_path = os.path.join(FORMS_DIR, f"{module_name}.py")
 
-    if os.path.exists(script_path):
-        spec = importlib.util.spec_from_file_location(module_name, script_path)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"No se pudo crear spec para {script_path}")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    else:
-        module = importlib.import_module(module_name)
+        if os.path.exists(script_path):
+            spec = importlib.util.spec_from_file_location(module_name, script_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"No se pudo crear spec para {script_path}")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        else:
+            module = importlib.import_module(module_name)
 
-    run_func = getattr(module, f"run_formularios_{country_name}", None)
-    if not callable(run_func):
-        raise AttributeError(f"No se encontró run_formularios_{country_name} en {module_name}")
+        run_func = getattr(module, f"run_formularios_{country_name}", None)
+        if not callable(run_func):
+            raise AttributeError(f"No se encontró run_formularios_{country_name} en {module_name}")
 
-    return run_func
+        return run_func
 
 
-def _run_country(country_name, environment, headless=False, enviar_email=True):
+def _run_country(country_name, environment, headless=False, enviar_email=True, is_scheduled=False):
     config = ENVIRONMENTS.get(environment)
     if config is None:
         raise ValueError(f"Entorno '{environment}' no reconocido")
@@ -62,6 +69,7 @@ def _run_country(country_name, environment, headless=False, enviar_email=True):
         viewport=config["viewport"],
         headless=headless,
         enviar_email=enviar_email,
+        is_scheduled=is_scheduled,
     )
 
 
@@ -102,6 +110,7 @@ def _parse_args():
     parser.add_argument("--run-country", dest="country_name", help="Ejecuta un país puntual sin abrir la UI")
     parser.add_argument("--environment", default="chrome_desktop", choices=sorted(ENVIRONMENTS.keys()))
     parser.add_argument("--no-email", action="store_true", help="No envía email al finalizar")
+    parser.add_argument("--scheduled", action="store_true", help="Indica que es una ejecución programada")
     parser.add_argument("--run-lambdatest", dest="lt_type", choices=["mac", "android"],
                         help="Ejecuta LambdaTest (mac o android) para el país indicado con --pais")
     parser.add_argument("--pais", dest="lt_pais", help="País para --run-lambdatest")
@@ -130,6 +139,7 @@ if __name__ == "__main__":
             args.environment,
             headless=False,
             enviar_email=not args.no_email,
+            is_scheduled=args.scheduled,
         )
     else:
         iniciar_interfaz()

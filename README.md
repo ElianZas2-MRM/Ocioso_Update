@@ -34,7 +34,8 @@ Automatización de formularios para varios países con Selenium, generación de 
 - `interface/`: UI de administración y utilidades de soporte.
 - `data/`: archivos Excel de entrada.
 - `drivers/`: drivers locales del navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`).
-- `resultados/`: resultados generados y capturas de pantalla.
+- `resultados/`: resultados generados y capturas de pantalla (Envío de Leads / LambdaTest).
+- `Dealerscheck_resultados/`: reportes Excel y capturas del Comparador Dealers.
 - `json/`: configuración persistente y programación.
 
 ## Drivers locales (sin descargas automáticas)
@@ -74,18 +75,19 @@ python json\ejecutor_autonomo.py
 
 ## Build portable
 
-El script `build_exe.bat` genera:
+El script `build.bat` genera:
 
 - `dist/OsocioFormAutomation.exe`
 - `dist/OsocioFormAutomation_portable/`
+- `dist/OsocioFormAutomation_portable.zip`
 
 Dentro de `dist/OsocioFormAutomation_portable/` se crean:
 
 - `OsocioFormAutomation.exe`
 - `Abrir_Osocio_Form_Automation.bat`
-- carpetas externas `data/`, `drivers/`, `json/`, `resultados/` y `temporales/`
+- carpetas externas `data/`, `drivers/`, `json/`, `resultados/`, `temporales/`, `Dealerscheck_resultados/`, `lambdatest_mac/` y `lambdatest_android/`
 
-Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
+El portable arranca siempre sin schedule activo ni configuración personal del Comparador Dealers (esos JSON se excluyen del build). Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 
 ## Migración a formularios visid
 
@@ -346,6 +348,89 @@ Configura ejecuciones recurrentes semanales sin intervención manual.
 
 ---
 
+## Guía completa de la app (todas las pestañas, versión actual)
+
+Esta sección documenta en detalle, y en limpio, cómo funciona cada pestaña de la app tal como está hoy. No incluye datos sensibles (usuarios/claves de LambdaTest, direcciones de email reales, etc.) — esos siempre se cargan de forma local en `lambdatest_credentials.txt` y `json/config_global.json`, ambos excluidos de git.
+
+### Configuración Global (barra superior, compartida por todas las pestañas)
+
+- **Email destinatario**: campo de texto, deshabilitado hasta marcar "Enviar mail". Acepta una o varias direcciones separadas por coma.
+- **Enviar mail**: al marcarlo aparecen "Adjuntar resultados" (adjunta el Excel de resultados), "Adjuntar screenshots" (adjunta las capturas) y el modo de envío: **"1 por país"** (un email por país al terminar) o **"Consolidado"** (un solo email al final con el resumen de todos).
+- El checkbox **"Ver navegador mientras corre"** y **"Minimizar a la bandeja al cerrar"** ya no están en esta barra superior: viven dentro del modal **"⚙ Configurar" → "Configuración avanzada"** de la pestaña Envío de Leads (ver abajo).
+
+### Pestaña: Envío de Leads
+
+Es la pestaña principal para correr los formularios y enviar leads de verdad.
+
+1. **"⚙ Configurar" → Configuración avanzada**: elegís entre "Un Excel por dispositivo (recomendado)" o "Un Excel compartido para todos los dispositivos", y marcás/desmarcás "Ver navegador mientras corre (solo Chrome / Firefox / Edge)" y "Minimizar a la bandeja al cerrar".
+2. **Modo de ejecución** (pills): "Mercados" en Consecutivo o Paralelo, y "Excels por mercado" en Consecutivo o Paralelo.
+3. **Dispositivos / Navegadores** (selección múltiple): Chrome, Firefox, Edge, Mac LT, Android LT. Al elegir Mac LT o Android LT aparece el panel de credenciales de LambdaTest (usuario/access key, se auto-cargan desde `lambdatest_credentials.txt` si existe).
+4. **"⚡ Enviar en paralelo por URL"** (opcional): abre una sesión de navegador por URL en simultáneo, con un campo para limitar la concurrencia máxima.
+5. **"🌎 PAÍSES A EJECUTAR"**: tarjetas de los 9 mercados (AR/BO/BR/CL/CO/EC/PY/PE/UY) — click para marcar/desmarcar, con contador "N seleccionados".
+6. **"EJECUTAR ENVÍO"**: se habilita al marcar al menos un país. Abre un modal centrado que bloquea la ventana principal y muestra el progreso en vivo por país (`1/5 → 2/5...`); el botón pasa a "EN CURSO..." mientras corre.
+7. **"Resultados"**: abre la carpeta `resultados/` (Excel de resultados + capturas por país/dispositivo).
+
+### Pestaña: Programación de Tests
+
+Programa ejecuciones recurrentes semanales sin intervención manual (ver también la sección "Test programado" más arriba, con el detalle del monitor de 60s).
+
+1. Click en **"⚙ Configurar automatización"** → abre el calendario semanal (días Lun a Dom, 96 franjas de 15 minutos por día).
+2. Elegís horarios por día (botones de cuarto de hora o uno personalizado con Enter), modo "Solo este día" / "Todos los días", y podés copiar horarios entre días.
+3. Elegís mercados y dispositivos/navegadores (mismos selectores que en Envío de Leads).
+4. Al guardar, la app valida que existan los Excel necesarios en `data/` para cada combinación país+dispositivo elegida — si falta alguno, muestra "Archivos Excel Faltantes" (generalos antes desde "Generar Excels con Datos").
+5. **"Programar test automático"** activa la programación; una vez activa, el botón se reemplaza por **"Iniciar ahora"** (dispara ya, sin esperar el horario) y **"Desactivar"**.
+6. La app debe estar abierta para que el monitor detecte el horario y dispare la ejecución (ver "Cómo funciona el monitor" más arriba).
+
+### Pestaña: Validación de Campos
+
+Sirve para chequear que las reglas de validación (regex, largo, obligatoriedad) de cada campo del formulario real coincidan con lo configurado, sin enviar un lead real.
+
+1. **Tabla de URLs** (País / URL / Formulario): se carga desde un Excel; botones **"Abrir Excel"** y **"Actualizar"** para recargar. Checkbox **"Ver navegador"** para ver el browser mientras corre.
+2. **"▶ Configuración de ID"** (expandible): formulario para mapear cada campo — ID del elemento, descripción, si es dropdown, si es numérico, regex completo y por carácter, y reglas rápidas (letras minúsculas, email, campo obligatorio, etc.). Incluye sub-formularios para "Mensaje de error" y "Dependencia" (campos que dependen de otro, ej. ciudad depende de región). La tabla de reglas ya configuradas permite editar o **"Eliminar regla"**.
+3. **"Ejecutar validación"**: corre la validación contra el/los form(s) reales de forma asíncrona.
+4. **"Resultados"**: abre la carpeta de resultados de validación.
+
+### Pestaña: Generar Excels con Datos
+
+Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo, etc.) que después usan "Envío de Leads" y "Programación de Tests".
+
+1. **Modo de URLs**: pill "URL Landing + URL Form" o "Solo URL Form" — define el formato del texto que pegás en el cuadro de URLs (`url landing • url form • ...` o `url form • url form • ...`).
+2. **Mercado**: elegís un país a la vez (se genera un Excel por mercado).
+3. **Dispositivos**: selección múltiple (Chrome, Firefox, Edge, Mac LT, Android LT) — se genera un Excel por dispositivo elegido, o uno solo si tildás "Excel compartido" en la config avanzada.
+4. **"🧩 Es formulario T3 2.0"**: si el form es la versión Adobe AEM nueva, tilda esto — el archivo se genera con sufijo `_T3.xlsx` para diferenciarlo.
+5. Botones de la barra fija inferior: **"GENERAR EXCELS"** (crea los archivos), **"REGENERAR DATOS"** (recrea los datos aleatorios manteniendo las URLs ya cargadas), **"Borrar URLs"** (limpia el cuadro de texto).
+6. Los archivos quedan en `data/`, con el patrón `Lead_information_Formulario_<País>_<Dispositivo>.xlsx` (o `_T3.xlsx` / `_Generico.xlsx` según el modo).
+
+### Pestaña: Comparador Dealers
+
+Chequea que los concesionarios (dealers) de una marca estén correctamente cargados en un formulario real, comparando contra un Excel de dealers esperados — reemplaza el bookmarklet manual que se pegaba antes en la consola del navegador.
+
+**1 · Mercado a chequear** — tarjetas de los 9 países (AR/BO/BR/CL/CO/EC/PY/PE/UY). Cada país guarda su propia configuración de columnas/URLs automáticamente al cambiar de mercado.
+
+**2 · URL del formulario a chequear** — mismo bloque visual que "Generar Excels": pill "URL Landing + URL Form" / "Solo URL Form", y un cuadro de texto donde podés pegar **una o varias URLs** (se procesan todas en la misma pasada):
+- Modo Landing+Form: `url landing` / `url form` / `url landing` / `url form` / ... (de a 2 líneas por form).
+- Modo Solo Form: una URL de form por línea.
+- Si las URLs pegadas parecen ser de un país distinto al mercado seleccionado, aparece un aviso (mismo criterio que "Generar Excels con Datos").
+- Selector de navegador (Chrome/Firefox/Edge) y checkbox **"Ver navegador mientras corre"** (apagado por defecto: corre atrás sin molestar, igual que "Envío de Leads").
+
+**3 · Excel de dealers a chequear** — botón "Seleccionar Excel" (cualquier .xlsx/.xls), fila de encabezado configurable (el Excel real no siempre arranca en la fila 1), y toggle **"Este Excel: Tiene columna de filtro"** / **"No tiene filtro (usar todas las filas)"**. Con filtro, se define la columna, el valor a buscar, y la condición: **Incluir**, **Excluir**, o **Incluir + buscar extras** (esta última además dispara la búsqueda de dealers EXTRA/duplicados, ver punto 4).
+
+**4 · Columnas del Excel** — pills **region / city / dealer** (ids reales del HTML del `<select>`, no cambian de país a país aunque el label visible sí — ej. en Argentina se ve "Provincia" pero el id sigue siendo `region`); `dealer` es siempre obligatorio, `region`/`city` se pueden apagar si el form no los tiene. Columnas del Excel a usar para región/ciudad/dealer/BAC (verificar BAC es opcional, muchos forms no lo exponen en el HTML). Checkbox para además **buscar dealers EXTRA** (presentes en el form pero no en el Excel filtrado) **y DUPLICADOS** (mismo dealer repetido en el Excel). Sección para agregar **columnas adicionales a comprobar en el form**: pares (columna del Excel, id del campo en el HTML) para validar cualquier otro campo del formulario contra el Excel.
+
+**Modelos** (opcional, solo forms T1 — no soporta T2/T3 todavía) — si el form tiene selector de modelo (id `models`), podés correr la comparación para "Todos los modelos" (los detecta en vivo) o para modelos específicos (lista separada por coma). Repite la comparación completa por cada modelo.
+
+**5 · Modo de salida** — "Solo Excel" o "Excel + Capturas (ZIP)". Con capturas, cada imagen lleva un banner con la URL del form arriba (mismo mecanismo que usa el resto de la app), y solo queda el ZIP final (no se dejan sueltas las capturas individuales).
+
+**6 · Configuraciones guardadas** — guardá el mapeo completo de columnas con el nombre que quieras (ej. "GMUY Livianos") para reusarlo después sin volver a configurar todo; podés cargar o eliminar configuraciones guardadas.
+
+**Ejecutar**: valida todo antes de arrancar (Excel seleccionado, columnas resueltas, al menos una URL de form) — si falta algo, muestra un aviso corto sin llegar a abrir nada, así nunca queda la pestaña bloqueada por error. Si todo está bien, abre un modal de progreso (igual estilo que "Envío de Leads", bloquea la ventana mientras corre) con botón Detener. Al terminar, muestra el resumen PASS/FAIL/EXTRA/DUPLICADO y un botón para cerrar.
+
+**Resultados**: el reporte Excel (con colores por estado: verde PASS, rojo FAIL, amarillo EXTRA, naranja DUPLICADO) y el ZIP de capturas quedan en la carpeta `Dealerscheck_resultados/` en la raíz del proyecto.
+
+**Tiempos de espera**: no son configurables — el motor reintenta automáticamente (primer intento rápido, hasta un máximo de 1.2s si el select tarda más en poblarse, por ejemplo en departamentos con muchas ciudades).
+
+---
+
 ## UPDATE — Historial de cambios (Ocioso_Update)
 
 ### Bloque 1 — Restauración, seguridad y correcciones base
@@ -546,3 +631,68 @@ El motor de llenado ahora maneja correctamente formularios basados en React u ot
 - **`_fill_and_dispatch` para todos los campos de texto**: antes los campos mapeados usaban `send_keys` (que no dispara los eventos que React necesita); ahora usan el setter nativo de `HTMLInputElement` + `input`/`change`/`blur` synthetic events.
 - **Espera adaptativa para SPAs standalone**: cuando la URL del formulario va directo en columna A (sin iframe en columna B), el engine espera hasta que haya al menos un `input`/`select` visible en el DOM (hasta 8s) antes de iniciar el discovery y el llenado.
 - **Extra wait para URLs `gm_front`**: 3 segundos adicionales tras el scroll inicial para que React monte los componentes antes de escanear el formulario.
+
+---
+
+### Bloque 11 — Reversión visual de la demo (`interface_demo.py`)
+
+Rediseño visual estilo Figma de la app en `interface_demo.py` (preview UX/UI, sin backend real). Es una maqueta interactiva para iterar el diseño; no reemplaza a la app productiva (`run.py`).
+
+**Layout general**
+- Se quitó el panel de **Consola** del pie; los logs van a `print` (stdout).
+- Barra de título en **modo oscuro** (DWM `DwmSetWindowAttribute`) en la ventana principal y el modal de programación.
+- Footer de créditos: "Made by Ariel Melgratti" centrado + "Some Updates by Elian Zás" a la derecha.
+
+**Pestaña Envío de Leads**
+- CTAs **Ejecutar** / **Ver Resultados** movidos a la cabecera de "DATOS POR PAÍS" (antes al pie).
+- **Ejecutar** queda deshabilitado hasta seleccionar al menos un país.
+- Checkbox **"Ver navegador mientras corre"** movido al card CONFIGURACIÓN (bajo DISPOSITIVOS), desmarcado por defecto y habilitado solo si hay Chrome/Firefox/Edge seleccionado.
+- Campo **Email** deshabilitado hasta activar "Enviar mail".
+- Tabla de datos: altura fija a ~5 filas visibles + scroll; **edición inline** de celdas (doble clic) con aviso efímero "estás editando el Excel, recordá Guardar"; **multi-selección** para clonar/eliminar varias filas.
+- **Modal de ejecución**: modal real (bloquea la interfaz de atrás), muestra info del lead en proceso, aviso "No podés cerrar mientras se ejecuta", mensajes de email condicionales (enviado / falta destinatario / desactivado) y variante para test programado (aviso de que los tests programados posteriores igual corren).
+
+**Card Test Automático (scheduler)**
+- Estados como el original: **Sin configurar → Configurado → Activado**, con acciones "Programar test automático", "Iniciar ahora" y "Desactivar". CTA "Configurar automatización" en la cabecera junto al badge.
+- Fondo distinto (morado más azulado + borde más visible) para que la sección resalte.
+- **Modal de configuración** portado del `weekly_scheduler` original y recoloreado: horario personalizado (HH:MM) arriba; "Aplicar a otros días" **dinámico** (se copia al instante al tocar cada día o "Todos", con resalto 3D del botón seleccionado, sin botón "Copiar"); botón "Guardar".
+
+**Pestaña Validación de Campos**
+- Layout del original (`field_validation_ui.py`): preview de Excel de URLs arriba, expander "Configuración de ID" con formulario + botonera de 4 + filtros + tabla de reglas, manteniendo la paleta nueva. Multi-select para eliminar varias reglas.
+
+**Pestaña Generar Excels con Datos**
+- Selector de **MERCADO A GENERAR** (un Excel por mercado a la vez, varios dispositivos del mismo mercado).
+- **Detección de país por las URLs** con aviso si no coincide con el mercado elegido.
+- Botón **Borrar URLs** (reemplaza "Guardar modificaciones").
+
+**Iconos**
+- Reemplazo de emojis crudos por iconos estilo tabler generados a juego (play, stop, gear, download, bolt, report, link, monitor, eye) en `Asset/tabler_icons/`, aplicados a EJECUTAR, Ver Resultados, GENERAR EXCELS, REGENERAR DATOS, Borrar URLs, Ejecutar validación, Resultados, Configurar automatización, Programar/Iniciar/Desactivar, Detener y las pills del modal.
+
+---
+
+### Bloque 12 — Nueva pestaña "Comparador Dealers"
+
+**41. Pestaña nueva completa**: reemplaza el bookmarklet JS manual que se pegaba en la consola del navegador para chequear dealers. Lee un Excel de dealers esperados (fila de encabezado y columnas configurables porque el Excel varía de país a país), navega región→ciudad→dealer en el form real vía Selenium, y compara contra el Excel filtrado. Módulos nuevos: `core/dealer_comparator_runner.py` (lógica pura, sin Tkinter) e `interface/dealer_comparator_ui.py` (la pestaña).
+
+**42. Excel con o sin filtro**: toggle explícito "Tiene columna de filtro" / "No tiene filtro (usar todas las filas)" — antes había que dejar el campo vacío a mano y no quedaba claro que eso era válido.
+
+**43. Condición "Incluir + buscar extras"**: se sumó como tercera opción del dropdown de condición, dispara automáticamente la búsqueda de dealers EXTRA (en el form pero no en el Excel) y DUPLICADOS (repetidos dentro del Excel filtrado) sin necesitar tildar un checkbox aparte.
+
+**44. Múltiples URLs de form en la misma pasada**: el cuadro de URLs acepta uno o varios forms (pares landing+form, o varios forms sueltos), igual formato que "Generar Excels con Datos" — se corren todos y el reporte final indica de qué URL vino cada fila.
+
+**45. Detección de país por URL**: mismo criterio que "Generar Excels con Datos" — si las URLs pegadas no coinciden con el mercado seleccionado, aparece un aviso antes de ejecutar.
+
+**46. Selector de modelo (solo T1)**: si el form tiene selector de modelo (id `models`), permite correr la comparación completa para "Todos los modelos" (detectados en vivo) o una lista específica separada por coma.
+
+**47. Columnas adicionales a comprobar en el form**: reemplaza el concepto más críptico de "validaciones por data-attr" por algo directo — columna del Excel + id del campo HTML, compara el valor real de cualquier input/select del form contra esa columna.
+
+**48. Tiempos de espera fijos con reintento**: no configurables por el usuario; primer intento rápido (0.6s) y, si no alcanzó, un segundo intento hasta 1.2s — cubre selects que tardan más en poblarse (ej. ciudades de un departamento grande).
+
+**49. Modal de ejecución bloqueante**: mismo lenguaje visual que el overlay de "Envío de Leads" — al ejecutar, bloquea la ventana principal (`grab_set`) para evitar que el usuario edite campos sin querer mientras corre, con botón Detener y resumen final PASS/FAIL/EXTRA/DUPLICADO.
+
+**50. "Ver navegador mientras corre"**: apagado por defecto (corre atrás sin robar el foco), igual criterio que "Envío de Leads".
+
+**51. Resultados en carpeta propia**: reportes Excel (con color por estado) y capturas empaquetadas en ZIP quedan en `Dealerscheck_resultados/`, separado de `resultados/`. Las capturas sueltas no se dejan en disco una vez armado el ZIP.
+
+**52. Configuraciones guardadas con nombre propio**: además del autoguardado por país, se puede guardar el mapeo completo de columnas con cualquier nombre (ej. "GMUY Livianos") para reusarlo sin reconfigurar.
+
+**53. Ícono de la app y barra de tareas**: `AppUserModelID` propio (`SetCurrentProcessExplicitAppUserModelID`) para que Windows no agrupe la app bajo el ícono genérico de python.exe en la barra de tareas. `Asset/tabler_icons/` sumado a los datos empaquetados por PyInstaller (antes no viajaba en el build).

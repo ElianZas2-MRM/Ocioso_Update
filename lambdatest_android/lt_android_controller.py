@@ -26,6 +26,7 @@ def run(
     log_fn: Callable = print,
     stop_event: Optional[threading.Event] = None,
     build_name: str = "",
+    excel_path: Optional[str] = None,
 ) -> dict:
     """
     Ejecuta LambdaTest Android para un país.
@@ -54,8 +55,9 @@ def run(
             "session_id": "", "error": str(e),
         }
 
-    excel_name = f"Lead_information_Formulario_{pais}_Main.xlsx"
-    excel_path = os.path.join(_OSOCIO_DIR, "data", excel_name)
+    if not excel_path:
+        excel_name = f"Lead_information_Formulario_{pais}_Android.xlsx"
+        excel_path = os.path.join(_OSOCIO_DIR, "data", excel_name)
 
     if not os.path.exists(excel_path):
         return {

@@ -13,8 +13,10 @@ __pycache__/
 # Runtime data
 temporales/
 resultados/
+Dealerscheck_resultados/
 json/programacion_test.json
 json/scheduler_triggered.json
+json/dealer_comparator_settings.json
 
 # OS files
 .DS_Store

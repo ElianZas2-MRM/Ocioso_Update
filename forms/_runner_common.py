@@ -75,10 +75,10 @@ def get_runner(country_name: str):
     """
     from generic_country_base import GenericCountryBase
 
-    def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None):
+    def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None, is_scheduled=False):
         class _DynamicCountry(GenericCountryBase):
             def __init__(self, browser=browser, viewport=viewport, headless=headless, background=background):
-                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background)
+                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background, is_scheduled=is_scheduled)
 
         return run_country_form(
             _DynamicCountry,

@@ -305,11 +305,11 @@ def build_excel_columns_for_country(country_name):
         normalized_entries.append((requested_idx, data_idx, pos, header_name))
 
     if not normalized_entries:
-        return ["URL", "Formulario"]
+        return ["URL", "Formulario", "Dispositivo"]
 
     normalized_entries.sort(key=lambda item: (item[0], item[1], item[2]))
     headers = [item[3] for item in normalized_entries]
-    return ["URL", "Formulario", *headers]
+    return ["URL", "Formulario", *headers, "Dispositivo"]
 
 
 def get_fixed_mapping_ids(country_name=None):

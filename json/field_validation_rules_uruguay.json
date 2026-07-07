@@ -454,6 +454,106 @@
         "min_length",
         "max_length"
       ]
+    },
+    "NAME": {
+      "descripcion": " ",
+      "campo": "name",
+      "element_id": "name",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "DOCUMENT": {
+      "descripcion": " ",
+      "campo": "document",
+      "element_id": "document",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "PHONE": {
+      "descripcion": " ",
+      "campo": "phone",
+      "element_id": "phone",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "MODEL": {
+      "descripcion": "model",
+      "campo": "model",
+      "element_id": "model",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "ESTIMATED-DAY": {
+      "descripcion": "estimated-day",
+      "campo": "estimated-day",
+      "element_id": "estimated-day",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Uruguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }
