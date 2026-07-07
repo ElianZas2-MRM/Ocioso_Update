@@ -34,19 +34,23 @@ _DEFAULT_ANDROID_DEVICE = "Galaxy S23"
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
 _THIS_DIR   = os.path.dirname(os.path.abspath(__file__))   # lambdatest_android/
-_OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # raíz del proyecto
-_MAC_DIR    = os.path.join(_OSOCIO_DIR, "lambdatest_mac")
+if getattr(sys, 'frozen', False):
+    _OSOCIO_DIR = os.path.dirname(sys.executable)
+else:
+    _OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # raíz del proyecto
+_MAC_DIR    = os.path.join(os.path.dirname(_THIS_DIR), "lambdatest_mac")
 _DATA_DIR   = os.path.join(_OSOCIO_DIR, "data")
 _ANDROID_RESULTADOS_DIR = os.path.join(_OSOCIO_DIR, "resultados_lambdatest_android")
 
 # Exponer lambdatest_mac en el path para importar desde lt_runner y lt_excel_reader
 if _MAC_DIR not in sys.path:
     sys.path.insert(0, _MAC_DIR)
-if _OSOCIO_DIR not in sys.path:
-    sys.path.insert(0, _OSOCIO_DIR)
+_src_root = os.path.dirname(_THIS_DIR)
+if _src_root not in sys.path:
+    sys.path.insert(0, _src_root)
 
 # Importar toda la lógica reutilizable desde lambdatest_mac
-from lt_runner import (
+from lt_runner import (  # type: ignore[import]
     load_credentials,
     mark_lt_status,
     LT_HUB,
@@ -58,8 +62,8 @@ from lt_runner import (
     _run_single_lead,
     _write_row_result,
 )
-from lt_excel_reader import read_osocio_excel
-from lt_screenshots import LTScreenshotManager
+from lt_excel_reader import read_osocio_excel  # type: ignore[import]
+from lt_screenshots import LTScreenshotManager  # type: ignore[import]
 
 
 # ══════════════════════════════════════════════════════════════════════════════

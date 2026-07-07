@@ -16,7 +16,10 @@ import threading
 from typing import Callable, Optional
 
 _THIS_DIR   = os.path.dirname(os.path.abspath(__file__))   # lambdatest_mac/
-_OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # raíz del proyecto
+if getattr(sys, 'frozen', False):
+    _OSOCIO_DIR = os.path.dirname(sys.executable)
+else:
+    _OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # raíz del proyecto
 _JSON_DIR   = os.path.join(_OSOCIO_DIR, "json")
 
 # Asegurar que lambdatest_mac esté en sys.path para los imports de lt_runner

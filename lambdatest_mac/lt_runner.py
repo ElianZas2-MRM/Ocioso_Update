@@ -79,7 +79,10 @@ _VISID_ID_ALIASES: dict = {
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
 _THIS_DIR   = os.path.dirname(os.path.abspath(__file__))   # lambdatest_mac/
-_OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # Form_Automation_Project/
+if getattr(sys, 'frozen', False):
+    _OSOCIO_DIR = os.path.dirname(sys.executable)
+else:
+    _OSOCIO_DIR = os.path.dirname(_THIS_DIR)                   # Form_Automation_Project/
 _DATA_DIR       = os.path.join(_OSOCIO_DIR, "data")
 _RESULTADOS_DIR = os.path.join(_OSOCIO_DIR, "resultados_lambdatestmac")
 _JSON_DIR       = os.path.join(_OSOCIO_DIR, "json")        # json/ de Osocio
@@ -1058,8 +1061,9 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
 def _get_field_mapping_for_pais(pais: str) -> List[Dict]:
     """Carga el field_mapping efectivo de Osocio para el país."""
     try:
-        if _OSOCIO_DIR not in sys.path:
-            sys.path.insert(0, _OSOCIO_DIR)
+        _src_root = os.path.dirname(_THIS_DIR)
+        if _src_root not in sys.path:
+            sys.path.insert(0, _src_root)
         from utils.fixed_field_mapping_store import load_effective_country_form_config
         config = load_effective_country_form_config(pais)
         return config.get("field_mapping", [])
