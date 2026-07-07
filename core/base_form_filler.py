@@ -2096,6 +2096,8 @@ class BaseFormFiller:
         self.handle_cookie_popups()
 
         # Chevrolet Brasil: la landing es un selector de canal; hay que entrar al formulario primero
+        # (RAQ revamp usa el mismo #contact-by-form pero DENTRO del iframe del form, no acá en el
+        # top-level — ver el bloque en find_and_position_to_form, después de cambiar de contexto.)
         if "chevrolet.com.br/solicitar-contato" in landing_url:
             try:
                 btn = WebDriverWait(self.driver, 10).until(
@@ -4728,8 +4730,8 @@ class BaseFormFiller:
                                 self.screenshot_manager.url_form_encontrado = _iframe_src
                             self._url_form_encontrado = _iframe_src
                             print("Cambiado al contexto del iframe")
-                            # solicitar-contato Brasil: click en #contact-by-form dentro del iframe
-                            if "solicitar-contato" in (landing_url or "").lower():
+                            # solicitar-contato / raq-revamp Brasil: click en #contact-by-form dentro del iframe
+                            if "solicitar-contato" in (landing_url or "").lower() or "raq-revamp" in (landing_url or "").lower():
                                 try:
                                     _btn = WebDriverWait(self.driver, 8).until(
                                         EC.element_to_be_clickable((By.ID, "contact-by-form"))
