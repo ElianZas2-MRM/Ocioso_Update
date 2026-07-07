@@ -119,10 +119,11 @@ for %%D in (data drivers resultados temporales Dealerscheck_resultados lambdates
     )
 )
 
-REM Copiar json/ sin los archivos de estado del scheduler ni la config personal del
-REM Comparador Dealers (portable arranca sin schedule activo y sin configs de otra PC)
+REM Copiar json/ sin los archivos de estado del scheduler, la config personal del
+REM Comparador Dealers, ni config_global.json (tiene el email y la access key de
+REM LambdaTest en texto plano) — el portable arranca limpio, sin datos de otra PC
 if exist ".\json" (
-    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json dealer_comparator_settings.json >nul
+    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json dealer_comparator_settings.json config_global.json >nul
     if errorlevel 8 goto :error
 ) else (
     mkdir "%PORTABLE_DIR%\json"
