@@ -35,6 +35,9 @@ def guardar_programacion(programacion):
                 "paises":      programacion["paises"],
                 "navegadores": programacion.get("navegadores", []),
                 "viewports":   programacion.get("viewports", []),
+                "dispositivo": programacion.get("dispositivo", "local"),
+                "modo_excel":  programacion.get("modo_excel", "consecutivo"),
+                "modo_mercados": programacion.get("modo_mercados", "consecutivo"),
             }
         else:
             # Formato legado (fecha_hora única)
@@ -71,6 +74,9 @@ def cargar_programacion():
                 "paises":      data["paises"],
                 "navegadores": data.get("navegadores", []),
                 "viewports":   data.get("viewports", []),
+                "dispositivo": data.get("dispositivo", "local"),
+                "modo_excel":  data.get("modo_excel", "consecutivo"),
+                "modo_mercados": data.get("modo_mercados", "consecutivo"),
             }
 
         # Formato legado (fecha_hora): ignorar para no romper la nueva UI

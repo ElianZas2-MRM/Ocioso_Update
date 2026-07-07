@@ -18,6 +18,26 @@ from selenium.common.exceptions import StaleElementReferenceException, TimeoutEx
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font
 
+# Parchear print global para evitar caídas por UnicodeEncodeError en consolas Windows (CP1252)
+import builtins
+_original_print = builtins.print
+def _safe_global_print(*args, **kwargs):
+    try:
+        _original_print(*args, **kwargs)
+    except UnicodeEncodeError:
+        try:
+            encoding = sys.stdout.encoding or "utf-8"
+            safe_args = []
+            for arg in args:
+                s = str(arg)
+                safe_args.append(s.encode(encoding, errors="replace").decode(encoding))
+            _original_print(*safe_args, **kwargs)
+        except Exception:
+            pass
+    except Exception:
+        pass
+builtins.print = _safe_global_print
+
 # Importar directamente
 from browser_manager import BrowserManager
 from screenshot_manager import ScreenshotManager
@@ -121,8 +141,13 @@ class BaseFormFiller:
         
         # Configurar paths específicos del país
         self.EXCEL_PATH = os.path.join(self.DATA_DIR, config['excel_file'])
-        self.SCREENSHOT_BASENAME = f"screenshots_{config['pais']}"
-        self.RESULTADOS_BASENAME = f"resultados_{config['pais']}"
+        _b = str(config.get('browser', '') or '').strip().lower()
+        _dev = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}.get(_b, _b.capitalize() if _b else "")
+        _dev_sfx = f"_{_dev}" if _dev else ""
+        prefix = "Automatizacion_" if config.get('is_scheduled') else "resultados_"
+        prefix_ss = "Automatizacion_screenshots_" if config.get('is_scheduled') else "screenshots_"
+        self.SCREENSHOT_BASENAME = f"{prefix_ss}{config['pais']}{_dev_sfx}"
+        self.RESULTADOS_BASENAME = f"{prefix}{config['pais']}{_dev_sfx}"
         
         # Inicializar en setup_directories_and_files
         self.SCREENSHOT_DIR = None
@@ -171,6 +196,69 @@ class BaseFormFiller:
         self._campos_nuevos_detectados = []
         # Callback para solicitar valores manuales (se inyecta desde la UI)
         self.manual_input_callback = _global_manual_input_callback
+
+    def _scroll_element_into_view(self, element):
+        """Scrolls the element into view. If focused inside an iframe (especially on Safari/macOS),
+        it also scrolls the parent window so that the element is fully visible in the viewport."""
+        if not element:
+            return
+        try:
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", element)
+            time.sleep(0.1)
+        except Exception:
+            pass
+
+        try:
+            # Comprobar si estamos dentro de un iframe
+            in_iframe = self.driver.execute_script("return window.self !== window.top;")
+            if in_iframe:
+                rect = self.driver.execute_script(
+                    "const r = arguments[0].getBoundingClientRect(); return {top: r.top, height: r.height};",
+                    element
+                )
+                element_top_in_iframe = rect["top"]
+                element_height = rect["height"]
+
+                # Obtener el iframe actual
+                target_iframe = None
+                if hasattr(self, "screenshot_manager") and self.screenshot_manager and getattr(self.screenshot_manager, "current_frame", None):
+                    target_iframe = self.screenshot_manager.current_frame
+                
+                # Cambiar temporalmente al contenido principal
+                self.driver.switch_to.default_content()
+
+                try:
+                    if not target_iframe:
+                        iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+                        for iframe in iframes:
+                            if iframe.is_displayed():
+                                target_iframe = iframe
+                                break
+                    
+                    if target_iframe:
+                        # Obtener la posición del iframe en el parent
+                        iframe_rect = self.driver.execute_script(
+                            "const r = arguments[0].getBoundingClientRect(); return {top: r.top, yOffset: window.pageYOffset};",
+                            target_iframe
+                        )
+                        iframe_top = iframe_rect["top"]
+                        parent_y_offset = iframe_rect["yOffset"]
+
+                        viewport_height = self.driver.execute_script("return window.innerHeight;")
+                        
+                        target_y_on_parent = parent_y_offset + iframe_top + element_top_in_iframe
+                        # Centrar el elemento en la pantalla
+                        scroll_y = target_y_on_parent - (viewport_height / 2) + (element_height / 2)
+                        scroll_y = max(0, scroll_y)
+
+                        self.driver.execute_script(f"window.scrollTo(0, {scroll_y});")
+                        time.sleep(0.15)
+                finally:
+                    # Siempre volver al iframe
+                    if target_iframe:
+                        self.driver.switch_to.frame(target_iframe)
+        except Exception as e:
+            print(f"[DEBUG] Error en _scroll_element_into_view: {e}")
 
     def begin_row_tracking(self):
         """Resetea el tracking de IDs/valores para la fila actual."""
@@ -468,6 +556,12 @@ class BaseFormFiller:
         row_list = list(row) if row is not None else []
         start = self.data_start_index
         values = list(row_list[start:]) if len(row_list) > start else []
+        
+        # LOGS DE DEPURACIÓN PARA EXCEL
+        print(f"[DEBUG-EXCEL] Fila completa del Excel (en crudo): {row_list}")
+        print(f"[DEBUG-EXCEL] data_start_index configurada: {start}")
+        print(f"[DEBUG-EXCEL] Valores extraídos (desde la columna index {start}): {values}")
+        
         normalized = {}
         for idx, key in enumerate(self.effective_data_keys):
             normalized[key] = values[idx] if idx < len(values) else ""
@@ -497,6 +591,7 @@ class BaseFormFiller:
                     id_values[normalized_id] = value
 
         normalized["__by_id"] = id_values
+        print(f"[DEBUG-EXCEL] Diccionario normalizado final: {normalized}")
         return normalized
 
     def get_form_value(self, form_data, key):
@@ -515,30 +610,78 @@ class BaseFormFiller:
         value = self.get_form_value(form_data, key)
         return "" if value is None else str(value)
 
+    def _normalize_resolved_value(self, value, field_config):
+        if value is None:
+            return ""
+            
+        val_str = str(value).strip()
+        # Eliminar decimal .0 si se leyó como float
+        if val_str.endswith(".0"):
+            val_str = val_str[:-2]
+            
+        # Obtener los identificadores del campo
+        field_id = str(field_config.get("id") or "").lower()
+        field_name = str(field_config.get("name") or "").lower()
+        
+        # Verificar si es un campo de teléfono o celular
+        is_phone = any(x in field_id or x in field_name for x in ("phone", "tel", "celular", "movil", "telephone"))
+        
+        # Verificar si es un campo de documento de Uruguay/Paraguay (ci, dni, rut, documento)
+        is_document = any(x in field_id or x in field_name for x in ("document", "ci", "dni", "rut", "cedula"))
+        
+        digits = "".join(c for c in val_str if c.isdigit())
+        if not digits:
+            return val_str
+            
+        pais = (self.config.get("pais") or "").lower()
+        
+        if is_phone:
+            if "paraguay" in pais:
+                # 10 dígitos, debe empezar con 09
+                if len(digits) == 9 and digits.startswith("9"):
+                    return "0" + digits
+            elif "uruguay" in pais:
+                # 9 dígitos, debe empezar con 09
+                if len(digits) == 8 and digits.startswith("9"):
+                    return "0" + digits
+                    
+        elif is_document:
+            if "uruguay" in pais:
+                # Cédula de Uruguay tiene 8 dígitos. Si tiene 7, agregarle un 0 al inicio.
+                if len(digits) == 7:
+                    return "0" + digits
+                
+        return val_str
+
     def _resolve_field_value(self, form_data, field_config):
         """Resuelve el valor a usar para un campo según su mapping"""
+        val = ""
         if isinstance(form_data, dict):
             by_id = form_data.get("__by_id", {}) if isinstance(form_data.get("__by_id"), dict) else {}
             resolved_id = field_config.get("__resolved_id") or field_config.get("id")
             candidate_ids = resolved_id if isinstance(resolved_id, list) else [resolved_id]
+            found = False
             for candidate_id in candidate_ids:
                 normalized_id = self._normalize_field_id(candidate_id)
                 if normalized_id and normalized_id in by_id:
-                    return by_id.get(normalized_id, "")
+                    val = by_id.get(normalized_id, "")
+                    found = True
+                    break
 
-            if 'data_key' in field_config:
-                return form_data.get(field_config['data_key'], "")
-
+            if not found:
+                if 'data_key' in field_config:
+                    val = form_data.get(field_config['data_key'], "")
+                else:
+                    data_index = field_config.get('data_index')
+                    if data_index is not None and data_index < len(self.data_columns):
+                        key = self.data_columns[data_index]
+                        val = form_data.get(key, "")
+        else:
             data_index = field_config.get('data_index')
-            if data_index is not None and data_index < len(self.data_columns):
-                key = self.data_columns[data_index]
-                return form_data.get(key, "")
-            return ""
+            if data_index is not None and data_index < len(form_data):
+                val = form_data[data_index]
 
-        data_index = field_config.get('data_index')
-        if data_index is not None and data_index < len(form_data):
-            return form_data[data_index]
-        return ""
+        return self._normalize_resolved_value(val, field_config)
 
     def setup_directories_and_files(self):
         """Configura carpetas y archivos con rutas relativas"""
@@ -594,6 +737,45 @@ class BaseFormFiller:
             background=self.config.get('background', True),
         )
         self.screenshot_manager = ScreenshotManager(self.driver, self.SCREENSHOT_DIR)
+        
+        # Monkey patch find_element and find_elements to support name & CSS fallback for By.ID
+        from selenium.webdriver.common.by import By
+        original_find_element = self.driver.find_element
+        original_find_elements = self.driver.find_elements
+
+        def wrapped_find_element(by, value):
+            if by == By.ID:
+                try:
+                    return original_find_element(by, value)
+                except Exception as e:
+                    # Fallback 1: Buscar por Name attribute
+                    try:
+                        return original_find_element(By.NAME, value)
+                    except Exception:
+                        pass
+                    # Fallback 2: Buscar por CSS Selector
+                    if any(c in value for c in ('[', '.', '#')):
+                        try:
+                            return original_find_element(By.CSS_SELECTOR, value)
+                        except Exception:
+                            pass
+                    raise e
+            return original_find_element(by, value)
+
+        def wrapped_find_elements(by, value):
+            if by == By.ID:
+                elements = original_find_elements(by, value)
+                if not elements:
+                    # Fallback 1: Buscar por Name attribute
+                    elements = original_find_elements(By.NAME, value)
+                    # Fallback 2: Buscar por CSS Selector
+                    if not elements and any(c in value for c in ('[', '.', '#')):
+                        elements = original_find_elements(By.CSS_SELECTOR, value)
+                return elements
+            return original_find_elements(by, value)
+
+        self.driver.find_element = wrapped_find_element
+        self.driver.find_elements = wrapped_find_elements
     
     def safe_load_workbook(self, excel_path):
         """Carga el workbook de forma segura, incluso si está abierto"""
@@ -655,11 +837,18 @@ class BaseFormFiller:
                     raise e
 
     def _element_exists_by_id(self, element_id):
-        """Chequeo rápido (sin waits) de existencia por ID dentro del iframe actual."""
+        """Chequeo rápido (sin waits) de existencia por ID, Name o Selector CSS dentro del iframe actual."""
         try:
-            return bool(self.driver.execute_script("return document.getElementById(arguments[0]) !== null;", element_id))
+            if bool(self.driver.execute_script("return document.getElementById(arguments[0]) !== null;", element_id)):
+                return True
+            if bool(self.driver.execute_script("return document.querySelector('[name=\"' + arguments[0] + '\"]') !== null;", element_id)):
+                return True
+            if any(x in element_id for x in ("[", ".", "#")):
+                if bool(self.driver.execute_script("return document.querySelector(arguments[0]) !== null;", element_id)):
+                    return True
+            return False
         except Exception:
-            # Fallback a Selenium (también sin espera)
+            # Fallback a Selenium (usará los métodos wrapped_find_elements)
             try:
                 return len(self.driver.find_elements(By.ID, element_id)) > 0
             except Exception:
@@ -764,7 +953,7 @@ class BaseFormFiller:
                 print(f" No se encontró botón 'Siguiente/Seguinte' visible ({paso_label})")
                 return False
 
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+            self._scroll_element_into_view(btn)
             time.sleep(0.5)
             self.driver.execute_script("arguments[0].click();", btn)
             print(f" Clic en botón de siguiente ({paso_label}) realizado")
@@ -800,16 +989,20 @@ class BaseFormFiller:
     def _finalize_model_kit_on_last_step(self, form_data):
         """Re-selecciona modelo/kit si aparecen de nuevo en el último paso (p. ej. Argentina)."""
         data = {key: self.get_form_value_str(form_data, key) for key in self.data_columns}
-        modelo_valor = data.get("model", "")
-        kit_valor = data.get("kit", "")
+        modelo_valor = (data.get("model") or "").strip()
+        kit_valor = (data.get("kit") or "").strip()
+
+        # Si no hay modelo ni kit en Excel, no interferir
+        if not modelo_valor and not kit_valor:
+            return
 
         try:
-            if self._is_visible(By.ID, "models"):
+            if modelo_valor and self._is_visible(By.ID, "models"):
                 model_updated = False
                 if self._select_current_option_matches_desired("models", modelo_valor):
                     print(" Modelo (paso final) ya coincide, se conserva")
                 else:
-                    print(f"Seleccionando modelo en paso final: {modelo_valor if modelo_valor else '(aleatorio)'}")
+                    print(f"Seleccionando modelo en paso final: {modelo_valor}")
                     model_updated = self.safe_select_option_if_visible("models", modelo_valor, "Modelo (paso final)")
 
                 if model_updated:
@@ -883,6 +1076,7 @@ class BaseFormFiller:
             ids = field_id if isinstance(field_id, list) else [field_id]
             chosen_id = self._pick_first_visible_id(ids)
             if not chosen_id:
+                print(f"⚠️ [DEBUG-FILL] Campo '{field_config.get('name')}' (IDs/Names intentados: {ids}) NO SE ENCONTRÓ en el DOM o no es visible.")
                 continue
             resolved = dict(field_config)
             resolved["__resolved_id"] = chosen_id
@@ -913,7 +1107,7 @@ class BaseFormFiller:
                     break
 
             if field_type == "select":
-                print(f"🔹 Procesando select '{field_name}' (ID: {field_id}, valor: '{field_value if field_value else '(vacío)'}')...")
+                print(f"🔹 [DEBUG-FILL] Procesando select '{field_name}' (ID: {field_id}, valor excel: '{field_value if field_value else '(vacío)'}')...")
                 if parent_id_normal:
                     success = self._select_dependency_child_with_timeout(field_id, field_value, field_name, parent_id_normal)
                 elif field_id == "event":
@@ -1019,17 +1213,51 @@ class BaseFormFiller:
                                     self._fill_and_dispatch(element, field_value)
                                 except Exception:
                                     pass
-                            print(f"{field_name} completado ({field_id}): {field_value}")
+                            print(f"✅ [DEBUG-FILL] {field_name} completado ({field_id}): {field_value}")
                             self._record_field_value(field_id, field_value)
                             processed_ids.add(field_id)
                             return
+                        else:
+                            status = "no encontrado en el DOM" if not element else ("no visible" if not element.is_displayed() else "deshabilitado")
+                            print(f"⚠️ [DEBUG-FILL] {field_name} ({field_id}) existe pero está {status}")
                     except Exception as e:
-                        print(f" Error completando campo '{field_id}': {e}")
+                        print(f"❌ [DEBUG-FILL] Error completando campo '{field_id}': {e}")
+                else:
+                    print(f"⚠️ [DEBUG-FILL] Omitiendo '{field_name}' ({field_id}) porque su valor en Excel está vacío o es None.")
             processed_ids.add(field_id)
 
         for field_config in resolved_field_configs:
             fill_with_dependencies(field_config)
         self._auto_fill_unmapped_dropdowns(self.field_mapping)
+
+    # === Adobe AEM Adaptive Form (formularios "2.0") =========================
+    # Lógica compartida en utils/aem_fill.py (misma fuente para desktop y LambdaTest).
+    # En estos forms el ID del widget es genérico y el keyword semántico vive en el
+    # <label for>, así que se localiza por label, no por ID fijo del field_mapping.
+
+    def _is_aem_adaptive_form(self):
+        """Detecta si la página actual es un Adobe AEM Adaptive Form (Guide)."""
+        from utils import aem_fill
+        return aem_fill.is_aem_adaptive_form(self.driver)
+
+    def _fill_aem_by_semantic_id(self, form_data):
+        """Llena un AEM Adaptive Form delegando en utils.aem_fill (fuente única)."""
+        from utils import aem_fill
+        pais = str(self.config.get("pais", "")).lower()
+        is_brasil = pais in ("brasil", "brazil", "br")
+        fd = dict(form_data) if isinstance(form_data, dict) else {}
+        # Asegurar cpf/cnpj/cep desde __by_id (por si el normalizado no los trae)
+        by_id = fd.get("__by_id", {}) if isinstance(fd.get("__by_id"), dict) else {}
+        for _src, _dst in (("cpf", "cpf"), ("cnpj", "cnpj"), ("cep", "cep"),
+                           ("zip", "cep"), ("postal", "cep"),
+                           ("vin", "vin"), ("vin-code", "vin"), ("chassis", "vin")):
+            if not fd.get(_dst) and by_id.get(_src):
+                fd[_dst] = by_id.get(_src)
+        return aem_fill.fill_aem_form(
+            self.driver, fd, is_brasil,
+            gen_doc=self._generate_brazil_document,
+            record=self._record_field_value,
+        )
 
     def _fill_libro_reclamaciones_direct(self, form_data):
         """
@@ -1054,7 +1282,7 @@ class BaseFormFiller:
                 els = self.driver.find_elements(By.ID, field_id)
                 for el in els:
                     if el.is_displayed() and el.is_enabled():
-                        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+                        self._scroll_element_into_view(el)
                         try:
                             el.clear()
                             el.send_keys(value)
@@ -1129,8 +1357,39 @@ class BaseFormFiller:
         except Exception as _disc_err:
             print(f"Auto-discovery: error no crítico — {_disc_err}")
 
+        # Formularios "2.0" (Adobe AEM Adaptive Form): IDs con panel volátil → se
+        # llena por keyword semántico del id/label en vez de ID fijo del mapping.
+        self._is_aem = self._is_aem_adaptive_form()
+        if self._is_aem:
+            print("🧩 [DEBUG] Formulario AEM Adaptive detectado → llenado por keyword semántico")
+            # Cerrar cookies antes de llenar (también en estos forms 2.0)
+            try:
+                self.handle_cookie_popups()
+            except Exception:
+                pass
+
         for iteration in range(max_iter):
-            self._fill_visible_fields_from_mapping(form_data, dependencies)
+            # Clic preliminar opcional para forzar validación y activar mensajes de error
+            try:
+                # Buscar el botón Siguiente o Enviar visible en este paso
+                boton_accion = self._find_next_button()
+                if not boton_accion:
+                    boton_accion, _ = self._resolve_submit_button(wait_seconds=1)
+                
+                if boton_accion and boton_accion.is_displayed() and boton_accion.is_enabled():
+                    print("⚡ [DEBUG] Clic preliminar sobre botón de acción para forzar validaciones antes de rellenar...")
+                    try:
+                        boton_accion.click()
+                    except Exception:
+                        self.driver.execute_script("arguments[0].click();", boton_accion)
+                    time.sleep(1.0)  # Esperar a que se pinten/activen los mensajes de error
+            except Exception as _e:
+                print(f"⚠️ No se pudo realizar clic preliminar de validación: {_e}")
+
+            if getattr(self, "_is_aem", False):
+                self._fill_aem_by_semantic_id(form_data)
+            else:
+                self._fill_visible_fields_from_mapping(form_data, dependencies)
 
             if not self._has_next_button():
                 break
@@ -1160,11 +1419,17 @@ class BaseFormFiller:
             raise RuntimeError(f"auto_step: se alcanzó el máximo de iteraciones ({max_iter})")
 
         self._finalize_model_kit_on_last_step(form_data)
+        # Rellenar requeridos visibles sin dato (ej. Rua/Número/Data de Nascimento) con
+        # valores sintéticos, para no quedar con campos obligatorios vacíos al enviar.
+        try:
+            self._fill_unmapped_required_fields()
+        except Exception as _e:
+            print(f" Auto-relleno de requeridos: error no crítico — {_e}")
         self._handle_terms_checkboxes()
 
         self.reposition_to_form(self.expected_form_url)
         form_completado_name = f"form_completado_{current_ss_number}.png"
-        self.screenshot_manager.take_form_screenshot(current_ss_number, "completado")
+        self.screenshot_manager.take_form_screenshot(current_ss_number, "completado", full_page=getattr(self, "_is_aem", False))
         print("Captura 2/3: Formulario completado")
         return form_completado_name
 
@@ -1295,7 +1560,7 @@ class BaseFormFiller:
 
         child_ready = self._wait_for_dependent_dropdown_ready(child_select_id, parent_id=parent_id)
         if not child_ready:
-            return False
+            raise ValueError(f"No se encontraron opciones en el dropdown '{child_field_name}' al depender de '{parent_id}'")
 
         for attempt in range(1, retries + 1):
             if self._select_has_valid_selected_option(child_select_id):
@@ -1450,7 +1715,7 @@ class BaseFormFiller:
                     return True
                 else:
                     print(f" {field_name} - No hay opciones válidas para auto-selección")
-                    return False
+                    raise ValueError(f"No se encontraron opciones en el dropdown '{field_name}'")
 
             # SI HAY VALOR EN EXCEL: coincidencia exacta
             try:
@@ -1459,8 +1724,17 @@ class BaseFormFiller:
                 selected_text = self._get_selected_text_for_select(select_element) or option_text
                 self._record_field_value(select_id, selected_text)
                 return True
-            except:
-                print(f" No se encontró opción exacta para {field_name}: '{option_text}'")
+            except Exception as e:
+                print(f"❌ [DEBUG-FILL] No se encontró opción exacta para {field_name}: '{option_text}'. Detalle: {e}")
+                options_now = []
+                try:
+                    options_now = self._get_valid_select_options(select_element)
+                    options = [o.text.strip() for o in select.options if o.text.strip()]
+                    print(f"   💡 Opciones disponibles en dropdown '{field_name}': {options}")
+                except Exception:
+                    pass
+                if not options_now:
+                    raise ValueError(f"No se encontraron opciones en el dropdown '{field_name}'")
                 if not hasattr(self, "_campos_dropdown_no_encontrados"):
                     self._campos_dropdown_no_encontrados = []
                 self._campos_dropdown_no_encontrados.append(f"{field_name}: '{option_text}'")
@@ -1483,6 +1757,14 @@ class BaseFormFiller:
                 return None
 
             normalized_value = (desired_value or "").strip().lower()
+            
+            # Si el Excel no pide un valor específico y ya hay un radio seleccionado, conservarlo
+            already_selected = next((r for r in radios if r.is_selected()), None)
+            if already_selected and not normalized_value:
+                desc = already_selected.get_attribute("title") or already_selected.get_attribute("value") or "opción"
+                print(f" Fecha estimada (radio) ya seleccionada ({desc}), se conserva")
+                return True
+
             target_radio = None
 
             if normalized_value:
@@ -1517,7 +1799,7 @@ class BaseFormFiller:
             else:
                 descripcion = target_radio.get_attribute("title") or target_radio.get_attribute("value") or (desired_value or "opción")
 
-            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", target_radio)
+            self._scroll_element_into_view(target_radio)
             try:
                 target_radio.click()
             except Exception:
@@ -1782,6 +2064,10 @@ class BaseFormFiller:
     
     def process_landing_page(self, landing_url, ss_counter):
         """Procesa la página de destino inicial"""
+        try:
+            self.driver.switch_to.default_content()
+        except Exception:
+            pass
         landing_url = self._sanitize_url(landing_url)
         self.driver.get(landing_url)
         
@@ -1846,6 +2132,9 @@ class BaseFormFiller:
             "button.btn-visid-submit.stat-button-link",
             "button[type='button'][class*='submit']",
             "button[class*='submit']",
+            "button[id*='guidebutton']",
+            "button[name*='guidebutton']",
+            "[id*='guidebutton'] button",
             "input[type='submit']",
         )
 
@@ -2173,7 +2462,7 @@ class BaseFormFiller:
             return False
 
         try:
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+            self._scroll_element_into_view(element)
             time.sleep(0.3)
         except Exception:
             pass
@@ -2181,7 +2470,7 @@ class BaseFormFiller:
         options = element.find_elements(By.TAG_NAME, "option")
         if not options:
             print(f" {field_name} no tiene opciones disponibles")
-            return False
+            raise ValueError(f"No se encontraron opciones en el dropdown '{field_name}'")
 
         if is_empty:
             try:
@@ -2221,14 +2510,15 @@ class BaseFormFiller:
                 except:
                     pass
             print(f" {field_name} - No hay opciones válidas para auto-selección")
-            return False
+            raise ValueError(f"No se encontraron opciones en el dropdown '{field_name}'")
 
         # SI HAY VALOR: Intentar usar el método optimizado primero
         try:
             if self.safe_select_option_if_visible(select_id, desired_value, field_name):
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            if isinstance(e, ValueError) and "No se encontraron opciones" in str(e):
+                raise
 
         # Búsqueda avanzada con normalización
         normalized_target = self._normalize_text(desired_value)
@@ -2453,6 +2743,25 @@ class BaseFormFiller:
         pattern   = element.get_attribute("pattern") or ""
         inputmode = (element.get_attribute("inputmode") or "").lower()
 
+        # Hints generales (id/name/placeholder/aria-label) para inferir tipo semántico
+        _all_hints = " ".join(filter(None, [
+            element.get_attribute("id") or "",
+            element.get_attribute("name") or "",
+            element.get_attribute("placeholder") or "",
+            element.get_attribute("aria-label") or "",
+        ])).lower()
+
+        # Fecha (nacimiento / data de nascimento / fecha): generar fecha válida de adulto
+        _date_hints = ("nascimento", "nacimiento", "birth", "dob", "aniversario",
+                       "fecha", "data-de", "data_de", "dataname", "cumple")
+        if input_type == "date" or any(h in _all_hints for h in _date_hints):
+            y = random.randint(1975, 2003)
+            m = random.randint(1, 12)
+            d = random.randint(1, 28)
+            if input_type == "date":
+                return f"{y:04d}-{m:02d}-{d:02d}"
+            return f"{d:02d}/{m:02d}/{y:04d}"
+
         max_len = min(int(maxlength) if maxlength and str(maxlength).isdigit() else 20, 30)
         min_len = max(int(minlength) if minlength and str(minlength).isdigit() else 1, 1)
         target  = max(min_len, min(max_len, 10))
@@ -2476,13 +2785,74 @@ class BaseFormFiller:
             input_type in ("number", "tel")
             or inputmode in ("numeric", "tel", "decimal")
             or bool(pattern and _re.search(r'^\^?\[?0-9', pattern))
+            or any(h in _all_hints for h in ("numero", "número", "number", "quantidade", "cantidad"))
         )
         if is_numeric:
-            return "".join(str(random.randint(0, 9)) for _ in range(target))
+            _n = max(1, min(target, 4))  # números cortos (ej. número de casa)
+            return "".join(str(random.randint(0, 9)) for _ in range(_n))
 
         # textarea / texto libre: alfanumérico
         chars = "abcdefghijklmnopqrstuvwxyz0123456789"
         return "".join(random.choice(chars) for _ in range(target))
+
+    def _is_field_required(self, element):
+        """True si el campo es requerido (attr required/aria-required o su label trae '*')."""
+        try:
+            return bool(self.driver.execute_script(
+                "var el=arguments[0];"
+                "if(el.required || el.getAttribute('aria-required')==='true') return true;"
+                "var id=el.id;"
+                "if(id){var l=document.querySelector('label[for=\"'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'\"]');"
+                "  if(l && (l.textContent||'').indexOf('*')>=0) return true;}"
+                "var p=el.closest('label'); if(p && (p.textContent||'').indexOf('*')>=0) return true;"
+                "return false;",
+                element,
+            ))
+        except Exception:
+            return bool(element.get_attribute("required") or element.get_attribute("aria-required") == "true")
+
+    def _fill_unmapped_required_fields(self):
+        """Rellena con valores sintéticos los campos REQUERIDOS visibles que quedaron vacíos
+        (no mapeados o sin dato en el Excel). Cubre campos extra de ciertos forms
+        (ej. Rua, Número, Data de Nascimento) sin tener que mapearlos uno por uno."""
+        try:
+            els = self.driver.find_elements(
+                By.XPATH,
+                "//input[not(@type='hidden')][not(@type='submit')][not(@type='button')]"
+                "[not(@type='checkbox')][not(@type='radio')][not(@type='file')][not(@type='reset')]"
+                " | //textarea",
+            )
+        except Exception:
+            return 0
+        filled = 0
+        for el in els:
+            try:
+                if not el.is_displayed() or not el.is_enabled():
+                    continue
+                if el.get_attribute("disabled") is not None:
+                    continue
+                # OJO: no saltar readonly — los datepickers de fecha (ej. Data de Nascimento)
+                # suelen ser readonly y aun así requeridos; se setean por JS igual.
+                if (el.get_attribute("value") or "").strip():
+                    continue  # ya tiene dato (mapeado, autocompletado por CEP, etc.)
+                if not self._is_field_required(el):
+                    continue
+                value = self._generate_synthetic_value(el)
+                if not value:
+                    continue
+                self._scroll_element_into_view(el)
+                self._fill_and_dispatch(el, value)
+                fid = el.get_attribute("id") or el.get_attribute("name") or ""
+                print(f"🧩 Requerido sin dato completado con valor sintético: {fid} = {value}")
+                self._record_field_value(fid, value)
+                filled += 1
+            except StaleElementReferenceException:
+                continue
+            except Exception as e:
+                print(f" Requerido sintético: error — {e}")
+        if filled:
+            print(f"🧩 {filled} campo(s) requerido(s) sin dato completado(s) con valor sintético")
+        return filled
 
     def _infer_data_key(self, field_id, field_name, field_placeholder=""):
         """
@@ -2508,6 +2878,17 @@ class BaseFormFiller:
         Llena los requeridos en el siguiente ciclo; los opcionales se mapean pero no se llenan.
         """
         mapped_ids = self._get_mapped_select_ids()
+        
+        # Ampliar mapped_ids para incluir todos sus alias de visid y evitar falsas detecciones
+        expanded_mapped_ids = set(mapped_ids)
+        for original_id in mapped_ids:
+            alias = self._VISID_ID_ALIASES.get(original_id)
+            if alias:
+                expanded_mapped_ids.add(alias)
+            for k, v in self._VISID_ID_ALIASES.items():
+                if v == original_id:
+                    expanded_mapped_ids.add(k)
+        
         nuevos = []
 
         scan_targets = [
@@ -2529,7 +2910,7 @@ class BaseFormFiller:
             for el in elements:
                 try:
                     fid = el.get_attribute("id") or el.get_attribute("name")
-                    if not fid or fid in mapped_ids:
+                    if not fid or fid in expanded_mapped_ids:
                         continue
                     if not el.is_displayed():
                         continue
@@ -2811,8 +3192,10 @@ class BaseFormFiller:
         self.driver.execute_script(
             "var el=arguments[0],v=arguments[1];"
             "el.focus();"
-            "try{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')"
-            ".set.call(el,v);}catch(e){el.value=v;}"
+            "try{"
+            "  var proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;"
+            "  Object.getOwnPropertyDescriptor(proto,'value').set.call(el,v);"
+            "}catch(e){el.value=v;}"
             "el.dispatchEvent(new Event('input',{bubbles:true}));"
             "el.dispatchEvent(new Event('change',{bubbles:true}));"
             "el.dispatchEvent(new Event('blur',{bubbles:true}));",
@@ -3524,12 +3907,13 @@ class BaseFormFiller:
     def _click_aem_guide_checkbox_by_input(self, checkbox_input):
         """AEM Guide suele reaccionar al click en .guideCheckBoxItem, no solo al input."""
         try:
+            if checkbox_input:
+                self._scroll_element_into_view(checkbox_input)
             return bool(
                 self.driver.execute_script(
                     """
                     const inp = arguments[0];
                     if (!inp) return false;
-                    inp.scrollIntoView({block: 'center', behavior: 'instant'});
                     const item = inp.closest('.guideCheckBoxItem');
                     if (item) {
                         item.click();
@@ -3569,9 +3953,7 @@ class BaseFormFiller:
                     if not cb.is_displayed():
                         continue
                     seen.add(key)
-                    self.driver.execute_script(
-                        "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", cb
-                    )
+                    self._scroll_element_into_view(cb)
                     time.sleep(0.15)
                     # Sin name_* falsos: _locate_checkbox_candidate filtraría por name != guide_checkbox
                     candidate = {
@@ -3795,7 +4177,7 @@ class BaseFormFiller:
             return False
 
         try:
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+            self._scroll_element_into_view(element)
         except Exception:
             pass
 
@@ -4026,8 +4408,10 @@ class BaseFormFiller:
             pass
         return False
 
-    def _apply_row_color(self, sheet, row_index, is_ok, form_coincide_col=None, form_coincide_value=None):
-        """Aplica color de fondo a la fila según si el lead se envió OK o no."""
+    def _apply_row_color(self, sheet, row_index, is_ok, start_col=None,
+                         form_coincide_col=None, form_coincide_ok=None):
+        """Colorea SOLO las columnas de resultado (desde start_col) según si el lead
+        se envió OK (verde) o con error (rojo). Los datos de entrada quedan sin color."""
         GREEN_ROW  = PatternFill(fill_type="solid", fgColor="C6EFCE")
         RED_ROW    = PatternFill(fill_type="solid", fgColor="FFC7CE")
         GREEN_CELL = PatternFill(fill_type="solid", fgColor="375623")
@@ -4035,17 +4419,13 @@ class BaseFormFiller:
         WHITE_FONT = Font(color="FFFFFF", bold=True)
 
         row_fill = GREEN_ROW if is_ok else RED_ROW
-        for col in range(1, sheet.max_column + 1):
+        for col in range(start_col or 1, sheet.max_column + 1):
             sheet.cell(row=row_index, column=col).fill = row_fill
 
-        if form_coincide_col:
-            val = str(form_coincide_value or "").strip().upper()
-            if val == "SI":
-                sheet.cell(row=row_index, column=form_coincide_col).fill = GREEN_CELL
-                sheet.cell(row=row_index, column=form_coincide_col).font = WHITE_FONT
-            elif val == "NO":
-                sheet.cell(row=row_index, column=form_coincide_col).fill = RED_CELL
-                sheet.cell(row=row_index, column=form_coincide_col).font = WHITE_FONT
+        if form_coincide_col and form_coincide_ok is not None:
+            cell = sheet.cell(row=row_index, column=form_coincide_col)
+            cell.fill = GREEN_CELL if form_coincide_ok else RED_CELL
+            cell.font = WHITE_FONT
 
     def submit_and_verify_form(self, current_ss_number, expected_form_url):
         """Envía el formulario y verifica resultado"""
@@ -4056,7 +4436,7 @@ class BaseFormFiller:
                 raise Exception("No se encontró el botón de envío con ningún selector")
             print(f"Botón enviar encontrado con selector: {used_sel}")
             
-            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", boton_enviar)
+            self._scroll_element_into_view(boton_enviar)
             time.sleep(0.3)
 
             try:
@@ -4066,8 +4446,54 @@ class BaseFormFiller:
 
             print("Clic en enviar (completado) realizado. Verificando resultado...")
 
+            # Detección de TY para forms 2.0 (/tools/forms): mensaje de agradecimiento.
+            # OJO: no basta con buscar texto — el encabezado del form ("...e entraremos
+            # em contato") daría falso positivo. Sólo hay TY si el form (botón Enviar) ya
+            # NO está visible (fue reemplazado por la confirmación) Y hay una frase fuerte.
+            def _tiene_thankyou_texto_2_0(d):
+                try:
+                    _cur = (d.current_url or "").lower()
+                except Exception:
+                    _cur = ""
+                if "/tools/" not in _cur:
+                    return False
+                # Si el botón Enviar sigue visible, el form NO se envió → no es TY.
+                try:
+                    _submit_visible = d.execute_script("""
+                        var els = document.querySelectorAll("button, input[type='submit'], input[type='button']");
+                        for (var i=0;i<els.length;i++){
+                            var e=els[i];
+                            var t=((e.innerText||e.value||"")+"").trim().toLowerCase();
+                            if(e.offsetParent!==null && (t==='enviar' || t.indexOf('enviar')===0)){ return true; }
+                        }
+                        return false;
+                    """)
+                    if _submit_visible:
+                        return False
+                except Exception:
+                    pass
+                try:
+                    _txt = d.execute_script(
+                        "return (document.body && document.body.innerText) ? document.body.innerText : '';"
+                    ) or ""
+                except Exception:
+                    _txt = ""
+                _txt = _txt.lower()
+                # Frases que sólo aparecen en la confirmación (no en el encabezado del form).
+                _markers = (
+                    "obrigado", "obrigada",
+                    "recebemos sua solicit", "recebemos seu contato",
+                    "sua solicitação foi recebida", "solicitação enviada",
+                    "recebido com sucesso", "recebida com sucesso",
+                    "enviado com sucesso", "cadastro realizado",
+                    "dados enviados", "mensagem enviada",
+                    "gracias por", "thank you for",
+                )
+                return any(m in _txt for m in _markers)
+
             # Verificación positiva: esperar div#thank-you con display:block (dentro del iframe)
             def _ty_visible(d):
+                # Plataforma clásica: div#thank-you display:block
                 try:
                     el = d.find_element(By.CSS_SELECTOR, "div#thank-you")
                     style = el.get_attribute("style") or ""
@@ -4080,7 +4506,15 @@ class BaseFormFiller:
                     d.find_element(By.CSS_SELECTOR, "div.rp-wrapper")
                     return True
                 except Exception:
-                    return False
+                    pass
+                # Forms 2.0 (URL con /tools/forms): la TY NO es div#thank-you sino un
+                # mensaje de agradecimiento (Gracias / Obrigado / Thank you / etc.).
+                try:
+                    if _tiene_thankyou_texto_2_0(d):
+                        return True
+                except Exception:
+                    pass
+                return False
 
             try:
                 WebDriverWait(self.driver, 15).until(_ty_visible)
@@ -4089,6 +4523,16 @@ class BaseFormFiller:
                 time.sleep(1)
 
             except TimeoutException:
+                # T3/AEM: capturar SIEMPRE el estado post-submit aunque no haya TY, para
+                # que se vea qué pasó (form más largo → full-page).
+                if getattr(self, "_is_aem", False) and self.screenshot_manager:
+                    try:
+                        self.driver.switch_to.default_content()
+                        self.screenshot_manager.take_form_screenshot(current_ss_number, "post_submit", full_page=True)
+                        print("Captura post_submit (sin TY) tomada")
+                    except Exception as _pe:
+                        print(f"Error capturando post_submit: {_pe}")
+
                 # Chequeo específico: error de event_id del servidor ("Lo siento / Ocurrió un inconveniente")
                 if self._detect_event_id_error():
                     result_text = "ERROR_EVENT_ID: Error de servidor al envío - formulario recargado automáticamente"
@@ -4248,19 +4692,41 @@ class BaseFormFiller:
                         if target_iframe:
                             if form_url_mismatch:
                                 print("Usando iframe disponible (URL de formulario no coincide con Excel)")
-                                _fallback_src = ""
-                                try:
-                                    _fallback_src = target_iframe.get_attribute("src") or ""
-                                except Exception:
-                                    pass
-                                if self.screenshot_manager:
-                                    self.screenshot_manager.url_form_encontrado = _fallback_src
-                                self._url_form_encontrado = _fallback_src
                             else:
                                 print("Formulario correcto encontrado y posicionado")
+
+                            _iframe_src = ""
+                            try:
+                                _iframe_src = target_iframe.get_attribute("src") or ""
+                            except Exception:
+                                pass
+
                             self.driver.switch_to.frame(target_iframe)
                             if self.screenshot_manager:
                                 self.screenshot_manager.current_frame = target_iframe
+
+                            if not _iframe_src or _iframe_src.strip() == "" or _iframe_src.startswith("about:"):
+                                try:
+                                    _iframe_src = self.driver.execute_script("return window.location.href;") or ""
+                                except Exception:
+                                    pass
+
+                            if _iframe_src and not _iframe_src.startswith("http"):
+                                try:
+                                    from urllib.parse import urljoin
+                                    self.driver.switch_to.parent_frame()
+                                    _landing_url = self.driver.current_url
+                                    if self.screenshot_manager and self.screenshot_manager.current_frame:
+                                        self.driver.switch_to.frame(self.screenshot_manager.current_frame)
+                                    else:
+                                        self.driver.switch_to.frame(target_iframe)
+                                    _iframe_src = urljoin(_landing_url, _iframe_src)
+                                except Exception:
+                                    pass
+
+                            if self.screenshot_manager:
+                                self.screenshot_manager.url_form_encontrado = _iframe_src
+                            self._url_form_encontrado = _iframe_src
                             print("Cambiado al contexto del iframe")
                             # solicitar-contato Brasil: click en #contact-by-form dentro del iframe
                             if "solicitar-contato" in (landing_url or "").lower():
@@ -4268,7 +4734,7 @@ class BaseFormFiller:
                                     _btn = WebDriverWait(self.driver, 8).until(
                                         EC.element_to_be_clickable((By.ID, "contact-by-form"))
                                     )
-                                    self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", _btn)
+                                    self._scroll_element_into_view(_btn)
                                     try:
                                         _btn.click()
                                     except Exception:
@@ -4288,16 +4754,16 @@ class BaseFormFiller:
                     # 3. Esperar a que el formulario esté listo
                     self.wait_for_form_ready_in_iframe()
 
+                    # Detección T3/AEM temprana: los forms 2.0 son más largos → capturas full-page
+                    self._is_aem = self._is_aem_adaptive_form()
+
                     # 3b. Click enviar vacío + captura errores (todos excepto libro-reclamaciones)
                     _is_libro_reclamaciones = "libro-reclamaciones" in (landing_url or "").lower()
                     if not _is_libro_reclamaciones:
                         try:
                             _btn_empty, _ = self._resolve_submit_button(wait_seconds=2)
                             if _btn_empty:
-                                self.driver.execute_script(
-                                    "arguments[0].scrollIntoView({behavior:'smooth',block:'center'});",
-                                    _btn_empty,
-                                )
+                                self._scroll_element_into_view(_btn_empty)
                                 time.sleep(0.3)
                                 try:
                                     _btn_empty.click()
@@ -4305,7 +4771,7 @@ class BaseFormFiller:
                                     self.driver.execute_script("arguments[0].click();", _btn_empty)
                                 time.sleep(0.5)  # esperar a que JS muestre los errores de validación
                                 if self.screenshot_manager:
-                                    self.screenshot_manager.take_form_screenshot(ss_counter, "errores")
+                                    self.screenshot_manager.take_form_screenshot(ss_counter, "errores", full_page=self._is_aem)
                                     print("Captura form_errores tomada (formulario vacío)")
                         except Exception as _e:
                             print(f"  ⚠ Click enviar vacío: {_e}")
@@ -4453,13 +4919,29 @@ class BaseFormFiller:
                 _lead_ok = (result_text == "Lead enviado correctamente")
 
                 if form_url_mismatch:
-                    _found_for_msg = getattr(self, "_url_form_encontrado", "") or "ninguno"
+                    _found_for_msg = getattr(self, "_url_form_encontrado", "") or ""
                     _lead_str = "lead enviado igualmente" if _lead_ok else "lead no enviado"
-                    result_text = (
-                        f"[Error Form] Formulario no inserto — "
-                        f"URL esperada: {expected_form_url or '?'} | "
-                        f"URL encontrada: {_found_for_msg} | {_lead_str}"
-                    )
+                    # Preservar el error de envío original (si lo hubo) para mapear TODOS los errores.
+                    _orig_err = "" if _lead_ok else (result_text or "").strip()
+                    if _found_for_msg:
+                        # SÍ hay un formulario inserto (iframe con src), pero es distinto al esperado.
+                        # "Formulario no inserto" se reserva para cuando NO hay ningún form.
+                        _mismatch_msg = (
+                            f"[Error Form] Formulario distinto al esperado — "
+                            f"URL esperada: {expected_form_url or '?'} | "
+                            f"URL encontrada: {_found_for_msg} | {_lead_str}"
+                        )
+                    else:
+                        _mismatch_msg = (
+                            f"[Error Form] Formulario no inserto — "
+                            f"URL esperada: {expected_form_url or '?'} | "
+                            f"URL encontrada: ninguno | {_lead_str}"
+                        )
+                    # Mapear TODOS los errores: el del form + el de envío (si el form llenó pero falló).
+                    if _orig_err and not _orig_err.lower().startswith("lead enviado"):
+                        result_text = f"{_mismatch_msg} || Error de envío: {_orig_err}"
+                    else:
+                        result_text = _mismatch_msg
                     _lead_ok = False
                 _sin_mapeo = getattr(self, "_campos_sin_mapeo_exitoso", [])
                 if _sin_mapeo:
@@ -4476,13 +4958,21 @@ class BaseFormFiller:
                 _found_url = getattr(self, "_url_form_encontrado", "")
                 sheet.cell(row=i, column=form_url_encontrada_col).value = _found_url
                 _form_coincide_val = ""
+                _form_coincide_ok = None
                 if expected_form_url:
-                    _form_coincide_val = "SI" if _found_url == expected_form_url else "NO"
+                    def _norm(u):
+                        if not u: return ""
+                        u = u.strip().split("?")[0].split("#")[0]
+                        if u.endswith("/"): u = u[:-1]
+                        return u.lower()
+                    _form_coincide_ok = (_norm(_found_url) == _norm(expected_form_url))
+                    _form_coincide_val = "PASS" if _form_coincide_ok else "FAIL"
                 sheet.cell(row=i, column=form_coincide_col).value = _form_coincide_val
                 self.write_tracked_fields_to_sheet(sheet, i)
 
-                # Colorear fila: verde si lead OK, rojo si error
-                self._apply_row_color(sheet, i, _lead_ok, form_coincide_col, _form_coincide_val)
+                # Colorear SOLO las columnas de resultado: verde si lead OK, rojo si error
+                self._apply_row_color(sheet, i, _lead_ok, start_col=result_col,
+                                      form_coincide_col=form_coincide_col, form_coincide_ok=_form_coincide_ok)
 
                 self.safe_save_workbook(wb, self.RESULTADOS_PATH)
                 _done_leads += 1

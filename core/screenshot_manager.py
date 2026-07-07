@@ -194,9 +194,19 @@ class ScreenshotManager:
         self._add_url_banner(os.path.join(self.screenshot_dir, filename))
         return result
 
-    def take_form_screenshot(self, ss_number, stage):
-        """Toma screenshot del formulario dentro del iframe"""
+    def take_form_screenshot(self, ss_number, stage, full_page=False):
+        """Toma screenshot del formulario dentro del iframe.
+        full_page=True → captura de página completa (scroll+merge), útil para forms
+        T3 2.0 que son más largos en alto y no entran en el viewport."""
         filename = f"form_{stage}_{ss_number}_{self.browser_name}.png"
+        if full_page:
+            try:
+                result = self.take_full_page_screenshot(filename)
+                self._add_url_banner(os.path.join(self.screenshot_dir, filename))
+                print(f"Captura de formulario (página completa) guardada: {filename}")
+                return result
+            except Exception as e:
+                print(f"Error capturando formulario completo, usando viewport: {e}")
         try:
             screenshot_path = os.path.join(self.screenshot_dir, filename)
             if self.browser_name == 'firefox' and self.current_frame is not None:

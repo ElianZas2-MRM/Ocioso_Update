@@ -32,6 +32,7 @@ def run(
     log_fn: Callable = print,
     stop_event: Optional[threading.Event] = None,
     build_name: str = "",
+    excel_path: Optional[str] = None,
 ) -> dict:
     """
     Ejecuta LambdaTest para un país y retorna el resumen.
@@ -59,8 +60,10 @@ def run(
             "session_id": "", "error": str(e),
         }
 
-    excel_name = f"Lead_information_Formulario_{pais}_Main.xlsx"
-    excel_path = os.path.join(_OSOCIO_DIR, "data", excel_name)
+    if not excel_path:
+        dev_suffix = "Mac" if "mac" in platform.lower() or "iphone" in platform.lower() else "Main"
+        excel_name = f"Lead_information_Formulario_{pais}_{dev_suffix}.xlsx"
+        excel_path = os.path.join(_OSOCIO_DIR, "data", excel_name)
 
     if not os.path.exists(excel_path):
         return {

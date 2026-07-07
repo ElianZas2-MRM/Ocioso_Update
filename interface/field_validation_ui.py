@@ -129,8 +129,44 @@ def _save_rules_file(payload):
 
 
 def _apply_row_colors(tree_widget):
-    tree_widget.tag_configure("odd", background="white")
-    tree_widget.tag_configure("even", background="#f1edf6")
+    # Intentar obtener el color de texto (foreground) configurado en el estilo
+    style = ttk.Style()
+    fg = style.lookup("Section.Treeview", "foreground")
+    if not fg:
+        fg = "white"  # Valor por defecto si no se encuentra
+    
+    # Comprobar si el texto es claro u oscuro para asignar los fondos apropiados
+    def _is_light_color(color_str):
+        if not color_str:
+            return False
+        color_str = color_str.strip().lower()
+        if color_str in ("white", "#ffffff", "#fff", "yellow", "cyan", "lavender"):
+            return True
+        if color_str in ("black", "none", ""):
+            return False
+        if color_str.startswith("#"):
+            try:
+                hex_val = color_str.lstrip("#")
+                if len(hex_val) == 3:
+                    hex_val = "".join([c*2 for c in hex_val])
+                r = int(hex_val[0:2], 16)
+                g = int(hex_val[2:4], 16)
+                b = int(hex_val[4:6], 16)
+                brightness = (r * 299 + g * 587 + b * 114) / 1000
+                return brightness > 130
+            except Exception:
+                return False
+        return False
+
+    if _is_light_color(fg):
+        # Texto claro -> Fondos oscuros contrastantes (Premium Figma-style)
+        tree_widget.tag_configure("odd", background="#2E1146", foreground="white")
+        tree_widget.tag_configure("even", background="#4A2666", foreground="#E6D6F2")
+    else:
+        # Texto oscuro -> Fondos claros contrastantes
+        tree_widget.tag_configure("odd", background="white", foreground="black")
+        tree_widget.tag_configure("even", background="#f1edf6", foreground="#333333")
+
     for index, item in enumerate(tree_widget.get_children()):
         tree_widget.item(item, tags=(("odd" if index % 2 == 0 else "even"),))
 
@@ -146,6 +182,27 @@ def build_field_validation_tab(parent, palette, shared_config=None):
     popup_text = "white"
     popup_button_bg = button_bg
     popup_button_fg = button_fg
+
+    # Colores de campos/tablas: por defecto blanco/negro (run original). El demo puede
+    # pasar valores oscuros para que combinen con su tema.
+    entry_bg = palette.get("entry_bg", "white")
+    entry_fg = palette.get("entry_fg", "black")
+    tree_bg = palette.get("tree_bg", container_bg)
+    tree_fg = palette.get("tree_fg", text_color)
+    heading_bg = palette.get("heading_bg", button_bg)
+
+    _vstyle = ttk.Style()
+    _vstyle.configure("TEntry", fieldbackground=entry_bg, background=entry_bg,
+                      foreground=entry_fg, insertcolor=entry_fg,
+                      bordercolor=button_bg, lightcolor=button_bg, darkcolor=button_bg)
+    _vstyle.map("TEntry",
+                fieldbackground=[("readonly", entry_bg), ("focus", entry_bg),
+                                 ("active", entry_bg), ("disabled", "#656565"), ("!disabled", entry_bg)],
+                foreground=[("disabled", "#aaaaaa"), ("!disabled", entry_fg)])
+    _vstyle.configure("Section.Treeview", background=tree_bg, foreground=tree_fg,
+                      fieldbackground=tree_bg, borderwidth=0)
+    _vstyle.configure("Section.Treeview.Heading", background=heading_bg, foreground=text_color,
+                      font=("Segoe UI", 9, "bold"), borderwidth=0)
 
     state = {
         "rows": [],
@@ -213,6 +270,7 @@ def build_field_validation_tab(parent, palette, shared_config=None):
         else {viewport: BooleanVar(value=(viewport == "fullscreen")) for viewport in VIEWPORT_OPTIONS}
     )
     teclado_mobile_var = BooleanVar(value=False)
+    ver_navegador_var = BooleanVar(value=True)
     rule_filter_text_var = StringVar(value="")
     rule_filter_country_var = StringVar(value="Todos")
     upsert_button_text_var = StringVar(value="Agregar regla")
@@ -441,6 +499,20 @@ def build_field_validation_tab(parent, palette, shared_config=None):
         pady=3,
     ).pack(side=LEFT)
 
+    Checkbutton(
+        urls_actions_frame,
+        text="Ver navegador",
+        variable=ver_navegador_var,
+        bg=app_bg,
+        fg=text_color,
+        selectcolor=entry_bg,
+        activebackground=app_bg,
+        activeforeground=text_color,
+        font=("Segoe UI", 10, "bold"),
+        cursor="hand2",
+        bd=0,
+    ).pack(side=LEFT, padx=(12, 0))
+
     def _collect_url_pairs_from_widget():
         return _read_url_pairs_from_excel(require_form=True)
 
@@ -580,7 +652,9 @@ def build_field_validation_tab(parent, palette, shared_config=None):
             activeforeground="white",
             selectcolor=section_bg,
         ).pack(side=LEFT, padx=(0, 6))
-    test_text_widget = Text(mapping_form, width=52, height=3)
+    test_text_widget = Text(mapping_form, width=52, height=3, bg=entry_bg, fg=entry_fg,
+                            insertbackground=entry_fg, relief="flat", highlightthickness=1,
+                            highlightbackground=button_bg)
     test_text_widget.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(0, 8))
 
     mapping_form.columnconfigure(1, weight=1)
@@ -599,7 +673,9 @@ def build_field_validation_tab(parent, palette, shared_config=None):
         bg=section_bg,
         fg=text_color,
     ).pack(side=LEFT, padx=(0, 6))
-    rule_filter_entry = Entry(filters_frame, font=("Segoe UI", 10), width=20, textvariable=rule_filter_text_var)
+    rule_filter_entry = Entry(filters_frame, font=("Segoe UI", 10), width=20, textvariable=rule_filter_text_var,
+                              bg=entry_bg, fg=entry_fg, insertbackground=entry_fg, relief="flat",
+                              highlightthickness=1, highlightbackground=button_bg)
     rule_filter_entry.pack(side=LEFT, padx=(0, 10))
 
     filtro_pais_values = ["Todos"] + [COUNTRY_ABBREVIATIONS[c] for c in AVAILABLE_COUNTRIES if c in COUNTRY_ABBREVIATIONS]
@@ -951,7 +1027,7 @@ def build_field_validation_tab(parent, palette, shared_config=None):
         else:
             regex_full_entry.config(state="normal", style=_dropdown_normal_style)
             regex_char_entry.config(state="normal", style=_dropdown_normal_style)
-            test_text_widget.config(state="normal", bg="white", fg="black")
+            test_text_widget.config(state="normal", bg=entry_bg, fg=entry_fg)
 
     def _on_dropdown_toggle(*_):
         _apply_dropdown_mode(clear_values=True)
@@ -2300,7 +2376,8 @@ def build_field_validation_tab(parent, palette, shared_config=None):
                         shared_driver = BrowserManager.create_browser(
                             browser_type=browser_name,
                             viewport=viewport_name,
-                            headless=False,
+                            headless=not ver_navegador_var.get(),
+                            background=not ver_navegador_var.get(),
                         )
                         try:
                             for pais_abrev, landing_url, form_url in url_triples:
