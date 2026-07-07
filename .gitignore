@@ -29,4 +29,4 @@ config_global.json
 # PyInstaller output — regenerable con build.bat
 build/
 dist/
-build_output.log
+build_output*.log

@@ -1004,7 +1004,10 @@ def iniciar_interfaz():
                            highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                            disabledbackground=BUTTON_INACTIVE, disabledforeground=TEXT_SECONDARY)
     email_entry.pack(side="left", ipady=3)
-    email_entry.insert(0, "elian.zas@mrm.com")
+    try:
+        email_entry.insert(0, obtener_email_destinatario() or "")
+    except Exception:
+        pass
     email_entry.config(state="disabled")  # Habilitado sólo al activar "Enviar mail"
 
     # Variables de control para las opciones de email
