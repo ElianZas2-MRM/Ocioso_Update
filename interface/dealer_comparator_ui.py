@@ -813,6 +813,43 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         modal.focus_set()
         modal.grab_set()  # bloquea la interacción con el resto de la app mientras corre
 
+        def _release_grab():
+            try:
+                modal.grab_release()
+            except Exception:
+                pass
+
+        # La ventana principal SIEMPRE debe poder cerrarse (con aviso si hay algo corriendo),
+        # incluso con el grab del modal activo — si no, el grab puede dejar el "X" de la
+        # ventana principal sin responder en Windows.
+        orig_close_protocol = root.protocol("WM_DELETE_WINDOW")
+
+        def _on_root_close_request():
+            if modal.winfo_exists() and "Comparando" in title_lbl.cget("text"):
+                if messagebox.askyesno("Salir", "Hay una comparación en curso. ¿Querés detenerla y salir de la app?"):
+                    state["stop_event"].set()
+                    _release_grab()
+                    modal.destroy()
+                    root.destroy()
+            else:
+                _release_grab()
+                if modal.winfo_exists():
+                    modal.destroy()
+                root.destroy()
+
+        root.protocol("WM_DELETE_WINDOW", _on_root_close_request)
+
+        def _restore_root_protocol(event=None):
+            if event is not None and event.widget is not modal:
+                return
+            _release_grab()
+            try:
+                root.protocol("WM_DELETE_WINDOW", orig_close_protocol)
+            except Exception:
+                pass
+
+        modal.bind("<Destroy>", _restore_root_protocol, add="+")
+
         title_bar = Frame(modal, bg=MODAL_BG)
         title_bar.pack(fill="x", padx=15, pady=(5, 0))
         title_bar_lbl = Label(title_bar, text="Comparador Dealers", font=("Segoe UI", 8, "bold"),
