@@ -158,6 +158,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     VALIDATE_BG = ctx["VALIDATE_BG"]
     VALIDATE_FG = ctx["VALIDATE_FG"]
     VALIDATE_HOVER = ctx["VALIDATE_HOVER"]
+    EXECUTE_BG = ctx.get("EXECUTE_BG", VALIDATE_BG)
+    EXECUTE_FG = ctx.get("EXECUTE_FG", VALIDATE_FG)
+    EXECUTE_HOVER = ctx.get("EXECUTE_HOVER", VALIDATE_HOVER)
     ENTRY_BG = ctx["ENTRY_BG"]
     TEXT_DELETE = ctx["TEXT_DELETE"]
     get_button_icon = ctx["get_button_icon"]
@@ -195,6 +198,17 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     footer_btns.pack(fill="x", padx=15, pady=8)
 
     root_frame = make_scrollable_tab_container(tab_frame)
+
+    # ── Guía rápida (mismo lenguaje que "Envío de Leads") ───────────────────────
+    guide_card = Frame(root_frame, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
+    guide_card.pack(fill="x", pady=(0, 8), ipady=6)
+    Label(guide_card, text="Configurá el chequeo: elegí mercado, pegá la URL del form y cargá el Excel de dealers",
+          font=("Segoe UI", 10, "bold"), bg=CARD_BG, fg=TEXT_P).pack(anchor="w", padx=15, pady=(6, 2))
+    Label(guide_card,
+          text="① Elegí el mercado y pegá la URL del formulario.   ② Cargá el Excel de dealers y mapeá sus columnas "
+               "(región/ciudad/dealer).   ③ EJECUTAR se habilita solo cuando está todo completo.",
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF", justify="left",
+          wraplength=1000).pack(anchor="w", padx=15, pady=(0, 6))
 
     def card(title, subtitle=None):
         block = Frame(root_frame, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
@@ -267,7 +281,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         LOGGER.info("[%s] %s", level, msg)
 
     # ── 1. Mercado ────────────────────────────────────────────────────────────
-    mercado_card = card("🌐 MERCADO A CHEQUEAR")
+    mercado_card = card("🌐 MERCADO A CHEQUEAR", "Elegí el país cuyo formulario vas a chequear.")
     m_grid = Frame(mercado_card, bg=CARD_BG)
     m_grid.pack(fill="x", padx=15, pady=2)
 
@@ -304,6 +318,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     urls_header.pack(fill="x", padx=15, pady=(6, 4))
     Label(urls_header, text="🔗 URL DEL FORMULARIO A CHEQUEAR", font=("Segoe UI", 9, "bold"),
           bg=CARD_BG, fg=TEXT_S).pack(side="left")
+    Label(urls_header, text="Pegá la URL real del formulario a comparar contra el Excel de dealers.",
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF").pack(side="left", padx=12)
 
     mode_btn_frame = Frame(urls_header, bg=CARD_BG)
     mode_btn_frame.pack(side="right")
@@ -448,7 +464,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                  style="Dealer.TCombobox", values=CONDITION_LABELS).pack()
 
     # ── 4. Columnas del Excel ────────────────────────────────────────────────
-    columns_card = card("🧭 COLUMNAS DEL EXCEL")
+    columns_card = card("🧭 COLUMNAS DEL EXCEL",
+                        "Decí qué columna del Excel corresponde a cada dato (Columna Dealer es obligatoria).")
     levels_label_row = Frame(columns_card, bg=CARD_BG)
     levels_label_row.pack(fill="x", padx=15, pady=(0, 2))
     Label(levels_label_row, text="Campos que tiene el form (id HTML del select):", font=("Segoe UI", 8),
@@ -701,6 +718,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         state["field_check_widgets"] = []
         for check in cfg.get("field_checks", []):
             _add_field_check_row(check.get("column", ""), check.get("field_id", ""))
+        refresh_execute_state()
 
     def _apply_country_settings(pais):
         cfg = all_settings["paises"].get(pais) or _default_country_settings(pais)
@@ -985,10 +1003,30 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     def _set_running(running):
         state["running"] = running
         if running:
-            btn_run.config(text=" DETENER", image=get_button_icon("stop_coral.png"), bg="#b91c1c", fg="white")
+            btn_run.config(text=" DETENER", image=get_button_icon("stop_coral.png"), bg="#b91c1c", fg="white",
+                            state="normal", cursor="hand2")
         else:
-            btn_run.config(text=" EJECUTAR", image=get_button_icon("download_blue.png"),
-                            bg=VALIDATE_BG, fg=VALIDATE_FG)
+            btn_run.config(text=" EJECUTAR", image=get_button_icon("play_green.png"))
+            refresh_execute_state()
+
+    def _tiene_datos_minimos():
+        """Chequeo rápido (sin leer el Excel) de lo mínimo para poder ejecutar:
+        Excel de dealers elegido, columna Dealer definida, y al menos una URL de form cargada."""
+        if not excel_path_var.get().strip():
+            return False
+        if not col_dealer_var.get().strip():
+            return False
+        if not any(form_url for _landing, form_url in _parse_urls_text()):
+            return False
+        return True
+
+    def refresh_execute_state():
+        if state.get("running"):
+            return
+        if _tiene_datos_minimos():
+            btn_run.config(state="normal", bg=EXECUTE_BG, fg=EXECUTE_FG, cursor="hand2")
+        else:
+            btn_run.config(state="disabled", bg=BTN_INACTIVE, fg="#9B86B5", cursor="arrow")
 
     def _validate_and_prepare():
         """Corre en el hilo principal, ANTES de abrir el modal de ejecución. Si algo está mal
@@ -1153,7 +1191,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     def _borrar_urls():
         url_text_area.delete("1.0", "end")
+        url_warn_var.set("")
         ui_log("URLs borradas.", "info")
+        refresh_execute_state()
 
     btn_borrar = Button(footer_btns, text=" Borrar URLs", image=get_button_icon("trash_coral.png"), compound="left",
                          font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg=TEXT_DELETE,
@@ -1163,11 +1203,19 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     btn_borrar.bind("<Enter>", lambda e: btn_borrar.config(bg=BTN_HOVER))
     btn_borrar.bind("<Leave>", lambda e: btn_borrar.config(bg=BTN_INACTIVE))
 
-    btn_run = Button(footer_btns, text=" EJECUTAR", image=get_button_icon("download_blue.png"), compound="left",
-                      font=("Segoe UI", 9, "bold"), bg=VALIDATE_BG, fg=VALIDATE_FG,
-                      relief="flat", bd=0, activebackground=VALIDATE_HOVER, activeforeground=VALIDATE_FG,
+    btn_run = Button(footer_btns, text=" EJECUTAR", image=get_button_icon("play_green.png"), compound="left",
+                      font=("Segoe UI", 9, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
+                      relief="flat", bd=0, activebackground=EXECUTE_HOVER, activeforeground=EXECUTE_FG,
                       padx=18, pady=6, cursor="hand2", command=_run_or_stop)
     btn_run.pack(side="left", padx=6)
+    btn_run.bind("<Enter>", lambda e: btn_run.config(bg=EXECUTE_HOVER) if btn_run["state"] == "normal" else None)
+    btn_run.bind("<Leave>", lambda e: btn_run.config(bg=EXECUTE_BG) if btn_run["state"] == "normal" else None)
+
+    # Habilitar/deshabilitar EJECUTAR en vivo, apenas cambian los datos mínimos necesarios
+    excel_path_var.trace_add("write", lambda *_a: refresh_execute_state())
+    col_dealer_var.trace_add("write", lambda *_a: refresh_execute_state())
+    url_text_area.bind("<KeyRelease>", lambda e: refresh_execute_state(), add="+")
 
     select_country(state["pais"])
+    refresh_execute_state()
     return root_frame

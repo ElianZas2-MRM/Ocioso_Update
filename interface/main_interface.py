@@ -1011,7 +1011,9 @@ def iniciar_interfaz():
     email_entry.config(state="disabled")  # Habilitado sólo al activar "Enviar mail"
 
     # Variables de control para las opciones de email
-    var_enviar_email = tk.BooleanVar(value=bool(_cfg.get("enviar_mail", False)))
+    # "Enviar mail" nunca se restaura tildado al abrir la app (para evitar envíos
+    # accidentales) aunque haya quedado guardado en una sesión anterior.
+    var_enviar_email = tk.BooleanVar(value=False)
     var_adjuntar_res = tk.BooleanVar(value=bool(_cfg.get("adjuntar_resultados", False)))
     var_adjuntar_ss = tk.BooleanVar(value=bool(_cfg.get("adjuntar_screenshots", False)))
     var_modo_email = tk.StringVar(value=_cfg.get("email_modo", "consolidado"))
@@ -2124,7 +2126,7 @@ def iniciar_interfaz():
                 first = False
             except Exception:
                 pass
-            time.sleep(60)
+            time.sleep(5)
 
     threading.Thread(target=_sched_monitor, daemon=True).start()
 
@@ -3352,6 +3354,9 @@ def iniciar_interfaz():
                 "VALIDATE_BG": VALIDATE_BG,
                 "VALIDATE_FG": VALIDATE_FG,
                 "VALIDATE_HOVER": VALIDATE_HOVER,
+                "EXECUTE_BG": EXECUTE_BG,
+                "EXECUTE_FG": EXECUTE_FG,
+                "EXECUTE_HOVER": EXECUTE_HOVER,
                 "ENTRY_BG": ENTRY_BG,
                 "TEXT_DELETE": TEXT_DELETE,
                 "get_button_icon": get_button_icon,
