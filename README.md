@@ -32,7 +32,6 @@ Al abrir, vas a ver la barra superior con el logo, el campo de **Email destinata
 ## Elementos comunes a toda la ventana
 
 - **Email destinatario / Enviar mail**: si tildás "Enviar mail", al terminar una corrida (Envío de Leads o Programación de Tests) se manda un mail de resumen a esa dirección. Se habilitan además "Adjuntar resultados", "Adjuntar screenshots" y el modo de envío (**1 por país** o **Consolidado**, un solo mail con todo).
-- **Consola** (parte inferior de la ventana): una cajita de texto de solo lectura que muestra en vivo todo lo que la app va logueando (los mismos mensajes `[INFO]`/`[ERROR]` que usan las distintas pestañas). Tiene un botón **Limpiar** para vaciarla. Sirve para ver qué está pasando sin necesidad de abrir una consola de Windows aparte.
 - **Minimizar a la bandeja al cerrar** (checkbox dentro de "⚙ Configurar" en Envío de Leads): si está tildado, al apretar la ❌ de la ventana la app no se cierra: se oculta y aparece un ícono en la bandeja del sistema (al lado del reloj de Windows). Doble click en ese ícono reabre la ventana; click derecho muestra "Restaurar" y "Salir". Si **no** está tildado, la ❌ cierra la app directamente (matando cualquier navegador que haya quedado abierto). En cualquiera de los dos casos, **si hay un envío o comparación corriendo**, la ❌ nunca cierra ni manda a la bandeja: solo minimiza la ventana a la barra de tareas, para no cortar un proceso a mitad de camino.
 
 ---
