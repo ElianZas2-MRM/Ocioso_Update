@@ -54,7 +54,10 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
    ![Credenciales LT](Asset/screenshots/06_credenciales_lt.png)
 
-5. **PAÍSES A EJECUTAR**: hacé click en las tarjetas de los mercados que querés correr (AR/BO/BR/CL/CO/EC/PY/PE/UY). El contador te dice cuántos elegiste. Los links **Todos** / **Ninguno** seleccionan o deseleccionan todos de un click.
+5. **PAÍSES A EJECUTAR**: hacé click en las tarjetas de los mercados que querés correr (AR/BO/BR/CL/CO/EC/PY/PE/UY) — se pueden elegir varios a la vez, cada tarjeta clickeada queda resaltada y el contador de arriba a la derecha suma. Los links **Todos** / **Ninguno** seleccionan o deseleccionan todos de un click. Recién ahí se habilita (se pone verde) el botón **EJECUTAR ENVÍO**; con 0 países elegidos queda gris y sin click.
+
+   ![Selección de países](Asset/screenshots/10_seleccion_paises.png)
+
 6. **DATOS POR PAÍS**: una tabla de previsualización y edición rápida del Excel que se va a usar. Elegís el país con las solapas (Argentina, Bolivia, …) y, si ese país tiene más de un Excel (por distintos dispositivos), el combo **"Excel a revisar"** de la derecha te deja elegir cuál mirar. Botones sobre la tabla:
    - **+ Agregar**: agrega una fila vacía al final.
    - **🗑 Eliminar**: borra la(s) fila(s) seleccionada(s).
@@ -90,6 +93,9 @@ Programa la ejecución automática y recurrente de "Envío de Leads" (por ejempl
    - **Agregar horario personalizado**: un campo `HH:MM` + botón **+ Agregar** (o Enter) para un horario que no caiga justo en el grillado de 15 minutos.
    - **Horarios elegidos**: aparecen como chips "✕ HH:MM" debajo de la grilla — click en el chip para sacar ese horario puntual.
    - **Aplicar a otros días**: con al menos un horario tildado en el día abierto, aparece la fila **"Aplicar estos horarios a otros días"** — botón **Todos** (copia instantánea a los 7 días) o elegir días puntuales y confirmar con **"✓ Aplicar a N días"** (si un día ya tenía horarios, se avisa "(se reemplaza)").
+
+     ![Aplicar horarios a otros días](Asset/screenshots/15_aplicar_otros_dias.png)
+
    - **Modo "Solo este día" / "Todos los días"**: si activás "Todos los días", cualquier horario que toques en el día abierto se replica en vivo a todos los demás días (aparece un aviso "⚠ Cambios aplican a TODOS los días"). Es distinto de "Aplicar a otros días", que es una copia puntual de una sola vez.
 
    ![Calendario de horarios](Asset/screenshots/08_calendario_horarios.png)
@@ -98,7 +104,7 @@ Programa la ejecución automática y recurrente de "Envío de Leads" (por ejempl
    - **Guardar configuración**: guarda el calendario armado. Antes de guardar, la app valida que ya existan los Excel necesarios en `data/` para cada combinación país + dispositivo elegida (si falta alguno, avisa "Archivos Excel Faltantes").
 3. Una vez guardada, en la pestaña principal aparece la tarjeta **"Programado en background"** con un resumen del próximo disparo (día, hora, modo, mercados).
 4. **Programar test automático**: activa la programación. El botón cambia a **Iniciar ahora** (para disparar ya, sin esperar el horario) + **Desactivar**.
-5. **La app tiene que estar abierta** para que el monitor (revisa cada 60 segundos) detecte el horario y dispare la ejecución — si estaba cerrada, al reabrirla corre el horario pendiente del día.
+5. **La app tiene que estar abierta** para que el monitor (revisa cada 5 segundos) detecte el horario y dispare la ejecución — si estaba cerrada, al reabrirla corre el horario pendiente del día.
 
 ---
 
@@ -122,10 +128,18 @@ Chequea que las reglas de validación (regex, largo, campo obligatorio, etc.) de
    ![Configuración de ID — detalle](Asset/screenshots/07_configuracion_id_detalle.png)
 
    - **Filtro** (texto libre) + combo de **País** + **Limpiar filtros**: filtran la tabla de reglas de abajo.
-   - **Generador regex**: abre un asistente para armar la expresión regular sin escribirla a mano — tildás combinaciones de **Letras minúsculas, Letras mayúsculas, Acentos, Espacios, Símbolos, Números, Máx. 2 iguales seguidos, No todos iguales, Todos iguales, Al menos una vocal, Al menos una consonante, Email, Campo obligatorio**, y definís **Mín./Máx. largo**. Va mostrando en vivo el "Regex full" y "Regex char" resultantes, con botones para copiarlos al portapapeles.
+   - **Generador regex**: abre un asistente para armar la expresión regular sin escribirla a mano — tildás combinaciones de **Letras minúsculas, Letras mayúsculas, Acentos, Espacios, Símbolos, Números, Máx. 2 iguales seguidos, No todos iguales, Todos iguales, Al menos una vocal, Al menos una consonante, Email, Campo obligatorio**, y definís **Mín./Máx. largo**. Va mostrando en vivo el "Regex full" y "Regex char" resultantes, con botones **Copiar regex full** / **Copia regex char** para pasarlos al portapapeles y pegarlos en los campos de arriba.
+
+     ![Generador de regex](Asset/screenshots/12_generador_regex.png)
+
    - **Limpiar campos**: vacía el formulario de arriba para cargar una regla nueva desde cero.
-   - **Mensaje de error**: abre un popup para definir qué mensaje de error espera ver la app cuando el campo falla. Si el campo es Dropdown, es un único mensaje; si no, podés cargar **varias reglas regex → mensaje** (distintos mensajes según qué regla de formato se rompa).
-   - **Dependencia**: abre un popup para decir que este campo depende del valor de otro (ej. "Ciudad" solo tiene sentido si "Región" ya tiene un valor elegido) — se arma como una lista de pares (ID dependiente, Valor).
+   - **Mensaje de error**: abre un popup para definir qué mensaje de error espera ver la app cuando el campo falla. Si el campo es Dropdown, es un único mensaje; si no, podés cargar **varias reglas regex → mensaje** (distintos mensajes según qué regla de formato se rompa) — ojo, primero tenés que tener un ID cargado/seleccionado, si no la app avisa "Completá o seleccioná un ID antes de configurar mensajes." en vez de abrir el popup vacío.
+
+     ![Mensaje de error](Asset/screenshots/13_mensaje_error.png)
+
+   - **Dependencia**: abre un popup para decir que este campo depende del valor de otro (ej. "Ciudad" solo tiene sentido si "Región" ya tiene un valor elegido) — se arma como una lista de pares (ID dependiente, Valor), con botones **Agregar / Editar dependencia** y **Eliminar dependencia**.
+
+     ![Dependencia](Asset/screenshots/14_dependencia.png)
    - **Agregar regla / Editar regla**: guarda el formulario de arriba como una regla nueva, o actualiza la seleccionada (el botón cambia de nombre solo según si hay una fila elegida en la tabla).
    - **Eliminar regla**: borra la regla seleccionada de la tabla.
    - **Tabla de reglas**: lista todo lo cargado (ID, Dropdown, Descripción, Dependencias, Regex full, Regex char, Texto de prueba, Países, Teclado mobile) — click en una fila para traerla al formulario de edición.
@@ -172,7 +186,11 @@ Chequea que los concesionarios (dealers) de una marca estén correctamente carga
 5. **Modelos** (opcional): tildá **"El form tiene selector de Modelo"** si aplica — **importante: esto solo funciona con formularios T1** (el id estándar `models`); formularios T2/T3 con selector de modelo distinto todavía no están soportados. Elegís **"Todos los modelos"** (corre la comparación contra cada modelo que el form ofrezca) o **"Modelo(s) específico(s)"** (campo de texto separado por comas, ej. "Onix, Tracker, S10").
 6. **Modo de salida**: "Solo Excel" o "Excel + Capturas (ZIP)".
 7. **Configuraciones guardadas**: guardá el mapeo completo de columnas con el nombre que quieras (ej. "GMUY Livianos") con **💾 Guardar configuración**, elegilo después del combo y **📂 Cargar** para reusarlo sin reconfigurar todo de nuevo, o **🗑 Eliminar** para borrar un preset guardado que ya no uses (no hay opción de renombrar: para eso, guardalo con el nombre nuevo y después borrá el viejo).
-8. **EJECUTAR**: valida todo antes de arrancar — si falta algo (Excel, URL de form, etc.) muestra un aviso corto sin llegar a abrir nada. Si está todo bien, abre un modal de progreso que bloquea la ventana principal, con botón **Detener** (mientras detiene, se desactiva y muestra "Deteniendo…"), y al terminar muestra **Cerrar** más el resumen 🟢 PASS / 🔴 FAIL / 🟡 EXTRA. El mismo botón EJECUTAR pasa a decir **DETENER** (en rojo) mientras la comparación está corriendo. Si intentás cerrar la ventana principal con una comparación en curso, la app te pregunta primero si de verdad querés detenerla y salir.
+8. **EJECUTAR**: arranca gris/deshabilitado hasta que cargues Excel de dealers + Columna Dealer + al menos una URL de form; se pone verde con el ícono ▶ apenas está todo completo (se habilita/deshabilita solo, en vivo, mientras completás los datos). Al apretarlo valida todo antes de arrancar — si falta algo puntual (columna que no existe en el Excel, filas vacías tras el filtro, etc.) muestra un aviso corto sin llegar a abrir nada. Si está todo bien, abre un modal de progreso que bloquea la ventana principal mostrando qué país está comparando, con botón **Detener** (mientras detiene, se desactiva y muestra "Deteniendo…"):
+
+   ![Modal de ejecución](Asset/screenshots/11_modal_ejecucion.png)
+
+   Al terminar, ese mismo modal muestra **Cerrar** más el resumen 🟢 PASS / 🔴 FAIL / 🟡 EXTRA. El botón EJECUTAR de la barra inferior pasa a decir **DETENER** (en rojo) mientras la comparación está corriendo. Si intentás cerrar la ventana principal con una comparación en curso, la app te pregunta primero si de verdad querés detenerla y salir. "Envío de Leads" usa un modal de progreso con el mismo lenguaje visual (mercado por mercado en vez de país por país).
 9. Los reportes (Excel con colores por estado, y el ZIP de capturas si corresponde) quedan en la carpeta `Dealerscheck_resultados/`.
 
 ---
