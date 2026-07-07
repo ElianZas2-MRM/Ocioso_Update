@@ -11,6 +11,7 @@ a = Analysis(
         ('Asset/Fullheader.png', 'Asset'),
         ('Asset/icon.ico', 'Asset'),
         ('Asset/osopng.png', 'Asset'),
+        ('Asset/tabler_icons', 'Asset/tabler_icons'),
     ],
     hiddenimports=[
         'autonomous_runner',
@@ -31,6 +32,8 @@ a = Analysis(
         'interface.weekly_scheduler',
         'interface.field_validation_ui',
         'interface.console_widget',
+        'interface.dealer_comparator_ui',
+        'core.dealer_comparator_runner',
         'validation.selenium_validation_runner',
         'validation.error_message_validator',
         'validation.text_field_validator',

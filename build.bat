@@ -1,5 +1,10 @@
 @echo off
 REM -- Changelog -----------------------------------------------------------------
+REM Jul 2026: Nueva pestana "Comparador Dealers": chequea region/ciudad/dealer/BAC/modelos
+REM           contra un Excel de dealers (fila de encabezado y columnas configurables,
+REM           multiples forms por pasada, deteccion de duplicados y extras, capturas +
+REM           reporte Excel en Dealerscheck_resultados/). Icono de la app (Asset/icon.ico)
+REM           y AppUserModelID propios para que la barra de tareas no muestre el de python.
 REM Jun 2026: Generar Excels: panel Brasil visible al seleccionar pais (pack before fix)
 REM           Generar Excels: boton "Regenerar datos (URLs actuales)" sin ingresar URLs
 REM           Generar Excels: radio buttons modo envio (redondelitos, sin indicatoron=0)
@@ -47,6 +52,14 @@ set "PY="
 for %%V in (314 313 312 311 310 39) do (
     if exist "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" (
         set "PY=%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
+        goto :create_venv
+    )
+    if exist "C:\Python%%V\python.exe" (
+        set "PY=C:\Python%%V\python.exe"
+        goto :create_venv
+    )
+    if exist "C:\Program Files\Python%%V\python.exe" (
+        set "PY=C:\Program Files\Python%%V\python.exe"
         goto :create_venv
     )
 )
@@ -97,7 +110,7 @@ mkdir "%PORTABLE_DIR%"
 copy /y "dist\%APP_NAME%.exe" "%PORTABLE_DIR%\%APP_NAME%.exe" >nul
 if errorlevel 1 goto :error
 
-for %%D in (data drivers resultados temporales lambdatest_mac lambdatest_android resultados_lambdatestmac resultados_lambdatest_android) do (
+for %%D in (data drivers resultados temporales Dealerscheck_resultados lambdatest_mac lambdatest_android resultados_lambdatestmac resultados_lambdatest_android) do (
     if exist ".\%%D" (
         robocopy ".\%%D" "%PORTABLE_DIR%\%%D" /E /NFL /NDL /NJH /NJS /NC /NS >nul
         if errorlevel 8 goto :error
@@ -106,9 +119,10 @@ for %%D in (data drivers resultados temporales lambdatest_mac lambdatest_android
     )
 )
 
-REM Copiar json/ sin los archivos de estado del scheduler (portable arranca sin schedule activo)
+REM Copiar json/ sin los archivos de estado del scheduler ni la config personal del
+REM Comparador Dealers (portable arranca sin schedule activo y sin configs de otra PC)
 if exist ".\json" (
-    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json >nul
+    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json dealer_comparator_settings.json >nul
     if errorlevel 8 goto :error
 ) else (
     mkdir "%PORTABLE_DIR%\json"

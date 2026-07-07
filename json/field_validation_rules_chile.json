@@ -77,11 +77,23 @@
         "Chile"
       ],
       "teclado_mobile": false,
-      "rules": {},
-      "error_messages": {},
+      "rules": {
+        "required": true,
+        "max_length": 50,
+        "invalid_chars": true
+      },
+      "error_messages": {
+        "required": "Ingresa tu nombre.",
+        "invalid_chars": "Ingresa tu nombre.",
+        "max_length": "Ingresa tu nombre."
+      },
       "error_message_patterns": [
         {
           "regex": "^$",
+          "mensaje": "Ingresa tu nombre."
+        },
+        {
+          "regex": ".*[0-9@].*",
           "mensaje": "Ingresa tu nombre."
         }
       ],
@@ -107,11 +119,23 @@
         "Chile"
       ],
       "teclado_mobile": false,
-      "rules": {},
-      "error_messages": {},
+      "rules": {
+        "required": true,
+        "max_length": 50,
+        "invalid_chars": true
+      },
+      "error_messages": {
+        "required": "Ingresa tu apellido.",
+        "invalid_chars": "Ingresa tu apellido.",
+        "max_length": "Ingresa tu apellido."
+      },
       "error_message_patterns": [
         {
           "regex": "^$",
+          "mensaje": "Ingresa tu apellido."
+        },
+        {
+          "regex": ".*[0-9@].*",
           "mensaje": "Ingresa tu apellido."
         }
       ],
@@ -137,15 +161,28 @@
         "Chile"
       ],
       "teclado_mobile": true,
-      "rules": {},
-      "error_messages": {},
+      "rules": {
+        "required": true,
+        "min_length": 9,
+        "max_length": 9,
+        "invalid_chars": true
+      },
+      "error_messages": {
+        "required": "Ingresa tu celular.",
+        "min_length": "Completar 9 números.",
+        "invalid_chars": "El número no puede empezar con 0."
+      },
       "error_message_patterns": [
         {
           "regex": "^$",
           "mensaje": "Ingresa tu celular."
         },
         {
-          "regex": "^(?!(.)(\\1+$))[0-9]{3,5}$",
+          "regex": "^0.*",
+          "mensaje": "El número no puede empezar con 0."
+        },
+        {
+          "regex": "^[1-9][0-9]{0,7}$",
           "mensaje": "Completar 9 números."
         }
       ],
@@ -171,15 +208,25 @@
         "Chile"
       ],
       "teclado_mobile": false,
-      "rules": {},
-      "error_messages": {},
+      "rules": {
+        "required": true,
+        "invalid_chars": true
+      },
+      "error_messages": {
+        "required": "Ingresa tu email.",
+        "invalid_chars": "El email ingresado no parece válido."
+      },
       "error_message_patterns": [
         {
           "regex": "^$",
           "mensaje": "Ingresa tu email."
         },
         {
-          "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$",
+          "regex": "^[^@]+$",
+          "mensaje": "El email ingresado no parece válido."
+        },
+        {
+          "regex": ".*@@.*",
           "mensaje": "El email ingresado no parece válido."
         }
       ],
@@ -430,6 +477,57 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "RUT (Chile)": {
+      "descripcion": "RUT",
+      "campo": "rut",
+      "element_id": "rut",
+      "regex_full": "^[0-9]{7,8}-[0-9kK]{1}$",
+      "regex_char": "[0-9kK\\-]",
+      "test_text": "12345678-9",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": true,
+      "rules": {
+        "required": true,
+        "min_length": 8,
+        "max_length": 10,
+        "invalid_chars": true
+      },
+      "error_messages": {
+        "required": "Ingresa tu RUT.",
+        "min_length": "Ingresar al menos 8 dígitos.",
+        "invalid_chars": "El RUT ingresado no parece válido."
+      },
+      "error_message_patterns": [
+        {
+          "regex": "^$",
+          "mensaje": "Ingresa tu RUT."
+        },
+        {
+          "regex": "^[0-9kK\\-]{1,7}$",
+          "mensaje": "Ingresar al menos 8 dígitos."
+        },
+        {
+          "regex": "^([0-9kK\\-])\\1+$",
+          "mensaje": "El RUT ingresado no parece válido."
+        },
+        {
+          "regex": ".*[^0-9kK\\-].*",
+          "mensaje": "El RUT ingresado no parece válido."
+        }
+      ],
+      "error_config": {},
+      "error_priority": [
+        "required",
+        "invalid_chars",
+        "min_length",
+        "max_length"
+      ]
     }
   }
 }

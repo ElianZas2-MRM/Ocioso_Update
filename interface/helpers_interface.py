@@ -136,6 +136,16 @@ def _enviar_via_smtp(destinatarios, asunto, cuerpo, adjuntos):
         server.sendmail(user, msg["To"].split("; "), msg.as_string())
 
 
+def _safe_print(msg):
+    try:
+        builtins.print(msg)
+    except Exception:
+        try:
+            enc = sys.stdout.encoding or "utf-8"
+            builtins.print(str(msg).encode(enc, errors="replace").decode(enc))
+        except Exception:
+            pass
+
 def _worker_envio_emails():
     """Worker que mantiene Outlook abierto y envía emails desde la cola."""
     global _outlook_instance
@@ -150,7 +160,7 @@ def _worker_envio_emails():
         try:
             _outlook_instance = win32.GetActiveObject("Outlook.Application")
         except Exception as _get_err:
-            builtins.print(f"⚠️ GetActiveObject falló ({_get_err}), intentando Dispatch...")
+            _safe_print(f"[WARN] GetActiveObject falló ({_get_err}), intentando Dispatch...")
             _outlook_instance = win32.Dispatch("Outlook.Application")
 
         while True:
@@ -180,11 +190,11 @@ def _worker_envio_emails():
                             if archivo and os.path.exists(archivo):
                                 mail.Attachments.Add(os.path.abspath(archivo))
                             else:
-                                builtins.print(f"      ⚠️ [{i}] Adjunto no encontrado: {archivo}")
+                                _safe_print(f"      [WARN] [{i}] Adjunto no encontrado: {archivo}")
                     _to = mail.To
                     _subject = mail.Subject
                     mail.Send()
-                    builtins.print(f"✅ Email enviado (Outlook) a: {_to} | Asunto: {_subject}")
+                    _safe_print(f"[SUCCESS] Email enviado (Outlook) a: {_to} | Asunto: {_subject}")
                     time.sleep(0.5)
 
                     if _callback:
@@ -208,7 +218,7 @@ def _worker_envio_emails():
 
                 except Exception as e:
                     import traceback
-                    builtins.print(f"❌ Error al enviar email via Outlook: {e}")
+                    _safe_print(f"[ERROR] Error al enviar email via Outlook: {e}")
                     log_runtime(traceback.format_exc(), level="ERROR")
                     if _callback:
                         try:
@@ -227,11 +237,11 @@ def _worker_envio_emails():
             except queue.Empty:
                 pass
             except Exception as e:
-                builtins.print(f"❌ Error en worker de email: {e}")
+                _safe_print(f"[ERROR] Error en worker de email: {e}")
                 log_runtime(str(e), level="ERROR")
 
     except Exception as e:
-        builtins.print(f"❌ ERROR CRÍTICO inicializando worker de email: {e}")
+        _safe_print(f"[ERROR] ERROR CRÍTICO inicializando worker de email: {e}")
         log_runtime(str(e), level="ERROR")
         while True:
             try:
@@ -582,7 +592,12 @@ def analizar_errores_excel(ruta_excel):
 
         resultados = df[col_resultado].astype(str).fillna("").str.strip()
         procesados_mask = resultados != ""
-        errores_mask = resultados.str.contains("error", case=False, na=False)
+        # Éxito REAL = el runner (local y LambdaTest) marcó "Lead enviado correctamente".
+        # Cualquier otra fila procesada (TY Page no detectada, formulario sigue visible,
+        # intentos fallidos, error de event id, error de servidor, etc.) cuenta como ERROR,
+        # aunque el texto no contenga literalmente la palabra "error".
+        _ok_mask = resultados.str.contains("Lead enviado correctamente", case=False, na=False)
+        errores_mask = procesados_mask & ~_ok_mask
 
         errores = df[errores_mask]
         con_errores = int(errores_mask.sum())
@@ -626,7 +641,8 @@ def analizar_errores_excel(ruta_excel):
         # Detectar formularios no insertados (Form coincide == NO)
         detalles_form = []
         if col_form_coincide:
-            form_no_coincide_mask = df[col_form_coincide].astype(str).str.strip().str.upper() == "NO"
+            _fc = df[col_form_coincide].astype(str).str.strip().str.upper()
+            form_no_coincide_mask = _fc.isin(["NO", "FORMULARIO INCORRECTO", "FAIL"])
             for idx, fila in df[form_no_coincide_mask].iterrows():
                 url_landing    = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
                 url_esperada   = str(fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(fila.get(col_form_url_esperada, float('nan'))) else "?"
@@ -1171,9 +1187,9 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         _fail_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles') or [])]
         _pass_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles_ok') or [])]
         if _fail_urls:
-            cuerpo += f"FAILED ({len(_fail_urls)}): {' | '.join(_fail_urls)}\n"
+            cuerpo += f"FAILED ({len(_fail_urls)}): {pais}\n"
         if _pass_urls:
-            cuerpo += f"PASSED ({len(_pass_urls)}): {' | '.join(_pass_urls)}\n"
+            cuerpo += f"PASSED ({len(_pass_urls)}): {pais}\n"
 
         cuerpo += "\nSaludos,\nAutomación de Formularios"
 

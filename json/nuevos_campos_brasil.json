@@ -1,12 +1,108 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-06-30T11:33:10",
+  "ultima_deteccion": "2026-07-07T10:42:41",
   "campos_nuevos": [
     {
       "id": "categories",
       "type": "select",
       "required": false,
       "label": "categories"
+    },
+    {
+      "id": "customSlider",
+      "type": "text",
+      "required": false,
+      "label": "customSlider"
+    },
+    {
+      "id": "guideContainer-rootPanel-panel1701281776810-guidedropdownlist___widget",
+      "type": "select",
+      "required": true,
+      "label": "Modelo:"
+    },
+    {
+      "id": "guideContainer-rootPanel-panel1701281776810-guidedropdownlist_658578335___widget",
+      "type": "select",
+      "required": true,
+      "label": "Essas informações são pessoais ou de uma empresa?"
+    },
+    {
+      "id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1352010797___widget",
+      "type": "text",
+      "required": true,
+      "label": "Número de veículos:"
+    },
+    {
+      "id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1283491___widget",
+      "type": "textarea",
+      "required": true,
+      "label": "Comentários adicionais:"
+    },
+    {
+      "id": "guideContainer-rootPanel-guidedropdownlist___widget",
+      "type": "select",
+      "required": true,
+      "label": "Data estimada da compra"
+    },
+    {
+      "id": "guideContainer-rootPanel-firstName___widget",
+      "type": "text",
+      "required": true,
+      "label": "Nome"
+    },
+    {
+      "id": "guideContainer-rootPanel-lastName___widget",
+      "type": "text",
+      "required": true,
+      "label": "Sobrenome"
+    },
+    {
+      "id": "guideContainer-rootPanel-guidetelephone___widget",
+      "type": "text",
+      "required": true,
+      "label": "guideContainer-rootPanel-guidetelephone___jqName"
+    },
+    {
+      "id": "guideContainer-rootPanel-emailFragment-guideemail___widget",
+      "type": "text",
+      "required": true,
+      "label": "E-MAIL"
+    },
+    {
+      "id": "guideContainer-rootPanel-cpf___widget",
+      "type": "text",
+      "required": true,
+      "label": "CPF"
+    },
+    {
+      "id": "guideContainer-rootPanel-simpleDealerSelector___widget",
+      "type": "text",
+      "required": true,
+      "label": "simpleDealerSelector"
+    },
+    {
+      "id": "acquisition-method",
+      "type": "select",
+      "required": false,
+      "label": "acquisition-method"
+    },
+    {
+      "id": "activity-area",
+      "type": "select",
+      "required": false,
+      "label": "activity-area"
+    },
+    {
+      "id": "fleet-size",
+      "type": "select",
+      "required": false,
+      "label": "fleet-size"
+    },
+    {
+      "id": "company-name",
+      "type": "text",
+      "required": false,
+      "label": " "
     }
   ]
 }

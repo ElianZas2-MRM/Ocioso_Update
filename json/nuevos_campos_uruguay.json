@@ -1,12 +1,42 @@
 {
   "pais": "Uruguay",
-  "ultima_deteccion": "2026-06-30T11:32:30",
+  "ultima_deteccion": "2026-07-02T01:29:02",
   "campos_nuevos": [
     {
       "id": "patent",
       "type": "text",
       "required": false,
       "label": " "
+    },
+    {
+      "id": "name",
+      "type": "text",
+      "required": true,
+      "label": " "
+    },
+    {
+      "id": "document",
+      "type": "text",
+      "required": true,
+      "label": " "
+    },
+    {
+      "id": "phone",
+      "type": "text",
+      "required": true,
+      "label": " "
+    },
+    {
+      "id": "model",
+      "type": "select",
+      "required": true,
+      "label": "model"
+    },
+    {
+      "id": "estimated-day",
+      "type": "select",
+      "required": true,
+      "label": "estimated-day"
     }
   ]
 }

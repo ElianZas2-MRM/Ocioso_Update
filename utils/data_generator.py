@@ -54,10 +54,10 @@ def generar_apellido():
     return " ".join(random.sample(LAST_NAMES, count))
 
 
-def generar_email(nombre, apellido, pais=""):
+def generar_email(nombre, apellido, pais="", device=None):
     """
-    Formato: {nombre_partes}{apellido_partes}{special}{pais_abrev}{nn}@mrm.com
-    Incluye todos los tokens de nombre y apellido, abreviatura de país, 2 dígitos y un carácter especial.
+    Formato: {nombre_partes}{apellido_partes}{special}{pais_abrev}{nn}{_device}@mrm.com
+    Incluye todos los tokens de nombre y apellido, abreviatura de país, 2 dígitos, un carácter especial y dispositivo.
     """
     # Incluir todos los tokens (1 o 2) según cuántas palabras haya
     nombre_parts = "".join(_clean(p) for p in nombre.split())
@@ -65,7 +65,14 @@ def generar_email(nombre, apellido, pais=""):
     abrev = PAIS_ABREV.get(pais, "")
     special = random.choice(SPECIAL_CHARS)
     numero = f"{random.randint(1, 99):02d}"
-    return f"{nombre_parts}{apellido_parts}{special}{abrev}{numero}@mrm.com"
+    
+    device_suffix = ""
+    if device:
+        dev_clean = device.lower().replace("lambdatest_", "").replace("emulado-navegador", "").replace("desktop", "").strip()
+        if dev_clean:
+            device_suffix = f"_{dev_clean}"
+            
+    return f"{nombre_parts}{apellido_parts}{special}{abrev}{numero}{device_suffix}@mrm.com"
 
 
 # ── Generadores de documento ─────────────────────────────────────────────────
@@ -198,6 +205,66 @@ def generar_documento_brasil_4devs(tipo: str = "cpf") -> str:
         return generar_cpf_brasil()
 
 
+# Países cuyos formularios pueden tener MÁS DE UN campo de documento a la vez
+# (ej. Brasil: CPF y CEP, o CNPJ y CEP). Estos usan columnas semánticas separadas en
+# el Excel en vez de una sola "Documento". Los países fuera de este dict siguen igual.
+DOC_TYPES_BY_COUNTRY = {
+    "Brasil": ["CPF", "CNPJ", "CEP", "VIN"],
+}
+
+
+# Valores fijos por formulario (match por substring de la URL del form). Se aplican al
+# generar el Excel, sobrescribiendo los aleatorios. Útil cuando un form exige un vehículo
+# real (VIN + modelo que coinciden). El usuario puede editarlos a mano en el Excel.
+FIXED_FORM_VALUES = {
+    "clubemyev": {"Modelo": "Spark EUV", "VIN": "LK6ADAE3XTB075680"},
+}
+
+
+def fixed_values_for_url(url):
+    """Devuelve el dict {columna: valor} fijo si la URL matchea un form conocido, o {}."""
+    u = str(url or "").lower()
+    for key, vals in FIXED_FORM_VALUES.items():
+        if key in u:
+            return vals
+    return {}
+
+
+# VIN: 17 caracteres, sin I/O/Q. Dígito verificador en la posición 9 (ISO 3779 / NHTSA).
+_VIN_CHARS = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
+_VIN_TRANSLIT = {
+    **{str(d): d for d in range(10)},
+    'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8,
+    'J': 1, 'K': 2, 'L': 3, 'M': 4, 'N': 5, 'P': 7, 'R': 9,
+    'S': 2, 'T': 3, 'U': 4, 'V': 5, 'W': 6, 'X': 7, 'Y': 8, 'Z': 9,
+}
+_VIN_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2]
+
+
+def generar_vin():
+    """Genera un VIN válido de 17 caracteres con dígito verificador correcto."""
+    chars = [random.choice(_VIN_CHARS) for _ in range(17)]
+    total = sum(_VIN_TRANSLIT[chars[i]] * _VIN_WEIGHTS[i] for i in range(17))
+    resto = total % 11
+    chars[8] = 'X' if resto == 10 else str(resto)  # posición 9 = verificador (peso 0)
+    return "".join(chars)
+
+
+def _generar_doc_por_tipo(tipo):
+    """Genera un documento brasileño del tipo pedido. CPF/CNPJ/VIN locales (instantáneos);
+    CEP vía 4devs con fallback a lista de CEPs válidos."""
+    t = (tipo or "").lower()
+    if t == "cpf":
+        return generar_cpf_brasil()
+    if t == "cnpj":
+        return generar_cnpj_brasil()
+    if t == "cep":
+        return generar_documento_brasil_4devs("cep")
+    if t == "vin":
+        return generar_vin()
+    return ""
+
+
 def generar_documento(pais):
     if pais == "Chile":
         return generar_rut_chile()
@@ -251,17 +318,20 @@ def generar_celular(pais):
 
 # ── Generador de fila completa ───────────────────────────────────────────────
 
-def generar_fila_datos(pais):
-    """Devuelve dict {nombre_columna: valor} para el país dado."""
+def generar_fila_datos(pais, device=None, doc_types=None):
+    """Devuelve dict {nombre_columna: valor} para el país dado.
+    doc_types: solo para países en DOC_TYPES_BY_COUNTRY (ej. Brasil). dict {tipo: bool}
+    para elegir qué documentos generar (CPF/CNPJ/CEP); default = todos. Esos países usan
+    columnas semánticas (CPF/CNPJ/CEP) en vez de la única 'Documento'."""
     nombre = generar_nombre()
     apellido = generar_apellido()
-    return {
+    fila = {
         "Modelo": "",
         "Nombre": nombre,
         "Apellido": apellido,
         "Documento": generar_documento(pais),
         "Celular": generar_celular(pais),
-        "Email": generar_email(nombre, apellido, pais),
+        "Email": generar_email(nombre, apellido, pais, device),
         # Campos de selección aleatoria en el formulario → vacíos
         "Región": "",
         "Region": "",
@@ -284,4 +354,16 @@ def generar_fila_datos(pais):
         "Seguro": "",
         "Color": "",
         "Kit": "",
+        "Dispositivo": device or "",
     }
+
+    # Países con múltiples documentos (Brasil): columnas semánticas CPF/CNPJ/CEP en vez
+    # de "Documento". Se generan solo los tipos tildados (doc_types); default = todos.
+    tipos = DOC_TYPES_BY_COUNTRY.get(pais)
+    if tipos:
+        fila.pop("Documento", None)
+        sel = doc_types if isinstance(doc_types, dict) else {t: True for t in tipos}
+        for t in tipos:
+            fila[t] = _generar_doc_por_tipo(t) if sel.get(t, False) else ""
+
+    return fila

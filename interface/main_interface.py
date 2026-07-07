@@ -1,2272 +1,955 @@
+# -*- coding: utf-8 -*-
 """
-main_interface.py — Interfaz gráfica principal de la aplicación (Tkinter).
-Pestañas: Carga de datos, Ejecución por país, Validación de campos, Programación y IDs Dinámicos.
-Permite cargar Excels, correr formularios, ver resultados y configurar el envío de emails.
+interface_demo.py — Demo visual interactiva del nuevo diseño Figma-style.
+Esta versión incluye scrollbars horizontales, scroll general de ventana, colores pastel suaves y advertencias dinámicas.
 """
+import tkinter as tk
+from tkinter import ttk, messagebox
 import os
 import sys
-import threading
 
-# Forzar UTF-8 en stdout/stderr para que los print() con emojis no rompan en Windows (cp1252)
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
-import subprocess
-import importlib
-import importlib.util
+# Evitar UnicodeEncodeError cuando el backend hace print() con emojis bajo consola cp1252
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 import time
-from tkinter import *
-from tkinter import ttk, messagebox
-from tkinter.scrolledtext import ScrolledText
+import threading
+from datetime import datetime as _dt, date as _date
 from PIL import Image, ImageTk
-import shutil
-import glob
-import pandas as pd
-from datetime import datetime, timedelta
-import re
-import json
-import textwrap
-import webbrowser
 
-from .helpers_interface import (
-    analizar_errores_excel,
-    abrir_excel,
-    crear_zip_de_carpeta,
-    cargar_config_global,
-    guardar_config_global,
-    obtener_email_destinatario,
-    cargar_ids_dinamicos,
-    guardar_ids_dinamicos,
-    cargar_dependencias,
-    guardar_dependencias,
-    obtener_ids_mapeados_normales,
-    sincronizar_excels_de_pais,
-    TEMPORALES_DIR,
-)
-# === LIMPIEZA DE TEMPORALES ===
-def limpiar_temporales():
-    """Elimina todo el contenido de la carpeta temporales al iniciar la app."""
-    try:
-        if not os.path.exists(TEMPORALES_DIR):
-            return
-        for f in glob.glob(os.path.join(TEMPORALES_DIR, '*')):
-            if os.path.isfile(f):
-                try:
-                    os.remove(f)
-                except Exception:
-                    pass
-            elif os.path.isdir(f):
-                try:
-                    shutil.rmtree(f)
-                except Exception:
-                    pass
-    except Exception:
-        pass
-from .field_validation_ui import build_field_validation_tab
-from tkinter import StringVar
-
-# Importar utilidades compartidas (import absoluto)
-from utils.fixed_field_mapping_store import (
-    build_excel_columns_for_country,
-    list_available_fixed_mapping_countries,
-    load_effective_country_form_config,
-    save_country_fixed_field_mapping,
-)
-
-# === RUTAS BASE ===
-from utils.paths import BASE_DIR, BUNDLE_DIR, FORMS_DIR, DATA_DIR, ASSET_DIR, RESULTS_DIR, JSON_DIR
-
-def abrir_carpeta_resultados():
-    """Abre la carpeta de resultados en el explorador."""
-    try:
-        if not os.path.exists(RESULTS_DIR):
-            messagebox.showwarning("Resultados", "No se encontró la carpeta de resultados.")
-            return
-
-        if os.name == "nt":
-            os.startfile(RESULTS_DIR)  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.run(["open", RESULTS_DIR], check=False)
-        else:
-            subprocess.run(["xdg-open", RESULTS_DIR], check=False)
-    except Exception as exc:
-        messagebox.showerror("Resultados", f"No se pudo abrir la carpeta de resultados:\n{exc}")
-
-
-APP_BG_COLOR = "#5D3C7A"
-HEADER_BG_COLOR = "#9c6fb4"
-SECTION_BG_COLOR = HEADER_BG_COLOR
-SECTION_CONTAINER_BG_COLOR = "#7a549a"
-SECTION_CTA_BG_COLOR = "#345474"
-PRIMARY_TEXT_COLOR = "#000000"
-
-
-def normalizar_valores_id_dinamico(valor):
-    """Normaliza un valor de ID dinámico a una lista sin vacíos."""
-    if valor is None:
-        return []
-
-    if isinstance(valor, list):
-        return [str(item).strip() for item in valor if str(item).strip()]
-
-    texto = str(valor).strip()
-    if not texto:
-        return []
-
-    if "|" in texto:
-        return [item.strip() for item in texto.split("|") if item.strip()]
-
-    return [texto]
-
-
-def extraer_datos_id_dinamico(raw_value):
-    """Obtiene nombre de campo y valor desde formato legacy o nuevo."""
-    if isinstance(raw_value, dict):
-        nombre = str(
-            raw_value.get("nombre_campo")
-            or raw_value.get("nombre")
-            or raw_value.get("campo")
-            or ""
-        ).strip()
-        valor = (
-            raw_value.get("valor")
-            if "valor" in raw_value
-            else raw_value.get("valores", raw_value.get("value", raw_value.get("values")))
-        )
-        return nombre, valor
-    return "", raw_value
-
-
-def compactar_valores_id_dinamico(valores):
-    """Devuelve un valor escalar si hay uno solo; si no, conserva lista."""
-    return valores if len(valores) > 1 else valores[0]
-
-
-def normalizar_paises_id_dinamico(raw_paises):
-    """Normaliza lista de países de un ID dinámico."""
-    if raw_paises is None:
-        return []
-    if isinstance(raw_paises, str):
-        candidatos = [raw_paises]
-    elif isinstance(raw_paises, (list, tuple, set)):
-        candidatos = list(raw_paises)
-    else:
-        return []
-
-    paises = []
-    for pais in candidatos:
-        texto = str(pais).strip()
-        if texto and texto not in paises:
-            paises.append(texto)
-    return paises
-
-
-def obtener_texto_encabezado(nombre_columna):
-    """Devuelve el texto visible a usar en el encabezado del Treeview."""
-    if not nombre_columna:
-        return nombre_columna
-
-    return nombre_columna
-
-# === MAPEO DE PAÍSES ===
-MAPEO_PAISES = {
-    "Argentina": "Formulario_Argentina_Main",
-    "Bolivia": "Formulario_Bolivia_Main", 
-    "Brasil": "Formulario_Brasil_Main",
-    "Chile": "Formulario_Chile_Main",
-    "Colombia": "Formulario_Colombia_Main",
-    "Ecuador": "Formulario_Ecuador_Main",
-    "Paraguay": "Formulario_Paraguay_Main",
-    "Peru": "Formulario_Peru_Main",
-    "Uruguay": "Formulario_Uruguay_Main"
-}
-
-# === MAPEO DE ABREVIATURAS DE PAÍSES ===
-ABREV_PAISES = {
-    "ar": "Argentina",
-    "bo": "Bolivia",
-    "br": "Brasil",
-    "cl": "Chile",
-    "co": "Colombia",
-    "ec": "Ecuador",
-    "py": "Paraguay",
-    "pe": "Peru",
-    "uy": "Uruguay"
-}
-
-# Mapeo inverso para convertir país completo a abreviatura
-PAIS_A_ABREV = {v: k for k, v in ABREV_PAISES.items()}
-
-
-def normalizar_datos_excel(pais_abrev, landing_url, expected_form_url):
-    """
-    Normaliza datos del Excel y acepta 2 formatos:
-    - Nuevo: columna A = país abreviado, B = landing_url, C = expected_form_url (iframe).
-      C puede estar vacío: formulario embebido en la landing, sin buscar iframe.
-    - Legacy: columna A = landing_url, B = expected_form_url.
-      B vacío: mismo criterio (formulario en la misma página).
-
-    Returns: (pais_abrev_valido, landing_url_limpia, expected_form_url_limpia, error)
-    """
-    error = None
-
-    def limpiar_url(url):
-        if not url:
-            return ""
-        url_limpia = str(url).strip()
-        url_limpia = url_limpia.replace('\n', '').replace('\r', '').replace('\t', '')
-        return url_limpia.strip()
-
-    def parece_url(texto):
-        valor = str(texto or "").strip().lower()
-        return valor.startswith("http://") or valor.startswith("https://")
-
-    raw_col_a = limpiar_url(pais_abrev)
-    raw_col_b = limpiar_url(landing_url)
-    raw_col_c = limpiar_url(expected_form_url)
-
-    # Formato nuevo: A=país, B=landing, C=form.
-    pais_normalizado = str(raw_col_a).lower() if raw_col_a else ""
-    if pais_normalizado in ABREV_PAISES:
-        landing_url_limpia = raw_col_b
-        expected_form_url_limpia = raw_col_c
-        if not landing_url_limpia:
-            error = "Landing URL faltante en formato con país (A/B/C)."
-        return pais_normalizado, landing_url_limpia, expected_form_url_limpia, error
-
-    # Formato legacy: A=landing, B=form (iframe). B vacío = formulario embebido en la misma página.
-    if parece_url(raw_col_a):
-        landing_url_limpia = raw_col_a
-        expected_form_url_limpia = raw_col_b if parece_url(raw_col_b) else ""
-
-        # Compatibilidad extra: si B no es URL pero C sí, usar C como form URL.
-        if not expected_form_url_limpia and parece_url(raw_col_c):
-            expected_form_url_limpia = raw_col_c
-
-        return "", landing_url_limpia, expected_form_url_limpia, error
-
-    # Caso inválido: no parece país válido ni URL legacy.
-    if raw_col_a:
-        error = f"País '{raw_col_a}' no válido. Use: {', '.join(ABREV_PAISES.keys())} o formato legacy (URL en A)."
-    else:
-        error = "Columna A vacía: use país abreviado o landing URL (formato legacy)."
-
-    return "", raw_col_b, raw_col_c, error
-
-
-def normalizar_paises_programacion(raw_paises):
-    """Convierte abreviaturas o nombres guardados a nombres de país válidos."""
-    paises_normalizados = []
-    for pais in normalizar_paises_id_dinamico(raw_paises):
-        if pais in MAPEO_PAISES and pais not in paises_normalizados:
-            paises_normalizados.append(pais)
-            continue
-
-        pais_expandido = ABREV_PAISES.get(pais.strip().lower())
-        if pais_expandido and pais_expandido not in paises_normalizados:
-            paises_normalizados.append(pais_expandido)
-
-    return paises_normalizados
-
-
-def _asegurar_paths_modulos():
-    """Asegura paths para imports dinámicos en modo fuente y ejecutable."""
-    core_dir = os.path.join(BASE_DIR, "core")
-    for p in (FORMS_DIR, core_dir, BASE_DIR):
-        if p not in sys.path:
-            sys.path.insert(0, p)
-
-
-def _get_run_func(pais_nombre):
-    """Devuelve la función run_formularios_<País> usando el runner genérico consolidado."""
-    _asegurar_paths_modulos()
-    from _runner_common import get_runner
-    return get_runner(pais_nombre)
-
-
-def _get_environments():
-    _asegurar_paths_modulos()
-    from _runner_common import ENVIRONMENTS
-    return ENVIRONMENTS
-
-# === CONFIGURACIONES DISPONIBLES ===
-CONFIGURACIONES = [
-    {"browser": "chrome", "viewport": "fullscreen"},
-    {"browser": "chrome", "viewport": "600x738"},
-    {"browser": "edge", "viewport": "fullscreen"},
-    {"browser": "edge", "viewport": "600x738"},
-    {"browser": "firefox", "viewport": "fullscreen"},
-    {"browser": "firefox", "viewport": "600x738"}
-]
-
-# Variables globales para ordenamiento
-orden_ascendente = {}
-
-# Variable global para programación de tests
-programacion_actual = None 
-
-# === CLASE PARA EDITAR CELDAS DIRECTAMENTE ===
-class CellEditor:
-    def __init__(self, tree_widget):
-        self.tree = tree_widget
-        self.entry = None
-        self.current_item = None
-        self.current_column = None
-
-    def start_edit(self, event):
-        item = self.tree.identify_row(event.y)
-        columna = self.tree.identify_column(event.x)
-
-        if not item or not columna or columna == '#0':
-            return
-        if item == "":
-            return
-
-        col_index = int(columna.replace('#', '')) - 1
-        columnas = self.tree["columns"]
-        if col_index >= len(columnas) or columnas[0] in ["info", "error"]:
-            return
-
-        # Guardar celda anterior ANTES de actualizar current_item/current_column
-        if self.entry:
-            self.finish_edit()
-
-        self.current_item = item
-        self.current_column = col_index
-
-        valores = list(self.tree.item(item)["values"])
-        valor_actual = valores[col_index] if col_index < len(valores) else ""
-        valor_actual = str(valor_actual)
-        if valor_actual.startswith("\x00"):
-            valor_actual = valor_actual[1:]
-
-        bbox = self.tree.bbox(item, columna)
-        if not bbox:
-            return
-
-        self.entry = Entry(self.tree, font=("Segoe UI", 9))
-        self.entry.place(x=bbox[0], y=bbox[1], width=bbox[2], height=bbox[3])
-        self.entry.insert(0, str(valor_actual))
-        self.entry.select_range(0, END)
-        self.entry.focus()
-
-        self.entry.bind('<Return>', self.finish_edit)
-        self.entry.bind('<Escape>', self.cancel_edit)
-
-    def finish_edit(self, event=None):
-        if not self.entry or not self.current_item:
-            return
-
-        nuevo_valor = self.entry.get()
-        if len(nuevo_valor) >= 2 and nuevo_valor.startswith("0") and nuevo_valor[1:].isdigit():
-            nuevo_valor_tree = "\x00" + nuevo_valor
-        else:
-            nuevo_valor_tree = nuevo_valor
-
-        try:
-            valores = list(self.tree.item(self.current_item)["values"])
-            if self.current_column < len(valores):
-                valores[self.current_column] = nuevo_valor_tree
-            else:
-                while len(valores) <= self.current_column:
-                    valores.append("")
-                valores[self.current_column] = nuevo_valor_tree
-            self.tree.item(self.current_item, values=valores)
-        except Exception:
-            pass
-        self.cleanup()
-
-    def cancel_edit(self, event=None):
-        self.cleanup()
-
-    def cleanup(self):
-        if self.entry:
-            self.entry.destroy()
-            self.entry = None
-        self.current_item = None
-        self.current_column = None
-
-def safe_str(val):
-    if val is None:
-        return ""
-    
-    if isinstance(val, str):
-        v = val.strip()
-        if v.endswith(".0") and v[:-2].lstrip("-").isdigit() and not v.startswith("0"):
-            v = v[:-2]
-        return v
-
-    if isinstance(val, float):
-        if val == int(val):
-            return str(int(val))
-        return str(val)
-
-    return str(val).strip()
-
-# === FUNCIONES MEJORADAS PARA MANEJO DE EXCEL EN INTERFAZ ===
-def cargar_excel_a_tabla(excel_nombre, tree_widget, cell_editor=None):
-    """Carga el contenido del Excel en el widget Treeview mostrando solo 5 filas visibles"""
-    try:
-        # Limpiar tabla existente
-        for item in tree_widget.get_children():
-            tree_widget.delete(item)
-        
-        excel_ruta = os.path.join(DATA_DIR, f"{excel_nombre}.xlsx")
-        
-        if os.path.exists(excel_ruta):
-            # Leer el Excel
-            df = pd.read_excel(excel_ruta, dtype=str, keep_default_na=False)
-
-            columnas_normalizadas = {}
-            for nombre_columna in df.columns:
-                alias = obtener_texto_encabezado(nombre_columna)
-                if alias and alias != nombre_columna:
-                    columnas_normalizadas[nombre_columna] = alias
-
-            if columnas_normalizadas:
-                df.rename(columns=columnas_normalizadas, inplace=True)
-            
-            # Configurar columnas del Treeview
-            columnas = list(df.columns)
-            # Forzar nombre de columna 'Modelo' en la posición original si existe, o agregarla si no
-            modelo_idx = None
-            for idx, col in enumerate(columnas):
-                if col.strip().lower() in ("modelo", "model", "models"):
-                    modelo_idx = idx
-                    columnas[idx] = "Modelo"
-            if modelo_idx is None:
-                # Si no existe, agregar al final
-                columnas.append("Modelo")
-                modelo_idx = len(columnas) - 1
-                df["Modelo"] = ""
-            tree_widget["columns"] = columnas
-            tree_widget["show"] = "headings"
-            
-            # MEJORA 1: Configurar estilo con líneas divisorias
-            estilo = ttk.Style()
-            estilo.configure(
-                "Section.Treeview",
-                background="white",
-                foreground=PRIMARY_TEXT_COLOR,
-                rowheight=25,
-                fieldbackground="white",
-                borderwidth=0,
-                relief="flat",
-            )
-
-            estilo.configure(
-                "Section.Treeview.Heading",
-                background="#d8def2",
-                foreground=PRIMARY_TEXT_COLOR,
-                relief="flat",
-                borderwidth=0,
-            )
-
-            estilo.map(
-                "Section.Treeview",
-                background=[('selected', '#8da9d9')],
-                foreground=[('selected', 'white')],
-            )
-            estilo.map(
-                "Section.Treeview.Heading",
-                background=[('active', '#c1c9e5')],
-            )
-
-            tree_widget.configure(style="Section.Treeview")
-            
-            # Configurar encabezados con función de ordenamiento
-            for col in columnas:
-                heading_text = obtener_texto_encabezado(col)
-                tree_widget.heading(col, text=heading_text, command=lambda c=col: ordenar_columna(c, tree_widget))
-
-                valores_columna = df[col].dropna()
-                max_contenido = 0
-                if not valores_columna.empty:
-                    max_contenido = valores_columna.astype(str).map(len).max()
-
-                if col.lower() in ("url", "formulario"):
-                    caracteres_objetivo = 50
-                else:
-                    caracteres_objetivo = max(len(col), max_contenido)
-
-                # Convertir a una estimación en píxeles (aprox. 8px por carácter)
-                ancho_pixeles = max(80, int(caracteres_objetivo * 8))
-                ancho_minimo = max(60, int(len(col) * 8))
-                tree_widget.column(col, width=ancho_pixeles, minwidth=ancho_minimo, stretch=False)
-
-            if columnas:
-                # Permite que la última columna acompañe el ancho del Treeview sin bloquear el scroll horizontal
-                tree_widget.column(columnas[-1], stretch=True)
-            
-            # Agregar datos (todas las filas, pero solo se mostrarán 5 visualmente)
-            # Asegurar que la columna 'Modelo' sea tipo string/object para evitar errores de asignación
-            if "Modelo" in df.columns:
-                df["Modelo"] = df["Modelo"].astype(str)
-            for index, row in df.iterrows():
-                valores = [""] * len(columnas)
-                # Copiar valores existentes
-                for idx, col in enumerate(df.columns):
-                    if idx < len(columnas):
-                        val = row[col]
-                        valores[idx] = safe_str(val)
-
-                # Autocompletar 'Modelo' desde la URL (busca en columna 'Formulario', 'form_url' o 'url')
-                col_form = None
-                prioridad = ["formulario", "form_url", "url"]
-                for nombre in prioridad:
-                    for idx, col in enumerate(columnas):
-                        if col.strip().lower() == nombre:
-                            col_form = idx
-                            break
-                    if col_form is not None:
-                        break
-                if col_form is not None and modelo_idx is not None:
-                    form_url = valores[col_form] if col_form < len(valores) else ""
-                    import re
-                    m = re.search(r"[?&]model=([^&#]+)", form_url)
-                    if m:
-                        from urllib.parse import unquote
-                        raw_model = m.group(1)
-                        model_val = unquote(raw_model)
-                        model_val = re.sub(r"[^a-zA-Z0-9áéíóúÁÉÍÓÚüÜñÑ\s]", " ", model_val)
-                        model_val = re.sub(r"\s+", " ", model_val).strip()
-                        valores[modelo_idx] = model_val
-                        # Actualizar también el DataFrame para que se guarde correctamente
-                        df.at[index, "Modelo"] = model_val
-                # Proteger valores que empiezan con "0" seguido de dígitos (ej: "09...")
-                # para que tkinter Treeview no los convierta a entero y pierda el 0 inicial.
-                valores_protegidos = []
-                for v in valores:
-                    sv = str(v) if v is not None else ""
-                    if len(sv) >= 2 and sv.startswith("0") and sv[1:].isdigit():
-                        sv = "\x00" + sv  # prefijo invisible para bloquear conversión numérica
-                    valores_protegidos.append(sv)
-                tree_widget.insert("", "end", values=valores_protegidos)
-            
-            # Reconfigurar el editor de celdas
-            if cell_editor:
-                tree_widget.bind('<Button-1>', cell_editor.start_edit)
-
-            aplicar_colores_filas(tree_widget)
-            
-            return True
-        else:
-            # Mostrar mensaje de que no existe el archivo
-            tree_widget["columns"] = ["info"]
-            tree_widget["show"] = "headings"
-            tree_widget.heading("info", text="Información")
-            tree_widget.column("info", width=400)
-            tree_widget.insert("", "end", values=["Archivo Excel no encontrado. Use 'Crear Excel' para generarlo."])
-            return False
-    except Exception as e:
-        print(f" Error al cargar Excel: {e}")
-        # Mostrar error en la tabla
-        tree_widget["columns"] = ["error"]
-        tree_widget["show"] = "headings"
-        tree_widget.heading("error", text="Error")
-        tree_widget.column("error", width=400)
-        tree_widget.insert("", "end", values=[f"Error al cargar Excel: {str(e)}"])
-        return False
-
-def ordenar_columna(columna, tree_widget):
-    """Ordena la columna al hacer click en el encabezado"""
-    global orden_ascendente
-    
-    # Obtener todos los datos del treeview
-    datos = []
-    for item in tree_widget.get_children():
-        valores = tree_widget.item(item)["values"]
-        datos.append(valores)
-    
-    if not datos:
-        return
-    
-    # Obtener índice de la columna
-    columnas = tree_widget["columns"]
-    if columna not in columnas:
-        return
-    
-    col_index = columnas.index(columna)
-    
-    # Determinar dirección de ordenamiento
-    if columna not in orden_ascendente:
-        orden_ascendente[columna] = True
-    else:
-        orden_ascendente[columna] = not orden_ascendente[columna]
-    
-    # Ordenar datos
-    try:
-        datos_ordenados = sorted(datos, key=lambda x: str(x[col_index]).lower() if x[col_index] is not None else "", 
-                                reverse=not orden_ascendente[columna])
-    except:
-        datos_ordenados = sorted(datos, key=lambda x: str(x[col_index]), 
-                                reverse=not orden_ascendente[columna])
-    
-    # Limpiar y reinsertar datos ordenados
-    for item in tree_widget.get_children():
-        tree_widget.delete(item)
-    
-    for fila in datos_ordenados:
-        tree_widget.insert("", "end", values=fila)
-    
-    # Actualizar indicador visual en el encabezado
-    indicador = " ▲" if orden_ascendente[columna] else " ▼"
-    for col in columnas:
-        encabezado = obtener_texto_encabezado(col)
-        if col == columna:
-            tree_widget.heading(col, text=f"{encabezado}{indicador}")
-        else:
-            tree_widget.heading(col, text=encabezado)
-
-    aplicar_colores_filas(tree_widget)
-
-def guardar_desde_tabla(excel_nombre, tree_widget):
-    """Guarda los datos del Treeview al archivo Excel"""
-    try:
-        excel_ruta = os.path.join(DATA_DIR, f"{excel_nombre}.xlsx")
-        
-        # Obtener datos del Treeview
-        datos = []
-        columnas = tree_widget["columns"]
-        
-        # Verificar si estamos mostrando mensajes de información/error
-        if columnas and columnas[0] in ["info", "error"]:
-            messagebox.showerror("Error", "No hay datos válidos para guardar. Cree el Excel primero.")
-            return False
-        
-        for item in tree_widget.get_children():
-            valores = tree_widget.item(item)["values"]
-            # Limpiar el prefijo \x00 que protege ceros iniciales en el Treeview
-            valores = [str(v).lstrip("\x00") if str(v).startswith("\x00") else str(v) for v in valores]
-            # Autocompletar model/models si corresponde
-            try:
-                col_form = None
-                col_model = None
-                for idx, col in enumerate(columnas):
-                    if col.lower() in ("formulario", "form_url", "url"):
-                        col_form = idx
-                    if col.lower() in ("model", "models"):
-                        col_model = idx
-                if col_form is not None and col_model is not None:
-                    form_url = str(valores[col_form]) if col_form < len(valores) else ""
-                    # Buscar model= en la URL
-                    import re
-                    m = re.search(r"[?&]model=([^&#]+)", form_url)
-                    if m:
-                        raw_model = m.group(1)
-                        # Decodificar %20 y similares
-                        from urllib.parse import unquote
-                        model_val = unquote(raw_model)
-                        # Solo letras y espacios
-                        model_val = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]", " ", model_val)
-                        model_val = re.sub(r"\s+", " ", model_val).strip()
-                        # Reemplazar en la fila
-                        valores = list(valores)
-                        valores[col_model] = model_val
-            except Exception as e:
-                print(f"[WARN] Autocompletado model/models falló: {e}")
-            datos.append(valores)
-
-        if datos and columnas:
-            # Crear DataFrame y guardar
-            df = pd.DataFrame(datos, columns=columnas)
-            df = df.astype(str)
-
-            with pd.ExcelWriter(excel_ruta, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False, sheet_name='Sheet1')
-            messagebox.showinfo("Éxito", f"Cambios guardados correctamente en:\n{excel_ruta}")
-            return True
-        else:
-            messagebox.showerror("Error", "No hay datos para guardar")
-            return False
-            
-    except Exception as e:
-        messagebox.showerror("Error", f"Error al guardar cambios: {str(e)}")
-        print(f"Error al guardar: {e}")
-        return False
-
-def actualizar_botones_excel(frame_pais, fila, excel_nombre, btn_actualizar, btn_guardar, tree_widget, cell_editor=None):
-    """Actualiza el estado de los botones de Excel"""
-    excel_ruta = os.path.join(DATA_DIR, f"{excel_nombre}.xlsx")
-    
-    if os.path.exists(excel_ruta):
-        # Habilitar botones de actualizar y guardar
-        btn_actualizar.config(state="normal")
-        btn_guardar.config(state="normal")
-        # Cargar el contenido del Excel
-        cargar_excel_a_tabla(excel_nombre, tree_widget, cell_editor)
-    else:
-        # Deshabilitar botones si no existe el Excel
-        btn_actualizar.config(state="disabled")
-        btn_guardar.config(state="disabled")
-        # Limpiar tabla y mostrar mensaje
-        for item in tree_widget.get_children():
-            tree_widget.delete(item)
-        tree_widget["columns"] = ["info"]
-        tree_widget["show"] = "headings"
-        tree_widget.heading("info", text="Información")
-        tree_widget.column("info", width=400)
-        tree_widget.insert("", "end", values=["Cree el Excel primero usando el botón 'Crear Excel'"])
-
-def agregar_fila(tree_widget):
-    """Agrega una nueva fila vacía a la tabla"""
-    try:
-        columnas = tree_widget["columns"]
-        if columnas and columnas[0] not in ["info", "error"]:
-            nueva_fila = [""] * len(columnas)
-            tree_widget.insert("", "end", values=nueva_fila)
-            aplicar_colores_filas(tree_widget)
-    except Exception as e:
-        messagebox.showerror("Error", f"No se pudo agregar fila: {e}")
-
-def eliminar_fila(tree_widget):
-    """Elimina la fila seleccionada"""
-    try:
-        seleccion = tree_widget.selection()
-        if seleccion:
-            tree_widget.delete(seleccion[0])
-            aplicar_colores_filas(tree_widget)
-        else:
-            messagebox.showwarning("Advertencia", "Seleccione una fila para eliminar")
-    except Exception as e:
-        messagebox.showerror("Error", f"No se pudo eliminar fila: {e}")
-
-# MEJORA 2: Función para clonar fila
-def clonar_fila(tree_widget):
-    """Clona la fila seleccionada y la inserta debajo"""
-    try:
-        seleccion = tree_widget.selection()
-        if not seleccion:
-            messagebox.showwarning("Advertencia", "Seleccione una fila para clonar")
-            return
-            
-        item_seleccionado = seleccion[0]
-        valores_originales = tree_widget.item(item_seleccionado)["values"]
-        
-        # Insertar nueva fila con los mismos valores debajo de la seleccionada
-        tree_widget.insert("", tree_widget.index(item_seleccionado) + 1, values=valores_originales)
-        aplicar_colores_filas(tree_widget)
-        
-    except Exception as e:
-        messagebox.showerror("Error", f"No se pudo clonar la fila: {e}")
-
-
-def aplicar_colores_filas(tree_widget):
-    """Alterna colores de filas para mejorar legibilidad."""
-    try:
-        tree_widget.tag_configure("odd", background="white")
-        tree_widget.tag_configure("even", background="#f1edf6")
-
-        for indice, item in enumerate(tree_widget.get_children()):
-            tag = "odd" if indice % 2 == 0 else "even"
-            tree_widget.item(item, tags=(tag,))
-    except Exception:
-        pass
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ESTADO GLOBAL DE EJECUCIÓN — bloqueo UI + botón DETENER
-# ══════════════════════════════════════════════════════════════════════════════
-
-_run_state = {
-    "running": False,
-    "stop_event": None,
-    "enviar_btn": None,       # botón "Enviar Leads"
-    "lt_btn": None,           # botón "Ejecutar en Mac"
-    "lt_android_btn": None,   # botón "Ejecutar en Android"
-    "stop_btn": None,         # botón "Detener" (consola)
-    "root": None,
-    "scheduler_panel": None,  # WeeklySchedulerPanel — para sincronizar su UI al detener desde el overlay
-    "overlay": None,          # Frame oscuro que cubre el contenido mientras corre
-    "progress_frame": None,   # Frame interno del overlay con filas por país
-    "progress": {},           # {pais: {"done":0,"total":0,"ok":0,"status":"waiting"}}
-    "progress_widgets": {},   # {pais: {"status_lbl":..., "count_lbl":...}}
-}
-
-
-def _set_running(running: bool):
-    """Habilita/deshabilita botones y muestra/oculta el overlay según si hay ejecución activa."""
-    _run_state["running"] = running
-    _set_manual_input_callback(running)
-    if running:
-        try:
-            from core.browser_manager import clear_active_drivers
-            clear_active_drivers()
-        except Exception:
-            pass
-    root = _run_state.get("root")
-
-    def _apply():
-        state = "disabled" if running else "normal"
-        for key in ("enviar_btn", "lt_btn", "lt_android_btn"):
-            btn = _run_state.get(key)
-            if btn:
-                try:
-                    btn.configure(state=state)
-                except Exception:
-                    pass
-        stop_btn = _run_state.get("stop_btn")
-        if stop_btn:
-            try:
-                if running:
-                    stop_btn.config(state="normal", text="⏹  Detener ejecución")
-                    stop_btn.pack(side=RIGHT, padx=6)
-                else:
-                    stop_btn.pack_forget()
-            except Exception:
-                pass
-        stop_msg_lbl = _run_state.get("stop_msg_lbl")
-        if stop_msg_lbl and running:
-            try:
-                stop_msg_lbl.config(text="")
-            except Exception:
-                pass
-        # Overlay (Frame sólido sobre root)
-        overlay = _run_state.get("overlay")
-        if overlay:
-            if running:
-                overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
-                overlay.lift()
-            else:
-                overlay.place_forget()
-
-    if root:
-        root.after(0, _apply)
-    else:
-        _apply()
-
-
-def _request_stop():
-    ev = _run_state.get("stop_event")
-    if ev:
-        ev.set()
-    # Mostrar disclaimer en el overlay antes de cerrar
-    btn = _run_state.get("stop_btn")
-    lbl = _run_state.get("stop_msg_lbl")
-    if btn:
-        try:
-            btn.config(state="disabled", text="⏹  Deteniendo...")
-        except Exception:
-            pass
-    if lbl:
-        try:
-            lbl.config(text="■  Detenido. El lead en curso terminará de enviarse y el navegador se cerrará solo al finalizar.")
-        except Exception:
-            pass
-    # Mata solo los drivers/browsers que abrió esta app (por PID registrado)
-    try:
-        from core.browser_manager import kill_active_drivers
-        kill_active_drivers()
-    except Exception:
-        pass
-    panel = _run_state.get("scheduler_panel")
-    if panel:
-        panel.request_stop()
-    _set_running(False)
-
-
-def _init_overlay_countries(paises_keys):
-    """Rellena las filas de progreso del overlay. Llamar desde UI thread antes de _set_running(True)."""
-    _run_state["progress"] = {k: {"done": 0, "total": 0, "ok": 0, "status": "waiting"} for k in paises_keys}
-    _run_state["progress_widgets"] = {}
-    pf = _run_state.get("progress_frame")
-    if not pf:
-        return
-    for w in pf.winfo_children():
-        w.destroy()
-    for key in paises_keys:
-        row = Frame(pf, bg="#1e1133", pady=2)
-        row.pack(fill="x", padx=30)
-        Label(row, text=key, bg="#1e1133", fg="#c9b8e8",
-              font=("Segoe UI", 10, "bold"), width=16, anchor="w").pack(side=LEFT)
-        status_lbl = Label(row, text="En espera...", bg="#1e1133", fg="#666",
-                           font=("Segoe UI", 10), width=16, anchor="w")
-        status_lbl.pack(side=LEFT, padx=(6, 0))
-        count_lbl = Label(row, text="", bg="#1e1133", fg="#c9b8e8",
-                          font=("Segoe UI", 10), width=10, anchor="w")
-        count_lbl.pack(side=LEFT, padx=(4, 0))
-        _run_state["progress_widgets"][key] = {"status_lbl": status_lbl, "count_lbl": count_lbl}
-
-
-def _update_progress(key, done=None, total=None, ok=None, status=None):
-    """Actualiza el progreso de un país en el overlay. Thread-safe."""
-    root = _run_state.get("root")
-    if not root:
-        return
-    def _apply():
-        p = _run_state["progress"].get(key)
-        if p is None:
-            return
-        if done is not None:
-            p["done"] = done
-        if total is not None:
-            p["total"] = total
-        if ok is not None:
-            p["ok"] = ok
-        if status is not None:
-            p["status"] = status
-        w = _run_state["progress_widgets"].get(key)
-        if not w:
-            return
-        s = p["status"]
-        d, t, o = p["done"], p["total"], p["ok"]
-        if s == "waiting":
-            w["status_lbl"].configure(text="En espera...", fg="#666")
-            w["count_lbl"].configure(text="")
-        elif s == "running":
-            w["status_lbl"].configure(text="⚡ En curso", fg="#f59e0b")
-            w["count_lbl"].configure(text=f"{d}/{t}" if t else "...")
-        elif s == "done_ok":
-            w["status_lbl"].configure(text="✓ Completado", fg="#10b981")
-            w["count_lbl"].configure(text=f"{t}/{t}" if t else "")
-        elif s == "done_error":
-            w["status_lbl"].configure(text="✗ Con errores", fg="#ef4444")
-            w["count_lbl"].configure(text=f"{t}/{t}" if t else "")
-        elif s == "stopped":
-            w["status_lbl"].configure(text="⛔ Detenido", fg="#888")
-            w["count_lbl"].configure(text="")
-        elif s == "emailing":
-            w["status_lbl"].configure(text="📧 Enviando email...", fg="#f59e0b")
-            w["count_lbl"].configure(text="")
-        elif s == "email_ok":
-            w["status_lbl"].configure(text="✉ Email enviado", fg="#10b981")
-            w["count_lbl"].configure(text="")
-        elif s == "email_fail":
-            w["status_lbl"].configure(text="✉ Email no enviado", fg="#ef4444")
-            w["count_lbl"].configure(text="")
-    root.after(0, _apply)
-
-
-# ── Broker de input manual — conecta el hilo selenium con la UI de tkinter ──
-
-class _ManualInputBroker:
-    """Muestra un diálogo de tkinter desde el hilo principal cuando el filler lo solicita."""
-
-    def __init__(self, root_widget):
-        self._root = root_widget
-        self._request = None          # (field_id, label)
-        self._response = [None]
-        self._req_ready = threading.Event()
-        self._resp_ready = threading.Event()
-        self._active = False
-
-    def start_polling(self):
-        self._active = True
-        self._root.after(400, self._poll)
-
-    def stop_polling(self):
-        self._active = False
-
-    def _poll(self):
-        if self._req_ready.is_set():
-            self._req_ready.clear()
-            fid, label = self._request
-            self._show_dialog(fid, label)
-        if self._active:
-            self._root.after(400, self._poll)
-
-    def _show_dialog(self, field_id, label):
-        dialog = Toplevel(self._root)
-        dialog.title("Campo no mapeado")
-        dialog.geometry("480x230")
-        dialog.configure(bg=APP_BG_COLOR)
-        dialog.resizable(False, False)
-        dialog.grab_set()
-        dialog.lift()
-        dialog.focus_force()
-
-        Label(dialog,
-              text="Se encontró un campo no mapeado en el formulario",
-              font=("Segoe UI", 11, "bold"), bg=APP_BG_COLOR, fg="white").pack(pady=(16, 2))
-        Label(dialog, text=f"Campo: {label}   (id: {field_id})",
-              font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="#ddd").pack()
-        Label(dialog, text="Ingresá el valor a completar (vacío = omitir este campo):",
-              font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="#ddd").pack(pady=(12, 4))
-
-        entry_var = StringVar()
-        entry = Entry(dialog, textvariable=entry_var, font=("Segoe UI", 11), width=36)
-        entry.pack(pady=(0, 12))
-        entry.focus()
-
-        def _ok(_ev=None):
-            self._response[0] = entry_var.get().strip() or None
-            self._resp_ready.set()
-            dialog.destroy()
-
-        def _skip():
-            self._response[0] = None
-            self._resp_ready.set()
-            dialog.destroy()
-
-        entry.bind("<Return>", _ok)
-        frame_btns = Frame(dialog, bg=APP_BG_COLOR)
-        frame_btns.pack()
-        ttk.Button(frame_btns, text="Usar este valor", command=_ok,
-                   style="Section.TButton").pack(side=LEFT, padx=4)
-        ttk.Button(frame_btns, text="Omitir campo", command=_skip,
-                   style="Section.TButton").pack(side=LEFT, padx=4)
-
-    def request_value(self, field_id, label):
-        """Llamado desde hilo selenium. Bloquea hasta que el usuario responde (máx. 3 min)."""
-        self._response[0] = None
-        self._resp_ready.clear()
-        self._request = (field_id, label)
-        self._req_ready.set()
-        self._resp_ready.wait(timeout=180)
-        return self._response[0]
-
-
-# Al iniciar/detener ejecución: activa/desactiva el callback global en base_form_filler
-def _set_manual_input_callback(active: bool):
-    try:
-        _asegurar_paths_modulos()
-        from base_form_filler import set_global_manual_input_callback
-        broker = _run_state.get("broker")
-        if active and broker:
-            set_global_manual_input_callback(broker.request_value)
-        else:
-            set_global_manual_input_callback(None)
-    except Exception:
-        pass
-
-
-# === FUNCIONES DE INTERFAZ ORIGINALES ===
-def ejecutar_script_configurable(nombre_script_base, selected_browser, selected_viewport, headless=None):
-    """Ejecuta el script base con la configuración seleccionada de forma dinámica."""
-    if headless is None:
-        headless = False
-
-    # --- CONFIGURACIONES DE SUFIJOS ---
-    config_map = {
-        'chrome': {'fullscreen': '_chrome_desktop', '600x738': '_chrome_mobile'},
-        'firefox': {'fullscreen': '_firefox_desktop', '600x738': '_firefox_mobile'},
-        'edge': {'fullscreen': '_edge_desktop', '600x738': '_edge_mobile'}
-    }
-
-    browser = selected_browser.get()
-    viewport = selected_viewport.get()
-
-    sufijo = config_map.get(browser, {}).get(viewport)
-    if not sufijo:
-        messagebox.showerror("Error", f"Configuración no soportada: {browser} - {viewport}")
-        return
-
-    # --- DETERMINAR PAÍS ---
-    nombre_base_sin_ext = nombre_script_base.replace('.py', '')
-    pais_encontrado = None
-
-    for pais_nombre, base_nombre in MAPEO_PAISES.items():
-        if base_nombre == nombre_base_sin_ext:  # Cambiado de 'in' a '=='
-            pais_encontrado = pais_nombre
-            break
-
-    if not pais_encontrado:
-        messagebox.showerror("Error",
-            f"No se pudo determinar el país del script: {nombre_script_base}\n"
-            f"Países soportados: {', '.join(MAPEO_PAISES.keys())}")
-        return
-
-    # --- USAR MAIN UNIFICADO ---
-    script_main = f"Formulario_{pais_encontrado}_Main.py"
-    env_param = f"{selected_browser.get()}_{'desktop' if selected_viewport.get() == 'fullscreen' else 'mobile'}"
-
-    def _run_form():
-        try:
-            env_config = _get_environments().get(env_param)
-            if env_config is None:
-                messagebox.showerror("Error", f"Entorno '{env_param}' no reconocido.")
-                return
-            run_func = _get_run_func(pais_encontrado)
-            run_func(browser=env_config["browser"], viewport=env_config["viewport"], headless=headless)
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo ejecutar {pais_encontrado}:\n{e}")
-
-    threading.Thread(target=_run_form, daemon=True).start()
-
-def ejecutar_script(nombre_script):
-    """Función original para compatibilidad con scripts existentes"""
-    script_path = os.path.join(FORMS_DIR, nombre_script)
-
-    if os.path.exists(script_path):
-        threading.Thread(target=lambda: subprocess.run([sys.executable, script_path], check=False), daemon=True).start()
-        messagebox.showinfo("Ejecución", f"Ejecutando script:\n{nombre_script}")
-        return
-
-    # Fallback para ejecutable empaquetado sin scripts .py externos.
-    nombre_base_sin_ext = nombre_script.replace('.py', '')
-    pais_encontrado = None
-    for pais_nombre, base_nombre in MAPEO_PAISES.items():
-        if base_nombre == nombre_base_sin_ext:
-            pais_encontrado = pais_nombre
-            break
-
-    if not pais_encontrado:
-        messagebox.showerror("Error", f"No se encontró el archivo ni se pudo mapear país:\n{nombre_script}")
-        return
-
-    def _run_fallback():
-        try:
-            environments = _get_environments()
-            env_config = environments.get("chrome_desktop") or next(iter(environments.values()), None)
-            if env_config is None:
-                messagebox.showerror("Error", f"No hay ENVIRONMENTS válidos.")
-                return
-            run_func = _get_run_func(pais_encontrado)
-            run_func(browser=env_config["browser"], viewport=env_config["viewport"], headless=False)
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo ejecutar {nombre_script}:\n{e}")
-
-    threading.Thread(target=_run_fallback, daemon=True).start()
-    messagebox.showinfo("Ejecución", f"Ejecutando (modo empaquetado):\n{nombre_script}")
-
-def crear_y_actualizar_excel(excel_nombre, fila, frame_pais, btn_actualizar, btn_guardar, tree_widget, cell_editor=None):
-    """Crea el Excel y actualiza los botones"""
-    try:
-        abrir_excel(excel_nombre)
-        # Esperar un poco para que se cree el archivo y luego actualizar
-        frame_pais.after(2000, lambda: actualizar_botones_excel(frame_pais, fila, excel_nombre, btn_actualizar, btn_guardar, tree_widget, cell_editor))
-    except Exception as e:
-        print(f" Error al crear Excel: {e}")
-
-def _autohide_yscroll(sb, first, last):
-    """Oculta el scrollbar cuando todo el contenido cabe; lo muestra cuando hay overflow.
-    Funciona con pack y grid — detecta el geometry manager automáticamente.
-    NO chequea winfo_ismapped() antes de ocultar: en Windows el widget puede estar
-    colocado (winfo_manager='grid') pero aún no pintado (winfo_ismapped=False)."""
-    first, last = float(first), float(last)
-    if not hasattr(sb, "_ah_manager"):
-        mgr = sb.winfo_manager()
-        if mgr:
-            sb._ah_manager = mgr
-    mgr = getattr(sb, "_ah_manager", "pack")
-    if first <= 0.0 and last >= 1.0:
-        if mgr == "grid":
-            try: sb.grid_remove()
-            except Exception: pass
-        else:
-            try: sb.pack_forget()
-            except Exception: pass
-    else:
-        if not sb.winfo_ismapped():
-            if mgr == "grid":
-                try: sb.grid()
-                except Exception: pass
-            else:
-                try: sb.pack(side="right", fill="y")
-                except Exception: pass
-        sb.set(first, last)
-
-
-def _build_generar_excels_tab(parent):
-    """Tab para generar Excels con datos aleatorios por país a partir de URLs."""
+# === Backend real (coexiste con la app vieja; import defensivo) ===
+_APP_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _p in (_APP_BASE, os.path.join(_APP_BASE, "forms"), os.path.join(_APP_BASE, "core")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+BACKEND_OK = True
+_BACKEND_IMPORT_ERROR = ""
+try:
+    from utils.paths import DATA_DIR, JSON_DIR, BASE_DIR
+    from utils.fixed_field_mapping_store import build_excel_columns_for_country
     from utils.data_generator import generar_fila_datos
+    from core.country_configs import COUNTRY_CONFIGS
+    from interface.helpers_interface import (
+        cargar_config_global, guardar_config_global, obtener_email_destinatario,
+    )
+    from utils.scheduling import guardar_programacion, cargar_programacion, limpiar_programacion
+    from interface.field_validation_ui import build_field_validation_tab
+    from interface.dealer_comparator_ui import build_dealer_comparator_tab
+except Exception as _imp_err:  # noqa: BLE001
+    BACKEND_OK = False
+    _BACKEND_IMPORT_ERROR = str(_imp_err)
+    build_field_validation_tab = None
+    build_dealer_comparator_tab = None
+    BASE_DIR = _APP_BASE
+    DATA_DIR = os.path.join(_APP_BASE, "data")
+    JSON_DIR = os.path.join(_APP_BASE, "json")
+    COUNTRY_CONFIGS = {}
 
-    # Keywords de países en URLs
-    _COUNTRY_URL_KEYWORDS = {
-        "argentina": "Argentina",
-        "bolivia": "Bolivia",
-        "brasil": "Brasil",
-        "brazil": "Brasil",
-        "chile": "Chile",
-        "colombia": "Colombia",
-        "ecuador": "Ecuador",
-        "paraguay": "Paraguay",
-        "peru": "Peru",
-        "uruguay": "Uruguay",
-    }
+    def build_excel_columns_for_country(pais):
+        return ["URL", "Formulario", "Modelo", "Nombre", "Apellido", "Documento", "Celular",
+                "Email", "Region", "Ciudad", "Concesionario", "Fecha de compra", "Comentario"]
 
-    def _detectar_pais_desde_urls(texto):
-        texto_lower = texto.lower()
-        for kw, pais in _COUNTRY_URL_KEYWORDS.items():
-            if kw in texto_lower:
-                return pais
+    def generar_fila_datos(pais, device=None, doc_types=None):
+        return {}
+
+    def cargar_config_global():
+        return {}
+
+    def guardar_config_global(cfg):
+        return False
+
+    def obtener_email_destinatario():
+        return []
+
+    def guardar_programacion(p):
+        return False
+
+    def cargar_programacion():
         return None
 
-    frame = Frame(parent, bg=APP_BG_COLOR, padx=30, pady=20)
-    frame.pack(fill="both", expand=True)
+    def limpiar_programacion():
+        return False
 
-    Label(frame, text="Generar Excels con Datos",
-          font=("Segoe UI", 14, "bold"), bg=APP_BG_COLOR, fg="white").pack(anchor="w", pady=(0, 4))
-    Label(frame,
-          text="Pegá las URLs (landing+form en pares, o solo forms). Detecta país automáticamente. Genera datos aleatorios válidos.",
-          font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="#ddd").pack(anchor="w", pady=(0, 10))
 
-    # ── Selector de país — RadioButtons (estilo checkboxes) ─────────────────
-    Label(frame, text="País:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 4))
+def _excel_path_for(pais):
+    """Excel principal (editable / previsualización / scheduler) del país: el del
+    primer dispositivo disponible (Chrome→Firefox→Edge→Mac→Android) o el genérico.
+    Si ninguno existe, devuelve la ruta de Chrome (para creación por defecto)."""
+    for suf in ("Chrome", "Firefox", "Edge", "Mac", "Android", "Generico"):
+        p = os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_{suf}.xlsx")
+        if os.path.exists(p):
+            return p
+    return os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_Chrome.xlsx")
 
-    paises_disponibles = list(MAPEO_PAISES.keys())
-    pais_var = StringVar(value="")
 
-    frame_pais_checks = Frame(frame, bg=APP_BG_COLOR)
-    frame_pais_checks.pack(anchor="w", pady=(0, 8))
-    _pais_dots = {}
-    for _idx, _pnombre in enumerate(paises_disponibles):
-        _rb = Frame(frame_pais_checks, bg=APP_BG_COLOR, cursor="hand2")
-        _rb.grid(row=_idx // 5, column=_idx % 5, sticky="w", padx=6, pady=1)
-        _dot = Label(_rb, text="○", font=("Segoe UI", 9),
-                     bg=APP_BG_COLOR, fg="white", cursor="hand2")
-        _dot.pack(side=LEFT)
-        Label(_rb, text=_pnombre, font=("Segoe UI", 9),
-              bg=APP_BG_COLOR, fg="white", cursor="hand2").pack(side=LEFT, padx=(3, 0))
-        _pais_dots[_pnombre] = _dot
+def _t3_tag(t3):
+    """Sufijo de nombre para Excels de formularios T3 2.0 (Adobe AEM)."""
+    return "_T3" if t3 else ""
 
-        def _on_pais_click(v=_pnombre):
-            pais_var.set(v)
-            for _v, _d in _pais_dots.items():
-                _d.config(text="●" if _v == v else "○")
 
-        for _w in _rb.winfo_children():
-            _w.bind("<Button-1>", lambda e, f=_on_pais_click: f())
-        _rb.bind("<Button-1>", lambda e, f=_on_pais_click: f())
+def _lead_excel_name(pais, suffix, t3=False):
+    """Nombre de archivo Excel de leads: …_{Pais}_{Dispositivo}[_T3].xlsx."""
+    return f"Lead_information_Formulario_{pais}_{suffix}{_t3_tag(t3)}.xlsx"
 
-    # ── Modo de URLs ─────────────────────────────────────────────────────────
-    url_mode_var = StringVar(value="landing_form")
-    frame_url_mode = Frame(frame, bg=APP_BG_COLOR)
-    frame_url_mode.pack(anchor="w", pady=(0, 6))
-    Label(frame_url_mode, text="Tipo de URLs:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 9, "bold")).pack(side=LEFT, padx=(0, 10))
-    _url_dots = {}
-    for _modo_val, _modo_txt in [
-        ("landing_form", "Landing + Form (pares)"),
-        ("solo_forms", "Solo Forms"),
-    ]:
-        _rb = Frame(frame_url_mode, bg=APP_BG_COLOR, cursor="hand2")
-        _rb.pack(side=LEFT, padx=(0, 14))
-        _dot = Label(_rb, text="●" if url_mode_var.get() == _modo_val else "○",
-                     font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="white", cursor="hand2")
-        _dot.pack(side=LEFT)
-        Label(_rb, text=_modo_txt, font=("Segoe UI", 9),
-              bg=APP_BG_COLOR, fg="white", cursor="hand2").pack(side=LEFT, padx=(3, 0))
-        _url_dots[_modo_val] = _dot
 
-        def _on_url_click(v=_modo_val):
-            url_mode_var.set(v)
-            for _v, _d in _url_dots.items():
-                _d.config(text="●" if _v == v else "○")
+def _generic_excel_path_for(pais, t3=False):
+    """Excel único 'compartido' del país: mismos datos para todos los dispositivos."""
+    return os.path.join(DATA_DIR, _lead_excel_name(pais, "Generico", t3))
 
-        for _w in _rb.winfo_children():
-            _w.bind("<Button-1>", lambda e, f=_on_url_click: f())
-        _rb.bind("<Button-1>", lambda e, f=_on_url_click: f())
 
-    # Warning de discrepancia país seleccionado vs URLs
-    url_country_warning_var = StringVar(value="")
-    url_country_warning_lbl = Label(
-        frame, textvariable=url_country_warning_var,
-        bg=APP_BG_COLOR, fg="#f4a261",
-        font=("Segoe UI", 9, "italic"), wraplength=700, justify="left",
-    )
-    url_country_warning_lbl.pack(anchor="w", pady=(0, 4))
+def _device_excel_suffix(dev):
+    """Sufijo de archivo Excel por dispositivo. LT usa el mismo nombre que leen
+    los controllers de LambdaTest (…_Mac.xlsx / …_Android.xlsx)."""
+    d = str(dev).strip().lower()
+    if d in ("mac lt", "mac"):
+        return "Mac"
+    if d in ("android lt", "android"):
+        return "Android"
+    return str(dev).strip().capitalize()  # Chrome / Firefox / Edge
 
-    # ── Área de URLs ────────────────────────────────────────────────────────
-    _url_label_var = StringVar(value="URLs (landing + form — de a pares, una por línea):")
-    url_area_lbl = Label(frame, textvariable=_url_label_var,
-                         bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10))
-    url_area_lbl.pack(anchor="w", pady=(0, 4))
 
-    def _actualizar_label_urls(*_):
-        if url_mode_var.get() == "solo_forms":
-            _url_label_var.set("URLs de forms (una por línea):")
-        else:
-            _url_label_var.set("URLs (landing + form — de a pares, una por línea):")
+# Serializa la reserva del nº de resultados (setup_directories_and_files) para que
+# sesiones en paralelo NO escriban el mismo resultados_<Pais>N.xlsx (choque de carpetas).
+_SETUP_LOCK = threading.Lock()
+_SETUP_PATCHED = [False]
 
-    url_mode_var.trace_add("write", _actualizar_label_urls)
 
-    frame_text_borde = Frame(frame, bg=SECTION_CONTAINER_BG_COLOR, padx=1, pady=1)
-    frame_text_borde.pack(fill="x", pady=(0, 8))
-    frame_text_inner = Frame(frame_text_borde, bg="white")
-    frame_text_inner.pack(fill="both")
-
-    url_scroll = ttk.Scrollbar(frame_text_inner, orient="vertical")
-    url_text = Text(frame_text_inner, height=8, font=("Consolas", 9),
-                    bg="white", fg="#111", relief="flat", bd=4,
-                    yscrollcommand=lambda f, l: _autohide_yscroll(url_scroll, f, l), wrap="none")
-    url_scroll.config(command=url_text.yview)
-    url_text.pack(side=LEFT, fill="both", expand=True)
-    url_scroll.pack(side=RIGHT, fill="y")
-
-    def _on_url_change(event=None):
-        texto = url_text.get("1.0", END)
-        detectado = _detectar_pais_desde_urls(texto)
-        seleccionado = pais_var.get()
-        if detectado:
-            if not seleccionado:
-                pais_var.set(detectado)
-                _toggle_brasil_panel()
-                url_country_warning_var.set("")
-            elif detectado != seleccionado:
-                url_country_warning_var.set(
-                    f"⚠ Las URLs sugieren {detectado} pero tenés seleccionado {seleccionado}. "
-                    "Verificá antes de generar."
-                )
-            else:
-                url_country_warning_var.set("")
-        else:
-            url_country_warning_var.set("")
-
-    url_text.bind("<KeyRelease>", _on_url_change)
-
-    # ── Status + botón carpeta ───────────────────────────────────────────────
-    status_var = StringVar(value="")
-    status_lbl = Label(frame, textvariable=status_var,
-                       bg=APP_BG_COLOR, fg="#a8e6a3",
-                       font=("Segoe UI", 9, "italic"), wraplength=700, justify="left")
-    status_lbl.pack(anchor="w", pady=(4, 0))
-
-    _ultima_ruta = [None]
-
-    def _abrir_carpeta():
-        ruta = _ultima_ruta[0]
-        if not ruta:
-            return
-        carpeta = os.path.dirname(ruta)
-        try:
-            if os.name == "nt":
-                os.startfile(carpeta)
-            elif sys.platform == "darwin":
-                import subprocess
-                subprocess.run(["open", carpeta], check=False)
-            else:
-                import subprocess
-                subprocess.run(["xdg-open", carpeta], check=False)
-        except Exception:
-            pass
-
-    btn_abrir_carpeta = ttk.Button(frame, text="📁 Abrir carpeta del Excel",
-                                   command=_abrir_carpeta, style="FolderCTA.TButton")
-
-    # ── Botones ─────────────────────────────────────────────────────────────
-    frame_btns = Frame(frame, bg=APP_BG_COLOR)
-    frame_btns.pack(anchor="w", pady=(8, 0))
-
-    def _generar():
-        import pandas as pd
-
-        pais = pais_var.get()
-        if not pais:
-            status_var.set("Seleccioná un país.")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        raw_lines = [ln.strip() for ln in url_text.get("1.0", END).splitlines()]
-        lines = [ln for ln in raw_lines if ln]
-        if not lines:
-            status_var.set("Ingresá al menos una URL.")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        # Construir pares según modo seleccionado
-        pares = []
-        if url_mode_var.get() == "solo_forms":
-            pares = [("", url) for url in lines]
-        else:
-            if len(lines) % 2 != 0:
-                status_var.set(
-                    f"En modo Landing+Form las URLs deben ser pares. "
-                    f"Tenés {len(lines)} línea(s) — falta una URL."
-                )
-                status_lbl.config(fg="#f4a261")
-                return
-            pares = [(lines[i], lines[i + 1]) for i in range(0, len(lines), 2)]
-
-        columnas = build_excel_columns_for_country(pais)
-
-        # Para Brasil: recargar config en el momento de generar
-        _br_docs_actual = cargar_config_global().get("lambdatest", {}).get("brasil_docs", {})
-        _br_cpf_rows  = set(_br_docs_actual.get("cpf_rows",  []))
-        _br_cep_rows  = set(_br_docs_actual.get("cep_rows",  []))
-        _br_cnpj_rows = set(_br_docs_actual.get("cnpj_rows", []))
-
-        filas = []
-        _form_counter = 0
-        for landing_url, form_url in pares:
-            _form_counter += 1
-            datos = generar_fila_datos(pais)
-            if pais == "Brasil":
-                from utils.data_generator import generar_documento_brasil_4devs
-                if _form_counter in _br_cnpj_rows:
-                    _tipo_doc = "cnpj"
-                elif _form_counter in _br_cep_rows:
-                    _tipo_doc = "cep"
-                else:
-                    _tipo_doc = "cpf"
-                datos["Documento"] = generar_documento_brasil_4devs(_tipo_doc)
-            fila = []
-            for col in columnas:
-                if col == "URL":
-                    fila.append(landing_url)
-                elif col == "Formulario":
-                    fila.append(form_url)
-                else:
-                    fila.append(datos.get(col, ""))
-            filas.append(fila)
-
-        if not filas:
-            status_var.set("No se generaron filas.")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        if pais == "Chile" and "Documento" in columnas:
-            from utils.data_generator import generar_rut_chile_con_k
-            doc_col_idx = columnas.index("Documento")
-            filas[0][doc_col_idx] = generar_rut_chile_con_k()
-
-        excel_nombre = f"Lead_information_Formulario_{pais}_Main.xlsx"
-        try:
-            _asegurar_paths_modulos()
-            from core.country_configs import COUNTRY_CONFIGS
-            excel_nombre = COUNTRY_CONFIGS.get(pais, {}).get("excel_file", excel_nombre)
-        except Exception:
-            pass
-
-        excel_ruta = os.path.join(DATA_DIR, excel_nombre)
-        df_new = pd.DataFrame(filas, columns=columnas).astype(str)
-
-        if os.path.exists(excel_ruta):
-            reemplazar = messagebox.askyesno(
-                "Excel existente",
-                f"Ya existe un Excel para {pais}:\n{excel_nombre}\n\n¿Reemplazarlo con los nuevos datos?"
-            )
-            if not reemplazar:
-                status_var.set("Generación cancelada.")
-                status_lbl.config(fg="#f4a261")
-                return
-
-        try:
-            with pd.ExcelWriter(excel_ruta, engine="openpyxl") as writer:
-                df_new.to_excel(writer, index=False, sheet_name="Sheet1")
-            status_var.set(f"✓ {len(filas)} fila(s) generada(s) → {excel_ruta}")
-            status_lbl.config(fg="#a8e6a3")
-            _ultima_ruta[0] = excel_ruta
-            btn_abrir_carpeta.pack(anchor="w", pady=(6, 0))
-        except PermissionError:
-            status_var.set("Cerrá el archivo Excel y volvé a intentar.")
-            status_lbl.config(fg="#f4a261")
-        except Exception as exc:
-            status_var.set(f"Error: {exc}")
-            status_lbl.config(fg="#f4a261")
-
-    def _limpiar():
-        import pandas as pd
-
-        pais = pais_var.get()
-        if not pais:
-            status_var.set("Seleccioná un país primero.")
-            status_lbl.config(fg="#f4a261")
-            return
-        excel_nombre = f"Lead_information_Formulario_{pais}_Main.xlsx"
-        try:
-            _asegurar_paths_modulos()
-            from core.country_configs import COUNTRY_CONFIGS
-            excel_nombre = COUNTRY_CONFIGS.get(pais, {}).get("excel_file", excel_nombre)
-        except Exception:
-            pass
-        excel_ruta = os.path.join(DATA_DIR, excel_nombre)
-        if not os.path.exists(excel_ruta):
-            status_var.set("No existe el archivo para limpiar.")
-            status_lbl.config(fg="#f4a261")
-            return
-        if not messagebox.askyesno("Limpiar Excel", f"Borrar todas las filas de datos de:\n{excel_nombre}?"):
-            return
-        columnas = build_excel_columns_for_country(pais)
-        try:
-            with pd.ExcelWriter(excel_ruta, engine="openpyxl") as writer:
-                pd.DataFrame(columns=columnas).to_excel(writer, index=False, sheet_name="Sheet1")
-            status_var.set(f"✓ Excel limpiado: {excel_nombre}")
-            status_lbl.config(fg="#a8e6a3")
-        except PermissionError:
-            status_var.set("Cerrá el archivo Excel antes de limpiar.")
-            status_lbl.config(fg="#f4a261")
-
-    def _borrar_urls():
-        url_text.delete("1.0", END)
-        url_country_warning_var.set("")
-        status_var.set("URLs borradas.")
-        status_lbl.config(fg="white")
-
-    def _generar_con_urls_existentes():
-        import pandas as pd
-
-        pais = pais_var.get()
-        if not pais:
-            status_var.set("Seleccioná un país.")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        excel_nombre = f"Lead_information_Formulario_{pais}_Main.xlsx"
-        try:
-            _asegurar_paths_modulos()
-            from core.country_configs import COUNTRY_CONFIGS
-            excel_nombre = COUNTRY_CONFIGS.get(pais, {}).get("excel_file", excel_nombre)
-        except Exception:
-            pass
-
-        excel_ruta = os.path.join(DATA_DIR, excel_nombre)
-        if not os.path.exists(excel_ruta):
-            status_var.set("No existe el Excel para este país. Generá uno primero con URLs.")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        try:
-            df_existente = pd.read_excel(excel_ruta, dtype=str, keep_default_na=False)
-        except Exception as exc:
-            status_var.set(f"Error al leer el Excel: {exc}")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        col_url = next((c for c in df_existente.columns if c.strip().lower() == "url"), None)
-        col_form = next((c for c in df_existente.columns if c.strip().lower() == "formulario"), None)
-        n_filas = len(df_existente)
-
-        if n_filas == 0:
-            status_var.set("El Excel no tiene filas. Ingresá URLs primero.")
-            status_lbl.config(fg="#f4a261")
-            return
-
-        ok = messagebox.askyesno(
-            "Regenerar datos",
-            f"Se regenerarán los datos de {n_filas} fila(s) para {pais}\n"
-            f"manteniendo las URLs existentes en el Excel.\n\n"
-            f"¿Continuar?"
-        )
-        if not ok:
-            return
-
-        columnas = build_excel_columns_for_country(pais)
-        _br_docs_actual = cargar_config_global().get("lambdatest", {}).get("brasil_docs", {})
-        _br_cpf_rows  = set(_br_docs_actual.get("cpf_rows",  []))
-        _br_cep_rows  = set(_br_docs_actual.get("cep_rows",  []))
-        _br_cnpj_rows = set(_br_docs_actual.get("cnpj_rows", []))
-
-        filas = []
-        for i, (_, row) in enumerate(df_existente.iterrows(), start=1):
-            datos = generar_fila_datos(pais)
-            if pais == "Brasil":
-                from utils.data_generator import generar_documento_brasil_4devs
-                if i in _br_cnpj_rows:
-                    _tipo_doc = "cnpj"
-                elif i in _br_cep_rows:
-                    _tipo_doc = "cep"
-                else:
-                    _tipo_doc = "cpf"
-                datos["Documento"] = generar_documento_brasil_4devs(_tipo_doc)
-            fila = []
-            for col in columnas:
-                if col == "URL":
-                    fila.append(row.get(col_url, "") if col_url else "")
-                elif col == "Formulario":
-                    fila.append(row.get(col_form, "") if col_form else "")
-                else:
-                    fila.append(datos.get(col, ""))
-            filas.append(fila)
-
-        if pais == "Chile" and "Documento" in columnas:
-            from utils.data_generator import generar_rut_chile_con_k
-            doc_col_idx = columnas.index("Documento")
-            filas[0][doc_col_idx] = generar_rut_chile_con_k()
-
-        try:
-            df_new = pd.DataFrame(filas, columns=columnas).astype(str)
-            with pd.ExcelWriter(excel_ruta, engine="openpyxl") as writer:
-                df_new.to_excel(writer, index=False, sheet_name="Sheet1")
-            status_var.set(f"✓ {len(filas)} fila(s) regeneradas con URLs existentes → {excel_ruta}")
-            status_lbl.config(fg="#a8e6a3")
-            _ultima_ruta[0] = excel_ruta
-            btn_abrir_carpeta.pack(anchor="w", pady=(6, 0))
-        except PermissionError:
-            status_var.set("Cerrá el archivo Excel y volvé a intentar.")
-            status_lbl.config(fg="#f4a261")
-        except Exception as exc:
-            status_var.set(f"Error: {exc}")
-            status_lbl.config(fg="#f4a261")
-
-    ttk.Button(frame_btns, text="Generar Excel", command=_generar,
-               style="Section.TButton").pack(side=LEFT, padx=(0, 8))
-    ttk.Button(frame_btns, text="Regenerar datos (URLs actuales)", command=_generar_con_urls_existentes,
-               style="Section.TButton").pack(side=LEFT, padx=(0, 8))
-    ttk.Button(frame_btns, text="Limpiar Excel", command=_limpiar,
-               style="Section.TButton").pack(side=LEFT, padx=(0, 8))
-    ttk.Button(frame_btns, text="Borrar URLs", command=_borrar_urls,
-               style="Section.TButton").pack(side=LEFT)
-
-    # ── Config Brasil (tipo de documento) — visible solo cuando se selecciona Brasil ──
-    _br_cfg_global = cargar_config_global()
-    brasil_cfg = _br_cfg_global.get("lambdatest", {}).get("brasil_docs", {})
-
-    frame_brasil_outer = Frame(frame, bg=APP_BG_COLOR)
-
-    Label(frame_brasil_outer, text="Brasil — tipo de documento a generar:",
-          bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(8, 2))
-    Label(frame_brasil_outer,
-          text="Si no se marca ningún tipo, se genera CPF para todos los forms.",
-          font=("Segoe UI", 8, "italic"), bg=APP_BG_COLOR, fg="#aaa").pack(anchor="w", pady=(0, 4))
-
-    frame_brasil = Frame(frame_brasil_outer, bg=APP_BG_COLOR)
-    frame_brasil.pack(anchor="w", pady=(0, 4))
-
-    br_cpf_var  = BooleanVar(value=bool(brasil_cfg.get("cpf_rows")))
-    br_cep_var  = BooleanVar(value=bool(brasil_cfg.get("cep_rows")))
-    br_cnpj_var = BooleanVar(value=bool(brasil_cfg.get("cnpj_rows")))
-
-    frame_br_checks = Frame(frame_brasil, bg=APP_BG_COLOR)
-    frame_br_checks.pack(anchor="w")
-    Checkbutton(frame_br_checks, text="CPF",  variable=br_cpf_var,  bg=APP_BG_COLOR, fg="white",
-                selectcolor=APP_BG_COLOR, activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 12))
-    Checkbutton(frame_br_checks, text="CEP",  variable=br_cep_var,  bg=APP_BG_COLOR, fg="white",
-                selectcolor=APP_BG_COLOR, activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 12))
-    Checkbutton(frame_br_checks, text="CNPJ", variable=br_cnpj_var, bg=APP_BG_COLOR, fg="white",
-                selectcolor=APP_BG_COLOR, activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT)
-
-    frame_br_rows = Frame(frame_brasil, bg=APP_BG_COLOR)
-    frame_br_rows.pack(anchor="w", pady=(4, 0))
-
-    def _br_row_gen(parent, label, default):
-        f = Frame(parent, bg=APP_BG_COLOR)
-        f.pack(anchor="w", pady=1)
-        Label(f, text=label, bg=APP_BG_COLOR, fg="white",
-              font=("Segoe UI", 9), width=16, anchor="w").pack(side=LEFT)
-        v = StringVar(value=default)
-        Entry(f, textvariable=v, width=24, font=("Segoe UI", 9)).pack(side=LEFT)
-        return v
-
-    br_cpf_rows_var  = _br_row_gen(frame_br_rows, "Filas CPF  (ej: 1,2):",  ",".join(str(x) for x in brasil_cfg.get("cpf_rows",  [])))
-    br_cep_rows_var  = _br_row_gen(frame_br_rows, "Filas CEP  (ej: 3):",    ",".join(str(x) for x in brasil_cfg.get("cep_rows",  [])))
-    br_cnpj_rows_var = _br_row_gen(frame_br_rows, "Filas CNPJ (ej: 4,5):",  ",".join(str(x) for x in brasil_cfg.get("cnpj_rows", [])))
-
-    def _parse_br_rows(s):
-        result = []
-        for tok in s.split(","):
-            tok = tok.strip()
-            if tok.isdigit():
-                result.append(int(tok))
-        return result
-
-    def _guardar_brasil_cfg():
-        cfg_actual = cargar_config_global()
-        cfg_actual.setdefault("lambdatest", {})["brasil_docs"] = {
-            "cpf_rows":  _parse_br_rows(br_cpf_rows_var.get())  if br_cpf_var.get()  else [],
-            "cep_rows":  _parse_br_rows(br_cep_rows_var.get())  if br_cep_var.get()  else [],
-            "cnpj_rows": _parse_br_rows(br_cnpj_rows_var.get()) if br_cnpj_var.get() else [],
-        }
-        guardar_config_global(cfg_actual)
-        print("✓ Config Brasil guardada.")
-
-    ttk.Button(frame_brasil, text="Guardar config Brasil",
-               command=_guardar_brasil_cfg,
-               style="Section.TButton").pack(anchor="w", pady=(8, 0))
-
-    # ── Leyenda de reglas ────────────────────────────────────────────────────
-    frame_reglas = Frame(frame, bg=SECTION_CONTAINER_BG_COLOR, padx=2, pady=2)
-    frame_reglas.pack(fill="x", pady=(16, 0))
-
-    def _toggle_brasil_panel(*_):
-        if pais_var.get() == "Brasil":
-            frame_brasil_outer.pack(anchor="w", pady=(8, 4), before=frame_reglas)
-        else:
-            frame_brasil_outer.pack_forget()
-
-    pais_var.trace_add("write", _toggle_brasil_panel)
-    _toggle_brasil_panel()  # estado inicial
-    frame_reglas_inner = Frame(frame_reglas, bg=SECTION_BG_COLOR, padx=12, pady=10)
-    frame_reglas_inner.pack(fill="both")
-    Label(frame_reglas_inner, text="Reglas de generación",
-          font=("Segoe UI", 9, "bold"), bg=SECTION_BG_COLOR, fg="white").pack(anchor="w")
-    reglas = (
-        "• Modelo → vacío (selección aleatoria en el formulario)\n"
-        "• Nombre/Apellido → 1 o 2 palabras aleatorias variadas\n"
-        "• Documento → Chile: RUT válido  ·  Ecuador: CI válida  ·  Brasil: CPF válido  ·  Resto: número aleatorio\n"
-        "• Celular → prefijo y cantidad de dígitos válidos por país\n"
-        "  Bolivia: 6/7+7  ·  Perú/Chile: 9+8  ·  Colombia: 3+9  ·  Ecuador/Paraguay: 09+8  ·  Uruguay: 09+7\n"
-        "• Región / Ciudad / Concesionario / Fecha → vacíos (selección aleatoria en el formulario)"
-    )
-    Label(frame_reglas_inner, text=reglas, font=("Segoe UI", 8), bg=SECTION_BG_COLOR,
-          fg="#ddd", justify="left").pack(anchor="w", pady=(4, 0))
-
-    Label(frame, text="Added By Elian", font=("Segoe UI", 7, "italic"),
-          bg=APP_BG_COLOR, fg="#7a5a95", anchor="e").pack(fill="x", pady=(12, 2))
-
-
-def _build_lambdatest_tab(parent):
-    """Construye el tab de LambdaTest con sub-tabs Mac y Android."""
-
-    frame = Frame(parent, bg=APP_BG_COLOR, padx=20, pady=8)
-    frame.pack(fill="both", expand=True)
-
-    Label(frame, text="LambdaTest", font=("Segoe UI", 12, "bold"),
-          bg=APP_BG_COLOR, fg="white").pack(anchor="w", pady=(0, 2))
-    Label(frame, text="Ejecutá formularios en la nube de LambdaTest.",
-          font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="#ddd").pack(anchor="w", pady=(0, 6))
-
-    # ── Credenciales compartidas ───────────────────────────────────────────────
-    def _leer_creds_txt():
-        path = os.path.join(BASE_DIR, "lambdatest_credentials.txt")
-        u = ak = ""
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if "=" not in line or line.startswith("#"):
-                        continue
-                    k, v = line.split("=", 1)
-                    k = k.strip().lower()
-                    if k == "username":
-                        u = v.strip()
-                    elif k == "access_key":
-                        ak = v.strip()
-        return u, ak
-
-    frame_creds = Frame(frame, bg=APP_BG_COLOR)
-    frame_creds.pack(anchor="w", pady=(0, 12))
-    Label(frame_creds, text="Credenciales:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 2))
-    Label(frame_creds, text="Se guardan en lambdatest_credentials.txt (compartidas para Mac y Android)",
-          bg=APP_BG_COLOR, fg="#aaa", font=("Segoe UI", 8, "italic")).pack(anchor="w", pady=(0, 4))
-
-    _u, _ak = _leer_creds_txt()
-
-    frame_user = Frame(frame_creds, bg=APP_BG_COLOR)
-    frame_user.pack(anchor="w", pady=2)
-    Label(frame_user, text="Username:", bg=APP_BG_COLOR, fg="white", width=12, anchor="w").pack(side=LEFT)
-    lt_username_var = StringVar(value=_u)
-    Entry(frame_user, textvariable=lt_username_var, width=34).pack(side=LEFT)
-
-    frame_key = Frame(frame_creds, bg=APP_BG_COLOR)
-    frame_key.pack(anchor="w", pady=2)
-    Label(frame_key, text="Access Key:", bg=APP_BG_COLOR, fg="white", width=12, anchor="w").pack(side=LEFT)
-    lt_key_var = StringVar(value=_ak)
-    Entry(frame_key, textvariable=lt_key_var, width=34, show="*").pack(side=LEFT)
-
-    def _guardar_creds():
-        path = os.path.join(BASE_DIR, "lambdatest_credentials.txt")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(f"username={lt_username_var.get().strip()}\n")
-            f.write(f"access_key={lt_key_var.get().strip()}\n")
-        print(f"✓ Credenciales LambdaTest guardadas en {path}")
-        messagebox.showinfo("LambdaTest", f"Credenciales guardadas en:\n{path}")
-
-    ttk.Button(frame_creds, text="Guardar credenciales", command=_guardar_creds,
-               style="Section.TButton").pack(anchor="w", pady=(8, 0))
-
-    # ── Sub-tabs Mac / Android ─────────────────────────────────────────────────
-    inner_nb = ttk.Notebook(frame)
-    inner_nb.pack(fill="both", expand=True, pady=(8, 0))
-
-    tab_mac     = Frame(inner_nb, bg=APP_BG_COLOR, padx=12, pady=6)
-    tab_android = Frame(inner_nb, bg=APP_BG_COLOR, padx=12, pady=6)
-    inner_nb.add(tab_mac,     text="  Mac  ")
-    inner_nb.add(tab_android, text="  Android  ")
-
-    # ── Sub-tab MAC ────────────────────────────────────────────────────────────
-    Label(tab_mac, text="Mac + Safari", font=("Segoe UI", 11, "bold"),
-          bg=APP_BG_COLOR, fg="white").pack(anchor="w", pady=(0, 4))
-    Label(tab_mac, text="macOS Sonoma · Safari · 1920×1080",
-          font=("Segoe UI", 9), bg=APP_BG_COLOR, fg="#aaa").pack(anchor="w", pady=(0, 10))
-
-    Label(tab_mac, text="Países a ejecutar:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 4))
-    frame_paises_mac = Frame(tab_mac, bg=APP_BG_COLOR)
-    frame_paises_mac.pack(anchor="w", pady=(0, 12))
-    lt_mac_vars = {}
-    for idx, pais in enumerate(MAPEO_PAISES.keys()):
-        var = BooleanVar(value=False)
-        lt_mac_vars[pais] = var
-        Checkbutton(frame_paises_mac, text=pais, variable=var,
-                    bg=APP_BG_COLOR, fg="white", selectcolor=APP_BG_COLOR,
-                    activebackground=APP_BG_COLOR, activeforeground="white",
-                    font=("Segoe UI", 9)).grid(row=idx // 5, column=idx % 5, sticky="w", padx=6, pady=2)
-
-    frame_btns_mac = Frame(tab_mac, bg=APP_BG_COLOR)
-    frame_btns_mac.pack(anchor="w", pady=(8, 0))
-
-    def _ejecutar_lt_mac():
-        if _run_state["running"]:
-            messagebox.showwarning("En ejecución", "Ya hay una ejecución en curso.")
-            return
-        paises_sel = [p for p, v in lt_mac_vars.items() if v.get()]
-        if not paises_sel:
-            messagebox.showwarning("LambdaTest Mac", "Seleccioná al menos un país.")
-            return
-
-        cfg_actual = cargar_config_global()
-        cfg_actual["lambdatest"] = {
-            "username": lt_username_var.get().strip(),
-            "access_key": lt_key_var.get().strip(),
-        }
-        guardar_config_global(cfg_actual)
-
-        stop_ev = threading.Event()
-        _run_state["stop_event"] = stop_ev
-        _init_overlay_countries(paises_sel)
-        _set_running(True)
-
-        import sys as _sys
-        import re as _re
-        _lt_dir = os.path.join(BASE_DIR, "lambdatest_mac")
-        if _lt_dir not in _sys.path:
-            _sys.path.insert(0, _lt_dir)
-
-        remaining = [len(paises_sel)]
-        remaining_lock = threading.Lock()
-        summaries_mac = []
-
-        def _make_lt_mac_log(pais_nombre):
-            def _lt_log(msg):
-                msg = str(msg).strip()
-                if not msg:
-                    return
-                if (
-                    "LEAD " in msg
-                    or msg.lstrip().startswith("→")
-                    or msg.lstrip().startswith("✗")
-                    or msg.lstrip().startswith("⛔")
-                    or msg.lstrip().startswith("⚠ Error")
-                ):
-                    print(msg.strip())
-                m = _re.search(r'LEAD\s+(\d+)/(\d+)', msg)
-                if m:
-                    _update_progress(pais_nombre, done=int(m.group(1)),
-                                     total=int(m.group(2)), status="running")
-            return _lt_log
-
-        def _run_pais_mac(pais):
-            _update_progress(pais, status="running")
-            try:
-                import lt_controller  # type: ignore[import]
-                summary = lt_controller.run(
-                    pais=pais,
-                    platform="mac",
-                    log_fn=_make_lt_mac_log(pais),
-                    stop_event=stop_ev,
-                )
-                ok = summary.get("ok", 0)
-                total = summary.get("total", 0)
-                if summary.get("error"):
-                    print(f"✗ {pais}: {summary['error']}")
-                    _update_progress(pais, total=total, ok=ok,
-                                     status="stopped" if stop_ev.is_set() else "done_error")
-                else:
-                    print(f"✓ Leads de {pais} enviados ({ok}/{total})")
-                    failed = summary.get("failed", 0)
-                    _update_progress(pais, done=total, total=total, ok=ok,
-                                     status="done_ok" if failed == 0 else "done_error")
-                with remaining_lock:
-                    summaries_mac.append({
-                        "pais": pais,
-                        "navegador": "lambdatest_mac",
-                        "viewport": "mac",
-                        "estado": "completado",
-                        "excel_path": summary.get("results_excel"),
-                        "screenshots_dir": None,
-                    })
-            except Exception as e:
-                print(f"✗ Error Mac [{pais}]: {e}")
-                _update_progress(pais, status="done_error")
-                with remaining_lock:
-                    summaries_mac.append({
-                        "pais": pais, "navegador": "lambdatest_mac", "viewport": "mac",
-                        "estado": "error", "excel_path": None, "screenshots_dir": None,
-                    })
-            finally:
-                with remaining_lock:
-                    remaining[0] -= 1
-                    if remaining[0] == 0:
-                        _set_running(False)
-                        if summaries_mac and not stop_ev.is_set():
-                            from interface.helpers_interface import enviar_email_resultados_consolidados
-                            threading.Thread(
-                                target=lambda: enviar_email_resultados_consolidados(summaries_mac),
-                                daemon=True,
-                            ).start()
-
-        print(f"▶ Enviando leads de: {', '.join(paises_sel)}")
-        for pais in paises_sel:
-            threading.Thread(target=_run_pais_mac, args=(pais,), daemon=True).start()
-
-    btn_lt_mac = ttk.Button(frame_btns_mac, text="Ejecutar en Mac",
-                            command=_ejecutar_lt_mac, style="Section.TButton")
-    btn_lt_mac.pack(side=LEFT, pady=(4, 0))
-    _run_state["lt_btn"] = btn_lt_mac
-
-    Label(tab_mac, text="Los logs aparecen en la consola global (parte inferior).",
-          font=("Segoe UI", 8, "italic"), bg=APP_BG_COLOR, fg="#aaa").pack(anchor="w", pady=(10, 0))
-
-    # ── Sub-tab ANDROID ────────────────────────────────────────────────────────
-    Label(tab_android, text="Android + Chrome", font=("Segoe UI", 11, "bold"),
-          bg=APP_BG_COLOR, fg="white").pack(anchor="w", pady=(0, 4))
-
-    frame_device = Frame(tab_android, bg=APP_BG_COLOR)
-    frame_device.pack(anchor="w", pady=(0, 10))
-    Label(frame_device, text="Dispositivo:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 10, "bold"), width=12, anchor="w").pack(side=LEFT)
-    ANDROID_DEVICES = ["Galaxy S23", "Galaxy S24", "Galaxy S22", "Galaxy S21", "Galaxy A54"]
-    lt_android_device_var = StringVar(value=ANDROID_DEVICES[0])
-    ttk.Combobox(frame_device, textvariable=lt_android_device_var,
-                 values=ANDROID_DEVICES, state="readonly", width=22).pack(side=LEFT)
-
-    frame_screenshots_android = Frame(tab_android, bg=APP_BG_COLOR)
-    frame_screenshots_android.pack(anchor="w", pady=(0, 10))
-    lt_android_screenshots_var = BooleanVar(value=False)
-    Radiobutton(frame_screenshots_android, text="Sin capturas  ", variable=lt_android_screenshots_var,
-                value=False, bg=APP_BG_COLOR, fg="white", selectcolor=APP_BG_COLOR,
-                activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT)
-    Radiobutton(frame_screenshots_android, text="Con capturas", variable=lt_android_screenshots_var,
-                value=True, bg=APP_BG_COLOR, fg="white", selectcolor=APP_BG_COLOR,
-                activebackground=APP_BG_COLOR, activeforeground="white",
-                font=("Segoe UI", 9)).pack(side=LEFT)
-
-    Label(tab_android, text="Países a ejecutar:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 4))
-    frame_paises_android = Frame(tab_android, bg=APP_BG_COLOR)
-    frame_paises_android.pack(anchor="w", pady=(0, 12))
-    lt_android_vars = {}
-    for idx, pais in enumerate(MAPEO_PAISES.keys()):
-        var = BooleanVar(value=False)
-        lt_android_vars[pais] = var
-        Checkbutton(frame_paises_android, text=pais, variable=var,
-                    bg=APP_BG_COLOR, fg="white", selectcolor=APP_BG_COLOR,
-                    activebackground=APP_BG_COLOR, activeforeground="white",
-                    font=("Segoe UI", 9)).grid(row=idx // 5, column=idx % 5, sticky="w", padx=6, pady=2)
-
-    frame_btns_android = Frame(tab_android, bg=APP_BG_COLOR)
-    frame_btns_android.pack(anchor="w", pady=(8, 0))
-
-    def _ejecutar_lt_android():
-        if _run_state["running"]:
-            messagebox.showwarning("En ejecución", "Ya hay una ejecución en curso.")
-            return
-        paises_sel = [p for p, v in lt_android_vars.items() if v.get()]
-        if not paises_sel:
-            messagebox.showwarning("LambdaTest Android", "Seleccioná al menos un país.")
-            return
-
-        cfg_actual = cargar_config_global()
-        cfg_actual["lambdatest"] = {
-            "username": lt_username_var.get().strip(),
-            "access_key": lt_key_var.get().strip(),
-        }
-        guardar_config_global(cfg_actual)
-
-        stop_ev = threading.Event()
-        _run_state["stop_event"] = stop_ev
-        _init_overlay_countries(paises_sel)
-        _set_running(True)
-
-        import sys as _sys
-        import re as _re
-        _lt_android_dir = os.path.join(BASE_DIR, "lambdatest_android")
-        _lt_mac_dir     = os.path.join(BASE_DIR, "lambdatest_mac")
-        for _d in (_lt_android_dir, _lt_mac_dir):
-            if _d not in _sys.path:
-                _sys.path.insert(0, _d)
-
-        device_name = lt_android_device_var.get()
-        remaining = [len(paises_sel)]
-        remaining_lock = threading.Lock()
-        summaries_android = []
-
-        def _make_lt_android_log(pais_nombre):
-            def _lt_log_android(msg):
-                msg = str(msg).strip()
-                if not msg:
-                    return
-                if (
-                    "LEAD " in msg
-                    or msg.lstrip().startswith("→")
-                    or msg.lstrip().startswith("✗")
-                    or msg.lstrip().startswith("⛔")
-                    or msg.lstrip().startswith("⚠ Error")
-                ):
-                    print(msg.strip())
-                m = _re.search(r'LEAD\s+(\d+)/(\d+)', msg)
-                if m:
-                    _update_progress(pais_nombre, done=int(m.group(1)),
-                                     total=int(m.group(2)), status="running")
-            return _lt_log_android
-
-        def _run_pais_android(pais):
-            _update_progress(pais, status="running")
-            try:
-                import lt_android_controller  # type: ignore[import]
-                summary = lt_android_controller.run(
-                    pais=pais,
-                    device_name=device_name,
-                    with_screenshots=lt_android_screenshots_var.get(),
-                    log_fn=_make_lt_android_log(pais),
-                    stop_event=stop_ev,
-                )
-                ok = summary.get("ok", 0)
-                total = summary.get("total", 0)
-                if summary.get("error"):
-                    print(f"✗ {pais}: {summary['error']}")
-                    _update_progress(pais, total=total, ok=ok,
-                                     status="stopped" if stop_ev.is_set() else "done_error")
-                else:
-                    print(f"✓ Leads de {pais} enviados ({ok}/{total})")
-                    failed = summary.get("failed", 0)
-                    _update_progress(pais, done=total, total=total, ok=ok,
-                                     status="done_ok" if failed == 0 else "done_error")
-                with remaining_lock:
-                    summaries_android.append({
-                        "pais": pais,
-                        "navegador": "lambdatest_android",
-                        "viewport": "android",
-                        "estado": "completado",
-                        "excel_path": summary.get("results_excel"),
-                        "screenshots_dir": None,
-                    })
-            except Exception as e:
-                print(f"✗ Error Android [{pais}]: {e}")
-                _update_progress(pais, status="done_error")
-                with remaining_lock:
-                    summaries_android.append({
-                        "pais": pais, "navegador": "lambdatest_android", "viewport": "android",
-                        "estado": "error", "excel_path": None, "screenshots_dir": None,
-                    })
-            finally:
-                with remaining_lock:
-                    remaining[0] -= 1
-                    if remaining[0] == 0:
-                        _set_running(False)
-                        if summaries_android and not stop_ev.is_set():
-                            from interface.helpers_interface import enviar_email_resultados_consolidados
-                            threading.Thread(
-                                target=lambda: enviar_email_resultados_consolidados(summaries_android),
-                                daemon=True,
-                            ).start()
-
-        print(f"▶ Enviando leads de: {', '.join(paises_sel)} ({device_name})")
-        for pais in paises_sel:
-            threading.Thread(target=_run_pais_android, args=(pais,), daemon=True).start()
-
-    btn_lt_android = ttk.Button(frame_btns_android, text="Ejecutar en Android",
-                                command=_ejecutar_lt_android, style="Section.TButton")
-    btn_lt_android.pack(side=LEFT, pady=(4, 0))
-    _run_state["lt_android_btn"] = btn_lt_android
-
-    Label(tab_android, text="Los logs aparecen en la consola global (parte inferior).",
-          font=("Segoe UI", 8, "italic"), bg=APP_BG_COLOR, fg="#aaa").pack(anchor="w", pady=(10, 0))
-
-    Label(frame, text="Added By Elian", font=("Segoe UI", 7, "italic"),
-          bg=APP_BG_COLOR, fg="#7a5a95", anchor="e").pack(fill="x", pady=(8, 2))
-
-
-def iniciar_interfaz():
-    limpiar_temporales()
-    root = Tk()
-    root.title("Osocio - Form Automation")
-    # Tamaño optimizado: 980x768
-    root.geometry("1200x800")
-    root.minsize(1100, 700)
-    root.configure(bg=APP_BG_COLOR)
-
-    # Uniformar estilos de tabs y botones para respetar la paleta definida
-    style = ttk.Style()
+def _ensure_serialized_setup():
+    if _SETUP_PATCHED[0]:
+        return
     try:
-        style.theme_use("clam")
+        from core import base_form_filler as _bff
+        _orig_setup = _bff.BaseFormFiller.setup_directories_and_files
+
+        def _locked_setup(self, _orig=_orig_setup):
+            with _SETUP_LOCK:
+                return _orig(self)
+
+        _bff.BaseFormFiller.setup_directories_and_files = _locked_setup
+        _SETUP_PATCHED[0] = True
     except Exception:
         pass
 
-    style.configure(
-        "TNotebook",
-        background=APP_BG_COLOR,
-        borderwidth=0,
-    )
-    style.configure(
-        "TNotebook.Tab",
-        background=HEADER_BG_COLOR,
-        foreground="white",
-        padding=(8, 4),
-        font=("Segoe UI", 10, "bold"),
-    )
-    style.map(
-        "TNotebook.Tab",
-        background=[("selected", HEADER_BG_COLOR), ("active", "#b897d8")],
-        foreground=[("selected", "white"), ("disabled", "#e6dcf2")],
-        padding=[("selected", (16, 8))],
-    )
 
-    style.configure(
-        "TButton",
-        background=HEADER_BG_COLOR,
-        foreground="white",
-        borderwidth=0,
-        padding=(10, 6),
-    )
-    style.map(
-        "TButton",
-        background=[
-            ("active", "#b897d8"),
-            ("pressed", "#7f5798"),
-            ("disabled", "#bda7d6"),
-        ],
-        foreground=[("disabled", "#f3eff8")],
-    )
+# País ↔ abreviatura (para la pestaña Validación de Campos)
+_VAL_ABBR = {"Argentina": "AR", "Bolivia": "BO", "Brasil": "BR", "Chile": "CH", "Colombia": "CO",
+             "Ecuador": "EC", "Paraguay": "PA", "Peru": "PE", "Uruguay": "UY"}
+_VAL_FULL = {v: k for k, v in _VAL_ABBR.items()}
+_VAL_FULL.update({"CL": "Chile", "PY": "Paraguay"})  # alias comunes
 
-    style.configure(
-        "Section.TNotebook",
-        background=SECTION_BG_COLOR,
-        borderwidth=0,
-    )
-    style.configure(
-        "Section.TNotebook.Tab",
-        background=SECTION_CTA_BG_COLOR,
-        foreground=PRIMARY_TEXT_COLOR,
-        padding=(8, 4),
-    )
-    style.map(
-        "Section.TNotebook.Tab",
-        background=[("selected", "#6990BA"), ("active", "#4a6a8d")],
-        foreground=[("selected", PRIMARY_TEXT_COLOR), ("disabled", "#4a4a4a")],
-        padding=[("selected", (16, 8))],
-    )
+# === PALETA DE COLORES PREMIUM AMIGABLE PARA LOS OJOS ===
+APP_BG_COLOR = "#5D3C7A"          # Morado base de Osocio (Ventana principal)
+CARD_BG_COLOR = "#4A2666"         # Morado oscuro/rico para las tarjetas contenedoras (Cards)
+BORDER_COLOR = "#7D4E9F"          # Borde de contraste de paneles
+TEXT_PRIMARY = "#FFFFFF"          # Texto principal blanco
+TEXT_SECONDARY = "#E6D6F2"        # Texto secundario lavanda muy claro
 
-    style.configure(
-        "Section.TButton",
-        background="#6990BA",
-        foreground=PRIMARY_TEXT_COLOR,
-        borderwidth=0,
-        padding=(10, 6),
-        relief="flat",
-    )
-    style.map(
-        "Section.TButton",
-        background=[
-            ("active", "#4a6a8d"),
-            ("pressed", "#2c435b"),
-            ("disabled", "#9cb6d0"),
-        ],
-        foreground=[("disabled", "#4a4a4a")],
-    )
+# Botones de selección y hovers en tonos pastel súper suaves (para no dañar la vista)
+ACCENT_COLOR = "#AED6F1"          # Azul pastel muy suave para elementos activos y chequeados
+ACCENT_MUTED = "#D4E6F1"          # Azul pastel aún más claro para hovers secundarios
+BUTTON_INACTIVE = "#35164D"       # Botón inactivo morado oscuro
+BUTTON_ACTIVE = "#602D8A"         # Botón activo/seleccionado (morado medio suave)
+BUTTON_HOVER = "#4C226E"          # Hover morado sutil (muy oscuro)
+ENTRY_BG = "#2E1146"              # Fondo para campos de entrada
 
-    style.configure(
-        "FolderCTA.TButton",
-        background="#2E8B57",
-        foreground="white",
-        font=("Segoe UI", 9, "bold"),
-        borderwidth=0,
-        padding=(10, 6),
-        relief="flat",
-    )
-    style.map(
-        "FolderCTA.TButton",
-        background=[("active", "#246B43"), ("pressed", "#1A5230"), ("disabled", "#7ab89a")],
-        foreground=[("disabled", "#ccc")],
-    )
+# Colores dedicados para pestañas (Tabs)
+TAB_ACTIVE_BG = "#7D4E9F"         # Morado brillante de contraste para pestaña activa
+TAB_ACTIVE_FG = "#FFFFFF"         # Texto blanco para pestaña activa
+TAB_INACTIVE_BG = "#35164D"       # Morado oscuro para pestaña inactiva
+TAB_INACTIVE_FG = "#C5B2D6"       # Texto secundario lavanda claro para pestaña inactiva
 
-    style.configure(
-        "Section.Vertical.TScrollbar",
-        troughcolor="#6b4890",
-        background="#1a0d2e",
-        bordercolor="#1a0d2e",
-        arrowcolor="#c8a0e8",
-        gripcount=0,
-        relief="flat",
-    )
-    style.map(
-        "Section.Vertical.TScrollbar",
-        background=[("active", "#2d1b44"), ("pressed", "#0f0820")],
-    )
-    style.configure(
-        "Section.Horizontal.TScrollbar",
-        troughcolor="#6b4890",
-        background="#1a0d2e",
-        bordercolor="#1a0d2e",
-        arrowcolor="#c8a0e8",
-        gripcount=0,
-        relief="flat",
-    )
-    style.map(
-        "Section.Horizontal.TScrollbar",
-        background=[("active", "#2d1b44"), ("pressed", "#0f0820")],
-    )
+# Colores suaves para los textos de los botones de acción (fondos oscuros)
+TEXT_ADD = "#82E0AA"              # Texto verde pastel suave para Agregar
+TEXT_DELETE = "#F1948A"           # Texto rojo/coral pastel suave para Eliminar
+TEXT_SAVE = "#85C1E9"             # Texto azul pastel suave para Guardar
+TEXT_EXCEL = "#F8C471"            # Texto naranja pastel suave para Abrir Excel
 
-    style.configure(
-        "Results.TButton",
-        background="#6990BA",
-        foreground=PRIMARY_TEXT_COLOR,
-        borderwidth=0,
-        padding=(10, 4),
-        relief="flat",
-    )
-    style.map(
-        "Results.TButton",
-        background=[
-            ("active", "#4a6a8d"),
-            ("pressed", "#2c435b"),
-            ("disabled", "#9cb6d0"),
-        ],
-        foreground=[("disabled", "#4a4a4a")],
-    )
+# Botones de acción principal en colores pasteles apagados (Fondos súper oscuros para evitar fatiga)
+EXECUTE_BG = "#27AE60"            # Verde esmeralda vívido para el CTA Ejecutar
+EXECUTE_FG = "#FFFFFF"            # Texto blanco para máximo contraste
+EXECUTE_HOVER = "#2ECC71"          # Hover verde más brillante
 
-    style.configure(
-        "EnviarLeads.TButton",
-        background="white",
-        foreground="black",
-        font=("Segoe UI", 11, "bold"),
-        borderwidth=0,
-        padding=(14, 8),
-        relief="flat",
-    )
-    style.map(
-        "EnviarLeads.TButton",
-        background=[
-            ("active", "#e0e0e0"),
-            ("pressed", "#c0c0c0"),
-            ("disabled", "#cccccc"),
-        ],
-        foreground=[("disabled", "#888888")],
-    )
+VALIDATE_BG = "#1D5270"           # Azul acero oscuro para Validación
+VALIDATE_FG = "#85C1E9"           # Celeste pastel para el texto
+VALIDATE_HOVER = "#28729C"         # Hover azul acero
 
-    style.configure(
-        "HeaderSeparator.TSeparator",
-        background=HEADER_BG_COLOR,
-        bordercolor=HEADER_BG_COLOR,
-        darkcolor=HEADER_BG_COLOR,
-        lightcolor=HEADER_BG_COLOR,
-    )
-    style.configure(
-        "App.TSeparator",
-        background=APP_BG_COLOR,
-        bordercolor=APP_BG_COLOR,
-        darkcolor=APP_BG_COLOR,
-        lightcolor=APP_BG_COLOR,
-    )
-    style.configure(
-        "Section.TSeparator",
-        background=SECTION_BG_COLOR,
-        bordercolor=SECTION_BG_COLOR,
-        darkcolor=SECTION_BG_COLOR,
-        lightcolor=SECTION_BG_COLOR,
-    )
+# CTA "Guardar" — mismo estilo en toda la app (azul medio, no tan pastel)
+SAVE_BG = "#4F86C6"
+SAVE_FG = "#FFFFFF"
+SAVE_HOVER = "#5E95D3"
 
-    icon_path = os.path.join(ASSET_DIR, "icon.ico")
+# Colores de la caja de advertencia (Muted Yellow)
+WARN_BG = "#FCF3CF"
+WARN_BORDER = "#F4D03F"
+WARN_TEXT = "#7E5109"
+
+# === Diálogo de Programación Semanal (portado de weekly_scheduler.py, recoloreado) ===
+_S_BG = APP_BG_COLOR
+_S_CARD = CARD_BG_COLOR
+_S_SEL = BUTTON_ACTIVE
+_S_UNSEL = BUTTON_INACTIVE
+_S_MUTED = TEXT_SECONDARY
+_S_BORDER = BORDER_COLOR
+_S_ACCENT = ACCENT_COLOR
+_S_AMBER = "#F8C471"
+_S_GREEN = "#82E0AA"
+_S_RED = "#F1948A"
+_S_WHITE = "#FFFFFF"
+
+_SCH_DAYS = [("Lun", "Lunes"), ("Mar", "Martes"), ("Mié", "Miércoles"), ("Jue", "Jueves"),
+             ("Vie", "Viernes"), ("Sáb", "Sábado"), ("Dom", "Domingo")]
+_SCH_HOURS = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 15, 30, 45)]
+_SCH_COUNTRIES = ["Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "Paraguay", "Peru", "Uruguay"]
+
+
+class _DemoSchedulerPanel(tk.Frame):
+    """Panel de configuración semanal (días, horarios, países) integrado directamente en la pestaña."""
+
+    def __init__(self, parent, on_save, initial_config=None, on_close=None):
+        super().__init__(parent, bg=_S_BG, bd=1, highlightthickness=1, highlightbackground=_S_BORDER)
+
+        self._on_save = on_save
+        self._on_close = on_close
+        self._selected_day = None
+        self._copy_open_state = False
+        self._copy_selected_days = []
+        self._hour_btns = {}
+        self._badges_frame = None
+        self._copy_frame_inner = None
+        self._val_lbl = None
+        self._save_btn = None
+        self._edit_all_days = False
+        self._custom_hour_var = tk.StringVar()
+
+        cfg = initial_config or {}
+        self._schedule = {k: list(v) for k, v in cfg.get("horarios", {}).items()}
+        self._countries = list(cfg.get("paises", []))
+
+        self._build_ui()
+
+    def _close(self):
+        if self._on_close:
+            self._on_close()
+
+    def _build_ui(self):
+        header = tk.Frame(self, bg=_S_CARD)
+        header.pack(fill="x")
+        tk.Label(header, text="⚙  Configurar automatización", font=("Segoe UI", 11, "bold"),
+                 bg=_S_CARD, fg=_S_WHITE).pack(side="left", padx=16, pady=10)
+        
+        btn_close = tk.Button(header, text="✕", font=("Segoe UI", 11), bg=_S_CARD, fg=_S_MUTED, relief="flat",
+                              cursor="hand2", activebackground=_S_BG, activeforeground=_S_WHITE, bd=0,
+                              command=self._close)
+        btn_close.pack(side="right", padx=12, pady=6)
+        btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#E74C3C", fg="white"))
+        btn_close.bind("<Leave>", lambda e: btn_close.config(bg=_S_CARD, fg=_S_MUTED))
+        
+        tk.Frame(self, bg=_S_BORDER, height=1).pack(fill="x")
+
+        self._build_footer(self, dict(padx=14, pady=10))
+        tk.Frame(self, bg=_S_BORDER, height=1).pack(fill="x", side="bottom")
+
+        body = tk.Frame(self, bg=_S_BG)
+        body.pack(fill="both", expand=True)
+
+        p = dict(padx=14, pady=8)
+        self._build_days_section(body, p)
+        self._build_countries_section(body, p)
+
+    def _card_frame(self, parent):
+        return tk.Frame(parent, bg=_S_CARD, highlightbackground=_S_BORDER, highlightthickness=1)
+
+    def _build_days_section(self, parent, pad):
+        card = self._card_frame(parent)
+        card.pack(fill="x", **pad)
+
+        hrow = tk.Frame(card, bg=_S_CARD)
+        hrow.pack(fill="x", padx=12, pady=(12, 6))
+        tk.Label(hrow, text="DÍAS DE LA SEMANA", font=("Segoe UI", 9, "bold"), bg=_S_CARD, fg=_S_MUTED).pack(side="left")
+        self._total_badge = tk.Label(hrow, text="", font=("Segoe UI", 8, "bold"), bg=_S_BG, fg=_S_ACCENT, padx=8, pady=2)
+        self._total_badge.pack(side="left", padx=6)
+        self._clear_all_lbl = tk.Label(hrow, text="Desmarcar todos", font=("Segoe UI", 9, "underline"),
+                                       bg=_S_CARD, fg=_S_ACCENT, cursor="hand2")
+        self._clear_all_lbl.pack(side="right")
+        self._clear_all_lbl.bind("<Button-1>", lambda e: self._clear_all())
+
+        day_row = tk.Frame(card, bg=_S_CARD)
+        day_row.pack(fill="x", padx=12, pady=(4, 8))
+        self._day_btns = {}
+        for short, full in _SCH_DAYS:
+            col_f = tk.Frame(day_row, bg=_S_CARD)
+            col_f.pack(side="left", expand=True, fill="x", padx=2)
+            btn = tk.Button(col_f, text=f"{short}\n—", font=("Segoe UI", 8, "bold"), relief="flat",
+                            cursor="hand2", pady=8, wraplength=60)
+            btn.pack(fill="x")
+            btn.config(command=lambda d=full: self._select_day(d))
+            self._day_btns[full] = btn
+
+        tk.Label(card, text="① Tocá un día para abrirlo.   ② Agregá u elegí sus horarios.   ③ Copialos a otros días con \"Todos\" o eligiendo días.",
+                 font=("Segoe UI", 8, "italic"), bg=_S_CARD, fg=_S_MUTED, justify="left").pack(anchor="w", padx=12, pady=(0, 6))
+
+        self._hours_outer = tk.Frame(card, bg=_S_BG)
+        self._hours_outer.pack(fill="x", padx=12, pady=(0, 8))
+        self._hours_outer.pack_forget()
+        self._update_day_buttons()
+
+    def _select_day(self, day):
+        if self._selected_day == day:
+            self._close_hours_panel()
+            return
+        self._selected_day = day
+        self._hours_outer.pack(fill="x", padx=12, pady=(0, 8))
+        self._build_hours_panel()
+        self._update_day_buttons()
+
+    def _close_hours_panel(self):
+        self._selected_day = None
+        self._hours_outer.pack_forget()
+        self._copy_open_state = False
+        self._copy_selected_days = []
+        self._update_day_buttons()
+
+    def _build_hours_panel(self):
+        for w in self._hours_outer.winfo_children():
+            w.destroy()
+
+        self._apply_days = set()
+
+        # Header + Guardar
+        h_hdr = tk.Frame(self._hours_outer, bg=_S_BG)
+        h_hdr.pack(fill="x", pady=(8, 4))
+        tk.Label(h_hdr, text=f"🕐  Horarios para el {self._selected_day}", font=("Segoe UI", 10, "bold"),
+                 bg=_S_BG, fg=_S_WHITE).pack(side="left")
+        tk.Button(h_hdr, text="✓ Guardar", font=("Segoe UI", 8, "bold"), bg=SAVE_BG, fg=SAVE_FG, relief="flat",
+                  activebackground=SAVE_HOVER, activeforeground=SAVE_FG,
+                  cursor="hand2", padx=10, pady=3, command=self._close_hours_panel).pack(side="right")
+
+        # 1) Agregar horario personalizado
+        cust_row = tk.Frame(self._hours_outer, bg=_S_BG)
+        cust_row.pack(fill="x", pady=(2, 6))
+        tk.Label(cust_row, text="1)  Agregar horario:", font=("Segoe UI", 9, "bold"), bg=_S_BG, fg=_S_WHITE).pack(side="left")
+        cust_entry = tk.Entry(cust_row, textvariable=self._custom_hour_var, font=("Segoe UI", 10), width=8,
+                              bg=_S_UNSEL, fg=_S_WHITE, insertbackground=_S_WHITE, relief="flat")
+        cust_entry.pack(side="left", padx=(6, 2), ipady=2)
+        cust_entry.bind("<Return>", lambda e: self._add_custom_hour(self._custom_hour_var.get()))
+        tk.Label(cust_row, text="HH:MM", font=("Segoe UI", 8), bg=_S_BG, fg=_S_MUTED).pack(side="left", padx=(2, 6))
+        tk.Button(cust_row, text="+ Agregar", font=("Segoe UI", 8, "bold"), bg=_S_SEL, fg=_S_WHITE, relief="flat",
+                  cursor="hand2", padx=10, pady=3,
+                  command=lambda: self._add_custom_hour(self._custom_hour_var.get())).pack(side="left")
+
+        # Horarios elegidos (badges)
+        tk.Label(self._hours_outer, text="Horarios elegidos (tocá para quitar):", font=("Segoe UI", 8, "bold"),
+                 bg=_S_BG, fg=_S_MUTED).pack(anchor="w", pady=(4, 2))
+        self._badges_frame = tk.Frame(self._hours_outer, bg=_S_BG)
+        self._badges_frame.pack(fill="x")
+        self._refresh_badges()
+
+        # 2) Aplicar estos horarios a otros días
+        tk.Frame(self._hours_outer, bg=_S_BORDER, height=1).pack(fill="x", pady=(6, 6))
+        tk.Label(self._hours_outer, text="2)  Aplicar estos horarios a otros días (se copia al instante):", font=("Segoe UI", 9, "bold"),
+                 bg=_S_BG, fg=_S_WHITE).pack(anchor="w")
+
+        chips_row = tk.Frame(self._hours_outer, bg=_S_BG)
+        chips_row.pack(fill="x", pady=4)
+        self._apply_chip_btns = {}
+
+        def _apply_day(d):
+            src = list(self._schedule.get(self._selected_day, []))
+            if src:
+                self._schedule[d] = list(src)
+            else:
+                self._schedule.pop(d, None)
+
+        def _toggle_apply(d):
+            if d in self._apply_days:
+                self._apply_days.discard(d)
+                self._schedule.pop(d, None)
+            else:
+                self._apply_days.add(d)
+                _apply_day(d)
+            _refresh_chips()
+            self._update_day_buttons()
+            self._update_footer()
+
+        def _all_other():
+            others = [d for _, d in _SCH_DAYS if d != self._selected_day]
+            if self._apply_days == set(others):
+                for d in others:
+                    self._schedule.pop(d, None)
+                self._apply_days = set()
+            else:
+                self._apply_days = set(others)
+                for d in others:
+                    _apply_day(d)
+            _refresh_chips()
+            self._update_day_buttons()
+            self._update_footer()
+
+        def _refresh_chips():
+            for d, b in self._apply_chip_btns.items():
+                on = d in self._apply_days
+                b.config(bg=_S_SEL if on else _S_UNSEL, fg=_S_WHITE if on else _S_MUTED,
+                         relief="raised" if on else "flat", bd=2 if on else 0)
+            all_on = bool(self._apply_days) and self._apply_days == set(d for _, d in _SCH_DAYS if d != self._selected_day)
+            todos_btn.config(relief="raised" if all_on else "flat", bd=2 if all_on else 0)
+
+        todos_btn = tk.Button(chips_row, text="Todos", font=("Segoe UI", 8, "bold"), bg=_S_AMBER, fg=_S_BG, relief="flat",
+                              cursor="hand2", padx=8, pady=4, command=_all_other)
+        todos_btn.pack(side="left", padx=(0, 8))
+        for _, d in _SCH_DAYS:
+            if d == self._selected_day:
+                continue
+            b = tk.Button(chips_row, text=d[:3], font=("Segoe UI", 8, "bold"), bg=_S_UNSEL, fg=_S_MUTED, relief="flat",
+                          cursor="hand2", padx=8, pady=4, command=lambda dd=d: _toggle_apply(dd))
+            b.pack(side="left", padx=2)
+            self._apply_chip_btns[d] = b
+
+        # 3) …o elegí de la grilla (cada 15 min)
+        tk.Frame(self._hours_outer, bg=_S_BORDER, height=1).pack(fill="x", pady=(8, 6))
+        tk.Label(self._hours_outer, text="…o elegí de la grilla (cada 15 min):", font=("Segoe UI", 8, "italic"),
+                 bg=_S_BG, fg=_S_MUTED).pack(anchor="w", pady=(0, 2))
+        grid = tk.Frame(self._hours_outer, bg=_S_BG)
+        grid.pack(fill="x", pady=(0, 4))
+        current = self._schedule.get(self._selected_day, [])
+        self._hour_btns = {}
+        for c in range(6):
+            grid.columnconfigure(c, weight=1)
+
+        for idx, hour in enumerate(_SCH_HOURS):
+            r, c = divmod(idx, 6)
+            picked = hour in current
+            btn = tk.Button(grid, text=hour, font=("Segoe UI", 9),
+                            bg=_S_SEL if picked else _S_UNSEL, fg=_S_WHITE if picked else _S_MUTED,
+                            relief="raised" if picked else "flat", cursor="hand2", padx=4, pady=6, width=5)
+            btn.grid(row=r, column=c, padx=2, pady=2, sticky="ew")
+            btn.config(command=lambda h=hour: self._toggle_hour(h))
+            self._hour_btns[hour] = btn
+
+    def _refresh_badges(self):
+        if not self._badges_frame:
+            return
+        for w in self._badges_frame.winfo_children():
+            w.destroy()
+        selected = sorted(self._schedule.get(self._selected_day, []))
+        MAX_SHOW = 12
+        for h in selected[:MAX_SHOW]:
+            is_custom = h not in _SCH_HOURS
+            bg = "#3A1A55" if is_custom else _S_BG
+            fg = _S_AMBER if is_custom else _S_ACCENT
+            tk.Button(self._badges_frame, text=f"✕ {h}", font=("Segoe UI", 9, "bold"), bg=bg, fg=fg,
+                      padx=6, pady=3, relief="solid", bd=1, cursor="hand2",
+                      command=lambda x=h: self._toggle_hour(x)).pack(side="left", padx=2)
+        if len(selected) > MAX_SHOW:
+            tk.Label(self._badges_frame, text=f"+{len(selected) - MAX_SHOW} más", font=("Segoe UI", 9),
+                     bg=_S_BG, fg=_S_MUTED).pack(side="left", padx=4)
+
+    def _toggle_hour(self, hour):
+        day = self._selected_day
+        dh = self._schedule.setdefault(day, [])
+        if hour in dh:
+            dh.remove(hour)
+        else:
+            dh.append(hour)
+            dh.sort()
+        if not self._schedule.get(day):
+            self._schedule.pop(day, None)
+        picked = hour in self._schedule.get(day, [])
+        btn = self._hour_btns.get(hour)
+        if btn:
+            btn.config(bg=_S_SEL if picked else _S_UNSEL, fg=_S_WHITE if picked else _S_MUTED,
+                       relief="raised" if picked else "flat")
+        self._refresh_badges()
+        self._update_day_buttons()
+        self._update_footer()
+
+    def _add_custom_hour(self, time_str):
+        time_str = time_str.strip()
+        try:
+            if ':' not in time_str:
+                raise ValueError
+            h, m = time_str.split(':', 1)
+            h, m = int(h), int(m)
+            if not (0 <= h <= 23 and 0 <= m <= 59):
+                raise ValueError
+            hora = f"{h:02d}:{m:02d}"
+        except (ValueError, TypeError):
+            messagebox.showwarning("Horario inválido", "Ingresá un horario válido en formato HH:MM\n(ej: 09:33, 14:05)", parent=self)
+            return
+        day = self._selected_day
+        if not day:
+            return
+        dh = self._schedule.setdefault(day, [])
+        if hora not in dh:
+            dh.append(hora)
+            dh.sort()
+        self._custom_hour_var.set("")
+        gbtn = self._hour_btns.get(hora)
+        if gbtn:
+            gbtn.config(bg=_S_SEL, fg=_S_WHITE, relief="raised")
+        self._refresh_badges()
+        self._update_day_buttons()
+        self._update_footer()
+
+    def _apply_hours_to_days(self, days):
+        src = list(self._schedule.get(self._selected_day, []))
+        if not src or not days:
+            return
+        for d in days:
+            self._schedule[d] = list(src)
+        self._update_day_buttons()
+        self._update_footer()
+        messagebox.showinfo("Aplicado", f"Horarios copiados a {len(days)} día(s): {', '.join(sorted(days))}.", parent=self)
+
+    def _update_day_buttons(self):
+        total = sum(len(v) for v in self._schedule.values())
+        if total > 0:
+            self._total_badge.config(text=f"{total} horario{'s' if total != 1 else ''}")
+            self._total_badge.pack(side="left", padx=6)
+            self._clear_all_lbl.pack(side="right")
+        else:
+            self._total_badge.pack_forget()
+            self._clear_all_lbl.pack_forget()
+
+        for short, full in _SCH_DAYS:
+            count = len(self._schedule.get(full, []))
+            is_open = self._selected_day == full
+            btn = self._day_btns[full]
+            if is_open:
+                btn.config(bg=_S_SEL, fg=_S_WHITE, text=f"{short}\n● abierto")
+            elif count > 0:
+                btn.config(bg=_S_UNSEL, fg=_S_ACCENT, text=f"{short}\n{count} sel.")
+            else:
+                btn.config(bg=_S_UNSEL, fg=_S_MUTED, text=f"{short}\n—")
+
+    def _clear_all(self):
+        self._schedule = {}
+        self._close_hours_panel()
+        self._update_day_buttons()
+        self._update_footer()
+
+    def _build_countries_section(self, parent, pad):
+        card = self._card_frame(parent)
+        card.pack(fill="x", **pad)
+
+        hrow = tk.Frame(card, bg=_S_CARD)
+        hrow.pack(fill="x", padx=12, pady=(12, 6))
+        tk.Label(hrow, text="🌎  PAÍSES A TESTEAR", font=("Segoe UI", 9, "bold"), bg=_S_CARD, fg=_S_MUTED).pack(side="left")
+        self._toggle_all_lbl = tk.Label(hrow, text="Seleccionar todos", font=("Segoe UI", 9, "underline"),
+                                        bg=_S_CARD, fg=_S_ACCENT, cursor="hand2")
+        self._toggle_all_lbl.pack(side="right")
+        self._toggle_all_lbl.bind("<Button-1>", lambda e: self._toggle_all())
+
+        grid = tk.Frame(card, bg=_S_CARD)
+        grid.pack(fill="x", padx=12, pady=(0, 4))
+        for c in range(3):
+            grid.columnconfigure(c, weight=1)
+
+        self._country_vars = {}
+        self._country_items = {}
+        for idx, country in enumerate(_SCH_COUNTRIES):
+            r, c = divmod(idx, 3)
+            checked = country in self._countries
+            var = tk.BooleanVar(value=checked)
+            self._country_vars[country] = var
+            bg = _S_SEL if checked else _S_UNSEL
+            border = _S_ACCENT if checked else _S_BORDER
+            item = tk.Frame(grid, bg=bg, highlightbackground=border, highlightthickness=1)
+            item.grid(row=r, column=c, padx=3, pady=3, sticky="ew")
+            self._country_items[country] = item
+            cb = tk.Checkbutton(item, text=country, variable=var, font=("Segoe UI", 9), bg=bg,
+                                fg=_S_WHITE, activebackground=_S_SEL, activeforeground=_S_WHITE,
+                                selectcolor=_S_UNSEL, padx=8, pady=6)
+            cb.pack(fill="x")
+            var.trace("w", lambda *a, co=country, it=item, cb_=cb, v=var: self._on_country_toggle(co, it, cb_, v))
+
+        self._count_lbl = tk.Label(card, text="", font=("Segoe UI", 8), bg=_S_CARD, fg=_S_MUTED)
+        self._count_lbl.pack(anchor="w", padx=12, pady=(2, 10))
+        self._update_country_count()
+
+    def _on_country_toggle(self, country, item, cb, var):
+        checked = var.get()
+        bg = _S_SEL if checked else _S_UNSEL
+        border = _S_ACCENT if checked else _S_BORDER
+        item.config(bg=bg, highlightbackground=border)
+        cb.config(bg=bg, fg=_S_WHITE)
+        if checked and country not in self._countries:
+            self._countries.append(country)
+        elif not checked and country in self._countries:
+            self._countries.remove(country)
+        self._update_country_count()
+        self._update_toggle_all_label()
+        self._update_footer()
+
+    def _toggle_all(self):
+        all_sel = len(self._countries) == len(_SCH_COUNTRIES)
+        for var in self._country_vars.values():
+            var.set(not all_sel)
+
+    def _update_toggle_all_label(self):
+        self._toggle_all_lbl.config(text="Desmarcar todos" if len(self._countries) == len(_SCH_COUNTRIES) else "Seleccionar todos")
+
+    def _update_country_count(self):
+        n = len(self._countries)
+        self._count_lbl.config(text=f"{n} de {len(_SCH_COUNTRIES)} países seleccionados" if n > 0 else "")
+
+    def _build_footer(self, parent, pad):
+        footer = tk.Frame(parent, bg=_S_BG)
+        footer.pack(fill="x", side="bottom", **pad)
+        self._val_lbl = tk.Label(footer, text="", font=("Segoe UI", 9), bg=_S_BG, fg=_S_AMBER,
+                                 padx=10, pady=6, justify="left", anchor="w", wraplength=500, relief="flat")
+        btn_row = tk.Frame(footer, bg=_S_BG)
+        btn_row.pack(fill="x")
+        self._save_btn = tk.Button(btn_row, text="💾  Guardar configuración", font=("Segoe UI", 10, "bold"),
+                                   bg=_S_SEL, fg=_S_WHITE, relief="flat", cursor="hand2", padx=16, pady=8,
+                                   command=self._save)
+        self._save_btn.pack(side="right")
+        self._update_footer()
+
+    def _update_footer(self):
+        if self._val_lbl is None:
+            return
+        total = sum(len(v) for v in self._schedule.values())
+        n = len(self._countries)
+        can = total > 0 and n > 0
+        if not can:
+            if total == 0 and n == 0:
+                msg = "⚠  Seleccioná al menos un horario y un país para continuar."
+            elif total == 0:
+                msg = "⚠  Seleccioná al menos un horario para continuar."
+            else:
+                msg = "⚠  Seleccioná al menos un país para continuar."
+            self._val_lbl.config(text=msg)
+            self._val_lbl.pack(fill="x", pady=(0, 8))
+        else:
+            self._val_lbl.pack_forget()
+        self._save_btn.config(state="normal" if can else "disabled", bg=_S_SEL if can else _S_UNSEL,
+                              cursor="hand2" if can else "arrow")
+
+    def _save(self):
+        total = sum(len(v) for v in self._schedule.values())
+        if total == 0 or not self._countries:
+            return
+        config = {"horarios": {k: v for k, v in self._schedule.items() if v}, "paises": list(self._countries)}
+        if self._on_save(config) is False:
+            return
+        self._close()
+
+
+# Directorio de Assets
+from utils.paths import BASE_DIR, ASSET_DIR
+
+ICONS_CACHE = {}
+
+def get_button_icon(name):
+    if not name:
+        return None
+    if name not in ICONS_CACHE:
+        icon_path = os.path.join(ASSET_DIR, "tabler_icons", name)
+        if os.path.exists(icon_path):
+            try:
+                img = Image.open(icon_path)
+                ICONS_CACHE[name] = ImageTk.PhotoImage(img)
+            except Exception:
+                ICONS_CACHE[name] = None
+        else:
+            ICONS_CACHE[name] = None
+    return ICONS_CACHE[name]
+
+_tray_instance = None
+
+if os.name == 'nt':
+    try:
+        import ctypes
+        from ctypes import wintypes
+        import win32gui
+        import win32con
+
+        # Define WNDPROC callback type
+        WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_int64, wintypes.HWND, ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM)
+
+        class WNDCLASSW(ctypes.Structure):
+            _fields_ = [
+                ('style', ctypes.c_uint),
+                ('lpfnWndProc', WNDPROC),
+                ('cbClsExtra', ctypes.c_int),
+                ('cbWndExtra', ctypes.c_int),
+                ('hInstance', wintypes.HINSTANCE),
+                ('hIcon', wintypes.HICON),
+                ('hCursor', wintypes.HICON),
+                ('hbrBackground', wintypes.HBRUSH),
+                ('lpszMenuName', wintypes.LPCWSTR),
+                ('lpszClassName', wintypes.LPCWSTR)
+            ]
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        class SysTrayIcon:
+            def __init__(self, icon_path, hover_text, on_quit, on_double_click=None):
+                self.icon_path = icon_path
+                self.hover_text = hover_text
+                self.on_quit = on_quit
+                self.on_double_click = on_double_click
+                
+                self.hinst = kernel32.GetModuleHandleW(None)
+                
+                # Keep reference to callback to prevent garbage collection
+                self.wndproc_cb = WNDPROC(self.wnd_proc)
+                
+                wc = WNDCLASSW()
+                wc.hInstance = self.hinst
+                wc.lpszClassName = "PythonCtypesMixTaskbarIcon"
+                wc.lpfnWndProc = self.wndproc_cb
+                
+                user32.RegisterClassW(ctypes.byref(wc))
+                
+                self.hwnd = user32.CreateWindowExW(
+                    0,
+                    "PythonCtypesMixTaskbarIcon",
+                    "Taskbar",
+                    0,
+                    0, 0, 0, 0,
+                    0, 0, self.hinst, None
+                )
+                
+                # Load icon using win32gui
+                if os.path.exists(self.icon_path):
+                    self.hicon = win32gui.LoadImage(
+                        self.hinst, self.icon_path, win32con.IMAGE_ICON, 0, 0,
+                        win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE
+                    )
+                else:
+                    self.hicon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
+                    
+                self.notify_id = None
+                self.show_icon()
+                
+            def wnd_proc(self, hwnd, msg, wparam, lparam):
+                if msg == win32con.WM_DESTROY:
+                    self.remove_icon()
+                    return 0
+                elif msg == win32con.WM_USER+20:
+                    if lparam in (win32con.WM_LBUTTONDBLCLK, win32con.WM_LBUTTONUP):
+                        if self.on_double_click:
+                            self.on_double_click()
+                    elif lparam == win32con.WM_RBUTTONUP:
+                        self.show_menu()
+                    return 0
+                return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+                
+            def show_icon(self):
+                flags = win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP
+                nid = (self.hwnd, 0, flags, win32con.WM_USER+20, self.hicon, self.hover_text)
+                if self.notify_id is None:
+                    win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
+                else:
+                    win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, nid)
+                self.notify_id = nid
+                
+            def remove_icon(self):
+                if self.notify_id:
+                    win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, self.notify_id)
+                    self.notify_id = None
+                    
+            def show_menu(self):
+                menu = win32gui.CreatePopupMenu()
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1, "Restaurar")
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 2, "Salir")
+                
+                pos = win32gui.GetCursorPos()
+                win32gui.SetForegroundWindow(self.hwnd)
+                cmd = win32gui.TrackPopupMenu(menu, win32con.TPM_RETURNCMD, pos[0], pos[1], 0, self.hwnd, None)
+                win32gui.DestroyMenu(menu)
+                
+                if cmd == 1:
+                    if self.on_double_click:
+                        self.on_double_click()
+                elif cmd == 2:
+                    self.on_quit()
+    except Exception:
+        pass
+else:
+    SysTrayIcon = None
+
+def iniciar_interfaz():
+    # AppUserModelID propio: evita que Windows agrupe la app bajo el ícono de python.exe en la barra de tareas
+    if os.name == 'nt':
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Osocio.FormAutomation.App")
+        except Exception:
+            pass
+
+    root = tk.Tk()
+    root.title("Osocio - Form Automation")
+    root.geometry("1150x680")  # Ventana con tamaño considerable
+    root.minsize(1100, 600)
+    root.configure(bg=APP_BG_COLOR)
+
+    # Establecer el icono del oso de Ocioso
+    icon_path = os.path.join(BASE_DIR, "Asset", "icon.ico")
     if os.path.exists(icon_path):
         try:
             root.iconbitmap(icon_path)
         except Exception:
             pass
 
-    # === CABECERA FIJA ===
-    _fullheader_path = os.path.join(ASSET_DIR, "Fullheader.png")
-    _fullheader_orig = Image.open(_fullheader_path) if os.path.exists(_fullheader_path) else None
-    _fh_orig_w, _fh_orig_h = (_fullheader_orig.size if _fullheader_orig else (900, 120))
+    # Barra de título en modo oscuro (Windows DWM)
+    def _dark_titlebar(window):
+        try:
+            import ctypes
+            window.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+            val = ctypes.c_int(1)
+            for attr in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE (20, y 19 en builds viejas)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(val), ctypes.sizeof(val))
+        except Exception:
+            pass
+    _dark_titlebar(root)
+ 
+    # Variables globales compartidas entre pestañas para consistencia
+    active_p_tab = ["Argentina"]
+    
+    # Helper constructora de botones con hovers amigables y Tabler Icons cargados dinámicamente
+    def make_icon_btn(parent, text, text_color, command=None, pack_btn=True):
+        icon_name = None
+        clean_text = text
+        if "Agregar Regla" in text:
+            icon_name = "plus_green.png"
+            clean_text = " Agregar Regla"
+        elif "Agregar" in text or "+" in text:
+            icon_name = "plus_green.png"
+            clean_text = " Agregar"
+        elif "Eliminar" in text or "🗑" in text:
+            icon_name = "trash_coral.png"
+            clean_text = " Eliminar"
+        elif "Guardar" in text or "💾" in text:
+            icon_name = "save_blue.png"
+            clean_text = " " + text.replace("💾", "").strip()
+        elif "Abrir Excel" in text or "📂" in text:
+            icon_name = "folder_yellow.png"
+            clean_text = " Abrir Excel"
+        elif "Clonar" in text or "📋" in text:
+            icon_name = "copy_lavender.png"
+            clean_text = " Clonar"
+        elif "Actualizar" in text or "🔄" in text:
+            icon_name = "refresh_lavender.png"
+            clean_text = " Actualizar"
+        elif "Limpiar" in text or "🧹" in text:
+            icon_name = "broom_lavender.png"
+            clean_text = " Limpiar campos"
+        elif "Regex" in text or "🔍" in text:
+            icon_name = "search_lavender.png"
+            clean_text = " Generador Regex"
+ 
+        photo = get_button_icon(icon_name)
 
-    _FH_HEIGHT = 200
-    _FH_WIDTH = max(1, int(round((_fh_orig_w * _FH_HEIGHT) / _fh_orig_h)))
+        # Todos los CTA "Guardar" comparten el mismo azul medio (relleno sólido)
+        _is_guardar = ("Guardar" in text or "💾" in text)
+        _base_bg = SAVE_BG if _is_guardar else BUTTON_INACTIVE
+        _base_fg = SAVE_FG if _is_guardar else text_color
+        _hover_bg = SAVE_HOVER if _is_guardar else BUTTON_HOVER
+
+        if photo:
+            btn = tk.Button(parent, text=clean_text, image=photo, compound="left",
+                            font=("Segoe UI", 9, "bold"), bg=_base_bg, fg=_base_fg,
+                            relief="flat", bd=0, activebackground=_hover_bg, activeforeground=_base_fg,
+                            padx=12, pady=4, cursor="hand2", command=command)
+        else:
+            btn = tk.Button(parent, text=clean_text, font=("Segoe UI", 9, "bold"), bg=_base_bg, fg=_base_fg,
+                            relief="flat", bd=0, activebackground=_hover_bg, activeforeground=_base_fg,
+                            padx=12, pady=4, cursor="hand2", command=command)
+
+        if pack_btn:
+            btn.pack(side="left", padx=3)
+        btn.bind("<Enter>", lambda e: btn.config(bg=_hover_bg))
+        btn.bind("<Leave>", lambda e: btn.config(bg=_base_bg))
+        return btn
+
+    # Estilos ttk para Treeviews y Scrollbars de diseño premium
+    style = ttk.Style()
+    try:
+        style.theme_use("clam")
+    except Exception:
+        pass
+        
+    style.configure("Treeview", 
+                    background=CARD_BG_COLOR, 
+                    foreground="white", 
+                    fieldbackground=CARD_BG_COLOR,
+                    rowheight=26,
+                    bordercolor=BORDER_COLOR,
+                    borderwidth=0)
+    style.configure("Treeview.Heading", 
+                    background=BUTTON_INACTIVE, 
+                    foreground="white", 
+                    font=("Segoe UI", 9, "bold"),
+                    borderwidth=0)
+    style.map("Treeview.Heading", background=[('active', BUTTON_HOVER)])
+    style.map("Treeview", background=[('selected', ACCENT_COLOR)], foreground=[('selected', BUTTON_INACTIVE)])
+
+    # DISEÑO PREMIUM PARA LAS BARRAS DE SCROLL (ttk Scrollbar - TScrollbar unificado para clam)
+    style.configure("TScrollbar", 
+                    troughcolor="#100518",     # Fondo negroso del canal
+                    background="#7D4E9F",      # Manija morada media distinguible
+                    bordercolor=BORDER_COLOR, 
+                    arrowcolor=TEXT_SECONDARY, 
+                    lightcolor="#7D4E9F",
+                    darkcolor="#7D4E9F",
+                    relief="flat", 
+                    borderwidth=0, 
+                    arrowsize=10)
+    style.map("TScrollbar",
+              background=[('active', "#9662BD"), ('pressed', ACCENT_COLOR)],
+              arrowcolor=[('active', 'white')])
+    # Mismos colores para las variantes orientadas (algunas vistas usan estos nombres)
+    for _sb in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
+        style.configure(_sb, troughcolor="#100518", background="#7D4E9F",
+                        bordercolor=BORDER_COLOR, arrowcolor=TEXT_SECONDARY,
+                        lightcolor="#7D4E9F", darkcolor="#7D4E9F", relief="flat",
+                        borderwidth=0, arrowsize=10)
+        style.map(_sb, background=[('active', "#9662BD"), ('pressed', ACCENT_COLOR)],
+                  arrowcolor=[('active', 'white')])
+
+    # ==========================================
+    # Helper para agregar logs a la consola inferior
+    # ==========================================
+    def log_message(msg):
+        print(msg)
+
+    # ==========================================
+    # 1. CABECERA FIJA (Imagen de Portada)
+    # ==========================================
+    _fullheader_path = os.path.join(ASSET_DIR, "Fullheader.png")
+    _fullheader_orig = None
+    if os.path.exists(_fullheader_path):
+        try:
+            _fullheader_orig = Image.open(_fullheader_path)
+        except Exception:
+            pass
+
+    _FH_HEIGHT = 120  # Altura un poco más compacta
+    _FH_WIDTH = 1200
+    if _fullheader_orig:
+        _fh_orig_w, _fh_orig_h = _fullheader_orig.size
+        _FH_WIDTH = max(1, int(round((_fh_orig_w * _FH_HEIGHT) / _fh_orig_h)))
+
     _HEADER_SPLIT_LEFT_COLOR = "#110830"
     _HEADER_SPLIT_RIGHT_COLOR = "#28164B"
-    header_canvas = Canvas(root, bd=0, highlightthickness=0, height=_FH_HEIGHT)
+    
+    header_canvas = tk.Canvas(root, bd=0, highlightthickness=0, height=_FH_HEIGHT, bg=APP_BG_COLOR)
     header_canvas.pack(fill="x", side="top")
 
     _fh_photo_ref = [None]
-    if _fullheader_orig is not None:
-        _fh_photo_ref[0] = ImageTk.PhotoImage(_fullheader_orig.resize((_FH_WIDTH, _FH_HEIGHT), Image.LANCZOS))
+    if _fullheader_orig:
+        try:
+            _fh_photo_ref[0] = ImageTk.PhotoImage(_fullheader_orig.resize((_FH_WIDTH, _FH_HEIGHT), Image.Resampling.LANCZOS))
+        except Exception:
+            _fh_photo_ref[0] = ImageTk.PhotoImage(_fullheader_orig)
 
     def _render_fixed_header(_event=None):
         header_canvas.delete("all")
@@ -2274,2684 +957,2883 @@ def iniciar_interfaz():
         split_x = canvas_w // 2
         header_canvas.create_rectangle(0, 0, split_x, _FH_HEIGHT, fill=_HEADER_SPLIT_LEFT_COLOR, outline="")
         header_canvas.create_rectangle(split_x, 0, canvas_w, _FH_HEIGHT, fill=_HEADER_SPLIT_RIGHT_COLOR, outline="")
-        if _fh_photo_ref[0] is None:
-            return
-        x = (canvas_w - _FH_WIDTH) // 2
-        header_canvas.create_image(x, 0, anchor="nw", image=_fh_photo_ref[0])
+        if _fh_photo_ref[0]:
+            x = (canvas_w - _FH_WIDTH) // 2
+            header_canvas.create_image(x, 0, anchor="nw", image=_fh_photo_ref[0])
+        else:
+            header_canvas.create_text(canvas_w // 2, _FH_HEIGHT // 2, 
+                                      text="OSOCIO FORM AUTOMATION", 
+                                      fill="white", font=("Segoe UI", 16, "bold"))
 
     header_canvas.bind("<Configure>", _render_fixed_header)
-    root.after(0, _render_fixed_header)
-    ttk.Separator(root, orient="horizontal", style="App.TSeparator").pack(fill="x")
+    root.after(50, _render_fixed_header)
 
-    # === PANEL DE CONSOLA DESPLEGABLE (bottom) ===
-    _run_state["root"] = root
-    _broker = _ManualInputBroker(root)
-    _broker.start_polling()
-    _run_state["broker"] = _broker
+    # Separador debajo del header
+    sep = tk.Frame(root, height=2, bg=BORDER_COLOR)
+    sep.pack(fill="x")
 
-    # === CONTENEDOR SCROLLEABLE (evita colapso al achicar ventana) ===
-    outer_container = Frame(root, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    outer_container.pack(fill="both", expand=True)
-    _run_state["outer_container"] = outer_container
+    # ==========================================
+    # 2. TOP BAR (Email Destinatario)
+    # ==========================================
+    top_bar = tk.Frame(root, bg=APP_BG_COLOR)
+    top_bar.pack(fill="x", padx=20, pady=(6, 4))
 
-    # === OVERLAY (Frame sólido sobre root — cubre la ventana durante ejecución) ===
-    # Se coloca en root (no en outer_container) para evitar problemas de z-order con Canvas nativo
-    _OV_BG = "#160d24"
-    _overlay = Frame(root, bg=_OV_BG, bd=0)
-    _overlay_inner = Frame(_overlay, bg=_OV_BG)
-    _overlay_inner.place(relx=0.5, rely=0.45, anchor="center")
-    Label(_overlay_inner, text="⚡ Ejecución en curso",
-          bg=_OV_BG, fg="white", font=("Segoe UI", 14, "bold")).pack(pady=(0, 18))
-    _progress_frame = Frame(_overlay_inner, bg=_OV_BG)
-    _progress_frame.pack(fill="x", pady=(0, 22))
-    _run_state["progress_frame"] = _progress_frame
-    _btn_detener = Button(
-        _overlay_inner, text="⏹  Detener ejecución",
-        bg="#c0392b", fg="white", font=("Segoe UI", 11, "bold"),
-        relief="flat", bd=0, padx=22, pady=10,
-        command=_request_stop, cursor="hand2",
-        activebackground="#e74c3c", activeforeground="white",
-    )
-    _btn_detener.pack()
-    _stop_msg_lbl = Label(
-        _overlay_inner, text="",
-        bg=_OV_BG, fg="#f39c12", font=("Segoe UI", 9),
-        wraplength=420, justify="center",
-    )
-    _stop_msg_lbl.pack(pady=(10, 0))
-    _run_state["overlay"] = _overlay
-    _run_state["stop_btn"] = _btn_detener
-    _run_state["stop_msg_lbl"] = _stop_msg_lbl
-    # El overlay empieza oculto — se muestra con place() en _set_running(True)
+    _cfg = {}
+    try:
+        _cfg = cargar_config_global()
+    except Exception:
+        pass
+    _ui_prefs = _cfg.get("ui_prefs", {})
+    var_ver_navegador = tk.BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
+    # Por defecto DESTILDADO: al cerrar la ventana el programa se cierra directo.
+    # Si el usuario lo tilda, la X minimiza a la bandeja (persistente).
+    var_minimizar_a_bandeja = tk.BooleanVar(value=bool(_ui_prefs.get("minimizar_a_bandeja", False)))
 
-    canvas = Canvas(outer_container, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    v_scroll = ttk.Scrollbar(outer_container, orient="vertical", style="Section.Vertical.TScrollbar")
+    email_frame = tk.Frame(top_bar, bg=APP_BG_COLOR)
+    email_frame.pack(side="right")
 
-    # Configurar grid: canvas (row 0), footer (row 1)
-    outer_container.grid_rowconfigure(0, weight=1)  # Canvas se expande
-    outer_container.grid_rowconfigure(1, weight=0)  # Footer tiene altura fija
-    outer_container.grid_columnconfigure(0, weight=1)
+    # Ícono de sobre a la izquierda
+    mail_ico = tk.Label(email_frame, text="✉", font=("Segoe UI", 11), bg=APP_BG_COLOR, fg=TEXT_SECONDARY)
+    mail_ico.pack(side="left", padx=(0, 6))
+
+    email_lbl = tk.Label(email_frame, text="Email destinatario:", font=("Segoe UI", 9, "bold"), bg=APP_BG_COLOR, fg=TEXT_PRIMARY)
+    email_lbl.pack(side="left", padx=(0, 8))
     
-    canvas.grid(row=0, column=0, sticky="nsew")
-    v_scroll.grid(row=0, column=1, sticky="ns")
+    email_entry = tk.Entry(email_frame, font=("Segoe UI", 10), bg=ENTRY_BG, fg=TEXT_PRIMARY,
+                           insertbackground="white", bd=0, relief="flat", width=34,
+                           highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
+                           disabledbackground=BUTTON_INACTIVE, disabledforeground=TEXT_SECONDARY)
+    email_entry.pack(side="left", ipady=3)
+    email_entry.insert(0, "elian.zas@mrm.com")
+    email_entry.config(state="disabled")  # Habilitado sólo al activar "Enviar mail"
 
-    ui_root = Frame(canvas, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    content_window = canvas.create_window((0, 0), window=ui_root, anchor="nw")
+    # Variables de control para las opciones de email
+    var_enviar_email = tk.BooleanVar(value=False)
+    var_adjuntar_res = tk.BooleanVar(value=False)
+    var_adjuntar_ss = tk.BooleanVar(value=False)
+    var_modo_email = tk.StringVar(value="consolidado")
 
-    # Debounce para evitar "estiramientos" al scrollear rápido (muchos <Configure>)
-    _scroll_update_job = {"id": None}
+    # Frame para las opciones extras de email
+    opts_frame = tk.Frame(email_frame, bg=APP_BG_COLOR)
 
-    def _update_scroll_region(_event=None):
-        try:
-            canvas.configure(scrollregion=canvas.bbox("all"))
-            _update_main_scrollbar_state()
-        except Exception:
-            pass
+    cb_adjuntar = tk.Checkbutton(opts_frame, text="Adjuntar resultados", variable=var_adjuntar_res,
+                                 bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                                 activebackground=APP_BG_COLOR, activeforeground="white",
+                                 font=("Segoe UI", 9), cursor="hand2")
+    cb_adjuntar.pack(side="left", padx=(10, 0))
+    
+    cb_ss = tk.Checkbutton(opts_frame, text="Adjuntar screenshots", variable=var_adjuntar_ss,
+                           bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                           activebackground=APP_BG_COLOR, activeforeground="white",
+                           font=("Segoe UI", 9), cursor="hand2")
+    cb_ss.pack(side="left", padx=(10, 0))
+    
+    lbl_modo = tk.Label(opts_frame, text="MODO:", font=("Segoe UI", 9, "bold"), bg=APP_BG_COLOR, fg=TEXT_SECONDARY)
+    lbl_modo.pack(side="left", padx=(15, 5))
+    
+    rb_pais = tk.Radiobutton(opts_frame, text="1 por país", variable=var_modo_email, value="por_pais",
+                             bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                             activebackground=APP_BG_COLOR, activeforeground="white",
+                             font=("Segoe UI", 9), cursor="hand2")
+    rb_pais.pack(side="left", padx=2)
+    
+    rb_cons = tk.Radiobutton(opts_frame, text="Consolidado", variable=var_modo_email, value="consolidado",
+                             bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                             activebackground=APP_BG_COLOR, activeforeground="white",
+                             font=("Segoe UI", 9), cursor="hand2")
+    rb_cons.pack(side="left", padx=2)
 
-    def _canvas_has_vertical_overflow():
-        try:
-            bbox = canvas.bbox("all")
-            if not bbox:
-                return False
-            content_height = max(0, bbox[3] - bbox[1])
-            viewport_height = max(0, canvas.winfo_height())
-            return content_height > (viewport_height + 1)
-        except Exception:
-            return False
+    def toggle_email_options():
+        if var_enviar_email.get():
+            email_entry.config(state="normal")
+            opts_frame.pack(side="left", padx=(10, 0))
+        else:
+            email_entry.config(state="disabled")
+            opts_frame.pack_forget()
 
-    def _canvas_has_horizontal_overflow():
-        try:
-            bbox = canvas.bbox("all")
-            if not bbox:
-                return False
-            content_width = max(0, bbox[2] - bbox[0])
-            viewport_width = max(0, canvas.winfo_width())
-            return content_width > (viewport_width + 1)
-        except Exception:
-            return False
+    cb_enviar = tk.Checkbutton(email_frame, text="Enviar mail", variable=var_enviar_email,
+                               bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                               activebackground=APP_BG_COLOR, activeforeground="white",
+                               font=("Segoe UI", 9, "bold"), cursor="hand2", command=toggle_email_options)
+    cb_enviar.pack(side="left", padx=(10, 0))
 
-    def _update_main_scrollbar_state(first=None, last=None):
-        try:
-            has_overflow = _canvas_has_vertical_overflow()
-            if has_overflow:
-                v_scroll.grid()
-                if first is None or last is None:
-                    first, last = canvas.yview()
-                first, last = float(first), float(last)
-                # Si scrollregion no está seteado aún, yview devuelve (0,1)
-                # aunque haya overflow real → calcular thumb desde bbox
-                if first == 0.0 and last >= 1.0:
-                    try:
-                        bbox = canvas.bbox("all")
-                        if bbox:
-                            content_h = max(bbox[3] - bbox[1], 1)
-                            viewport_h = max(canvas.winfo_height(), 1)
-                            if content_h > viewport_h:
-                                last = viewport_h / content_h
-                    except Exception:
-                        pass
-                v_scroll.set(first, last)
+    # ==========================================
+    # 3. TABS BAR
+    # ==========================================
+    tab_bar = tk.Frame(root, bg=APP_BG_COLOR)
+    tab_bar.pack(fill="x", padx=20, pady=(0, 4))
+
+    content_area = tk.Frame(root, bg=APP_BG_COLOR)
+    content_area.pack(fill="both", expand=True, padx=20, pady=(0, 4))
+
+    tabs = {}
+    tab_buttons = []
+
+    def switch_tab(target_name):
+        for name, frame in tabs.items():
+            if name == target_name:
+                frame.pack(fill="both", expand=True)
             else:
-                v_scroll.grid_remove()
-        except Exception:
-            pass
-
-    def _on_main_scrollbar(*args):
-        if not _canvas_has_vertical_overflow():
-            _update_main_scrollbar_state(0.0, 1.0)
-            return
-        canvas.yview(*args)
-
-    def _schedule_scroll_region_update(_event=None):
-        try:
-            if _scroll_update_job["id"] is not None:
-                canvas.after_cancel(_scroll_update_job["id"])
-        except Exception:
-            pass
-        # ~60 FPS (16ms). Reduce jitter sin perder fluidez.
-        _scroll_update_job["id"] = canvas.after(16, _update_scroll_region)
-
-    def _sync_window_width(event):
-        try:
-            # Fijar el ancho del contenido al ancho visible del canvas para que
-            # componentes anchos (ej. Treeview) NO estiren la ventana completa.
-            # El Treeview ya tiene su propio scroll horizontal.
-            canvas.itemconfigure(content_window, width=event.width)
-            _update_main_scrollbar_state()
-        except Exception:
-            pass
-
-    v_scroll.configure(command=_on_main_scrollbar)
-    canvas.configure(yscrollcommand=_update_main_scrollbar_state)
-
-    ui_root.bind("<Configure>", _schedule_scroll_region_update)
-    canvas.bind("<Configure>", _sync_window_width)
-    # Inicializar scrollregion una vez que se renderiza todo
-    canvas.after(0, _schedule_scroll_region_update)
-
-    # === Scroll con rueda del mouse (vertical) y Shift+rueda (horizontal) ===
-    def _on_mousewheel(event):
-        # Windows/macOS: event.delta (multiplo de 120). Linux: usar Button-4/5 abajo.
-        try:
-            if getattr(event, "state", 0) & 0x0001:  # Shift presionado
-                # horizontal
-                if not _canvas_has_horizontal_overflow():
-                    return "break"
-                delta = int(-1 * (event.delta / 120))
-                canvas.xview_scroll(delta, "units")
-            else:
-                if not _canvas_has_vertical_overflow():
-                    return "break"
-                delta = int(-1 * (event.delta / 120))
-                canvas.yview_scroll(delta, "units")
-        except Exception:
-            return "break"
-        return "break"
-
-    def _on_linux_wheel_up(_event):
-        if not _canvas_has_vertical_overflow():
-            return "break"
-        canvas.yview_scroll(-1, "units")
-        return "break"
-
-    def _on_linux_wheel_down(_event):
-        if not _canvas_has_vertical_overflow():
-            return "break"
-        canvas.yview_scroll(1, "units")
-        return "break"
-
-    def _bind_mousewheel(_event=None):
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-        canvas.bind_all("<Button-4>", _on_linux_wheel_up)
-        canvas.bind_all("<Button-5>", _on_linux_wheel_down)
-
-    def _unbind_mousewheel(_event=None):
-        try:
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-        except Exception:
-            pass
-
-    canvas.bind("<Enter>", _bind_mousewheel)
-    canvas.bind("<Leave>", _unbind_mousewheel)
-
-    # === INICIALIZAR VARIABLES DE CONFIGURACIÓN ===
-    global chrome_var, firefox_var, edge_var, desktop_var, mobile_var
-    global lt_mac_var, lt_android_var, visible_browser_var, email_modo_var
-    global modo_ejecucion_var, pais_single_var
-
-    _ui_prefs = cargar_config_global().get("ui_prefs", {})
-    _navs = _ui_prefs.get("navegadores", ["chrome"])
-    _vps  = _ui_prefs.get("viewports",   ["fullscreen"])
-    chrome_var          = BooleanVar(value="chrome"             in _navs)
-    firefox_var         = BooleanVar(value="firefox"            in _navs)
-    edge_var            = BooleanVar(value="edge"               in _navs)
-    lt_mac_var          = BooleanVar(value="lambdatest_mac"     in _navs)
-    lt_android_var      = BooleanVar(value="lambdatest_android" in _navs)
-    visible_browser_var = BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
-    desktop_var         = BooleanVar(value="fullscreen" in _vps)
-    mobile_var          = BooleanVar(value="600x738"    in _vps)
-    modo_ejecucion_var  = StringVar(value="consecutive")
-    pais_single_var     = StringVar(value="")
-
-    email_modo_var = StringVar(value=_ui_prefs.get("email_modo", "por_pais"))
-
-    app_tabs_container = Frame(ui_root, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    app_tabs_container.pack(fill="both", expand=True, padx=20, pady=(0, 0))
-
-    app_notebook = ttk.Notebook(app_tabs_container, style="TNotebook")
-    app_notebook.pack(fill="both", expand=True)
-
-    testing_tab = Frame(app_notebook, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    validation_tab = Frame(app_notebook, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    lambdatest_tab = Frame(app_notebook, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    generar_excels_tab = Frame(app_notebook, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
-    app_notebook.add(testing_tab, text="Envio de Leads")
-    app_notebook.add(validation_tab, text="Validación de Campos")
-    app_notebook.add(lambdatest_tab, text="LambdaTest")
-    app_notebook.add(generar_excels_tab, text="Generar Excels con Datos")
-
-    # Configuración global compartida entre tabs
-    cfg_global = cargar_config_global()
-    cfg_global["enviar_mail"] = False  # siempre arranca desactivado, sin importar sesión anterior
-    if "adjuntar_resultados" not in cfg_global:
-        cfg_global["adjuntar_resultados"] = True
-    if "adjuntar_screenshots" not in cfg_global:
-        cfg_global["adjuntar_screenshots"] = True
-    guardar_config_global(cfg_global)
-
-    email_var = StringVar(value=obtener_email_destinatario())
-    enviar_mail_var = BooleanVar(value=False)  # siempre inicia apagado por seguridad
-    adjuntar_resultados_var = BooleanVar(value=bool(cfg_global.get("adjuntar_resultados", True)))
-    adjuntar_screenshots_var = BooleanVar(value=bool(cfg_global.get("adjuntar_screenshots", True)))
-
-    build_field_validation_tab(
-        validation_tab,
-        {
-            "app_bg": APP_BG_COLOR,
-            "container_bg": SECTION_CONTAINER_BG_COLOR,
-            "section_bg": SECTION_BG_COLOR,
-            "text_color": PRIMARY_TEXT_COLOR,
-            "button_bg": HEADER_BG_COLOR,
-            "button_fg": PRIMARY_TEXT_COLOR,
-        },
-        {
-            "browser_vars": {
-                "chrome": chrome_var,
-                "firefox": firefox_var,
-                "edge": edge_var,
-            },
-            "viewport_vars": {
-                "fullscreen": desktop_var,
-                "600x738": mobile_var,
-            },
-            "email_var": email_var,
-            "enviar_mail_var": enviar_mail_var,
-            "adjuntar_resultados_var": adjuntar_resultados_var,
-        },
-    )
-
-    _build_lambdatest_tab(lambdatest_tab)
-    _build_generar_excels_tab(generar_excels_tab)
-
-    # === FILA SUPERIOR: Configuración Global + Botón Ejecutar Todos ===
-    frame_superior = Frame(ui_root, bg=APP_BG_COLOR)
-    frame_superior.pack(fill="x", padx=20, pady=(0, 4), before=app_tabs_container)
-
-    # Configuración Global - Título arriba, controles abajo
-    # TÍTULO PRINCIPAL arriba contra margen izquierdo
-    Label(
-        frame_superior,
-        text="Configuración Global",
-        font=("Segoe UI", 12, "bold"),
-        bg=APP_BG_COLOR,
-        fg="white",
-    ).pack(anchor="w", pady=(0, 6))
-
-    # CONTROLES por debajo del título
-    frame_controles = Frame(frame_superior, bg=APP_BG_COLOR)
-    frame_controles.pack(fill="x")
-
-    # IZQUIERDA: Navegador y Viewport en columna vertical
-    frame_izquierda = Frame(frame_controles, bg=APP_BG_COLOR)
-    frame_izquierda.pack(side=LEFT, anchor="n", padx=(0, 20))
-
-    # Navegador (primera fila)
-    frame_navegador = Frame(frame_izquierda, bg=APP_BG_COLOR)
-    frame_navegador.pack(anchor="w", pady=2)
-    Label(
-        frame_navegador,
-        text="Navegador:",
-        bg=APP_BG_COLOR,
-        fg="white",
-        width=10,
-        anchor="w",
-    ).pack(side=LEFT)
-
-    Checkbutton(
-        frame_navegador,
-        text="Chrome",
-        variable=chrome_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-    Checkbutton(
-        frame_navegador,
-        text="Firefox",
-        variable=firefox_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-    Checkbutton(
-        frame_navegador,
-        text="Edge",
-        variable=edge_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-
-    # Viewport
-    frame_viewport = Frame(frame_izquierda, bg=APP_BG_COLOR)
-    frame_viewport.pack(anchor="w", pady=2)
-    Label(
-        frame_viewport,
-        text="Viewport:",
-        bg=APP_BG_COLOR,
-        fg="white",
-        width=10,
-        anchor="w",
-    ).pack(side=LEFT)
-
-    Checkbutton(
-        frame_viewport,
-        text="Desktop",
-        variable=desktop_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-    Checkbutton(
-        frame_viewport,
-        text="Mobile Emulado-Navegador",
-        variable=mobile_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-
-    # Visibilidad del browser
-    frame_visibilidad = Frame(frame_izquierda, bg=APP_BG_COLOR)
-    frame_visibilidad.pack(anchor="w", pady=2)
-    Label(
-        frame_visibilidad,
-        text="Modo:",
-        bg=APP_BG_COLOR,
-        fg="white",
-        width=10,
-        anchor="w",
-    ).pack(side=LEFT)
-    Checkbutton(
-        frame_visibilidad,
-        text="Ver navegador mientras corre",
-        variable=visible_browser_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    ).pack(side=LEFT, padx=5)
-    Label(
-        frame_visibilidad,
-        text="ℹ️ Por defecto corre en segundo plano sin interrumpirte",
-        bg=APP_BG_COLOR,
-        fg="#888888",
-        font=("Segoe UI", 8),
-    ).pack(side=LEFT, padx=4)
-
-    # Email (derecha contra el margen)
-    frame_email_derecha = Frame(frame_controles, bg=APP_BG_COLOR)
-    frame_email_derecha.pack(side=RIGHT, anchor="e")
-
-    # === Email destinatario (persistente) ===
-    frame_email = Frame(frame_email_derecha, bg=APP_BG_COLOR)
-    frame_email.pack(anchor="e", pady=2)
-
-    def _columna_excel_desde_data_index(data_index):
-        # A=URL, B=Formulario → datos desde C. data_index=0 → columna 3 → offset +3
-        try:
-            excel_column = int(data_index) + 3
-        except Exception:
-            return ""
-
-        resultado = ""
-        while excel_column > 0:
-            excel_column, remainder = divmod(excel_column - 1, 26)
-            resultado = chr(65 + remainder) + resultado
-        return resultado
-
-    def _parsear_id_fijo_input(raw_value):
-        texto = str(raw_value or "").strip()
-        if not texto:
-            return ""
-
-        partes = [parte.strip() for parte in texto.split("|") if parte.strip()]
-        if not partes:
-            return ""
-        return partes if len(partes) > 1 else partes[0]
-
-    def _texto_id_fijo(raw_value):
-        if isinstance(raw_value, list):
-            return " | ".join(str(item).strip() for item in raw_value if str(item).strip())
-        return str(raw_value or "").strip()
-
-    def _build_tab_ids_excel(popup):
-
-        Label(
-            popup,
-            text="IDs Excel",
-            font=("Segoe UI", 12, "bold"),
-            bg=APP_BG_COLOR,
-            fg="white",
-        ).pack(pady=(16, 8), padx=20, anchor="w")
-
-        descripcion_popup = (
-            "Estos IDs corresponden al mapping fijo por país. Elegí un país y ajustá ID, descripción, tipo y columna Excel. "
-            "Las columnas A y B siguen fijas para URL y Formulario; desde C el data_index arranca en 0."
-        )
-        Label(
-            popup,
-            text=descripcion_popup,
-            font=("Segoe UI", 9),
-            bg=APP_BG_COLOR,
-            fg="#ddd",
-            justify="left",
-            anchor="w",
-            wraplength=700,
-        ).pack(fill="x", padx=20, anchor="w")
-
-        ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=10)
-
-        paises_disponibles = list_available_fixed_mapping_countries() or list(MAPEO_PAISES.keys())
-        pais_var = StringVar(value=paises_disponibles[0] if paises_disponibles else "")
-        tipo_var = StringVar(value="Rellenable")
-        _TIPO_DISPLAY = {"text": "Rellenable", "select": "Dropdown"}
-        _TIPO_STORAGE = {"Rellenable": "text", "Dropdown": "select"}
-        id_var = StringVar(value="")
-        descripcion_var = StringVar(value="")
-        data_index_var = StringVar(value="0")
-        columna_excel_var = StringVar(value="Columna Excel: D (data_index 0)")
-        btn_guardar_text = StringVar(value="Crear")
-
-        frame_inputs = Frame(popup, bg=APP_BG_COLOR)
-        frame_inputs.pack(padx=20, fill="x")
-
-        _estilo_ids = ttk.Style()
-        _estilo_ids.configure("IDs.TCombobox", fieldbackground="white", background="white", foreground="black")
-        _estilo_ids.map("IDs.TCombobox", fieldbackground=[("readonly", "white")], foreground=[("readonly", "black")])
-
-        Label(frame_inputs, text="País:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=0, column=0, sticky="w", pady=4)
-        combo_pais = ttk.Combobox(frame_inputs, textvariable=pais_var, values=paises_disponibles, state="readonly", width=24, style="IDs.TCombobox")
-        combo_pais.grid(row=0, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        Label(frame_inputs, text="Tipo:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=1, column=0, sticky="w", pady=4)
-        combo_tipo = ttk.Combobox(frame_inputs, textvariable=tipo_var, values=["Rellenable", "Dropdown"], state="readonly", width=12, style="IDs.TCombobox")
-        combo_tipo.grid(row=1, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        Label(frame_inputs, text="ID:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=2, column=0, sticky="w", pady=4)
-        Entry(frame_inputs, font=("Segoe UI", 10), width=30, textvariable=id_var).grid(row=2, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        Label(frame_inputs, text="Descripción:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=3, column=0, sticky="w", pady=4)
-        Entry(frame_inputs, font=("Segoe UI", 10), width=30, textvariable=descripcion_var).grid(row=3, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        Label(frame_inputs, text="Data index:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=4, column=0, sticky="w", pady=4)
-        Entry(frame_inputs, font=("Segoe UI", 10), width=12, textvariable=data_index_var).grid(row=4, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        Label(frame_inputs, textvariable=columna_excel_var, bg=APP_BG_COLOR, fg="#ffd38a", font=("Segoe UI", 9, "bold"), anchor="w", justify="left").grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
-
-        frame_ctas_ids_fijos = Frame(frame_inputs, bg=APP_BG_COLOR)
-        frame_ctas_ids_fijos.grid(row=0, column=2, rowspan=6, padx=(18, 0), sticky="ne")
-
-        estado_edicion = Label(
-            popup,
-            text="",
-            bg=APP_BG_COLOR,
-            fg="#ffd38a",
-            font=("Segoe UI", 9, "bold"),
-            anchor="w",
-            justify="left",
-        )
-        estado_edicion.pack(fill="x", padx=20, pady=(6, 0), anchor="w")
-
-        ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=(10, 6))
-        Label(popup, text="Mapping actual:", font=("Segoe UI", 10, "bold"), bg=APP_BG_COLOR, fg="white").pack(padx=20, anchor="w")
-
-        frame_lista_container = Frame(popup, bg=APP_BG_COLOR)
-        frame_lista_container.pack(padx=20, pady=(6, 14), fill="both", expand=True)
-
-        canvas_lista = Canvas(frame_lista_container, bg=APP_BG_COLOR, highlightthickness=0, bd=0)
-        scroll_lista = ttk.Scrollbar(frame_lista_container, orient="vertical", style="Section.Vertical.TScrollbar", command=canvas_lista.yview)
-        canvas_lista.configure(yscrollcommand=lambda f, l, _sb=scroll_lista: _autohide_yscroll(_sb, f, l))
-        canvas_lista.pack(side=LEFT, fill="both", expand=True)
-        scroll_lista.pack(side=RIGHT, fill="y")
-
-        frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
-        lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
-        frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
-        canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
-
-        filas_widgets = {}
-        entrada_en_edicion = {"index": None}
-        entradas_pais = []
-        required_ids_pais = []
-
-        def _actualizar_columna_excel(*_):
-            try:
-                data_index = int(data_index_var.get().strip())
-            except Exception:
-                columna_excel_var.set("Columna Excel: índice inválido")
-                return
-
-            columna_excel = _columna_excel_desde_data_index(data_index)
-            columna_excel_var.set(f"Columna Excel: {columna_excel} (data_index {data_index})")
-
-        def _limpiar_formulario(reset_edicion=True):
-            id_var.set("")
-            descripcion_var.set("")
-            tipo_var.set("Rellenable")
-            data_index_var.set("0")
-            if reset_edicion:
-                entrada_en_edicion["index"] = None
-                btn_guardar_text.set("Crear")
-                estado_edicion.config(text="")
-            _actualizar_columna_excel()
-
-        def _reindexar_entradas_para_excel(entries):
-            """Ordena por índice solicitado y reindexa sin huecos para Excel."""
-            if not entries:
-                return []
-
-            def _as_int(value, default=0):
-                try:
-                    return int(value)
-                except Exception:
-                    return default
-
-            ordenadas = sorted(
-                [dict(entry) for entry in entries],
-                key=lambda entry: (
-                    _as_int(entry.get("requested_data_index", entry.get("data_index", 0))),
-                    str(entry.get("name") or "").lower(),
-                    str(entry.get("id") or "").lower(),
-                ),
-            )
-
-            start_index = _as_int(ordenadas[0].get("data_index", 0), 0)
-            for offset, entry in enumerate(ordenadas):
-                requested = _as_int(entry.get("requested_data_index", entry.get("data_index", start_index + offset)), start_index + offset)
-                entry["requested_data_index"] = requested
-                entry["data_index"] = start_index + offset
-
-            return ordenadas
-
-        def _cargar_pais_actual():
-            nonlocal entradas_pais, required_ids_pais
-            config_pais = load_effective_country_form_config(pais_var.get().strip())
-            entradas_pais = [dict(entry) for entry in (config_pais.get("field_mapping") or [])]
-            for entry in entradas_pais:
-                try:
-                    entry["requested_data_index"] = int(entry.get("requested_data_index", entry.get("data_index", 0)))
-                except Exception:
-                    entry["requested_data_index"] = int(entry.get("data_index", 0)) if str(entry.get("data_index", "")).strip().isdigit() else 0
-            entradas_pais = _reindexar_entradas_para_excel(entradas_pais)
-            required_ids_pais = list(config_pais.get("country_fields", {}).get("required_fields") or [])
-
-        def _refrescar_lista():
-            for widget in list(filas_widgets.values()):
-                widget.destroy()
-            filas_widgets.clear()
-
-            if not entradas_pais:
-                lbl = Label(frame_lista, text="(sin mapping)", bg=APP_BG_COLOR, fg="#aaa", font=("Segoe UI", 9, "italic"))
-                lbl.pack(anchor="w")
-                filas_widgets["__empty__"] = lbl
-                return
-
-            for idx, entry in enumerate(entradas_pais):
-                fila = Frame(frame_lista, bg=APP_BG_COLOR)
-                fila.pack(fill="x", pady=2)
-
-                data_index = int(entry.get("data_index", 0))
-                columna_excel = _columna_excel_desde_data_index(data_index)
-                ids_actuales = entry.get("id") if isinstance(entry.get("id"), list) else [entry.get("id")]
-                es_requerido = any(str(raw_id or "").strip() in required_ids_pais for raw_id in ids_actuales)
-                sufijo_requerido = " | requerido" if es_requerido else ""
-                texto_fila = (
-                    f"{columna_excel} (index {data_index}) | ID: {_texto_id_fijo(entry.get('id'))} | "
-                    f"{str(entry.get('name') or '').strip()} | {_TIPO_DISPLAY.get(str(entry.get('type') or 'text').strip(), str(entry.get('type') or 'text').strip())}{sufijo_requerido}"
-                )
-
-                Label(
-                    fila,
-                    text=texto_fila,
-                    bg=APP_BG_COLOR,
-                    fg="white",
-                    font=("Segoe UI", 10),
-                    anchor="w",
-                    justify="left",
-                    wraplength=660,
-                ).pack(side=LEFT, expand=True, fill="x")
-
-                def _editar_existente(index=idx):
-                    if index < 0 or index >= len(entradas_pais):
-                        return
-                    entry_actual = entradas_pais[index]
-                    id_var.set(_texto_id_fijo(entry_actual.get("id")))
-                    descripcion_var.set(str(entry_actual.get("name") or "").strip())
-                    tipo_var.set(_TIPO_DISPLAY.get(str(entry_actual.get("type") or "text").strip(), "Rellenable"))
-                    data_index_var.set(str(entry_actual.get("requested_data_index", entry_actual.get("data_index", 0))))
-                    entrada_en_edicion["index"] = index
-                    btn_guardar_text.set("Editar")
-                    estado_edicion.config(text=f"Editando {pais_var.get().strip()}: {_texto_id_fijo(entry_actual.get('id'))}")
-                    _actualizar_columna_excel()
-                    canvas_lista.yview_moveto(0)
-
-                def _eliminar(index=idx):
-                    if index < 0 or index >= len(entradas_pais):
-                        return
-                    entradas_pais.pop(index)
-                    reindexadas = _reindexar_entradas_para_excel(entradas_pais)
-                    entradas_pais[:] = reindexadas
-                    pais_nombre = pais_var.get().strip()
-                    save_country_fixed_field_mapping(pais_nombre, entradas_pais, required_fields=required_ids_pais)
-                    sincronizar_excels_de_pais(pais_nombre)
-                    if entrada_en_edicion["index"] == index:
-                        _limpiar_formulario()
-                    elif isinstance(entrada_en_edicion["index"], int) and entrada_en_edicion["index"] > index:
-                        entrada_en_edicion["index"] -= 1
-                    _cargar_pais_actual()
-                    _refrescar_lista()
-
-                Button(fila, text="Editar", command=_editar_existente, bg=HEADER_BG_COLOR, fg="black", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", padx=6, pady=1).pack(side=RIGHT, padx=(4, 0))
-                Button(fila, text="✕", command=_eliminar, bg="#7a2040", fg="white", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", padx=6, pady=1).pack(side=RIGHT)
-                filas_widgets[f"row_{idx}"] = fila
-
-        def _guardar_mapping_fijo():
-            pais_nombre = pais_var.get().strip()
-            if not pais_nombre:
-                messagebox.showwarning("IDs Excel", "Seleccioná un país.", parent=popup)
-                return
-
-            id_texto = id_var.get().strip()
-            if not id_texto:
-                messagebox.showwarning("IDs Excel", "Ingresá un ID.", parent=popup)
-                return
-
-            try:
-                data_index = int(data_index_var.get().strip())
-            except Exception:
-                messagebox.showwarning("IDs Excel", "El data_index debe ser numérico.", parent=popup)
-                return
-
-            if data_index < 0:
-                messagebox.showwarning("IDs Excel", "El data_index debe ser mayor o igual a 0.", parent=popup)
-                return
-
-            nueva_entry = {
-                "id": _parsear_id_fijo_input(id_texto),
-                "name": descripcion_var.get().strip() or id_texto,
-                "type": _TIPO_STORAGE.get(tipo_var.get().strip(), "text"),
-                "requested_data_index": data_index,
-                "data_index": data_index,
-            }
-
-            idx_edit = entrada_en_edicion["index"]
-            if isinstance(idx_edit, int) and 0 <= idx_edit < len(entradas_pais):
-                entradas_pais[idx_edit] = nueva_entry
-            else:
-                entradas_pais.append(nueva_entry)
-
-            reindexadas = _reindexar_entradas_para_excel(entradas_pais)
-            entradas_pais[:] = reindexadas
-
-            save_country_fixed_field_mapping(pais_nombre, entradas_pais, required_fields=required_ids_pais)
-            sincronizar_excels_de_pais(pais_nombre)
-            _cargar_pais_actual()
-            _limpiar_formulario()
-            _refrescar_lista()
-
-        Button(frame_ctas_ids_fijos, text="Limpiar", command=_limpiar_formulario, bg=HEADER_BG_COLOR, fg="black", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", width=12, padx=10, pady=3).pack(anchor="e", pady=(0, 6))
-        Button(frame_ctas_ids_fijos, textvariable=btn_guardar_text, command=_guardar_mapping_fijo, bg=HEADER_BG_COLOR, fg="black", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", width=12, padx=10, pady=3).pack(anchor="e")
-
-        combo_pais.bind("<<ComboboxSelected>>", lambda _event: (_cargar_pais_actual(), _limpiar_formulario(), _refrescar_lista()))
-        combo_tipo.set("Rellenable")
-        entry_data_index_widget = frame_inputs.grid_slaves(row=4, column=1)
-        if entry_data_index_widget:
-            entry_data_index_widget[0].bind("<KeyRelease>", _actualizar_columna_excel)
-
-        _cargar_pais_actual()
-        _limpiar_formulario()
-        _refrescar_lista()
-
-    # === IDs únicos (contenido de tab dentro del popup unificado) ===
-    def _build_tab_ids_unicos(popup):
-
-        labels_responsivos = []
-
-        def _envolver_texto(texto, max_chars):
-            if not texto:
-                return ""
-
-            lineas = []
-            wrapper = textwrap.TextWrapper(
-                width=max_chars,
-                break_long_words=True,
-                break_on_hyphens=False,
-            )
-            for linea in str(texto).splitlines():
-                chunks = wrapper.wrap(linea) or [""]
-                lineas.extend(chunks)
-            return "\n".join(lineas)
-
-        def _registrar_label_responsivo(widget, texto_original):
-            labels_responsivos.append({"widget": widget, "text": texto_original})
-
-        def _actualizar_labels_responsivos(_event=None):
-            ancho_disponible = max(360, popup.winfo_width() - 90)
-            max_chars = max(28, int(ancho_disponible / 7))
-            for item in labels_responsivos:
-                widget = item["widget"]
-                if not widget.winfo_exists():
-                    continue
-                texto_envuelto = _envolver_texto(item["text"], max_chars)
-                widget.configure(text=texto_envuelto, wraplength=ancho_disponible)
-
-        popup.bind("<Configure>", _actualizar_labels_responsivos)
-
-        # --- Título ---
-        Label(
-            popup,
-            text="IDs únicos",
-            font=("Segoe UI", 12, "bold"),
-            bg=APP_BG_COLOR,
-            fg="white",
-        ).pack(pady=(16, 8), padx=20, anchor="w")
-
-        lbl_descripcion = Label(
-            popup,
-            text="Asigná uno o más valores fijos a un ID de campo no mapeado.\nSirve para inputs, textareas y selects especiales. También podés volver a cargar el mismo ID para sumar más valores.",
-            font=("Segoe UI", 9),
-            bg=APP_BG_COLOR,
-            fg="#ddd",
-            justify="left",
-            anchor="w",
-        )
-        lbl_descripcion.pack(fill="x", padx=20, anchor="w")
-        _registrar_label_responsivo(
-            lbl_descripcion,
-            "Asigná uno o más valores fijos a un ID de campo no mapeado.\nSirve para inputs, textareas y selects especiales.\nTambién podés volver a cargar el mismo ID para sumar más valores.",
-        )
-
-        ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=10)
-
-        # --- Formulario de ingreso ---
-        frame_inputs = Frame(popup, bg=APP_BG_COLOR)
-        frame_inputs.pack(padx=20, anchor="w")
-
-        Label(
-            frame_inputs,
-            text="ID:",
-            bg=APP_BG_COLOR,
-            fg="white",
-            font=("Segoe UI", 10),
-            width=8,
-            anchor="w",
-        ).grid(row=0, column=0, sticky="w", pady=4)
-        entry_id = Entry(frame_inputs, font=("Segoe UI", 10), width=24)
-        entry_id.grid(row=0, column=1, padx=(0, 10), pady=4)
-
-        Label(
-            frame_inputs,
-            text="Descripción (opcional):",
-            bg=APP_BG_COLOR,
-            fg="white",
-            font=("Segoe UI", 10),
-            width=20,
-            anchor="w",
-        ).grid(row=1, column=0, sticky="w", pady=4)
-        entry_nombre_campo = Entry(frame_inputs, font=("Segoe UI", 10), width=24)
-        entry_nombre_campo.grid(row=1, column=1, padx=(0, 10), pady=4)
-
-        Label(
-            frame_inputs,
-            text="Valor:",
-            bg=APP_BG_COLOR,
-            fg="white",
-            font=("Segoe UI", 10),
-            width=8,
-            anchor="w",
-        ).grid(row=2, column=0, sticky="w", pady=4)
-        entry_valor = Entry(frame_inputs, font=("Segoe UI", 10), width=24)
-        entry_valor.grid(row=2, column=1, padx=(0, 10), pady=4)
-
-        ids_fijos_mapeados = obtener_ids_mapeados_normales()
-        warning_id_var = StringVar(value="")
-        label_warning_id = Label(
-            frame_inputs,
-            textvariable=warning_id_var,
-            bg=APP_BG_COLOR,
-            fg="#ffd38a",
-            font=("Segoe UI", 9),
-            anchor="w",
-            justify="left",
-        )
-        label_warning_id.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(2, 0))
-
-        # --- Lista de IDs existentes ---
-        ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=(12, 6))
-        Label(popup, text="IDs configurados:", font=("Segoe UI", 10, "bold"),
-              bg=APP_BG_COLOR, fg="white").pack(padx=20, anchor="w")
-
-        frame_lista_container = Frame(popup, bg=APP_BG_COLOR)
-        frame_lista_container.pack(padx=20, pady=(6, 16), fill="both", expand=True)
-
-        canvas_lista = Canvas(
-            frame_lista_container,
-            bg=APP_BG_COLOR,
-            highlightthickness=0,
-            bd=0,
-        )
-        scroll_lista = ttk.Scrollbar(
-            frame_lista_container,
-            orient="vertical",
-            style="Section.Vertical.TScrollbar",
-            command=canvas_lista.yview,
-        )
-        canvas_lista.configure(yscrollcommand=lambda f, l, _sb=scroll_lista: _autohide_yscroll(_sb, f, l))
-
-        canvas_lista.pack(side=LEFT, fill="both", expand=True)
-        scroll_lista.pack(side=RIGHT, fill="y")
-
-        frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
-        lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
-
-        def _actualizar_scroll_lista(_event=None):
-            try:
-                canvas_lista.configure(scrollregion=canvas_lista.bbox("all"))
-            except Exception:
-                pass
-
-        def _ajustar_ancho_lista(event):
-            try:
-                canvas_lista.itemconfigure(lista_window, width=event.width)
-            except Exception:
-                pass
-
-        def _on_lista_mousewheel(event):
-            try:
-                delta = int(-1 * (event.delta / 120))
-                canvas_lista.yview_scroll(delta, "units")
-            except Exception:
-                return "break"
-            return "break"
-
-        frame_lista.bind("<Configure>", _actualizar_scroll_lista)
-        canvas_lista.bind("<Configure>", _ajustar_ancho_lista)
-        canvas_lista.bind("<MouseWheel>", _on_lista_mousewheel)
-
-        filas_widgets = {}  # row_key -> frame
-        entrada_en_edicion = {"index": None}
-
-        label_modo_edicion = Label(
-            popup,
-            text="",
-            bg=APP_BG_COLOR,
-            fg="#ffd38a",
-            font=("Segoe UI", 9, "bold"),
-            anchor="w",
-            justify="left",
-        )
-        label_modo_edicion.pack(fill="x", padx=20, anchor="w", pady=(0, 4))
-
-        def _actualizar_estado_edicion(id_val="", paises=None):
-            if id_val:
-                alcance = "Todos" if _es_todos_paises(paises) else ", ".join(paises or [])
-                label_modo_edicion.config(text=f"Editando ID: {id_val} (Países: {alcance})")
-                btn_crear_text.set("Editar")
-            else:
-                label_modo_edicion.config(text="")
-                btn_crear_text.set("Crear")
-
-        # --- Selector de países (3 columnas de 3 países) ---
-        frame_paises = Frame(frame_inputs, bg=APP_BG_COLOR)
-        frame_paises.grid(row=0, column=2, rowspan=3, padx=(14, 0), sticky="nw")
-
-        Label(
-            frame_paises,
-            text="Países (opcional)",
-            bg=APP_BG_COLOR,
-            fg="white",
-            font=("Segoe UI", 10, "bold"),
-            anchor="w",
-        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 4))
-
-        pais_vars = {}
-        paises_disponibles = list(MAPEO_PAISES.keys())
-
-        def _es_todos_paises(paises):
-            seleccionados = normalizar_paises_id_dinamico(paises)
-            if not seleccionados:
-                return True
-            return set(seleccionados) == set(paises_disponibles)
-
-        for idx, pais in enumerate(paises_disponibles):
-            row = (idx % 3) + 1
-            col = idx // 3
-            var = BooleanVar(value=False)
-            pais_vars[pais] = var
-            Checkbutton(
-                frame_paises,
-                text=pais,
-                variable=var,
-                bg=APP_BG_COLOR,
-                fg="white",
-                activebackground=APP_BG_COLOR,
-                activeforeground="white",
-                selectcolor=APP_BG_COLOR,
-                anchor="w",
-            ).grid(row=row, column=col, sticky="w", padx=(0, 10), pady=1)
-
-        btn_crear_text = StringVar(value="Crear")
+                frame.pack_forget()
         
-        def _limpiar_formulario_ids_dinamicos():
-            entry_id.delete(0, "end")
-            entry_nombre_campo.delete(0, "end")
-            entry_valor.delete(0, "end")
-            for var in pais_vars.values():
-                var.set(False)
-            filtro_texto_var.set("")
-            filtro_pais_var.set("Todos")
-            warning_id_var.set("")
-            entrada_en_edicion["index"] = None
-            _actualizar_estado_edicion()
-            btn_crear_text.set("Crear")
-            _refrescar_lista()
+        for btn in tab_buttons:
+            if btn.tab_name == target_name:
+                btn.config(bg=TAB_ACTIVE_BG, fg=TAB_ACTIVE_FG, highlightthickness=1, highlightbackground=BORDER_COLOR)
+            else:
+                btn.config(bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, highlightthickness=0)
 
-        # Diccionario de abreviaturas de países
-        pais_abreviaturas = {
-            "Argentina": "AR",
-            "Brasil": "BR",
-            "Bolivia": "BO",
-            "Chile": "CH",
-            "Ecuador": "EC",
-            "Colombia": "CO",
-            "Paraguay": "PY",
-            "Peru": "PE",
-            "Uruguay": "UY",
-        }
-        abreviatura_a_pais = {abrev: pais for pais, abrev in pais_abreviaturas.items()}
-        filtro_texto_var = StringVar(value="")
-        filtro_pais_var = StringVar(value="Todos")
+    tabs_data = [
+        ("Envío de Leads", "leads", False),
+        ("Programación de Tests", "scheduler", False),
+        ("Validación de Campos", "validation", False),
+        ("Generar Excels con Datos", "excel", False),
+        ("Comparador Dealers", "dealers", False),
+    ]
+    for t_text, t_name, t_disabled in tabs_data:
+        btn = tk.Button(tab_bar, text=t_text, font=("Segoe UI", 9, "bold"), bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG,
+                        relief="flat", bd=0, activebackground=TAB_ACTIVE_BG, activeforeground=TAB_ACTIVE_FG,
+                        padx=18, pady=8, highlightthickness=0)
+        btn.tab_name = t_name
+        btn.pack(side="left", padx=2)
+        if t_disabled:
+            btn.config(state="disabled", disabledforeground="#8A6E9E", cursor="arrow")
+        else:
+            btn.config(command=lambda name=t_name: switch_tab(name))
+        tab_buttons.append(btn)
 
-        def _refrescar_lista():
-            for w in list(filas_widgets.values()):
-                w.destroy()
-            filas_widgets.clear()
-            datos = cargar_ids_dinamicos()
-            entries = datos.get("entries", []) if isinstance(datos, dict) else []
-            texto_filtro = filtro_texto_var.get().strip().lower()
-            pais_filtro_abrev = filtro_pais_var.get().strip() or "Todos"
-            pais_filtro = abreviatura_a_pais.get(pais_filtro_abrev)
+    for _, t_name, _ in tabs_data:
+        tabs[t_name] = tk.Frame(content_area, bg=APP_BG_COLOR)
 
-            filas_filtradas = []
-            for idx, entry in enumerate(entries):
-                if not isinstance(entry, dict):
-                    continue
-                id_val = str(entry.get("id") or "").strip()
-                if not id_val:
-                    continue
+    # Canvases registrados para el scroll con rueda de mouse
+    scrollable_canvases = []
 
-                nombre_campo, valor_raw = extraer_datos_id_dinamico(entry)
-                valores = normalizar_valores_id_dinamico(valor_raw)
-                valor_texto = " | ".join(valores) if valores else "(sin valores)"
-                paises_entry = normalizar_paises_id_dinamico(entry.get("paises", entry.get("countries")))
-                entry_es_todos = _es_todos_paises(paises_entry)
-                if entry_es_todos:
-                    paises_abrev = "Todos"
+    # Helper para crear un panel scrolleable verticalmente dentro de una pestaña
+    def make_scrollable_tab_container(parent):
+        canvas = tk.Canvas(parent, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
+        v_scroll = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview, style="TScrollbar")
+        
+        inner_frame = tk.Frame(canvas, bg=APP_BG_COLOR)
+        
+        # Sincronizar el ancho del frame interno con el canvas
+        def _on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+            
+        canvas.bind("<Configure>", _on_canvas_configure)
+        inner_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        
+        canvas_window = canvas.create_window((0, 0), window=inner_frame, anchor="nw")
+        canvas.configure(yscrollcommand=v_scroll.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        v_scroll.pack(side="right", fill="y")
+        scrollable_canvases.append(canvas)
+        return inner_frame
+
+    # ==========================================
+    # TAB 1: ENVÍO DE LEADS (leads)
+    # ==========================================
+    leads_scroll_frame = make_scrollable_tab_container(tabs["leads"])
+
+    # Modo de Excel: "por_dispositivo" (default, un Excel por dispositivo) o
+    # "compartido" (un único Excel genérico con los mismos datos para todos).
+    try:
+        _excel_mode_ini = (cargar_config_global() or {}).get("excel_mode", "por_dispositivo")
+    except Exception:
+        _excel_mode_ini = "por_dispositivo"
+    excel_mode_holder = [_excel_mode_ini if _excel_mode_ini in ("por_dispositivo", "compartido") else "por_dispositivo"]
+
+    # --- 1. CONFIGURACIÓN DE EJECUCIÓN (Card Panel) ---
+    config_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    config_card.pack(fill="x", pady=(0, 8), ipady=6)
+
+    sec_head = tk.Frame(config_card, bg=CARD_BG_COLOR)
+    sec_head.pack(fill="x", padx=15, pady=(6, 2))
+    sec_title = tk.Label(sec_head, text="Configurá tu envío: elegí mercado, modo de ejecución y dispositivos",
+                         font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY)
+    sec_title.pack(side="left")
+    btn_adv_cfg = tk.Button(sec_head, text=" Configurar", image=get_button_icon("gear_white.png"), compound="left",
+                            font=("Segoe UI", 8, "bold"), bg=BUTTON_ACTIVE, fg="white", relief="flat", bd=0,
+                            activebackground=BUTTON_HOVER, activeforeground="white", padx=12, pady=3,
+                            cursor="hand2", command=lambda: abrir_config_avanzada())
+    btn_adv_cfg.pack(side="right")
+
+    sec_hint = tk.Label(config_card,
+                        text="① Elegí el modo de mercados y de Excels.   ② Tildá los dispositivos/navegadores.   "
+                             "③ Con “Configurar” cambiás si cada dispositivo usa su Excel o uno compartido.",
+                        font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", justify="left")
+    sec_hint.pack(anchor="w", padx=15, pady=(0, 6))
+
+    row_config = tk.Frame(config_card, bg=CARD_BG_COLOR)
+    row_config.pack(fill="x", padx=15)
+
+    # Piloto de grupos con botones pastel suaves. Devuelve un holder [valor] con la selección.
+    def make_pill_group(parent, label_text, subtitle_text, options, default_val, sub_texts=None, on_change=None):
+        group_frame = tk.Frame(parent, bg=CARD_BG_COLOR)
+        group_frame.pack(side="left", padx=(0, 25), anchor="n")
+
+        lbl = tk.Label(group_frame, text=label_text, font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
+        lbl.pack(anchor="w", pady=(0, 3))
+
+        btn_row = tk.Frame(group_frame, bg=CARD_BG_COLOR)
+        btn_row.pack(anchor="w")
+
+        selected_val = [default_val]
+        btns = {}
+        sub_lbl = None
+
+        def on_click(val):
+            selected_val[0] = val
+            for v, b in btns.items():
+                if v == val:
+                    b.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
                 else:
-                    paises_abrev = ", ".join([pais_abreviaturas.get(p, p) for p in paises_entry])
-
-                texto_busqueda = f"{id_val} {nombre_campo} {valor_texto} {paises_abrev}".lower()
-                if texto_filtro and texto_filtro not in texto_busqueda:
-                    continue
-
-                prioridad = 0
-                if pais_filtro:
-                    if entry_es_todos:
-                        prioridad = 1
-                    elif pais_filtro in paises_entry:
-                        prioridad = 0
-                    else:
-                        continue
-
-                filas_filtradas.append((
-                    prioridad,
-                    idx,
-                    entry,
-                    id_val,
-                    nombre_campo,
-                    valor_texto,
-                    paises_abrev,
-                ))
-
-            if pais_filtro:
-                filas_filtradas.sort(key=lambda x: (x[0], x[1]))
-
-            if not filas_filtradas:
-                lbl = Label(frame_lista, text="(ninguno)", bg=APP_BG_COLOR,
-                            fg="#aaa", font=("Segoe UI", 9, "italic"))
-                lbl.pack(anchor="w")
-                filas_widgets["__empty__"] = lbl
-                return
-
-            for _prioridad, idx, entry, id_val, nombre_campo, valor_texto, paises_abrev in filas_filtradas:
-
-                fila = Frame(frame_lista, bg=APP_BG_COLOR)
-                fila.pack(fill="x", pady=2)
-                if nombre_campo:
-                    texto_fila = f"ID: {id_val}   Valor: {valor_texto}   Descripción: {nombre_campo}   Países: {paises_abrev}"
-                else:
-                    texto_fila = f"ID: {id_val}   Valor: {valor_texto}   Países: {paises_abrev}"
-                label_fila = Label(
-                    fila,
-                    text=texto_fila,
-                    bg=APP_BG_COLOR,
-                    fg="white",
-                    font=("Segoe UI", 10),
-                    anchor="w",
-                    justify="left",
-                )
-                label_fila.pack(side=LEFT, expand=True, fill="x")
-                _registrar_label_responsivo(label_fila, texto_fila)
-
-                def _editar_existente(index=idx):
-                    d = cargar_ids_dinamicos()
-                    entries_edit = d.get("entries", []) if isinstance(d, dict) else []
-                    if index < 0 or index >= len(entries_edit):
-                        return
-
-                    entry_actual = entries_edit[index]
-                    id_actual = str(entry_actual.get("id") or "").strip()
-                    nombre_actual, valor_raw = extraer_datos_id_dinamico(entry_actual)
-                    valores_actuales = normalizar_valores_id_dinamico(valor_raw)
-                    paises_actuales = normalizar_paises_id_dinamico(entry_actual.get("paises", entry_actual.get("countries")))
-
-                    entry_id.delete(0, "end")
-                    entry_id.insert(0, id_actual)
-                    entry_nombre_campo.delete(0, "end")
-                    entry_nombre_campo.insert(0, nombre_actual)
-                    entry_valor.delete(0, "end")
-                    entry_valor.insert(0, " | ".join(valores_actuales))
-                    for pais, var in pais_vars.items():
-                        var.set(pais in paises_actuales)
-
-                    entrada_en_edicion["index"] = index
-                    _actualizar_estado_edicion(id_actual, paises_actuales)
-                    _actualizar_warning_id()
-                    canvas_lista.yview_moveto(0)
-
-                Button(
-                    fila,
-                    text="Editar",
-                    command=_editar_existente,
-                    bg=HEADER_BG_COLOR,
-                    fg="black",
-                    relief="flat",
-                    font=("Segoe UI", 9, "bold"),
-                    cursor="hand2",
-                    padx=6,
-                    pady=1,
-                ).pack(side=RIGHT, padx=(4, 0))
-
-                def _eliminar(index=idx):
-                    d = cargar_ids_dinamicos()
-                    entries_del = d.get("entries", []) if isinstance(d, dict) else []
-                    if index < 0 or index >= len(entries_del):
-                        return
-                    entries_del.pop(index)
-                    d["entries"] = entries_del
-
-                    if entrada_en_edicion["index"] == index:
-                        _limpiar_formulario_ids_dinamicos()
-                    elif isinstance(entrada_en_edicion["index"], int) and entrada_en_edicion["index"] > index:
-                        entrada_en_edicion["index"] -= 1
-
-                    guardar_ids_dinamicos(d)
-                    _refrescar_lista()
-
-                Button(fila, text="✕", command=_eliminar,
-                       bg="#7a2040", fg="white", relief="flat",
-                       font=("Segoe UI", 9, "bold"), cursor="hand2",
-                       padx=6, pady=1).pack(side=RIGHT)
-                filas_widgets[f"row_{idx}"] = fila
-
-            _actualizar_labels_responsivos()
-
-        _refrescar_lista()
-
-        def _actualizar_warning_id(*_):
-            current_id = entry_id.get().strip()
-            if current_id and current_id in ids_fijos_mapeados:
-                texto_warning = "Aviso: este ID ya existe en los IDs Excel.\nConsultar en Más información para ver el listado completo."
-                warning_id_var.set(_envolver_texto(texto_warning, max(28, int(max(360, popup.winfo_width() - 90) / 7))))
-            else:
-                warning_id_var.set("")
-
-        entry_id.bind("<KeyRelease>", _actualizar_warning_id)
-
-        def _agregar():
-            id_val = entry_id.get().strip()
-            nombre_campo = entry_nombre_campo.get().strip()
-            valor_val = entry_valor.get().strip()
-            paises_seleccionados = [pais for pais, var in pais_vars.items() if var.get()]
-            if _es_todos_paises(paises_seleccionados):
-                paises_seleccionados = []
-            if not id_val or not valor_val:
-                messagebox.showwarning("IDs únicos", "Completá ambos campos.", parent=popup)
-                return
-            if id_val in ids_fijos_mapeados:
-                continuar = messagebox.askyesno(
-                    "IDs únicos",
-                    "Ese ID ya existe en los IDs Excel. Consultar en Más información para ver el listado completo.\n\nSi lo guardás acá, solo actuará como respaldo para campos no mapeados o lógica especial.\n\n¿Querés guardarlo igual?",
-                    parent=popup,
-                )
-                if not continuar:
-                    return
-
-            d = cargar_ids_dinamicos()
-            valores_nuevos = normalizar_valores_id_dinamico(valor_val)
-            if not valores_nuevos:
-                messagebox.showwarning("IDs únicos", "No hay valores válidos para guardar.", parent=popup)
-                return
-
-            nueva_entry = {
-                "id": id_val,
-                "valor": compactar_valores_id_dinamico(valores_nuevos),
-                "paises": paises_seleccionados,
-            }
-            if nombre_campo:
-                nueva_entry["nombre_campo"] = nombre_campo
-
-            entries = d.get("entries", []) if isinstance(d, dict) else []
-            if not isinstance(entries, list):
-                entries = []
-
-            idx_edit = entrada_en_edicion["index"]
-            if isinstance(idx_edit, int) and 0 <= idx_edit < len(entries):
-                entries[idx_edit] = nueva_entry
-            else:
-                entries.append(nueva_entry)
-
-            d["entries"] = entries
-
-            guardar_ids_dinamicos(d)
-            _limpiar_formulario_ids_dinamicos()
-            _refrescar_lista()
-
-        # Fila de filtros (columna izquierda)
-        frame_filtros = Frame(frame_inputs, bg=APP_BG_COLOR)
-        frame_filtros.grid(row=4, column=0, columnspan=2, pady=(2, 0), sticky="w")
-
-        frame_col_filtro_texto = Frame(frame_filtros, bg=APP_BG_COLOR)
-        frame_col_filtro_texto.grid(row=0, column=0, padx=(0, 10), sticky="w")
-        Label(
-            frame_col_filtro_texto,
-            text="Filtro:",
-            bg=APP_BG_COLOR,
-            fg="white",
-            font=("Segoe UI", 10),
-        ).pack(side=LEFT, padx=(0, 6))
-        entry_filtro = Entry(frame_col_filtro_texto, font=("Segoe UI", 10), width=20, textvariable=filtro_texto_var)
-        entry_filtro.pack(side=LEFT)
-
-        frame_col_filtro_pais = Frame(frame_filtros, bg=APP_BG_COLOR)
-        frame_col_filtro_pais.grid(row=0, column=1, padx=(0, 10), sticky="w")
-        valores_filtro_pais = ["Todos"] + [pais_abreviaturas[p] for p in paises_disponibles if p in pais_abreviaturas]
-        estilo_combo_filtro = ttk.Style()
-        estilo_combo_filtro.configure(
-            "FiltroPais.TCombobox",
-            fieldbackground="white",
-            background="white",
-            foreground="black",
-        )
-        estilo_combo_filtro.map(
-            "FiltroPais.TCombobox",
-            fieldbackground=[("readonly", "white")],
-            selectbackground=[("readonly", "white")],
-            selectforeground=[("readonly", "black")],
-            foreground=[("readonly", "black")],
-            background=[("readonly", "white")],
-        )
-        combo_filtro_pais = ttk.Combobox(
-            frame_col_filtro_pais,
-            textvariable=filtro_pais_var,
-            values=valores_filtro_pais,
-            state="readonly",
-            width=8,
-            style="FiltroPais.TCombobox",
-        )
-        combo_filtro_pais.pack(side=LEFT)
-        combo_filtro_pais.set("Todos")
-
-        # CTAs debajo de la columna de países (Limpiar izquierda, Crear derecha)
-        frame_ctas_paises = Frame(frame_inputs, bg=APP_BG_COLOR)
-        frame_ctas_paises.grid(row=4, column=2, pady=(2, 0), sticky="ew")
-        frame_ctas_paises.grid_columnconfigure(0, weight=1)
-        frame_ctas_paises.grid_columnconfigure(1, weight=1)
-        ancho_cta = 12
-
-        Button(
-            frame_ctas_paises,
-            text="Limpiar",
-            command=_limpiar_formulario_ids_dinamicos,
-            bg=HEADER_BG_COLOR,
-            fg="black",
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            cursor="hand2",
-            width=ancho_cta,
-            padx=10,
-            pady=3,
-        ).grid(row=0, column=0, sticky="w")
-
-        Button(
-            frame_ctas_paises,
-            textvariable=btn_crear_text,
-            command=_agregar,
-            bg=HEADER_BG_COLOR,
-            fg="black",
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            cursor="hand2",
-            width=ancho_cta,
-            padx=10,
-            pady=3,
-        ).grid(row=0, column=1, sticky="e")
-
-        entry_filtro.bind("<KeyRelease>", lambda _event: _refrescar_lista())
-        combo_filtro_pais.bind("<<ComboboxSelected>>", lambda _event: _refrescar_lista())
-
-        _actualizar_labels_responsivos()
-
-    def _build_tab_dependencias(popup):
-        """Tab para registrar dependencias padre→hijo por país, con estilo y estructura igual a IDs Excel."""
-
-        Label(
-            popup,
-            text="Dependencias entre IDs",
-            font=("Segoe UI", 12, "bold"),
-            bg=APP_BG_COLOR,
-            fg="white",
-        ).pack(pady=(16, 8), padx=20, anchor="w")
-
-        descripcion_popup = (
-            "Registrá qué ID hijo depende de un ID padre. El sistema los rellenará en orden respetando la dependencia."
-        )
-        Label(
-            popup,
-            text=descripcion_popup,
-            font=("Segoe UI", 9),
-            bg=APP_BG_COLOR,
-            fg="#ddd",
-            justify="left",
-            anchor="w",
-            wraplength=700,
-        ).pack(fill="x", padx=20, anchor="w")
-
-        ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=10)
-
-        paises_disponibles = [
-            "Argentina", "Bolivia", "Brasil", "Chile",
-            "Colombia", "Ecuador", "Paraguay", "Peru", "Uruguay",
-        ]
-        padre_var = StringVar(value="")
-        hijo_var = StringVar(value="")
-        pais_vars = {pais: BooleanVar(value=False) for pais in paises_disponibles}
-        btn_guardar_text = StringVar(value="Crear")
-        entrada_en_edicion = {"index": None}
-
-        frame_inputs = Frame(popup, bg=APP_BG_COLOR)
-        frame_inputs.pack(padx=20, fill="x")
-
-        # Países primero, en filas de 3
-        Label(frame_inputs, text="Países:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="nw").grid(row=0, column=0, sticky="nw", pady=4)
-        frame_paises = Frame(frame_inputs, bg=APP_BG_COLOR)
-        frame_paises.grid(row=0, column=1, sticky="w", pady=4)
-        for idx, pais in enumerate(paises_disponibles):
-            row = idx // 3
-            col = idx % 3
-            Checkbutton(
-                frame_paises,
-                text=pais,
-                variable=pais_vars[pais],
-                bg=APP_BG_COLOR,
-                fg="white",
-                activebackground=APP_BG_COLOR,
-                activeforeground="white",
-                selectcolor=APP_BG_COLOR,
-                anchor="w",
-            ).grid(row=row, column=col, sticky="w", padx=(0, 10), pady=1)
-
-        # ID Padre
-        Label(frame_inputs, text="ID Padre:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=1, column=0, sticky="w", pady=4)
-        Entry(frame_inputs, font=("Segoe UI", 10), width=24, textvariable=padre_var).grid(row=1, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        # ID Hijo
-        Label(frame_inputs, text="ID Hijo:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), width=14, anchor="w").grid(row=2, column=0, sticky="w", pady=4)
-        Entry(frame_inputs, font=("Segoe UI", 10), width=24, textvariable=hijo_var).grid(row=2, column=1, sticky="w", pady=4, padx=(0, 12))
-
-        # CTAs en una fila abajo
-        frame_ctas = Frame(frame_inputs, bg=APP_BG_COLOR)
-        frame_ctas.grid(row=3, column=0, columnspan=2, pady=(8, 0), sticky="w")
-        Button(frame_ctas, text="Limpiar", command=lambda: limpiar_formulario(), bg=HEADER_BG_COLOR, fg="black", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", width=12, padx=10, pady=3).pack(side=LEFT, padx=(0, 8))
-        Button(frame_ctas, textvariable=btn_guardar_text, command=lambda: guardar_dependencia(), bg=HEADER_BG_COLOR, fg="black", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", width=12, padx=10, pady=3).pack(side=LEFT)
-
-        ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=(10, 6))
-        Label(popup, text="Dependencias registradas:", font=("Segoe UI", 10, "bold"), bg=APP_BG_COLOR, fg="white").pack(padx=20, anchor="w")
-
-        frame_lista_container = Frame(popup, bg=APP_BG_COLOR)
-        frame_lista_container.pack(padx=20, pady=(6, 14), fill="both", expand=True)
-
-        canvas_lista = Canvas(frame_lista_container, bg=APP_BG_COLOR, highlightthickness=0, bd=0)
-        scroll_lista = ttk.Scrollbar(frame_lista_container, orient="vertical", style="Section.Vertical.TScrollbar", command=canvas_lista.yview)
-        canvas_lista.configure(yscrollcommand=lambda f, l, _sb=scroll_lista: _autohide_yscroll(_sb, f, l))
-        canvas_lista.pack(side=LEFT, fill="both", expand=True)
-        scroll_lista.pack(side=RIGHT, fill="y")
-
-        frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
-        lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
-        frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
-        canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
-
-        filas_widgets = {}
-        dependencias = cargar_dependencias()
-
-        def limpiar_formulario():
-            padre_var.set("")
-            hijo_var.set("")
-            for var in pais_vars.values():
-                var.set(False)
-            entrada_en_edicion["index"] = None
-            btn_guardar_text.set("Crear")
-            refrescar_lista()
-
-        def guardar_dependencia():
-            padre = padre_var.get().strip()
-            hijo = hijo_var.get().strip()
-            paises = [p for p, v in pais_vars.items() if v.get()]
-            if not padre or not hijo:
-                messagebox.showwarning("Dependencias", "Completá ID Padre e ID Hijo.", parent=popup)
-                return
-            nueva_dep = {"padre": padre, "hijo": hijo, "paises": paises}
-            deps = cargar_dependencias()
-            idx_edit = entrada_en_edicion["index"]
-            if isinstance(idx_edit, int) and 0 <= idx_edit < len(deps):
-                deps[idx_edit] = nueva_dep
-            else:
-                deps.append(nueva_dep)
-            guardar_dependencias(deps)
-            limpiar_formulario()
-
-        def refrescar_lista():
-            for widget in list(filas_widgets.values()):
-                widget.destroy()
-            filas_widgets.clear()
-            deps = cargar_dependencias()
-            if not deps:
-                lbl = Label(frame_lista, text="(sin dependencias)", bg=APP_BG_COLOR, fg="#aaa", font=("Segoe UI", 9, "italic"))
-                lbl.pack(anchor="w")
-                filas_widgets["__empty__"] = lbl
-                return
-            for idx, dep in enumerate(deps):
-                padre = dep.get("padre", "")
-                hijo = dep.get("hijo", "")
-                paises = dep.get("paises", [])
-                paises_txt = ", ".join(paises) if paises else "Todos"
-                texto_fila = f"Padre: {padre}   →   Hijo: {hijo}   |   Países: {paises_txt}"
-                fila = Frame(frame_lista, bg=APP_BG_COLOR)
-                fila.pack(fill="x", pady=2)
-                Label(fila, text=texto_fila, bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10), anchor="w", justify="left", wraplength=660).pack(side=LEFT, expand=True, fill="x")
-                Button(fila, text="Editar", command=lambda i=idx: editar_dependencia(i), bg=HEADER_BG_COLOR, fg="black", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", padx=6, pady=1).pack(side=RIGHT, padx=(4, 0))
-                Button(fila, text="✕", command=lambda i=idx: eliminar_dependencia(i), bg="#7a2040", fg="white", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", padx=6, pady=1).pack(side=RIGHT)
-                filas_widgets[f"row_{idx}"] = fila
-
-        def editar_dependencia(index):
-            deps = cargar_dependencias()
-            if index < 0 or index >= len(deps):
-                return
-            dep = deps[index]
-            padre_var.set(dep.get("padre", ""))
-            hijo_var.set(dep.get("hijo", ""))
-            for pais, var in pais_vars.items():
-                var.set(pais in dep.get("paises", []))
-            entrada_en_edicion["index"] = index
-            btn_guardar_text.set("Editar")
-
-        def eliminar_dependencia(index):
-            deps = cargar_dependencias()
-            if index < 0 or index >= len(deps):
-                return
-            deps.pop(index)
-            guardar_dependencias(deps)
-            limpiar_formulario()
-
-        refrescar_lista()
-
-    def abrir_popup_ids_dinamicos():
-        popup = Toplevel(ui_root)
-        popup.title("IDs Dinámicos")
-        popup.configure(bg=APP_BG_COLOR)
-        popup.geometry("930x620")
-        popup.minsize(760, 520)
-        popup.resizable(True, True)
-
-        icon_path = os.path.join(ASSET_DIR, "icon.ico")
-        if os.path.exists(icon_path):
-            try:
-                popup.iconbitmap(icon_path)
-            except Exception:
+                    b.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=1, highlightbackground=BUTTON_INACTIVE)
+            if sub_texts and sub_lbl is not None:
+                sub_lbl.config(text=sub_texts.get(val, subtitle_text))
+            if on_change:
                 try:
-                    popup.iconbitmap(default=icon_path)
+                    on_change(val)
                 except Exception:
                     pass
 
-        notebook_ids = ttk.Notebook(popup, style="TNotebook")
-        notebook_ids.pack(fill="both", expand=True, padx=10, pady=10)
+        for opt in options:
+            opt_val = opt.lower()
+            b = tk.Button(btn_row, text=opt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                          relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                          highlightthickness=1, highlightbackground=BUTTON_INACTIVE,
+                          padx=12, pady=4, cursor="hand2")
+            b.pack(side="left", padx=2)
+            btns[opt_val] = b
+            b.config(command=lambda v=opt_val: on_click(v))
 
-        tab_ids_unicos = Frame(notebook_ids, bg=APP_BG_COLOR)
-        tab_ids_excel = Frame(notebook_ids, bg=APP_BG_COLOR)
-        tab_dependencias = Frame(notebook_ids, bg=APP_BG_COLOR)
-        notebook_ids.add(tab_ids_unicos, text="IDs únicos")
-        notebook_ids.add(tab_ids_excel, text="IDs Excel")
-        notebook_ids.add(tab_dependencias, text="Dependencias")
+            def on_enter(e, btn=b, val=opt_val):
+                if selected_val[0] != val:
+                    btn.config(bg=BUTTON_HOVER)
+            def on_leave(e, btn=b, val=opt_val):
+                if selected_val[0] != val:
+                    btn.config(bg=BUTTON_INACTIVE)
+            b.bind("<Enter>", on_enter)
+            b.bind("<Leave>", on_leave)
 
-        _build_tab_ids_unicos(tab_ids_unicos)
-        _build_tab_ids_excel(tab_ids_excel)
-        _build_tab_dependencias(tab_dependencias)
+        on_click(default_val)
 
-    frame_btn_dinamicos = Frame(testing_tab, bg=APP_BG_COLOR)
-    frame_btn_dinamicos.pack(fill="x", padx=20, pady=(10, 8))
-    Button(
-        frame_btn_dinamicos,
-        text=" IDs Dinámicos",
-        command=abrir_popup_ids_dinamicos,
-        bg=HEADER_BG_COLOR,
-        fg="black",
-        relief="flat",
-        font=("Segoe UI", 10, "bold"),
-        cursor="hand2",
-        padx=12,
-        pady=4,
-    ).pack(anchor="e")
+        sub_lbl = tk.Label(group_frame, text=(sub_texts.get(default_val, subtitle_text) if sub_texts else subtitle_text),
+                           font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", wraplength=180, justify="left")
+        sub_lbl.pack(anchor="w", pady=(3, 0))
+        return selected_val
 
-    Label(
-        frame_email,
-        text="Email:",
-        bg=APP_BG_COLOR,
-        fg="white",
-        width=10,
-        anchor="w",
-    ).pack(side=LEFT)
+    mercados_mode = make_pill_group(
+        row_config, "MERCADOS", "", ["Consecutivo", "Paralelo"], "consecutivo",
+        sub_texts={"consecutivo": "Un mercado a la vez (AR → BO → …)", "paralelo": "Todos los mercados a la vez"})
+    excels_mode = make_pill_group(
+        row_config, "EXCELS POR MERCADO", "", ["Consecutivo", "Paralelo"], "consecutivo",
+        sub_texts={"consecutivo": "Los Excels del mercado, uno tras otro", "paralelo": "Todos a la vez (solo browsers locales Chrome/FF/Edge)"},
+        on_change=lambda v: _refresh_excel_par_warning())
 
-    entry_email = Entry(frame_email, font=("Segoe UI", 10), width=50, textvariable=email_var)
-    entry_email.pack(side=LEFT, padx=5)
-    Label(frame_email, text="(varios emails separados por coma)",
-          font=("Segoe UI", 8), bg=APP_BG_COLOR, fg="#888").pack(side=LEFT)
+    # Dispositivos y Navegadores
+    disp_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
+    disp_frame.pack(side="left", anchor="n", padx=(0, 20))
 
-    def _persistir_email_destinatario(*_):
-        config = cargar_config_global()
-        config["email_destinatario"] = (email_var.get() or "").strip()
-        guardar_config_global(config)
+    disp_lbl = tk.Label(disp_frame, text="DISPOSITIVOS / NAVEGADORES", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
+    disp_lbl.pack(anchor="w", pady=(0, 3))
 
-    # Guardar cuando se sale del campo o cuando cambia (por ejemplo pegado)
-    entry_email.bind("<FocusOut>", _persistir_email_destinatario)
-    email_var.trace_add("write", _persistir_email_destinatario)
+    disp_btn_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    disp_btn_row.pack(anchor="w")
 
-    # === Opciones de email (persistentes) ===
-    frame_email_opts = Frame(frame_email_derecha, bg=APP_BG_COLOR)
-    frame_email_opts.pack(anchor="e", pady=(4, 2))
+    dispositivos = ["Chrome", "Firefox", "Edge", "Mac LT", "Android LT"]
+    selected_disp = {d.lower(): False for d in dispositivos}
+    selected_disp["chrome"] = True
+    disp_btns = {}
 
-    chk_enviar_mail = Checkbutton(
-        frame_email_opts,
-        text="Enviar mail",
-        variable=enviar_mail_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    )
-    chk_enviar_mail.pack(side=LEFT, padx=(0, 10))
+    status_lbl = tk.Label(disp_frame, text="1 dispositivo seleccionado.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF")
 
-    chk_adj_resultados = Checkbutton(
-        frame_email_opts,
-        text="Adjuntar resultados",
-        variable=adjuntar_resultados_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    )
-    chk_adj_resultados.pack(side=LEFT, padx=5)
-
-    chk_adj_screens = Checkbutton(
-        frame_email_opts,
-        text="Adjuntar screenshots",
-        variable=adjuntar_screenshots_var,
-        bg=APP_BG_COLOR,
-        fg="white",
-        activebackground=APP_BG_COLOR,
-        activeforeground="white",
-        selectcolor=APP_BG_COLOR,
-    )
-    chk_adj_screens.pack(side=LEFT, padx=5)
-
-    # Modo de envío: un email por país vs. uno consolidado al final
-    frame_email_modo = Frame(frame_email_derecha, bg=APP_BG_COLOR)
-    frame_email_modo.pack(anchor="e", pady=(2, 0))
-    Label(frame_email_modo, text="Modo email:", bg=APP_BG_COLOR, fg="white",
-          font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 4))
-    rb_por_pais = Radiobutton(frame_email_modo, text="1 por país", variable=email_modo_var,
-                value="por_pais", bg=APP_BG_COLOR, fg="white",
-                activebackground=APP_BG_COLOR, activeforeground="white",
-                selectcolor=APP_BG_COLOR, font=("Segoe UI", 9))
-    rb_por_pais.pack(side=LEFT)
-    rb_consolidado = Radiobutton(frame_email_modo, text="Consolidado al final", variable=email_modo_var,
-                value="consolidado", bg=APP_BG_COLOR, fg="white",
-                activebackground=APP_BG_COLOR, activeforeground="white",
-                selectcolor=APP_BG_COLOR, font=("Segoe UI", 9))
-    rb_consolidado.pack(side=LEFT, padx=(6, 0))
-
-    def _persistir_opciones_email(*_):
-        cfg = cargar_config_global()
-        cfg["enviar_mail"] = bool(enviar_mail_var.get())  # sincroniza archivo con checkbox
-        cfg["adjuntar_resultados"] = bool(adjuntar_resultados_var.get())
-        cfg["adjuntar_screenshots"] = bool(adjuntar_screenshots_var.get())
-
-        # Guardar prefs de UI (browser, viewport, modo browser, modo email)
-        navs = [n for n, v in [
-            ("chrome", chrome_var), ("firefox", firefox_var), ("edge", edge_var),
-            ("lambdatest_mac", lt_mac_var), ("lambdatest_android", lt_android_var),
-        ] if v.get()]
-        vps = [vp for vp, v in [
-            ("fullscreen", desktop_var), ("600x738", mobile_var),
-        ] if v.get()]
-        cfg["ui_prefs"] = {
-            "navegadores": navs if navs else ["chrome"],
-            "viewports": vps if vps else ["fullscreen"],
-            "visible_browser": bool(visible_browser_var.get()),
-            "email_modo": email_modo_var.get(),
-        }
-        guardar_config_global(cfg)
-
-        estado = "normal" if enviar_mail_var.get() else "disabled"
-        entry_email.config(state=estado)
-        chk_adj_resultados.config(state=estado)
-        chk_adj_screens.config(state=estado)
-        rb_por_pais.config(state=estado)
-        rb_consolidado.config(state=estado)
-
-    for _var in (enviar_mail_var, adjuntar_resultados_var, adjuntar_screenshots_var,
-                 chrome_var, firefox_var, edge_var, lt_mac_var, lt_android_var,
-                 desktop_var, mobile_var, visible_browser_var, email_modo_var):
-        _var.trace_add("write", _persistir_opciones_email)
-    _persistir_opciones_email()
-
-    # === Estado de envío de email (muestra ⏳ / ✅ / ❌ en tiempo real) ===
-    email_status_var = StringVar(value="")
-    email_status_label = Label(
-        frame_email_derecha,
-        textvariable=email_status_var,
-        font=("Segoe UI", 9, "italic"),
-        bg=APP_BG_COLOR,
-        fg="#7FFF7F",
-        anchor="e",
-    )
-    email_status_label.pack(anchor="e", pady=(0, 2))
-
-    def _set_email_status(success, error_msg=""):
-        if success:
-            email_status_var.set("✅ Email enviado correctamente")
-            email_status_label.config(fg="#7FFF7F")
-        else:
-            email_status_var.set(f"❌ Error al enviar: {error_msg}")
-            email_status_label.config(fg="#FF7F7F")
-
-    from interface.helpers_interface import registrar_callback_ui_email
-
-    def _global_email_ui_handler(estado, err_msg):
-        def _update():
-            if estado == "pending":
-                email_status_var.set("⏳ Enviando email...")
-                email_status_label.config(fg="#FFFF99")
-            elif estado == "success":
-                _set_email_status(True)
-            else:
-                _set_email_status(False, err_msg)
-        root.after(0, _update)
-
-    registrar_callback_ui_email(_global_email_ui_handler)
-
-    #ttk.Separator(root, orient="horizontal", style="App.TSeparator").pack(fill="x", pady=10)
-
-    # === PREVISUALIZACIÓN DE LEADS ===
-    section_container = Frame(
-        testing_tab,
-        bg=SECTION_CONTAINER_BG_COLOR,
-        highlightthickness=0,
-        bd=0,
-    )
-    section_container.pack(fill="both", padx=20, pady=(10, 5))
-
-    section_frame = Frame(
-        section_container,
-        bg=SECTION_BG_COLOR,
-        highlightthickness=0,
-        bd=0,
-    )
-    section_frame.pack(fill="both", padx=4, pady=4)
-
-    Label(
-        section_frame,
-        text="Elija el país, tendrá una previsualización al Excel con la información del Lead.",
-        font=("Segoe UI", 11, "bold"),
-        bg=SECTION_BG_COLOR,
-        fg=PRIMARY_TEXT_COLOR,
-    ).pack(anchor="w", padx=12, pady=(12, 6))
-
-    # === SELECTOR DE MODO DE EJECUCIÓN ===
-    frame_selector = Frame(section_frame, bg=SECTION_BG_COLOR)
-    frame_selector.pack(fill="x", padx=10, pady=(0, 4))
-
-    Label(
-        frame_selector,
-        text="Modo de envío:",
-        font=("Segoe UI", 9, "bold"),
-        bg=SECTION_BG_COLOR,
-        fg="white",
-    ).pack(anchor="w", pady=(0, 4))
-
-    _lt_modo_var = StringVar(value="")
-
-    frame_modos = Frame(frame_selector, bg=SECTION_BG_COLOR)
-    frame_modos.pack(anchor="w")
-    _modo_dots = {}
-    for _modo_val, _modo_txt in [
-        ("consecutive", "Múltiples países (consecutivo por sesión)"),
-        ("parallel", "Múltiples países (en paralelo por sesión)"),
-    ]:
-        _rb = Frame(frame_modos, bg=SECTION_BG_COLOR, cursor="hand2")
-        _rb.pack(side=LEFT, padx=(0, 16))
-        _dot = Label(_rb, text="○", font=("Segoe UI", 10),
-                     bg=SECTION_BG_COLOR, fg="white", cursor="hand2")
-        _dot.pack(side=LEFT)
-        Label(_rb, text=_modo_txt, font=("Segoe UI", 9),
-              bg=SECTION_BG_COLOR, fg="white", cursor="hand2").pack(side=LEFT, padx=(3, 0))
-        _modo_dots[_modo_val] = _dot
-
-        def _on_modo_click(v=_modo_val):
-            _lt_modo_var.set(v)
-            for _v, _d in _modo_dots.items():
-                _d.config(text="●" if _v == v else "○")
-
-        for _w in _rb.winfo_children():
-            _w.bind("<Button-1>", lambda e, f=_on_modo_click: f())
-        _rb.bind("<Button-1>", lambda e, f=_on_modo_click: f())
-
-    # Contenedor dinámico de selectores de país
-    frame_seleccion_pais = Frame(frame_selector, bg=SECTION_BG_COLOR)
-    frame_seleccion_pais.pack(anchor="w", pady=(6, 0))
-
-    _paises_multi_vars = {}
-
-    def _actualizar_estado_btn_enviar(*_):
-        modo_ok = _lt_modo_var.get() != ""
-        paises_ok = any(v.get() for v in _paises_multi_vars.values())
-        btn_enviar_leads.config(state="normal" if (modo_ok and paises_ok) else "disabled")
-
-    def _render_pais_selector(*_):
-        for widget in frame_seleccion_pais.winfo_children():
-            widget.destroy()
-        _paises_multi_vars.clear()
-        _modo_ok = _lt_modo_var.get() != ""
-        for _col_idx, _pais_nombre in enumerate(MAPEO_PAISES.keys()):
-            _var = BooleanVar(value=False)
-            _paises_multi_vars[_pais_nombre] = _var
-            _var.trace_add("write", _actualizar_estado_btn_enviar)
-            Checkbutton(
-                frame_seleccion_pais,
-                text=_pais_nombre,
-                variable=_var,
-                state="normal" if _modo_ok else "disabled",
-                bg=SECTION_BG_COLOR,
-                fg="white",
-                activebackground=SECTION_BG_COLOR,
-                activeforeground="white",
-                selectcolor=SECTION_BG_COLOR,
-                disabledforeground="#9b7fc7",
-                font=("Segoe UI", 8),
-            ).grid(row=_col_idx // 5, column=_col_idx % 5, sticky="w", padx=6, pady=1)
-        _actualizar_estado_btn_enviar()
-
-    _lt_modo_var.trace_add("write", _render_pais_selector)
-    _lt_modo_var.trace_add("write", _actualizar_estado_btn_enviar)
-
-    def _ejecutar_envio():
-        from concurrent.futures import ThreadPoolExecutor
-
-        if _run_state["running"]:
-            messagebox.showwarning("En ejecución", "Ya hay una ejecución en curso.")
-            return
-
-        modo = _lt_modo_var.get()
-        navegadores = [b for b, v in [("chrome", chrome_var), ("firefox", firefox_var), ("edge", edge_var)] if v.get()]
-        viewports = [vp for vp, v in [("fullscreen", desktop_var), ("600x738", mobile_var)] if v.get()]
-        if not navegadores or not viewports:
-            messagebox.showwarning("Configuración", "Seleccioná al menos un navegador y un viewport.")
-            return
-
-        paises_sel = [p for p, v in _paises_multi_vars.items() if v.get()]
-        if not paises_sel:
-            messagebox.showwarning("Selección vacía", "Marcá al menos un país para ejecutar.")
-            return
-
-        stop_ev = threading.Event()
-        _run_state["stop_event"] = stop_ev
-        _init_overlay_countries(paises_sel)
-        _set_running(True)
-
-        _background = not visible_browser_var.get()
-        _consolidado = email_modo_var.get() == "consolidado"
-        _resultados_consolidado = []
-        _resultados_lock = threading.Lock()
-
-        def _run_combo(pais, nav, vp):
-            if stop_ev.is_set():
-                return
+    def _load_lt_creds():
+        path = os.path.join(BASE_DIR, "lambdatest_credentials.txt")
+        u = ak = ""
+        if os.path.exists(path):
             try:
-                run_func = _get_run_func(pais)
-                def _prog(done, total, _pais=pais):
-                    _update_progress(_pais, done=done, total=total, status="running")
-                def _email_cb(ev, _pais=pais):
-                    _update_progress(_pais, status="emailing" if ev == "sending" else ("email_ok" if ev == "ok" else "email_fail"))
-                formulario = run_func(
-                    browser=nav, viewport=vp, headless=False,
-                    background=_background,
-                    enviar_email=not _consolidado,
-                    progress_callback=_prog,
-                    email_callback=_email_cb,
-                    stop_event=stop_ev,
-                )
-                if _consolidado and formulario is not None:
-                    excel = getattr(formulario, "RESULTADOS_PATH", None)
-                    shots = getattr(formulario, "SCREENSHOT_DIR", None)
-                    if excel and os.path.exists(excel):
-                        with _resultados_lock:
-                            _resultados_consolidado.append({
-                                "pais": pais,
-                                "navegador": nav,
-                                "viewport": vp,
-                                "estado": "completado",
-                                "excel_path": excel,
-                                "screenshots_dir": shots,
-                            })
-            except Exception as exc:
-                print(f"Error ejecutando {pais} ({nav}/{vp}): {exc}")
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if "=" not in line or line.startswith("#"):
+                            continue
+                        k, v = line.split("=", 1)
+                        k = k.strip().lower()
+                        if k == "username":
+                            u = v.strip()
+                        elif k == "access_key":
+                            ak = v.strip()
+            except Exception:
+                pass
+        return u, ak
 
-        def _run_pais_con_browsers(pais):
-            _update_progress(pais, status="running")
-            browser_combos = [(nav, vp) for nav in navegadores for vp in viewports]
-            if len(browser_combos) <= 1:
-                if browser_combos:
-                    _run_combo(pais, *browser_combos[0])
-                if stop_ev.is_set():
-                    _update_progress(pais, status="stopped")
-                elif _consolidado:
-                    _update_progress(pais, status="done_ok")
-                return
-            with ThreadPoolExecutor(max_workers=len(browser_combos)) as ex:
-                for f in [ex.submit(_run_combo, pais, nav, vp) for nav, vp in browser_combos]:
-                    try:
-                        f.result()
-                    except Exception:
-                        pass
-            if stop_ev.is_set():
-                _update_progress(pais, status="stopped")
-            elif _consolidado:
-                _update_progress(pais, status="done_ok")
-
-        def _done():
-            _set_running(False)
-            if _consolidado and _resultados_consolidado:
-                from interface.helpers_interface import enviar_email_resultados_consolidados
-                threading.Thread(
-                    target=lambda: enviar_email_resultados_consolidados(_resultados_consolidado),
-                    daemon=True,
-                ).start()
-
-        if modo == "parallel":
-            def _run_parallel():
-                with ThreadPoolExecutor(max_workers=min(len(paises_sel), 9)) as ex:
-                    for f in [ex.submit(_run_pais_con_browsers, p) for p in paises_sel]:
-                        try:
-                            f.result()
-                        except Exception:
-                            pass
-                _done()
-            threading.Thread(target=_run_parallel, daemon=True).start()
+    def toggle_disp(name):
+        key = name.lower()
+        selected_disp[key] = not selected_disp[key]
+        btn = disp_btns[key]
+        if selected_disp[key]:
+            btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
         else:
-            def _run_sequential():
-                for pais in paises_sel:
-                    if stop_ev.is_set():
-                        break
-                    _run_pais_con_browsers(pais)
-                _done()
-            threading.Thread(target=_run_sequential, daemon=True).start()
+            btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=1, highlightbackground=BUTTON_INACTIVE)
+        
+        # Panel LT dinámico
+        if selected_disp["mac lt"] or selected_disp["android lt"]:
+            # Recargar credenciales desde el archivo cuando se selecciona mac o android
+            u, ak = _load_lt_creds()
+            lt_user_ent.delete(0, tk.END)
+            lt_user_ent.insert(0, u)
+            lt_key_ent.delete(0, tk.END)
+            lt_key_ent.insert(0, ak)
+            lt_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
+        else:
+            lt_creds_frame.pack_forget()
+            
+        count = sum(1 for v in selected_disp.values() if v)
+        status_lbl.config(text=f"{count} dispositivo{'s' if count != 1 else ''} seleccionado{'s' if count != 1 else ''}.")
+        actualizar_warning()
+        try:
+            _refresh_excel_par_warning()
+        except Exception:
+            pass
 
-    # Botón "Enviar Leads" unificado (blanco/negro, disabled hasta selección)
-    btn_enviar_leads = ttk.Button(
-        frame_selector,
-        text="Enviar Leads",
-        command=_ejecutar_envio,
-        style="EnviarLeads.TButton",
-        state="disabled",
-    )
-    btn_enviar_leads.pack(anchor="w", pady=(10, 4))
-    _run_state["enviar_btn"] = btn_enviar_leads
+        refresh_ver_nav_state()
 
-    # Renderizar selector inicial
-    _render_pais_selector()
+    for disp in dispositivos:
+        d_key = disp.lower()
+        init_bg = BUTTON_ACTIVE if d_key == "chrome" else BUTTON_INACTIVE
+        init_fg = "white" if d_key == "chrome" else TEXT_SECONDARY
+        init_hb = ACCENT_COLOR if d_key == "chrome" else BUTTON_INACTIVE
+        
+        b = tk.Button(disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
+                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                      highlightthickness=1, highlightbackground=init_hb,
+                      padx=10, pady=4, cursor="hand2")
+        b.pack(side="left", padx=2)
+        disp_btns[d_key] = b
+        b.config(command=lambda n=disp: toggle_disp(n))
 
-    # === SECCIÓN DE BOTONES POR PAÍS ===
-    tabs_container = Frame(section_frame, bg=SECTION_BG_COLOR)
-    tabs_container.pack(fill="x", padx=10, pady=(0, 12))
+        def make_disp_hover(btn=b, k=d_key):
+            def on_enter(e):
+                if not selected_disp[k]:
+                    btn.config(bg=BUTTON_HOVER)
+            def on_leave(e):
+                if not selected_disp[k]:
+                    btn.config(bg=BUTTON_INACTIVE)
+            btn.bind("<Enter>", on_enter)
+            btn.bind("<Leave>", on_leave)
+        make_disp_hover()
 
-    notebook = ttk.Notebook(tabs_container, style="Section.TNotebook")
-    notebook.pack(fill="x", expand=True)
+    status_lbl.pack(anchor="w", pady=(3, 0))
 
-    btn_resultados = ttk.Button(
-        section_container,
-        text="Resultados",
-        style="Results.TButton",
-        command=abrir_carpeta_resultados,
-    )
-    btn_resultados.place(in_=tabs_container, relx=1.0, x=-4, y=0, anchor="ne")
-    # Definición de países y sus scripts
-    paises = [
-        {
-            "nombre": "Argentina",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Argentina_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Bolivia",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Bolivia_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Brasil",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Brasil_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Chile",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Chile_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Colombia",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Colombia_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Ecuador",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Ecuador_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Paraguay",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Paraguay_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Peru",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Peru_Main.py"},
-            ]
-        },
-        {
-            "nombre": "Uruguay",
-            "scripts": [
-                {"texto": "Completar Formularios", "script": "Formulario_Uruguay_Main.py"},
-            ]
-        }
+    # "Ver navegador" y "Minimizar a la bandeja al cerrar" viven en Configuración
+    # avanzada (botón "Configurar"). Acá sólo quedan las variables persistentes.
+
+    def _persistir_prefs(*_):
+        try:
+            cfg = cargar_config_global()
+            if "ui_prefs" not in cfg:
+                cfg["ui_prefs"] = {}
+            cfg["ui_prefs"]["visible_browser"] = bool(var_ver_navegador.get())
+            cfg["ui_prefs"]["minimizar_a_bandeja"] = bool(var_minimizar_a_bandeja.get())
+            guardar_config_global(cfg)
+        except Exception:
+            pass
+
+    var_ver_navegador.trace_add("write", _persistir_prefs)
+    var_minimizar_a_bandeja.trace_add("write", _persistir_prefs)
+
+    # Enviar en paralelo POR URL: una sesión (navegador) por URL, todas en simultáneo
+    var_url_parallel = tk.BooleanVar(value=False)
+    url_max_var = tk.StringVar(value="6")
+    url_par_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    url_par_row.pack(anchor="w", pady=(2, 0))
+    cb_url_par = tk.Checkbutton(url_par_row, text="⚡ Enviar en paralelo por URL (una sesión por URL)", variable=var_url_parallel,
+                                bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                                activebackground=CARD_BG_COLOR, activeforeground="white",
+                                font=("Segoe UI", 8), cursor="hand2")
+    cb_url_par.pack(side="left")
+    tk.Label(url_par_row, text="máx. simultáneas:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left", padx=(10, 4))
+    tk.Entry(url_par_row, textvariable=url_max_var, width=4, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white",
+             bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, justify="center").pack(side="left", ipady=1)
+
+    # Formularios T3 2.0 (Adobe AEM): usa los Excels con nombre …_T3.xlsx
+    var_t3 = tk.BooleanVar(value=False)
+    t3_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    t3_row.pack(anchor="w", pady=(2, 0))
+    tk.Checkbutton(t3_row, text="🧩 Formularios T3 2.0 (usa los Excels …_T3)", variable=var_t3,
+                   command=lambda: update_table_data(active_p_tab[0]),
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2").pack(side="left")
+
+    def refresh_ver_nav_state():
+        # "Ver navegador" sólo aplica a browsers de escritorio (chrome/firefox/edge).
+        # Si no hay ninguno seleccionado, se fuerza apagado (el checkbox está en Config avanzada).
+        if not any(selected_disp.get(b) for b in ("chrome", "firefox", "edge")):
+            var_ver_navegador.set(False)
+    refresh_ver_nav_state()
+
+    # Disclaimer dinámico: "Excels en paralelo" no aplica a LambdaTest.
+    excel_par_warn_lbl = tk.Label(config_card, text="", font=("Segoe UI", 8, "bold"),
+                                  bg=CARD_BG_COLOR, fg=WARN_TEXT, wraplength=760, justify="left")
+    excel_par_warn_lbl.pack(anchor="w", padx=15, pady=(2, 0))
+
+    def _refresh_excel_par_warning(*_):
+        try:
+            _lt_sel = bool(selected_disp.get("mac lt") or selected_disp.get("android lt"))
+            _par = (excels_mode[0] == "paralelo")
+        except Exception:
+            return
+        if _par and _lt_sel:
+            excel_par_warn_lbl.config(
+                text="⚠ 'Excels en paralelo' NO aplica a LambdaTest (Mac/Android): esos dispositivos se "
+                     "ejecutan igual de forma consecutiva. El paralelo sólo acelera los browsers locales "
+                     "(Chrome/Firefox/Edge).")
+        else:
+            excel_par_warn_lbl.config(text="")
+    _refresh_excel_par_warning()
+
+    # CREDENCIALES LAMBDATEST INLINE
+    lt_creds_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
+    lt_creds_frame.pack_forget()
+
+    tk.Label(lt_creds_frame, text="CREDENCIALES LT", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, columnspan=3, sticky="w")
+    
+    tk.Label(lt_creds_frame, text="User:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=1, column=0, sticky="w", pady=1)
+    lt_user_ent = tk.Entry(lt_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28)
+    lt_user_ent.grid(row=1, column=1, sticky="w", padx=4, pady=1)
+    # Cargar credenciales al inicializar
+    _u_init, _ak_init = _load_lt_creds()
+    lt_user_ent.insert(0, _u_init)
+
+    tk.Label(lt_creds_frame, text="Key:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=2, column=0, sticky="w", pady=1)
+    lt_key_ent = tk.Entry(lt_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28, show="*")
+    lt_key_ent.grid(row=2, column=1, sticky="w", padx=4, pady=1)
+    lt_key_ent.insert(0, _ak_init)
+
+    # CTA de guardado de credenciales LambdaTest
+    def _save_lt_creds():
+        user_val = lt_user_ent.get().strip()
+        key_val = lt_key_ent.get().strip()
+        path = os.path.join(BASE_DIR, "lambdatest_credentials.txt")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(f"username={user_val}\n")
+                f.write(f"access_key={key_val}\n")
+            messagebox.showinfo("LambdaTest", "✓ Credenciales de LambdaTest guardadas con éxito en lambdatest_credentials.txt")
+            log_message("[INFO] Credenciales de LambdaTest actualizadas en lambdatest_credentials.txt.")
+        except Exception as e:
+            messagebox.showerror("LambdaTest", f"Error al guardar credenciales:\n{e}")
+    
+    lt_save_btn = make_icon_btn(lt_creds_frame, "💾 Guardar", TEXT_SAVE, command=_save_lt_creds, pack_btn=False)
+    lt_save_btn.grid(row=1, column=2, rowspan=2, padx=6, pady=1, sticky="ns")
+
+    # ADVERTENCIA DINÁMICA DE MÚLTIPLES DISPOSITIVOS (Figma Style)
+    warning_box = tk.Frame(config_card, bg=WARN_BG, bd=1, highlightthickness=1, highlightbackground=WARN_BORDER)
+    warning_box.pack_forget()
+
+    warn_lbl = tk.Label(warning_box, text="⚠ Cuidado. Si corrés el mismo form en varios navegadores o dispositivos, cada uno necesita datos únicos — de lo contrario los leads pueden rechazarse o duplicarse.",
+                        font=("Segoe UI", 8, "bold"), bg=WARN_BG, fg=WARN_TEXT, justify="left")
+    warn_lbl.pack(side="left", padx=12, pady=6)
+
+    warn_cta = tk.Button(warning_box, text="Ir a Generar Excels ➜", font=("Segoe UI", 8, "bold"), bg=WARN_BG, fg=WARN_TEXT,
+                         relief="flat", bd=0, highlightthickness=1, highlightbackground=WARN_BORDER, padx=10, pady=2, cursor="hand2", command=lambda: switch_tab("excel"))
+    warn_cta.pack(side="right", padx=12, pady=6)
+
+    _WARN_SHARED = ("⚠ Modo Excel compartido activo: TODOS los dispositivos usan el mismo Excel genérico "
+                    "(los mismos datos). Los leads pueden duplicarse o rechazarse. Cambiá el modo con la ⚙.")
+
+    def actualizar_warning():
+        # El warning solo aplica al modo compartido (mismos datos → riesgo de duplicados).
+        # En modo por-dispositivo cada Excel tiene datos únicos, así que no se muestra.
+        if excel_mode_holder[0] == "compartido":
+            warn_lbl.config(text=_WARN_SHARED)
+            warning_box.pack(fill="x", padx=15, pady=(8, 0), before=row_config)
+        else:
+            warning_box.pack_forget()
+
+    def abrir_config_avanzada():
+        win = tk.Toplevel(root)
+        win.title("Configuración avanzada")
+        win.configure(bg=CARD_BG_COLOR)
+        win.transient(root)
+        win.resizable(False, False)
+        w, h = 560, 480
+        px = root.winfo_rootx() + (root.winfo_width() - w) // 2
+        py = root.winfo_rooty() + (root.winfo_height() - h) // 2
+        win.geometry(f"{w}x{h}+{max(px,0)}+{max(py,0)}")
+
+        tk.Label(win, text="⚙  Configuración avanzada", font=("Segoe UI", 13, "bold"),
+                 bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w", padx=18, pady=(16, 2))
+        tk.Label(win, text="Opciones que no forman parte de la pantalla principal.",
+                 font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18, pady=(0, 12))
+
+        tk.Label(win, text="EXCEL POR DISPOSITIVO", font=("Segoe UI", 9, "bold"),
+                 bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18)
+
+        mode_var = tk.StringVar(value=excel_mode_holder[0])
+        opts_frame = tk.Frame(win, bg=CARD_BG_COLOR)
+        opts_frame.pack(fill="x", padx=18, pady=(6, 0))
+
+        tk.Radiobutton(opts_frame, variable=mode_var, value="por_dispositivo",
+                       text="Un Excel por dispositivo (recomendado)",
+                       font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
+                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR,
+                       activeforeground=TEXT_PRIMARY, anchor="w").pack(anchor="w", pady=2)
+        tk.Label(opts_frame, text="Cada dispositivo usa su propio Excel con datos únicos (…_Chrome/_Firefox/_Edge/_Mac/_Android.xlsx).",
+                 font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, wraplength=500, justify="left").pack(anchor="w", padx=(24, 0), pady=(0, 8))
+
+        tk.Radiobutton(opts_frame, variable=mode_var, value="compartido",
+                       text="Un Excel compartido para todos los dispositivos",
+                       font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
+                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR,
+                       activeforeground=TEXT_PRIMARY, anchor="w").pack(anchor="w", pady=2)
+        tk.Label(opts_frame, text="Todos los dispositivos (incluido LambdaTest) corren los MISMOS datos desde un único Excel genérico (…_Generico.xlsx).",
+                 font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, wraplength=500, justify="left").pack(anchor="w", padx=(24, 0), pady=(0, 4))
+
+        disc = tk.Label(win, text="⚠ Al compartir los mismos datos, los leads pueden duplicarse o ser rechazados por el formulario.",
+                        font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=WARN_TEXT, wraplength=500, justify="left")
+        disc.pack(anchor="w", padx=18, pady=(6, 0))
+
+        # ── Comportamiento de la app ────────────────────────────────────────────
+        tk.Label(win, text="COMPORTAMIENTO DE LA APP", font=("Segoe UI", 9, "bold"),
+                 bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18, pady=(14, 4))
+        beh_frame = tk.Frame(win, bg=CARD_BG_COLOR)
+        beh_frame.pack(fill="x", padx=18)
+        tk.Checkbutton(beh_frame, text="Ver navegador mientras corre  (solo Chrome / Firefox / Edge)",
+                       variable=var_ver_navegador, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
+                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
+                       anchor="w").pack(anchor="w", pady=2)
+        tk.Checkbutton(beh_frame, text="Minimizar a la bandeja al cerrar (en vez de cerrar el programa)",
+                       variable=var_minimizar_a_bandeja, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
+                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
+                       anchor="w").pack(anchor="w", pady=2)
+
+        btns = tk.Frame(win, bg=CARD_BG_COLOR)
+        btns.pack(side="bottom", fill="x", padx=18, pady=14)
+
+        def _guardar():
+            nuevo = mode_var.get()
+            excel_mode_holder[0] = nuevo
+            try:
+                _cfg = cargar_config_global() or {}
+                _cfg["excel_mode"] = nuevo
+                guardar_config_global(_cfg)
+            except Exception:
+                pass
+            actualizar_warning()
+            try:
+                update_excel_calculation()
+            except Exception:
+                pass
+            win.destroy()
+
+        tk.Button(btns, text="Guardar", font=("Segoe UI", 9, "bold"), bg=SAVE_BG, fg=SAVE_FG,
+                  activebackground=SAVE_HOVER, activeforeground=SAVE_FG,
+                  relief="flat", bd=0, padx=18, pady=6, cursor="hand2", command=_guardar).pack(side="right")
+        tk.Button(btns, text="Cancelar", font=("Segoe UI", 9), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                  relief="flat", bd=0, padx=14, pady=6, cursor="hand2", command=win.destroy).pack(side="right", padx=(0, 8))
+
+    actualizar_warning()  # reflejar el modo persistido al abrir la app
+
+    # --- 2. PAÍSES A EJECUTAR (Card Panel) ---
+    paises_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    paises_card.pack(fill="x", pady=(0, 8), ipady=5)
+
+    p_header = tk.Frame(paises_card, bg=CARD_BG_COLOR)
+    p_header.pack(fill="x", padx=15, pady=(6, 4))
+    
+    tk.Label(p_header, text="🌐 PAÍSES A EJECUTAR", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
+
+    paises_list = ["Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "Paraguay", "Peru", "Uruguay"]
+    p_codes = {"Argentina": "AR", "Bolivia": "BO", "Brasil": "BR", "Chile": "CL", "Colombia": "CO", "Ecuador": "EC", "Paraguay": "PY", "Peru": "PE", "Uruguay": "UY"}
+    selected_countries = {p: False for p in paises_list}
+    country_cards = {}
+    country_labels = {}
+
+    counter_lbl = tk.Label(p_header, text="0 seleccionados", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
+    counter_lbl.pack(side="right", padx=(10, 0))
+
+    tk.Label(paises_card, text="Elegí el o los países que querés ejecutar.",
+             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 4))
+
+    def update_country_counter():
+        count = sum(1 for v in selected_countries.values() if v)
+        counter_lbl.config(text=f"{count} seleccionados")
+
+    def toggle_country(name):
+        selected_countries[name] = not selected_countries[name]
+        card = country_cards[name]
+        c_lbl = country_labels[name]
+        if selected_countries[name]:
+            card.config(highlightbackground=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+            c_lbl.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+        else:
+            card.config(highlightbackground=BORDER_COLOR, bg=CARD_BG_COLOR)
+            c_lbl.config(fg="white", bg=CARD_BG_COLOR)
+        update_country_counter()
+        refresh_execute_state()
+
+    grid_frame = tk.Frame(paises_card, bg=CARD_BG_COLOR)
+    grid_frame.pack(fill="x", padx=15, pady=2)
+
+    for idx, pais in enumerate(paises_list):
+        code = p_codes[pais]
+        card = tk.Frame(grid_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, cursor="hand2")
+        card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
+        grid_frame.columnconfigure(idx % 9, weight=1)
+
+        code_lbl = tk.Label(card, text=code, font=("Segoe UI", 11, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, cursor="hand2")
+        code_lbl.pack(pady=(5, 1))
+        
+        name_lbl = tk.Label(card, text=pais, font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+        name_lbl.pack(pady=(0, 5))
+
+        country_cards[pais] = card
+        country_labels[pais] = name_lbl
+
+        def bind_click(w, p=pais):
+            w.bind("<Button-1>", lambda e: toggle_country(p))
+        bind_click(card)
+        bind_click(code_lbl)
+        bind_click(name_lbl)
+
+    links_frame = tk.Frame(paises_card, bg=CARD_BG_COLOR)
+    links_frame.pack(fill="x", padx=15, pady=(2, 2))
+
+    def select_all_countries():
+        for p in paises_list:
+            if not selected_countries[p]:
+                toggle_country(p)
+    def select_none_countries():
+        for p in paises_list:
+            if selected_countries[p]:
+                toggle_country(p)
+
+    all_btn = tk.Label(links_frame, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+    all_btn.pack(side="left")
+    all_btn.bind("<Button-1>", lambda e: select_all_countries())
+
+    none_btn = tk.Label(links_frame, text="Ninguno", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+    none_btn.pack(side="left", padx=12)
+    none_btn.bind("<Button-1>", lambda e: select_none_countries())
+
+    # --- 3. PROGRAMACIÓN SEMANAL / TEST AUTOMÁTICO (Card Panel — fondo distinto para resaltar) ---
+    SCHED_BG = "#3B1E5E"      # Morado un poco más azulado/oscuro que las demás cards
+    SCHED_BORDER = "#8B5FB5"  # Borde más visible
+    scheduler_scroll_frame = make_scrollable_tab_container(tabs["scheduler"])
+
+    programacion_card = tk.Frame(scheduler_scroll_frame, bg=SCHED_BG, bd=0, highlightthickness=1, highlightbackground=SCHED_BORDER)
+    programacion_card.pack(fill="x", padx=20, pady=(20, 10), ipady=5)
+
+    left_col = tk.Frame(programacion_card, bg=SCHED_BG)
+    left_col.pack(side="left", fill="both", expand=True, padx=(15, 10), pady=10)
+
+    right_col = tk.Frame(programacion_card, bg=SCHED_BG)
+    right_col.pack(side="right", fill="both", expand=True, padx=(10, 15), pady=10)
+
+    # --- Columna Izquierda ---
+    tk.Label(left_col, text="📅 PROGRAMACIÓN DE TEST AUTOMÁTICO", font=("Segoe UI", 9, "bold"), bg=SCHED_BG, fg=TEXT_SECONDARY).pack(anchor="w", pady=(0, 10))
+
+    prog_btns = tk.Frame(left_col, bg=SCHED_BG)
+
+    # --- Columna Derecha ---
+    header_ctas = tk.Frame(right_col, bg=SCHED_BG)
+    header_ctas.pack(fill="x", pady=(0, 6))
+
+    prog_badge = tk.Label(header_ctas, text="", font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, padx=10, pady=2)
+    prog_badge.pack(side="right")
+
+    btn_config_prog = tk.Button(header_ctas, text=" Configurar automatización", image=get_button_icon("gear_white.png"), compound="left",
+                                font=("Segoe UI", 8, "bold"),
+                                bg=BUTTON_ACTIVE, fg="white", relief="flat", bd=0, activebackground=BUTTON_HOVER,
+                                activeforeground="white", padx=12, pady=3, cursor="hand2",
+                                command=lambda: toggle_scheduler_config())
+    btn_config_prog.pack(side="right", padx=(0, 8))
+    btn_config_prog.bind("<Enter>", lambda e: btn_config_prog.config(bg=BUTTON_HOVER))
+    btn_config_prog.bind("<Leave>", lambda e: btn_config_prog.config(bg=BUTTON_ACTIVE))
+
+    prog_hint = tk.Label(right_col,
+                         text="📖  Guía de inicio rápido:\n"
+                              "① Definí el modo de Mercados y los Dispositivos abajo.  "
+                              "② Clic en “Configurar automatización” (arriba) para definir días, horarios y países.  "
+                              "③ Clic en “Programar test automático” (al final) para activar la tarea en background.\n"
+                              "💡 El test programado lee automáticamente los archivos Excel correspondientes a los dispositivos seleccionados.",
+                         font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF", justify="left", anchor="w", wraplength=480)
+    prog_hint.pack(anchor="w", pady=(2, 6))
+
+    prog_body = tk.Frame(right_col, bg=SCHED_BG)
+    prog_body.pack(fill="x", pady=2)
+
+    prog_desc = tk.Label(prog_body, text="", font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF",
+                         justify="left", anchor="w", wraplength=480)
+    prog_desc.pack(side="left", fill="x", expand=True)
+
+
+    prog_state = {"mode": "sin_config"}   # sin_config | configurado | activado
+    scheduler_cfg = {"horarios": {}, "paises": [], "dispositivo": "local", "modo_excel": "consecutivo", "navegadores": ["chrome"]}
+
+    sched_mode_btns = {}
+    sched_navs_btns = {}
+
+    def select_sched_mode(val):
+        scheduler_cfg["modo_excel"] = val
+        _refresh_sched_config_ui()
+        _refresh_prog()
+
+    def toggle_sched_nav(val):
+        cur_disp = scheduler_cfg.get("dispositivo", "local")
+        cur_navs = list(scheduler_cfg.get("navegadores", ["chrome"]))
+
+        if val == "lambdatest_mac":
+            scheduler_cfg["dispositivo"] = "lambdatest_mac"
+            scheduler_cfg["navegadores"] = ["lambdatest_mac"]
+        elif val == "lambdatest_android":
+            scheduler_cfg["dispositivo"] = "lambdatest_android"
+            scheduler_cfg["navegadores"] = ["lambdatest_android"]
+        else:  # local chrome/firefox/edge
+            if cur_disp in ("lambdatest_android", "lambdatest_mac"):
+                scheduler_cfg["dispositivo"] = "local"
+                scheduler_cfg["navegadores"] = [val]
+            else:
+                if val in cur_navs:
+                    if len(cur_navs) > 1:
+                        cur_navs.remove(val)
+                else:
+                    cur_navs.append(val)
+                scheduler_cfg["navegadores"] = [n for n in cur_navs if n in ("chrome", "firefox", "edge")]
+
+        _refresh_sched_config_ui()
+        _refresh_prog()
+
+    def _refresh_sched_config_ui():
+        cur_disp = scheduler_cfg.get("dispositivo", "local")
+        cur_mode = scheduler_cfg.get("modo_excel", "consecutivo")
+        cur_navs = scheduler_cfg.get("navegadores", ["chrome"])
+
+        # 1. Botones de mercados
+        is_lt = cur_disp in ("lambdatest_android", "lambdatest_mac")
+        for m_key, btn in sched_mode_btns.items():
+            btn.config(state="normal", cursor="hand2")
+            if m_key == cur_mode:
+                btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
+            else:
+                btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=0)
+
+        # 2. Botones de navegadores / dispositivos
+        for n_key, btn in sched_navs_btns.items():
+            if n_key in cur_navs:
+                btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
+            else:
+                btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=0)
+
+        if is_lt:
+            sched_warning_lbl.config(text="⚠️ Si corrés en paralelo con LambdaTest, asegurate de que tu plan soporte suficientes sesiones concurrentes.")
+            sched_warning_lbl.pack(fill="x", pady=(4, 0))
+        else:
+            sched_warning_lbl.pack_forget()
+
+    prog_config = tk.Frame(left_col, bg=SCHED_BG)
+    prog_config.pack(fill="x", pady=(4, 6))
+
+    # Columna 1: MERCADOS (Consecutivo / Paralelo)
+    col_merc = tk.Frame(prog_config, bg=SCHED_BG)
+    col_merc.pack(side="left", padx=(0, 40), anchor="n")
+    tk.Label(col_merc, text="MERCADOS", font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg=TEXT_SECONDARY).pack(anchor="w", pady=(0, 2))
+    merc_btn_row = tk.Frame(col_merc, bg=SCHED_BG)
+    merc_btn_row.pack(anchor="w")
+
+    # Columna 2: DISPOSITIVOS / NAVEGADORES (Chrome, Firefox, Edge, Mac LT, Android LT)
+    col_navs = tk.Frame(prog_config, bg=SCHED_BG)
+    col_navs.pack(side="left", anchor="n")
+    tk.Label(col_navs, text="DISPOSITIVOS / NAVEGADORES", font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg=TEXT_SECONDARY).pack(anchor="w", pady=(0, 2))
+    navs_btn_row = tk.Frame(col_navs, bg=SCHED_BG)
+    navs_btn_row.pack(anchor="w")
+
+    prog_btns.pack(fill="x", pady=(10, 0))
+
+    sched_warning_lbl = tk.Label(right_col, text="", font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#F8C471", justify="left")
+
+    _mode_opts = [
+        ("Consecutivo", "consecutivo"),
+        ("Paralelo", "paralelo")
     ]
+    for opt_txt, opt_val in _mode_opts:
+        b = tk.Button(merc_btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                      padx=12, pady=4, cursor="hand2")
+        b.pack(side="left", padx=2)
+        b.config(command=lambda val=opt_val: select_sched_mode(val))
+        sched_mode_btns[opt_val] = b
 
-    # Recolectar loaders para auto-refresh al cambiar de pestaña
-    _excel_reloaders = []
+    _nav_opts = [
+        ("Chrome", "chrome"),
+        ("Firefox", "firefox"),
+        ("Edge", "edge"),
+        ("Mac LT", "lambdatest_mac"),
+        ("Android LT", "lambdatest_android")
+    ]
+    for opt_txt, opt_val in _nav_opts:
+        b = tk.Button(navs_btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                      padx=12, pady=4, cursor="hand2")
+        b.pack(side="left", padx=2)
+        b.config(command=lambda val=opt_val: toggle_sched_nav(val))
+        sched_navs_btns[opt_val] = b
 
-    # Crear pestañas para cada país
-    for pais in paises:
-        frame_pais = Frame(notebook, bg=SECTION_BG_COLOR)
-        notebook.add(frame_pais, text=pais["nombre"])
-        
-        # Configurar grid para expansión
-        frame_pais.grid_rowconfigure(2, weight=1)
-        frame_pais.grid_columnconfigure(0, weight=1)
-        frame_pais.grid_columnconfigure(1, weight=1)
-                    
-        # Área de tabla para mostrar/editar el Excel (una sola por pestaña)
-        frame_tabla = Frame(
-            frame_pais,
-            bg=SECTION_BG_COLOR,
-            highlightthickness=0,
-            bd=0,
-        )
-        frame_tabla.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
-        
-        # Frame para controles de tabla - NUEVA ESTRUCTURA
-        frame_controles = Frame(frame_tabla, bg=SECTION_BG_COLOR)
-        frame_controles.pack(fill="x", pady=5)
 
-        # Contenedor para botones de la izquierda (operaciones de tabla)
-        frame_botones_izquierda = Frame(frame_controles, bg=SECTION_BG_COLOR)
-        frame_botones_izquierda.pack(side=LEFT)
 
-        # Contenedor para botones de la derecha (Excel y Formularios)
-        frame_botones_derecha = Frame(frame_controles, bg=SECTION_BG_COLOR)
-        frame_botones_derecha.pack(side=RIGHT)
+    def _sched_summary():
+        dias = len([d for d, h in scheduler_cfg["horarios"].items() if h])
+        total = sum(len(v) for v in scheduler_cfg["horarios"].values())
+        return dias, total, len(scheduler_cfg["paises"])
 
-        # Botones para controlar la tabla (IZQUIERDA)
-        btn_agregar_fila = ttk.Button(
-            frame_botones_izquierda,
-            text="Agregar Fila",
-            command=lambda tw=None: agregar_fila(tw) if tw else None,
-            style="Section.TButton",
-        )
-        btn_agregar_fila.pack(side=LEFT, padx=5)
+    def _mk_prog_btn(text, cmd, bg, fg, hover, icon=None):
+        b = tk.Button(prog_btns, text=text, font=("Segoe UI", 8, "bold"), bg=bg, fg=fg, relief="flat", bd=0,
+                      activebackground=hover, activeforeground=fg, padx=12, pady=4, cursor="hand2", command=cmd)
+        img = get_button_icon(icon) if icon else None
+        if img:
+            b.config(image=img, compound="left")
+        b.bind("<Enter>", lambda e: b.config(bg=hover) if str(b["state"]) == "normal" else None)
+        b.bind("<Leave>", lambda e: b.config(bg=bg) if str(b["state"]) == "normal" else None)
+        return b
+    def _refresh_prog():
+        for w in prog_btns.winfo_children():
+            w.destroy()
+        for w in prog_body.winfo_children():
+            w.destroy()
+        dias, total, n_p = _sched_summary()
+        configured = total > 0 and n_p > 0
+        if prog_state["mode"] != "activado":
+            prog_state["mode"] = "configurado" if configured else "sin_config"
 
-        btn_eliminar_fila = ttk.Button(
-            frame_botones_izquierda,
-            text="Eliminar Fila",
-            command=lambda tw=None: eliminar_fila(tw) if tw else None,
-            style="Section.TButton",
-        )
-        btn_eliminar_fila.pack(side=LEFT, padx=5)
+        if prog_state["mode"] == "activado":
+            prog_badge.config(text="✓ Activado", bg=EXECUTE_BG, fg=EXECUTE_FG)
+        elif configured:
+            prog_badge.config(text="⚙ Configurado", bg=BORDER_COLOR, fg=TEXT_PRIMARY)
+        else:
+            prog_badge.config(text="🕐 Sin configurar", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
 
-        # Botón para clonar fila
-        btn_clonar_fila = ttk.Button(
-            frame_botones_izquierda,
-            text="Clonar Fila",
-            command=lambda tw=None: clonar_fila(tw) if tw else None,
-            style="Section.TButton",
-        )
-        btn_clonar_fila.pack(side=LEFT, padx=5)
+        if configured:
+            # Título de estado
+            title_txt = "📅 Programado en background:" if prog_state["mode"] == "activado" else "⚙️ Configuración lista:"
+            tk.Label(prog_body, text=title_txt, font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg="white").pack(anchor="w", pady=(0, 4))
 
-        btn_actualizar_tabla = ttk.Button(
-            frame_botones_izquierda,
-            text="Actualizar",
-            command=lambda n=None, tw=None, ce=None: cargar_excel_a_tabla(n, tw, ce) if n and tw else None,
-            style="Section.TButton",
-        )
-        btn_actualizar_tabla.pack(side=LEFT, padx=5)
+            # Contenedor para los horarios individuales (vertical)
+            hours_frame = tk.Frame(prog_body, bg=SCHED_BG)
+            hours_frame.pack(fill="x", anchor="w", pady=2)
 
-        btn_guardar_tabla = ttk.Button(
-            frame_botones_izquierda,
-            text="Guardar Cambios",
-            command=lambda n=None, tw=None: guardar_desde_tabla(n, tw) if n and tw else None,
-            style="Section.TButton",
-        )
-        btn_guardar_tabla.pack(side=LEFT, padx=5)
-
-        # Crear Treeview con scrollbars y altura limitada
-        tree_frame = Frame(frame_tabla, bg=SECTION_BG_COLOR, bd=0, highlightthickness=0)
-        tree_frame.pack(fill="both", expand=True)
-        tree_frame.grid_rowconfigure(0, weight=1)
-        tree_frame.grid_columnconfigure(0, weight=1)
-
-        # Scrollbars
-        v_scroll = ttk.Scrollbar(tree_frame, orient="vertical", style="Section.Vertical.TScrollbar")
-        h_scroll = ttk.Scrollbar(tree_frame, orient="horizontal", style="Section.Horizontal.TScrollbar")
-
-        # Treeview con altura limitada a 5 filas (25px de altura por fila = 125px)
-        tree_excel = ttk.Treeview(
-            tree_frame,
-            yscrollcommand=lambda f, l, _sb=v_scroll: _autohide_yscroll(_sb, f, l),
-            xscrollcommand=h_scroll.set,
-            selectmode="browse",
-            height=5,  # ← ESTA ES LA LÍNEA IMPORTANTE: limita a 5 filas visibles
-            style="Section.Treeview",
-        )
-        v_scroll.config(command=tree_excel.yview)
-        h_scroll.config(command=tree_excel.xview)
-
-        # Posicionar con grid para mantener scrollbars visibles
-        tree_excel.grid(row=0, column=0, sticky="nsew")
-        v_scroll.grid(row=0, column=1, sticky="ns")
-        h_scroll.grid(row=1, column=0, sticky="ew")
-        # Evitar que el espacio bajo el scroll horizontal colapse
-        tree_frame.grid_rowconfigure(1, weight=0)
-        
-        # Crear editor de celdas
-        cell_editor = CellEditor(tree_excel)
-
-        # Cerrar el entry al scrollear con rueda
-        tree_excel.bind('<MouseWheel>', lambda e: cell_editor.finish_edit(), add=True)
-        
-        # Botones de formulario y Excel en la barra superior derecha
-        for i, script in enumerate(pais["scripts"], start=1):
-            # Determinar nombre del archivo Excel
-            excel_nombre = f"Lead_information_{script['script'].replace('.py', '')}"
-            
-            # === Botones en la barra superior derecha ===
-            excel_ruta = os.path.join(DATA_DIR, f"{excel_nombre}.xlsx")
-
-            if os.path.exists(excel_ruta):
-                # Si existe, mostrar botón "Abrir Excel"
-                btn_abrir_excel_superior = ttk.Button(
-                    frame_botones_derecha,
-                    text="Abrir Excel", 
-                    command=lambda n=excel_nombre: abrir_excel(n),
-                    style="Section.TButton",
-                )
-                btn_abrir_excel_superior.pack(side=RIGHT, padx=5)
+            if total <= 10:
+                for day_abbr, day_full in _SCH_DAYS:
+                    hours = scheduler_cfg["horarios"].get(day_full) or []
+                    if hours:
+                        pill = tk.Frame(hours_frame, bg="#4A2666", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+                        pill.pack(anchor="w", pady=2)
+                        tk.Label(pill, text=f" {day_abbr.upper()} ", font=("Segoe UI", 8, "bold"), bg="#4A2666", fg=ACCENT_COLOR).pack(side="left", pady=1)
+                        hours_str = ", ".join(sorted(hours))
+                        tk.Label(pill, text=f"{hours_str} ", font=("Segoe UI", 8), bg="#4A2666", fg="white").pack(side="left", pady=1)
             else:
-                # Si no existe, mostrar botón "Crear Excel"
-                btn_crear_excel_superior = ttk.Button(
-                    frame_botones_derecha,
-                    text="Crear Excel",
-                    command=lambda n=excel_nombre, f=i, fp=frame_pais, ba=None, bg=None, tw=tree_excel, ce=cell_editor: crear_y_actualizar_excel(n, f, fp, ba, bg, tw, ce),
-                    style="Section.TButton",
-                )
-                btn_crear_excel_superior.pack(side=RIGHT, padx=5)
-            
-            # Configurar los comandos de los botones de tabla con las referencias correctas
-            btn_agregar_fila.config(command=lambda tw=tree_excel: agregar_fila(tw))
-            btn_eliminar_fila.config(command=lambda tw=tree_excel: eliminar_fila(tw))
-            btn_clonar_fila.config(command=lambda tw=tree_excel: clonar_fila(tw))
-            btn_actualizar_tabla.config(command=lambda n=excel_nombre, tw=tree_excel, ce=cell_editor: cargar_excel_a_tabla(n, tw, ce))
-            def _guardar_con_edit(n=excel_nombre, tw=tree_excel, ce=cell_editor):
-                ce.finish_edit()
-                guardar_desde_tabla(n, tw)
-            btn_guardar_tabla.config(command=_guardar_con_edit)
-            _excel_reloaders.append((excel_nombre, tree_excel, cell_editor))
+                pill = tk.Frame(hours_frame, bg="#4A2666", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+                pill.pack(anchor="w", pady=2)
+                tk.Label(pill, text=f" 📆 {dias} DÍAS ({total} HORARIOS) ", font=("Segoe UI", 8, "bold"), bg="#4A2666", fg=ACCENT_COLOR).pack(side="left", pady=1)
 
-            # Cargar el Excel si existe
-            if os.path.exists(excel_ruta):
-                cargar_excel_a_tabla(excel_nombre, tree_excel, cell_editor)
+            # Contenedor de detalles de ejecución (abajo de los horarios)
+            details_frame = tk.Frame(prog_body, bg=SCHED_BG)
+            details_frame.pack(fill="x", anchor="w", pady=(6, 2))
+
+            # Pill de dispositivo
+            cur_disp = scheduler_cfg.get("dispositivo", "local")
+            cur_navs = scheduler_cfg.get("navegadores", ["chrome"])
+            if cur_disp == "local":
+                nav_names = [n.upper() for n in cur_navs]
+                disp_txt = f"🖥️ LOCAL ({', '.join(nav_names)})"
+            elif cur_disp == "lambdatest_android":
+                disp_txt = "🤖 ANDROID LT"
             else:
-                # Mostrar mensaje indicando que no existe el Excel
-                tree_excel["columns"] = ["info"]
-                tree_excel["show"] = "headings"
-                tree_excel.heading("info", text="Información")
-                tree_excel.column("info", width=400)
-                tree_excel.insert("", "end", values=["Cree el Excel primero usando el botón 'Crear Excel'"])
+                disp_txt = "🍏 MAC LT"
+            pill_d = tk.Frame(details_frame, bg="#3E2B5A", bd=0, highlightthickness=1, highlightbackground="#9B7FCD")
+            pill_d.pack(side="left", padx=(0, 4), pady=2)
+            tk.Label(pill_d, text=f" {disp_txt} ", font=("Segoe UI", 8, "bold"), bg="#3E2B5A", fg="#C5A9DF").pack(side="left", pady=1)
 
-    #ttk.Separator(root, orient="horizontal", style="App.TSeparator").pack(fill="x", pady=10)
+            # Pill de modo de ejecución
+            cur_mode = scheduler_cfg.get("modo_excel", "consecutivo")
+            mode_txt = "CONSECUTIVO" if cur_mode == "consecutivo" else "PARALELO"
+            pill_m = tk.Frame(details_frame, bg="#2C3E50", bd=0, highlightthickness=1, highlightbackground="#5DADE2")
+            pill_m.pack(side="left", padx=4, pady=2)
+            tk.Label(pill_m, text=f" {mode_txt} ", font=("Segoe UI", 8, "bold"), bg="#2C3E50", fg="#AED6F1").pack(side="left", pady=1)
 
-    def _on_leads_tab_activated(event):
-        selected = app_notebook.select()
-        if app_notebook.tab(selected, "text") == "Envio de Leads":
-            for _n, _tw, _ce in _excel_reloaders:
-                if os.path.exists(os.path.join(DATA_DIR, f"{_n}.xlsx")):
-                    cargar_excel_a_tabla(_n, _tw, _ce)
-    app_notebook.bind("<<NotebookTabChanged>>", _on_leads_tab_activated)
+            # Pill de países
+            paises_abrevs = [_VAL_ABBR.get(p, p) for p in scheduler_cfg["paises"]]
+            pstr = ", ".join(paises_abrevs)
+            pill_p = tk.Frame(details_frame, bg="#194D33", bd=0, highlightthickness=1, highlightbackground="#82E0AA")
+            pill_p.pack(side="left", padx=4, pady=2)
+            tk.Label(pill_p, text=" MERCADOS ", font=("Segoe UI", 8, "bold"), bg="#194D33", fg="#82E0AA").pack(side="left", pady=1)
+            tk.Label(pill_p, text=f"{pstr} ", font=("Segoe UI", 8), bg="#194D33", fg="white").pack(side="left", pady=1)
 
-    # === CALENDARIO SEMANAL DE AUTOMATIZACIÓN ===
-    programar_container = Frame(
-        testing_tab,
-        bg=SECTION_CONTAINER_BG_COLOR,
-        highlightthickness=0,
-        bd=0,
-    )
-    programar_container.pack(fill="x", padx=20, pady=15)
+            info_txt = " (Se ejecuta en background según los horarios)" if prog_state["mode"] == "activado" else " (Programá el test para activarlo)"
+            tk.Label(prog_body, text=info_txt, font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF").pack(anchor="w", pady=2)
+        else:
+            tk.Label(prog_body, text="Sin configuración. Usá \"Configurar automatización\" para definir días, horarios y países.",
+                      font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF").pack(anchor="w", pady=2)
 
-    from interface.weekly_scheduler import WeeklySchedulerPanel
+        if prog_state["mode"] == "activado":
+            _mk_prog_btn(" Iniciar ahora", _sched_run_now, EXECUTE_BG, EXECUTE_FG, EXECUTE_HOVER, icon="play_green.png").pack(side="left", padx=6)
+            _mk_prog_btn(" Desactivar", _sched_deactivate, BUTTON_INACTIVE, TEXT_DELETE, BUTTON_HOVER, icon="stop_coral.png").pack(side="left", padx=6)
+        else:
+            # Color azul brillante (#3498DB) para resaltar el botón de activar sobre el fondo morado
+            bg_color = "#3498DB" if configured else BUTTON_INACTIVE
+            fg_color = "white" if configured else TEXT_SECONDARY
+            hover_color = "#2980B9" if configured else BUTTON_HOVER
+            b = _mk_prog_btn(" Programar test automático", _sched_activate,
+                             bg_color, fg_color, hover_color, icon="play_white.png")
+            if not configured:
+                b.config(state="disabled", cursor="arrow")
+            b.pack(side="left", padx=6)
 
-    def _get_navegadores_seleccionados():
-        navs = []
-        if chrome_var.get():     navs.append("chrome")
-        if firefox_var.get():    navs.append("firefox")
-        if edge_var.get():       navs.append("edge")
-        if lt_mac_var.get():     navs.append("lambdatest_mac")
-        if lt_android_var.get(): navs.append("lambdatest_android")
-        return navs
+    def _on_sched_save(cfg):
+        selected_paises = cfg.get("paises", [])
+        selected_navs = scheduler_cfg.get("navegadores", ["chrome"])
+        missing_files = []
 
-    def _get_viewports_seleccionados():
-        vps = []
-        if desktop_var.get(): vps.append("fullscreen")
-        if mobile_var.get():  vps.append("600x738")
-        return vps
-
-    # Referencia forward para que actualizar_estado_botones funcione antes de crear el panel
-    _scheduler_ref = {}
-
-    def actualizar_estado_botones():
-        panel = _scheduler_ref.get("panel")
-        activo = panel.is_active() if panel else False
-        estado = "disabled" if activo else "normal"
-        for widget in root.winfo_children():
-            if isinstance(widget, ttk.Notebook):
-                for tab_id in widget.tabs():
-                    tab = widget.nametowidget(tab_id)
-                    for child in tab.winfo_children():
-                        if isinstance(child, ttk.Button) and "Enviar Leads" in child.cget("text"):
-                            child.config(state=estado)
-
-    def _ejecutar_programacion(programacion, stop_event=None):
-        """Ejecuta todos los tests del schedule semanal y retorna lista de resultados."""
-        from glob import glob as glob_search
-
-        def _stopped():
-            return stop_event is not None and stop_event.is_set()
-
-        # Mostrar overlay y registrar stop_event para que "Detener" funcione
-        _run_state["stop_event"] = stop_event
-        _paises_prog_all = list(programacion.get("paises", []))
-        _root_sched = _run_state.get("root")
-        if _root_sched and _paises_prog_all:
-            _root_sched.after(0, lambda ps=_paises_prog_all: (
-                _init_overlay_countries(ps),
-                _set_running(True),
-            ))
-
-        resultados = []
-        _LT_NAV = ("lambdatest_mac", "lambdatest_android")
-        # LambdaTest no compatible con ejecución programada por ahora — se omite
-        navegadores_prog = [n for n in programacion.get("navegadores", []) if n not in _LT_NAV]
-
-        for pais_nombre in programacion.get("paises", []):
-            if _stopped():
-                print("⛔ Ejecución detenida por el usuario.")
-                break
-            for navegador in navegadores_prog:
-                if _stopped():
-                    break
-                if navegador in _LT_NAV:
-                    lt_type = "mac" if navegador == "lambdatest_mac" else "android"
-                    try:
-                        lt_dir = os.path.join(BASE_DIR,
-                            "lambdatest_mac" if lt_type == "mac" else "lambdatest_android")
-                        if lt_dir not in sys.path:
-                            sys.path.insert(0, lt_dir)
-                        lt_results_dir = os.path.join(BASE_DIR,
-                            "resultados_lambdatestmac" if lt_type == "mac"
-                            else "resultados_lambdatest_android")
-                        antes = set(os.listdir(lt_results_dir)) if os.path.isdir(lt_results_dir) else set()
-                        if lt_type == "mac":
-                            import lt_controller  # type: ignore[import]
-                            summary = lt_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}", stop_event=stop_event)
-                        else:
-                            import lt_android_controller  # type: ignore[import]
-                            summary = lt_android_controller.run(pais=pais_nombre, build_name=f"Automatizado — {pais_nombre}", stop_event=stop_event)
-                        if summary.get("error"):
-                            print(f"⚠️ LambdaTest {lt_type} — {pais_nombre}: {summary['error']}")
-                        else:
-                            excel_file = summary.get("results_excel")
-                            if not excel_file or not os.path.exists(excel_file):
-                                # Fallback: scan directory for new xlsx
-                                if os.path.isdir(lt_results_dir):
-                                    despues = set(os.listdir(lt_results_dir))
-                                    nuevos = [f for f in (despues - antes) if f.endswith(".xlsx")]
-                                    if nuevos:
-                                        excel_file = os.path.join(lt_results_dir, sorted(nuevos)[-1])
-                            if excel_file and os.path.exists(excel_file):
-                                resultados.append({
-                                    "pais": pais_nombre, "navegador": navegador,
-                                    "viewport": lt_type, "estado": "completado",
-                                    "excel_path": excel_file,
-                                    "screenshots_dir": None,
-                                })
-                    except Exception as ex:
-                        print(f"⚠️ Error LambdaTest {lt_type} — {pais_nombre}: {ex}")
-                    time.sleep(2)
+        for pais in selected_paises:
+            for nav in selected_navs:
+                if nav == "lambdatest_mac":
+                    dev_name = "Mac"
+                elif nav == "lambdatest_android":
+                    dev_name = "Android"
+                elif nav == "firefox":
+                    dev_name = "Firefox"
+                elif nav == "edge":
+                    dev_name = "Edge"
                 else:
-                    for viewport in programacion.get("viewports", []):
-                        if _stopped():
-                            break
-                        env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
-                        try:
-                            pattern = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}*.xlsx")
-                            antes_m = glob_search(pattern)
-                            max_antes = max(
-                                (int(os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", ""))
-                                 for m in antes_m
-                                 if os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "").isdigit()),
-                                default=0)
-                            env_config = _get_environments().get(env_param)
-                            if env_config is None:
-                                print(f"⚠️ Entorno no reconocido: {env_param}")
-                                continue
-                            run_func = _get_run_func(pais_nombre)
-                            run_func(browser=env_config["browser"], viewport=env_config["viewport"],
-                                     headless=False, enviar_email=False, background=True)
-                            despues_m = glob_search(pattern)
-                            max_despues = max(
-                                (int(os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", ""))
-                                 for m in despues_m
-                                 if os.path.basename(m).replace(f"resultados_{pais_nombre}", "").replace(".xlsx", "").isdigit()),
-                                default=0)
-                            if max_despues > max_antes:
-                                excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{max_despues}.xlsx")
-                                if os.path.exists(excel_file):
-                                    resultados.append({
-                                        "pais": pais_nombre, "navegador": navegador,
-                                        "viewport": viewport, "estado": "completado",
-                                        "excel_path": excel_file,
-                                        "screenshots_dir": os.path.join(
-                                            RESULTS_DIR, f"screenshots_{pais_nombre}{max_despues}"),
-                                    })
-                        except Exception as ex:
-                            print(f"⚠️ Error ejecutando {pais_nombre} ({env_param}): {ex}")
-                        time.sleep(2)
+                    dev_name = "Chrome"
 
-        if _root_sched:
-            _root_sched.after(0, lambda: _set_running(False))
-        return resultados
+                excel_name = f"Lead_information_Formulario_{pais}_{dev_name}.xlsx"
+                excel_path = os.path.join(DATA_DIR, excel_name)
+                if not os.path.exists(excel_path):
+                    missing_files.append(f"• {pais} ({dev_name}) -> {excel_name}")
 
-    from interface.helpers_interface import enviar_email_resultados_consolidados as _send_consolidated
+        if missing_files:
+            missing_str = "\n".join(missing_files)
+            messagebox.showerror(
+                "Archivos Excel Faltantes",
+                f"No se puede guardar la configuración porque no se encuentran los archivos Excel requeridos en la carpeta 'data/':\n\n{missing_str}\n\nPor favor, generá los Excels para estos mercados y navegadores antes de programar la automatización."
+            )
+            return False
 
-    scheduler_panel = WeeklySchedulerPanel(
-        programar_container,
-        get_navegadores_cb=_get_navegadores_seleccionados,
-        get_viewports_cb=_get_viewports_seleccionados,
-        on_scheduling_change=lambda active: actualizar_estado_botones(),
-        execute_cb=lambda prog, ev: _ejecutar_programacion(prog, ev),
-        send_email_cb=lambda r: _send_consolidated(r) if enviar_mail_var.get() else None,
-        root=root,
+        scheduler_cfg["horarios"] = cfg.get("horarios", {})
+        scheduler_cfg["paises"] = selected_paises
+        log_message("[INFO] Programación semanal guardada.")
+        _refresh_prog()
+        return True
+    # Panel de configuración (desplegable)
+    def _on_config_close():
+        config_panel.pack_forget()
+
+    config_panel = _DemoSchedulerPanel(
+        scheduler_scroll_frame, 
+        on_save=_on_sched_save, 
+        initial_config=scheduler_cfg,
+        on_close=_on_config_close
     )
-    scheduler_panel.pack(fill="x", padx=4, pady=4)
-    _scheduler_ref["panel"] = scheduler_panel
-    _run_state["scheduler_panel"] = scheduler_panel
-    actualizar_estado_botones()
 
-    # === FOOTER STICKY (siempre visible abajo) ===
-    frame_footer = Frame(outer_container, bg=APP_BG_COLOR)
-    frame_footer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 5))
+    def toggle_scheduler_config():
+        if config_panel.winfo_ismapped():
+            config_panel.pack_forget()
+        else:
+            # Sincronizar la config actual
+            config_panel._schedule = {k: list(v) for k, v in scheduler_cfg.get("horarios", {}).items()}
+            config_panel._countries = list(scheduler_cfg.get("paises", []))
+            
+            # Actualizar la UI del panel
+            config_panel._update_day_buttons()
+            config_panel._update_country_count()
+            config_panel._update_toggle_all_label()
+            for country, var in config_panel._country_vars.items():
+                var.set(country in config_panel._countries)
+            config_panel._close_hours_panel()
+            config_panel._update_footer()
+            
+            config_panel.pack(fill="x", padx=20, pady=(0, 20))
+            
+            # Auto-scroll al final de la pestaña para visualizar el panel abierto
+            try:
+                scheduler_scroll_frame.update_idletasks()
+                canvas = scheduler_scroll_frame.master
+                canvas.yview_moveto(1.0)
+            except Exception:
+                pass
 
-    # Variable para rastrear la ventana de "Cómo se usa"
-    ventana_indicaciones = None
-
-    # Función para el popup de "Cómo se usa"
-    def mostrar_indicaciones():
-        nonlocal ventana_indicaciones
-        
-        # Si ya hay una ventana abierta, cerrarla
-        if ventana_indicaciones is not None and ventana_indicaciones.winfo_exists():
-            ventana_indicaciones.destroy()
-            ventana_indicaciones = None
+    def _sched_activate():
+        dias, total, n_p = _sched_summary()
+        if not (total > 0 and n_p > 0):
+            messagebox.showwarning("Programación", "Configurá días, horarios y países antes de programar.")
             return
         
-        # Crear nueva ventana
-        ventana_indicaciones = Toplevel(root)
-        ventana_indicaciones.title("Cómo se usa")
-        ventana_indicaciones.geometry("980x700")
-        ventana_indicaciones.minsize(700, 500)
-        ventana_indicaciones.configure(bg=APP_BG_COLOR)
+        disp = scheduler_cfg.get("dispositivo", "local")
+        navs = scheduler_cfg.get("navegadores", ["chrome"])
 
-        icon_path = os.path.join(ASSET_DIR, "icon.ico")
-        if os.path.exists(icon_path):
+        try:
+            guardar_programacion({
+                "tipo": "semanal",
+                "horarios": {k: v for k, v in scheduler_cfg.get("horarios", {}).items() if v},
+                "paises": list(scheduler_cfg.get("paises", [])),
+                "navegadores": navs,
+                "viewports": ["fullscreen"],
+                "dispositivo": disp,
+                "modo_excel": scheduler_cfg.get("modo_excel", "consecutivo"),
+                "modo_mercados": scheduler_cfg.get("modo_excel", "consecutivo"),
+            })
+        except Exception as e:
+            log_message(f"[ERROR] No se pudo guardar la programación: {e}")
+        prog_state["mode"] = "activado"
+        log_message("[SUCCESS] Test automático programado y activado (json/programacion_test.json).")
+        _refresh_prog()
+        messagebox.showinfo("Programación", "✓ Test automático activado. Se ejecutará según los horarios (con la app abierta).")
+
+    def _sched_deactivate():
+        try:
+            limpiar_programacion()
+        except Exception:
+            pass
+        prog_state["mode"] = "configurado"
+        log_message("[INFO] Test automático desactivado.")
+        _refresh_prog()
+
+    def _sched_run_now():
+        log_message("[INFO] Iniciando test programado ahora...")
+        execute_send_leads(scheduled=True)
+
+    # Cargar programación persistida al iniciar
+    try:
+        _existing = cargar_programacion()
+        if _existing and _existing.get("tipo") == "semanal":
+            scheduler_cfg["horarios"] = _existing.get("horarios", {})
+            scheduler_cfg["paises"] = _existing.get("paises", [])
+            scheduler_cfg["dispositivo"] = _existing.get("dispositivo", "local")
+            scheduler_cfg["modo_excel"] = _existing.get("modo_mercados") or _existing.get("modo_excel", "consecutivo")
+            scheduler_cfg["navegadores"] = _existing.get("navegadores", ["chrome"])
+            prog_state["mode"] = "activado"
+    except Exception:
+        pass
+
+    _refresh_sched_config_ui()
+    _refresh_prog()
+
+    # Monitor semanal: dispara la ejecución cuando llega un horario programado (app abierta)
+    _SCHED_TRIG_PATH = os.path.join(JSON_DIR, "scheduler_triggered.json")
+    _sched_triggered = {}
+    _DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+    def _sched_load_triggered():
+        try:
+            import json
+            with open(_SCHED_TRIG_PATH, encoding="utf-8") as f:
+                raw = json.load(f)
+            return {tuple(k.split("|")): _date.fromisoformat(v) for k, v in raw.items()}
+        except Exception:
+            return {}
+
+    def _sched_save_triggered():
+        try:
+            import json
+            with open(_SCHED_TRIG_PATH, "w", encoding="utf-8") as f:
+                json.dump({f"{k[0]}|{k[1]}": v.isoformat() for k, v in _sched_triggered.items()}, f)
+        except Exception:
+            pass
+
+    def _sched_monitor():
+        _sched_triggered.update(_sched_load_triggered())
+        first = True
+        while True:
             try:
-                ventana_indicaciones.iconbitmap(icon_path)
+                if prog_state["mode"] == "activado" and scheduler_cfg.get("horarios"):
+                    ahora = _dt.now()
+                    dia = _DAYS_ES[ahora.weekday()]
+                    now_min = ahora.hour * 60 + ahora.minute
+                    for hora in list(scheduler_cfg["horarios"].get(dia, [])):
+                        try:
+                            hh, mm = int(hora[:2]), int(hora[3:5])
+                        except Exception:
+                            continue
+                        start = hh * 60 + mm
+                        if start <= now_min < start + 15:
+                            key = (dia, hora)
+                            if _sched_triggered.get(key) != ahora.date():
+                                _sched_triggered[key] = ahora.date()
+                                _sched_save_triggered()
+                                if not first:
+                                    root.after(0, lambda: execute_send_leads(scheduled=True))
+                first = False
+            except Exception:
+                pass
+            time.sleep(60)
+
+    threading.Thread(target=_sched_monitor, daemon=True).start()
+
+    # --- 4. DATOS POR PAÍS (Card Panel Table) ---
+    datos_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    datos_card.pack(fill="x", expand=False, ipady=4)
+
+    d_header = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    d_header.pack(fill="x", padx=15, pady=(6, 4))
+
+    tk.Label(d_header, text="📄 DATOS POR PAÍS", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
+    tk.Label(d_header, text="ℹ Acá verás una previsualización del Excel del primer dispositivo que encuentre el sistema.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=15)
+
+    p_tabs_row = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    p_tabs_row.pack(fill="x", padx=15, pady=(0, 6))
+
+    p_tab_buttons = {}
+
+    def select_p_tab(btn, name):
+        for _n, _b in p_tab_buttons.items():
+            _b.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=1, highlightbackground=BUTTON_INACTIVE)
+        btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
+        active_p_tab[0] = name
+        update_table_data(name)
+        # Forzar actualización en Tab 3 por si cambió el país activo
+        try:
+            update_excel_calculation()
+        except Exception:
+            pass
+
+    for idx, pais in enumerate(paises_list):
+        has_leads = (pais in ["Argentina", "Bolivia"])
+        leads_count = " 3" if pais == "Argentina" else (" 1" if pais == "Bolivia" else "")
+        suffix = f" ({leads_count.strip()})" if has_leads else ""
+        
+        btn_bg = BUTTON_ACTIVE if pais == "Argentina" else BUTTON_INACTIVE
+        btn_fg = "white" if pais == "Argentina" else TEXT_SECONDARY
+        btn_hb = ACCENT_COLOR if pais == "Argentina" else BUTTON_INACTIVE
+
+        b = tk.Button(p_tabs_row, text=f"{pais}{suffix}", font=("Segoe UI", 8, "bold"), bg=btn_bg, fg=btn_fg,
+                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                      highlightthickness=1, highlightbackground=btn_hb,
+                      padx=8, pady=3, cursor="hand2")
+        b.pack(side="left", padx=1)
+        p_tab_buttons[pais] = b
+        b.config(command=lambda btn=b, n=pais: select_p_tab(btn, n))
+
+    # Selector de qué Excel (dispositivo) previsualizar dentro del país activo
+    current_preview_path = [None]
+    _preview_dev_paths = {}  # label visible -> ruta del Excel (del país actual)
+    preview_device_var = tk.StringVar()
+
+    def _available_device_excels(pais):
+        t3 = bool(var_t3.get())
+        t3_tag = "_T3" if t3 else ""
+        specs = [("Chrome", "Chrome"), ("Firefox", "Firefox"), ("Edge", "Edge"),
+                 ("Mac LT", "Mac"), ("Android LT", "Android"), ("Genérico (compartido)", "Generico")]
+        out = []
+        for label, suf in specs:
+            p = os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_{suf}{t3_tag}.xlsx")
+            if os.path.exists(p):
+                out.append((label, p))
+        return out
+
+    tk.Label(p_tabs_row, text="Excel a revisar:", font=("Segoe UI", 8, "bold"),
+             bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="right", padx=(8, 4))
+    preview_device_combo = ttk.Combobox(p_tabs_row, textvariable=preview_device_var,
+                                        state="readonly", width=20, style="TCombobox")
+    preview_device_combo.pack(side="right")
+
+    def _on_preview_device_change(_e=None):
+        label = preview_device_var.get()
+        path = _preview_dev_paths.get(label)
+        if path:
+            update_table_data(active_p_tab[0], path=path)
+    preview_device_combo.bind("<<ComboboxSelected>>", _on_preview_device_change)
+
+    # Controles de Tabla
+    tbl_ctrl_row = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    tbl_ctrl_row.pack(fill="x", padx=15, pady=(0, 6))
+
+    # Etiqueta para avisos efímeros (Eliminar, Agregar, etc.) al lado de los botones
+    tbl_msg_lbl = tk.Label(tbl_ctrl_row, text="", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR)
+
+    # Control de timer para mensaje efímero
+    tbl_msg_timer_id = [None]
+
+    def show_table_msg(text, color):
+        # Cancelar el timer previo si existe
+        if tbl_msg_timer_id[0] is not None:
+            try:
+                root.after_cancel(tbl_msg_timer_id[0])
+            except Exception:
+                pass
+            tbl_msg_timer_id[0] = None
+
+        tbl_msg_lbl.pack_forget()
+        tbl_msg_lbl.config(text=text, fg=color)
+        tbl_msg_lbl.pack(side="left", padx=15)
+        
+        # Desaparecer el mensaje tras 10 segundos (10000 ms)
+        def hide_msg():
+            tbl_msg_lbl.pack_forget()
+            tbl_msg_timer_id[0] = None
+
+        tbl_msg_timer_id[0] = root.after(10000, hide_msg)
+
+    # Comandos (Excel real por país)
+    def cmd_agregar():
+        _close_cell_editor()
+        n = len(tree["columns"]) or 1
+        iid = tree.insert("", "end", values=[""] * n)
+        _stripe_rows()
+        tree.selection_set(iid)
+        tree.focus(iid)
+        tree.see(iid)
+        tree.focus_set()
+        show_table_msg("✓ Fila agregada (resaltada abajo). Completá con doble clic y Guardá.", TEXT_ADD)
+        log_message("[INFO] Fila vacía agregada a la tabla.")
+
+    def cmd_eliminar():
+        _close_cell_editor()
+        selected = tree.selection()
+        if selected:
+            for item in selected:
+                tree.delete(item)
+            _stripe_rows()
+            show_table_msg(f"🗑 {len(selected)} fila(s) eliminada(s). Guardá para persistir.", TEXT_DELETE)
+            log_message(f"[INFO] {len(selected)} fila(s) eliminada(s) de la tabla.")
+        else:
+            show_table_msg("⚠ Seleccioná una o varias filas para eliminar.", WARN_TEXT)
+
+    def cmd_clonar():
+        _close_cell_editor()
+        selected = tree.selection()
+        if selected:
+            last = None
+            for item in selected:
+                last = tree.insert("", "end", values=tree.item(item, "values"))
+            _stripe_rows()
+            if last:
+                tree.see(last)
+            show_table_msg(f"📋 {len(selected)} fila(s) clonada(s). Guardá para persistir.", TEXT_SECONDARY)
+            log_message(f"[INFO] {len(selected)} fila(s) duplicada(s) en la tabla.")
+        else:
+            show_table_msg("⚠ Seleccioná una o varias filas para clonar.", WARN_TEXT)
+
+    def cmd_actualizar_tbl():
+        update_table_data(active_p_tab[0])
+        show_table_msg("🔄 Datos recargados desde el Excel.", TEXT_SAVE)
+        log_message(f"[INFO] Datos de {active_p_tab[0]} recargados desde el archivo.")
+
+    def cmd_guardar_tbl():
+        pais = active_p_tab[0]
+        path = current_preview_path[0] or _excel_path_for(pais)
+        cols = list(tree["columns"])
+        rows = [list(tree.item(i, "values")) for i in tree.get_children()]
+        try:
+            import pandas as pd
+            os.makedirs(DATA_DIR, exist_ok=True)
+            pd.DataFrame(rows, columns=cols).astype(str).to_excel(path, index=False)
+            show_table_msg(f"💾 Guardado {len(rows)} fila(s) en {os.path.basename(path)}.", TEXT_SAVE)
+            log_message(f"[SUCCESS] Guardadas {len(rows)} filas en {path}.")
+            _refresh_tab_count(pais, len(rows))
+        except PermissionError:
+            messagebox.showerror("Guardar Leads", "El Excel está abierto en otro programa. Cerralo y reintentá.")
+        except Exception as e:
+            messagebox.showerror("Guardar Leads", f"No se pudo guardar:\n{e}")
+
+    def cmd_abrir_excel():
+        pais = active_p_tab[0]
+        path = current_preview_path[0] or _excel_path_for(pais)
+        try:
+            if not os.path.exists(path):
+                import pandas as pd
+                os.makedirs(DATA_DIR, exist_ok=True)
+                pd.DataFrame(columns=build_excel_columns_for_country(pais)).to_excel(path, index=False)
+            os.startfile(path)
+            show_table_msg("📂 Excel abierto.", TEXT_EXCEL)
+            log_message(f"[INFO] Abriendo {path}.")
+        except Exception as e:
+            messagebox.showerror("Abrir Excel", f"No se pudo abrir el Excel:\n{e}")
+
+    make_icon_btn(tbl_ctrl_row, "+ Agregar", TEXT_ADD, command=cmd_agregar)
+    make_icon_btn(tbl_ctrl_row, "🗑 Eliminar", TEXT_DELETE, command=cmd_eliminar)
+    make_icon_btn(tbl_ctrl_row, "📋 Clonar", TEXT_SECONDARY, command=cmd_clonar)
+    make_icon_btn(tbl_ctrl_row, "🔄 Actualizar", TEXT_SECONDARY, command=cmd_actualizar_tbl)
+    make_icon_btn(tbl_ctrl_row, "💾 Guardar", TEXT_SAVE, command=cmd_guardar_tbl)
+    make_icon_btn(tbl_ctrl_row, "📂 Abrir Excel", TEXT_EXCEL, command=cmd_abrir_excel)
+
+    # Frame contenedor con barras de scroll (TScrollbar estilizados)
+    tree_frame = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    tree_frame.pack(fill="x", expand=False, padx=15, pady=2)
+
+    columns = ("url_landing", "url_form", "modelo", "nombre", "apellido", "email", "telefono", "documento", "direccion", "ciudad", "estado", "cod_postal", "comentarios")
+    tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=5, selectmode="extended", style="Treeview")
+    
+    tree.heading("url_landing", text="URL LANDING")
+    tree.heading("url_form", text="URL FORM")
+    tree.heading("modelo", text="MODELO")
+    tree.heading("nombre", text="NOMBRE")
+    tree.heading("apellido", text="APELLIDO")
+    tree.heading("email", text="EMAIL")
+    tree.heading("telefono", text="TELÉFONO")
+    tree.heading("documento", text="DOCUMENTO")
+    tree.heading("direccion", text="DIRECCIÓN")
+    tree.heading("ciudad", text="CIUDAD")
+    tree.heading("estado", text="ESTADO")
+    tree.heading("cod_postal", text="CÓDIGO POSTAL")
+    tree.heading("comentarios", text="COMENTARIOS")
+
+    tree.column("url_landing", width=320, minwidth=150, stretch=False)
+    tree.column("url_form", width=320, minwidth=130, stretch=False)
+    tree.column("modelo", width=100, minwidth=60, stretch=False)
+    tree.column("nombre", width=120, minwidth=80, stretch=False)
+    tree.column("apellido", width=120, minwidth=80, stretch=False)
+    tree.column("email", width=180, minwidth=120, stretch=False)
+    tree.column("telefono", width=120, minwidth=80, stretch=False)
+    tree.column("documento", width=120, minwidth=90, stretch=False)
+    tree.column("direccion", width=200, minwidth=110, stretch=False)
+    tree.column("ciudad", width=120, minwidth=80, stretch=False)
+    tree.column("estado", width=120, minwidth=80, stretch=False)
+    tree.column("cod_postal", width=100, minwidth=80, stretch=False)
+    tree.column("comentarios", width=250, minwidth=130, stretch=False)
+
+    # Scrollbars Horizontal y Vertical para la tabla Excel (Diseño premium unificado)
+    v_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="TScrollbar")
+    h_scrollbar = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview, style="TScrollbar")
+    tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+    
+    h_scrollbar.pack(side="bottom", fill="x")
+    v_scrollbar.pack(side="right", fill="y")
+    tree.pack(side="top", fill="x", expand=False)
+
+    # Edición inline de celdas (doble clic) + aviso de "editando sin guardar"
+    _active_editor = [None]
+
+    def _close_cell_editor(_e=None):
+        ed = _active_editor[0]
+        _active_editor[0] = None
+        if ed is not None:
+            try:
+                ed.destroy()
             except Exception:
                 pass
 
-        container = Frame(ventana_indicaciones, bg=APP_BG_COLOR)
-        container.pack(fill="both", expand=True)
+    def _edit_cell(event):
+        _close_cell_editor()  # cerrar cualquier editor previo abierto
+        if tree.identify_region(event.x, event.y) != "cell":
+            return
+        row = tree.identify_row(event.y)
+        col = tree.identify_column(event.x)
+        if not row or not col:
+            return
+        bbox = tree.bbox(row, col)
+        if not bbox:
+            return
+        col_index = int(col[1:]) - 1
+        x, y, w, h = bbox
+        current_val = tree.item(row, "values")[col_index]
+        editor = tk.Entry(tree, bg=ENTRY_BG, fg="white", insertbackground="white", bd=0,
+                          relief="flat", highlightthickness=1, highlightbackground=ACCENT_COLOR, font=("Segoe UI", 9))
+        editor.place(x=x, y=y, width=w, height=h)
+        editor.insert(0, current_val)
+        editor.focus_set()
+        editor.select_range(0, "end")
+        _active_editor[0] = editor
 
-        container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=1)
-
-        canvas = Canvas(container, bg=APP_BG_COLOR, highlightthickness=0)
-        v_scroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        h_scroll = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
-        canvas.configure(yscrollcommand=lambda f, l, _sb=v_scroll: _autohide_yscroll(_sb, f, l),
-                         xscrollcommand=h_scroll.set)
-
-        canvas.grid(row=0, column=0, sticky="nsew")
-        v_scroll.grid(row=0, column=1, sticky="ns")
-        h_scroll.grid(row=1, column=0, sticky="ew")
-
-        content_frame = Frame(canvas, bg=APP_BG_COLOR)
-        content_window = canvas.create_window((0, 0), window=content_frame, anchor="nw")
-        text_labels = []
-        image_blocks = []
-
-        def _refresh_scrollregion(_event=None):
+        def commit(_e=None):
+            if _active_editor[0] is not editor:
+                return
+            _active_editor[0] = None
             try:
-                canvas.configure(scrollregion=canvas.bbox("all"))
+                if tree.exists(row):
+                    vals = list(tree.item(row, "values"))
+                    if col_index < len(vals) and vals[col_index] != editor.get():
+                        vals[col_index] = editor.get()
+                        tree.item(row, values=vals)
+                        show_table_msg("✏ Estás editando el Excel — recordá Guardar para no perder los cambios.", TEXT_EXCEL)
+            except Exception:
+                pass
+            try:
+                editor.destroy()
             except Exception:
                 pass
 
-        def _apply_responsive_layout():
-            try:
-                content_width = max(480, canvas.winfo_width() - 32)
-                wrap = max(420, content_width - 40)
+        editor.bind("<Return>", commit)
+        editor.bind("<FocusOut>", commit)
+        editor.bind("<Escape>", lambda e: _close_cell_editor())
 
-                for lbl in text_labels:
-                    lbl.configure(wraplength=wrap)
+    tree.bind("<Double-1>", _edit_cell)
+    # Cerrar el editor si se scrollea o cambia el tamaño (evita que quede flotando)
+    tree.bind("<MouseWheel>", lambda e: _close_cell_editor())
 
-                max_img_w = max(420, content_width - 44)
-                new_refs = []
-                for block in image_blocks:
-                    original_img = block["image"]
-                    img_label = block["label"]
+    # Rayado alterno para distinguir filas (evita que una fila vacía se pierda con el fondo)
+    tree.tag_configure("odd", background="#573083")
+    tree.tag_configure("even", background="#3B1C52")
 
-                    if original_img.width > max_img_w:
-                        ratio = max_img_w / float(original_img.width)
-                        resized = original_img.resize(
-                            (int(original_img.width * ratio), int(original_img.height * ratio)),
-                            Image.LANCZOS,
-                        )
-                    else:
-                        resized = original_img
+    def _stripe_rows():
+        for i, it in enumerate(tree.get_children()):
+            tree.item(it, tags=("odd" if i % 2 else "even",))
 
-                    photo = ImageTk.PhotoImage(resized)
-                    img_label.configure(image=photo)
-                    new_refs.append(photo)
+    def _refresh_tab_count(pais, n):
+        btn = p_tab_buttons.get(pais)
+        if btn:
+            btn.config(text=f"{pais} ({n})" if n else pais)
 
-                ventana_indicaciones._image_refs = new_refs
-                _refresh_scrollregion()
-            except Exception:
-                pass
+    # Carga real del Excel del país (columnas dinámicas desde el archivo)
+    def update_table_data(pais, path=None):
+        _close_cell_editor()
 
-        def _on_canvas_resize(event):
-            try:
-                canvas.itemconfigure(content_window, width=max(480, event.width))
-                _apply_responsive_layout()
-            except Exception:
-                pass
+        # Repoblar el selector de dispositivo con los Excels disponibles del país
+        avail = _available_device_excels(pais)
+        _preview_dev_paths.clear()
+        for _lbl, _p in avail:
+            _preview_dev_paths[_lbl] = _p
 
-        def _on_mousewheel(event):
-            try:
-                if getattr(event, "state", 0) & 0x0001:
-                    delta = int(-1 * (event.delta / 120))
-                    canvas.xview_scroll(delta, "units")
-                else:
-                    delta = int(-1 * (event.delta / 120))
-                    canvas.yview_scroll(delta, "units")
-            except Exception:
-                return "break"
-            return "break"
+        if not avail:
+            preview_device_combo.config(state="disabled", values=[])
+            preview_device_var.set("")
+        else:
+            preview_device_combo.config(state="readonly", values=[_lbl for _lbl, _ in avail])
 
-        def _on_linux_wheel_up(_event):
-            canvas.yview_scroll(-1, "units")
-            return "break"
+        if path is None:
+            # Mantener el dispositivo elegido si sigue disponible; si no, el primero
+            cur = preview_device_var.get()
+            if cur in _preview_dev_paths:
+                path = _preview_dev_paths[cur]
+            elif avail:
+                path = avail[0][1]
+                preview_device_var.set(avail[0][0])
+            else:
+                path = _excel_path_for(pais)
+        else:
+            for _lbl, _p in avail:
+                if _p == path:
+                    preview_device_var.set(_lbl)
+                    break
+        current_preview_path[0] = path
 
-        def _on_linux_wheel_down(_event):
-            canvas.yview_scroll(1, "units")
-            return "break"
+        df = None
+        try:
+            import pandas as pd
+            if os.path.exists(path):
+                df = pd.read_excel(path, dtype=str).fillna("")
+        except Exception as e:
+            log_message(f"[ERROR] No se pudo leer el Excel de {pais}: {e}")
+            df = None
 
-        content_frame.bind("<Configure>", _refresh_scrollregion)
-        canvas.bind("<Configure>", _on_canvas_resize)
-        ventana_indicaciones.bind("<MouseWheel>", _on_mousewheel)
-        ventana_indicaciones.bind("<Shift-MouseWheel>", _on_mousewheel)
-        ventana_indicaciones.bind("<Button-4>", _on_linux_wheel_up)
-        ventana_indicaciones.bind("<Button-5>", _on_linux_wheel_down)
+        if df is not None and len(df.columns) > 0:
+            cols = [str(c) for c in df.columns]
+        else:
+            cols = build_excel_columns_for_country(pais)
 
-        Label(
-            content_frame,
-            text="Cómo se usa",
-            font=("Segoe UI", 16, "bold"),
-            bg=APP_BG_COLOR,
-            fg="white",
-            anchor="w",
-            justify="left",
-        ).pack(fill="x", padx=20, pady=(16, 8))
+        tree.config(columns=cols)
+        for c in cols:
+            cl = c.lower()
+            wide = any(k in cl for k in ("url", "form", "coment", "direcc"))
+            tree.heading(c, text=c.upper())
+            tree.column(c, width=300 if wide else 120, minwidth=70, stretch=False, anchor="w")
 
-        url_sharepoint = "https://interpublic.sharepoint.com/sites/buemrmqa/_layouts/15/Doc.aspx?sourcedoc=%7B72455d97-49e3-4f3b-a71f-50b7d081e863%7D&action=edit&wd=target%28Automatizaci%C3%B3n%20de%20form.one%7C9fc98087-e699-46fd-92a4-d6d85119fc81%2FGu%C3%ADa%20de%20uso%20Osocio%20automatizaci%C3%B3n%20de%20form.%7C04d96e18-7215-48a3-af98-cd00777e8426%2F%29&wdorigin=703&wdpartid=%7Be9c543a1-820c-44a8-89d0-7b129cf12549%7D%7B16%7D&wdsectionfileid=%7Ba2134ac4-168c-4613-8694-cef6b74f3db7%7D"
-        url_repositorio_git = "https://interpublic.sharepoint.com/sites/buemrmqa/_layouts/15/Doc.aspx?sourcedoc=%7B72455d97-49e3-4f3b-a71f-50b7d081e863%7D&action=edit&wd=target%28Automatizaci%C3%B3n%20de%20form.one%7C9fc98087-e699-46fd-92a4-d6d85119fc81%2FGu%C3%ADa%20de%20uso%20Osocio%20automatizaci%C3%B3n%20de%20form.%7C04d96e18-7215-48a3-af98-cd00777e8426%2F%29&wdorigin=703&wdpartid=%7Be9c543a1-820c-44a8-89d0-7b129cf12549%7D%7B16%7D&wdsectionfileid=%7Ba2134ac4-168c-4613-8694-cef6b74f3db7%7D"
-        url_documentacion = "https://interpublic.sharepoint.com/sites/buemrmqa/_layouts/15/Doc.aspx?sourcedoc=%7B72455d97-49e3-4f3b-a71f-50b7d081e863%7D&action=edit&wd=target%28Automatizaci%C3%B3n%20de%20form.one%7C9fc98087-e699-46fd-92a4-d6d85119fc81%2FGu%C3%ADa%20de%20uso%20Osocio%20automatizaci%C3%B3n%20de%20form.%7C04d96e18-7215-48a3-af98-cd00777e8426%2F%29&wdorigin=703&wdpartid=%7Be9c543a1-820c-44a8-89d0-7b129cf12549%7D%7B16%7D&wdsectionfileid=%7Ba2134ac4-168c-4613-8694-cef6b74f3db7%7D"
+        for item in tree.get_children():
+            tree.delete(item)
 
-        def _abrir_enlace(url):
-            def _handler(_event=None):
-                try:
-                    webbrowser.open(url, new=2)
-                except Exception as exc:
-                    messagebox.showerror("Cómo se usa", f"No se pudo abrir el enlace:\n{exc}", parent=ventana_indicaciones)
+        n = 0
+        if df is not None:
+            for _, row in df.iterrows():
+                tree.insert("", "end", values=[str(row[c]) for c in df.columns])
+                n += 1
 
-            return _handler
+        if not avail:
+            vals = ["No hay excels creados para este país. Por favor, genéralos en la pestaña 'Generar Excels con Datos'."] + [""] * (len(cols) - 1)
+            tree.insert("", "end", values=vals)
 
-        mensajes_ayuda = [
-            "En el siguiente SharePoint podrás encontrar una guía completa, con explicaciones paso a paso, recomendaciones de uso y contexto funcional para aprovechar Osocio en profundidad.",
-            "Acceder a la guía en SharePoint",
-            "Si necesitás una referencia más técnica, orientada al código y al mantenimiento de la herramienta, también podés consultar el proyecto completo en el siguiente repositorio de Git.",
-            "Abrir repositorio de Git",
-            "Además, contás con una documentación adicional donde se describe la estructura general del proyecto, su lógica principal y varios detalles útiles para comprender mejor cómo está organizado.",
-            "Ver documentación del proyecto",
+        _stripe_rows()
+        _refresh_tab_count(pais, n)
+
+    update_table_data("Argentina")
+
+    # Contadores reales en las pestañas de país (según filas del Excel)
+    for _pais in paises_list:
+        try:
+            _p = _excel_path_for(_pais)
+            if _pais != "Argentina" and os.path.exists(_p):
+                import pandas as pd
+                _refresh_tab_count(_pais, len(pd.read_excel(_p, dtype=str)))
+        except Exception:
+            pass
+
+    # Estado de ejecución (para que la X minimice en vez de cerrar mientras corre).
+    _exec_state = {"running": False}
+
+    # Ejecución real de leads (desktop + LambdaTest) con el modal de progreso
+    def execute_send_leads(scheduled=False):
+        if not BACKEND_OK:
+            messagebox.showerror("Ejecutar", f"El backend no está disponible.\n{_BACKEND_IMPORT_ERROR}")
+            return
+
+        # Sufijos de dispositivo ↔ tipo de ejecución (para localizar los Excels generados)
+        # (suffix Excel, dtype, browser, key en selected_disp)
+        _DEVICE_SUFFIX = [
+            ("Chrome", "desktop", "chrome", "chrome"),
+            ("Firefox", "desktop", "firefox", "firefox"),
+            ("Edge", "desktop", "edge", "edge"),
+            ("Mac", "mac", None, "mac lt"),
+            ("Android", "android", None, "android lt"),
         ]
 
-        lbl_mensaje_sharepoint = Label(
-            content_frame,
-            text=mensajes_ayuda[0],
-            font=("Segoe UI", 12),
-            bg=APP_BG_COLOR,
-            fg="white",
-            anchor="w",
-            justify="left",
-            wraplength=920,
-        )
-        lbl_mensaje_sharepoint.pack(fill="x", padx=20, pady=(8, 6))
-        text_labels.append(lbl_mensaje_sharepoint)
+        # Formularios T3 2.0 (Adobe AEM): usar los Excels con nombre …_T3.xlsx
+        t3 = bool(var_t3.get())
 
-        lbl_link_sharepoint = Label(
-            content_frame,
-            text=mensajes_ayuda[1],
-            font=("Segoe UI", 12, "underline"),
-            bg=APP_BG_COLOR,
-            fg="#9fd4ff",
-            anchor="w",
-            justify="left",
-            wraplength=920,
-            cursor="hand2",
-        )
-        lbl_link_sharepoint.pack(fill="x", padx=20, pady=(0, 12))
-        lbl_link_sharepoint.bind("<Button-1>", _abrir_enlace(url_sharepoint))
-        text_labels.append(lbl_link_sharepoint)
+        def _sessions_for(pais):
+            """Una sesión por dispositivo tildado. Cada dispositivo (desktop y LT)
+            usa su propio Excel (…_Chrome/_Firefox/_Edge/_Mac/_Android[_T3].xlsx), que es
+            además donde LambdaTest guarda los resultados. No hay fallback: si falta
+            el Excel del dispositivo, se detecta luego y no ejecuta."""
+            shared = excel_mode_holder[0] == "compartido"
+            gpath = _generic_excel_path_for(pais, t3)
+            out = []
+            for suffix, dtype, browser, key in _DEVICE_SUFFIX:
+                if not selected_disp.get(key):
+                    continue
+                path = gpath if shared else os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, t3))
+                out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix, "excel": path})
+            return out
 
-        lbl_mensaje_git = Label(
-            content_frame,
-            text=mensajes_ayuda[2],
-            font=("Segoe UI", 12),
-            bg=APP_BG_COLOR,
-            fg="white",
-            anchor="w",
-            justify="left",
-            wraplength=920,
-        )
-        lbl_mensaje_git.pack(fill="x", padx=20, pady=(0, 6))
-        text_labels.append(lbl_mensaje_git)
+        if scheduled:
+            disp_sched = scheduler_cfg.get("dispositivo", "local")
+            p_mode = scheduler_cfg.get("modo_excel", "consecutivo")
+            paises_run = list(scheduler_cfg.get("paises", [])) or [active_p_tab[0]]
+            
+            market_jobs = []
+            for p in paises_run:
+                sessions = []
+                if disp_sched == "lambdatest_android":
+                    sessions.append({
+                        "pais": p, "dtype": "android", "browser": None, "device": "Android",
+                        "excel": os.path.join(DATA_DIR, _lead_excel_name(p, "Android", t3))
+                    })
+                elif disp_sched == "lambdatest_mac":
+                    sessions.append({
+                        "pais": p, "dtype": "mac", "browser": None, "device": "Mac",
+                        "excel": os.path.join(DATA_DIR, _lead_excel_name(p, "Mac", t3))
+                    })
+                else: # local
+                    navs = scheduler_cfg.get("navegadores", []) or ["chrome"]
+                    for nav in navs:
+                        suffix = "Chrome" if nav == "chrome" else "Firefox" if nav == "firefox" else "Edge"
+                        sessions.append({
+                            "pais": p, "dtype": "desktop", "browser": nav, "device": suffix,
+                            "excel": os.path.join(DATA_DIR, _lead_excel_name(p, suffix, t3))
+                        })
+                market_jobs.append((p, sessions))
+                
+            mercados_par = (p_mode == "paralelo") and (len(market_jobs) > 1)
+            excels_par = (p_mode == "paralelo")
+        else:
+            if not any(selected_disp.values()):
+                messagebox.showwarning("Ejecutar", "Seleccioná al menos un dispositivo / navegador antes de ejecutar.")
+                return
+            paises_run = [p for p in paises_list if selected_countries.get(p)] or [active_p_tab[0]]
+            market_jobs = [(p, _sessions_for(p)) for p in paises_run]
+            
+            mercados_par = (mercados_mode[0] == "paralelo") and (len(market_jobs) > 1)
+            excels_par = (excels_mode[0] == "paralelo")
 
-        lbl_link_git = Label(
-            content_frame,
-            text=mensajes_ayuda[3],
-            font=("Segoe UI", 12, "underline"),
-            bg=APP_BG_COLOR,
-            fg="#9fd4ff",
-            anchor="w",
-            justify="left",
-            wraplength=920,
-            cursor="hand2",
-        )
-        lbl_link_git.pack(fill="x", padx=20, pady=(0, 12))
-        lbl_link_git.bind("<Button-1>", _abrir_enlace(url_repositorio_git))
-        text_labels.append(lbl_link_git)
-
-        lbl_mensaje_docs = Label(
-            content_frame,
-            text=mensajes_ayuda[4],
-            font=("Segoe UI", 12),
-            bg=APP_BG_COLOR,
-            fg="white",
-            anchor="w",
-            justify="left",
-            wraplength=920,
-        )
-        lbl_mensaje_docs.pack(fill="x", padx=20, pady=(0, 6))
-        text_labels.append(lbl_mensaje_docs)
-
-        lbl_link_docs = Label(
-            content_frame,
-            text=mensajes_ayuda[5],
-            font=("Segoe UI", 12, "underline"),
-            bg=APP_BG_COLOR,
-            fg="#9fd4ff",
-            anchor="w",
-            justify="left",
-            wraplength=920,
-            cursor="hand2",
-        )
-        lbl_link_docs.pack(fill="x", padx=20, pady=(0, 12))
-        lbl_link_docs.bind("<Button-1>", _abrir_enlace(url_documentacion))
-        text_labels.append(lbl_link_docs)
-
-        ventana_indicaciones.after(10, _apply_responsive_layout)
-
-    # Variable para rastrear la ventana de "Más información"
-    ventana_ejemplos = None
-
-    # Función para el popup de "Más información"
-    def mostrar_ejemplos_formularios():
-        nonlocal ventana_ejemplos
-        
-        # Si ya hay una ventana abierta, cerrarla
-        if ventana_ejemplos is not None and ventana_ejemplos.winfo_exists():
-            ventana_ejemplos.destroy()
-            ventana_ejemplos = None
+        total_sessions = sum(len(js) for _, js in market_jobs)
+        if total_sessions == 0:
+            messagebox.showwarning("Ejecutar", "No hay Excels para ejecutar. Generá datos o seleccioná un dispositivo.")
             return
+
+        mercados_par = (mercados_mode[0] == "paralelo") and (len(market_jobs) > 1)
+        excels_par = (excels_mode[0] == "paralelo")
+
+        # Modo "una sesión por URL": expande cada fila de cada Excel en su propia sesión
+        url_par = (not scheduled) and bool(var_url_parallel.get())
+        try:
+            url_max = max(1, min(20, int(url_max_var.get())))
+        except Exception:
+            url_max = 6
+
+        def _url_sessions():
+            import pandas as pd
+            tmpdir = os.path.join(_APP_BASE, "temporales")
+            os.makedirs(tmpdir, exist_ok=True)
+            out = []
+            for _pais, sessions in market_jobs:
+                for s in sessions:
+                    if s["dtype"] != "desktop" or not s["excel"] or not os.path.exists(s["excel"]):
+                        out.append(s)  # LT o sin Excel → sesión entera
+                        continue
+                    try:
+                        df = pd.read_excel(s["excel"], dtype=str).fillna("")
+                    except Exception:
+                        out.append(s)
+                        continue
+                    if len(df) == 0:
+                        continue
+                    for i in range(len(df)):
+                        tmp = os.path.join(tmpdir, f"_url_{_pais}_{s['device']}_{i + 1}.xlsx")
+                        try:
+                            df.iloc[[i]].to_excel(tmp, index=False)
+                        except Exception:
+                            continue
+                        out.append({"pais": _pais, "dtype": "desktop", "browser": s["browser"],
+                                    "device": f"{s['device']}·URL{i + 1}", "excel": tmp})
+            return out
+
+        if url_par:
+            flat_sessions = _url_sessions()
+            total_sessions = len(flat_sessions)
+            if total_sessions == 0:
+                messagebox.showwarning("Ejecutar", "No hay URLs para ejecutar.")
+                return
+            active_sessions_list = flat_sessions
+        else:
+            active_sessions_list = []
+            for _pais, js in market_jobs:
+                active_sessions_list.extend(js)
+
+        # Validar Excels ANTES de arrancar: cada dispositivo seleccionado (desktop y LT)
+        # debe tener su propio Excel. Si falta alguno, avisar y no ejecutar (sin modal).
+        faltantes = []
+        faltantes_sessions = []  # sesiones con Excel inexistente (para poder crearlos vacíos)
+        for s in active_sessions_list:
+            _ex = s["excel"]
+            _nombre = os.path.basename(_ex) if _ex else \
+                f"Lead_information_Formulario_{s['pais']}_{s['device']}.xlsx"
+            if not _ex or not os.path.exists(_ex):
+                faltantes.append(f"• {s['pais']} · {s['device']}: {_nombre} (no existe)")
+                faltantes_sessions.append(s)
+                continue
+            # El Excel existe: validar que tenga al menos una fila con datos (no arrancar vacío).
+            try:
+                import pandas as _pd
+                _df = _pd.read_excel(_ex, dtype=str, keep_default_na=False)
+                _tiene = (not _df.empty) and any(
+                    any(str(v).strip() for v in _r.values) for _, _r in _df.iterrows()
+                )
+            except Exception:
+                _tiene = True  # si no se pudo leer (abierto/corrupto), no bloquear por esto
+            if not _tiene:
+                faltantes.append(f"• {s['pais']} · {s['device']}: {_nombre} (vacío / sin leads)")
+        if faltantes:
+            # Dos opciones: crear los Excel vacíos con las columnas del país (respeta el path
+            # _T3 si corresponde), o cerrar. Solo se pueden crear los que NO existen.
+            _creables = []
+            _seen_paths = set()
+            for s in faltantes_sessions:
+                _p = s.get("excel")
+                if _p and _p not in _seen_paths and "temporales" not in _p:
+                    _seen_paths.add(_p)
+                    _creables.append(s)
+            _msg = ("No se encontró un Excel válido (inexistente o vacío) para el/los dispositivo(s) seleccionado(s):\n\n"
+                    + "\n".join(faltantes))
+            if _creables:
+                _msg += ("\n\n¿Querés CREAR el/los Excel vacío(s) con las columnas del país (para completarlos a mano)?\n\n"
+                         "Sí = crear los Excel vacíos    ·    No = cerrar")
+                if messagebox.askyesno("Error Excel", _msg):
+                    _creados = []
+                    for s in _creables:
+                        try:
+                            _cols = build_excel_columns_for_country(s["pais"])
+                            import pandas as _pd
+                            os.makedirs(os.path.dirname(s["excel"]) or DATA_DIR, exist_ok=True)
+                            _pd.DataFrame(columns=_cols).to_excel(s["excel"], index=False)
+                            _creados.append(os.path.basename(s["excel"]))
+                        except Exception as _ce:
+                            log_message(f"[ERROR] No se pudo crear {s.get('excel')}: {_ce}")
+                    if _creados:
+                        messagebox.showinfo(
+                            "Excel creados",
+                            "Se crearon vacíos (solo encabezados). Completá al menos un lead "
+                            "(o generá datos) y volvé a ejecutar:\n\n"
+                            + "\n".join("• " + n for n in _creados))
+            else:
+                messagebox.showerror("Error Excel", _msg
+                                     + "\n\nGenerá los datos (con al menos un lead) antes de ejecutar.")
+            return
+
+        import pandas as pd
+        total_leads = 0
+        for idx, s in enumerate(active_sessions_list):
+            s["sess_id"] = idx
+            rc = 0
+            if s["dtype"] == "desktop" and s["excel"] and os.path.exists(s["excel"]):
+                try:
+                    rc = len(pd.read_excel(s["excel"]))
+                except Exception:
+                    rc = 1
+            else:
+                rc = 1
+            s["rows_count"] = max(1, rc)
+            total_leads += s["rows_count"]
+
+        # Persistir email + enviar_mail en config_global (lo lee el backend de email)
+        enviar_mail = bool(var_enviar_email.get())
+        _email_modo = var_modo_email.get()  # "por_pais" | "consolidado"
+        dest = email_entry.get().strip()
+        try:
+            _cfg = cargar_config_global()
+            _cfg["email_destinatario"] = dest
+            _cfg["enviar_mail"] = enviar_mail
+            # Opt-in real: sólo adjunta lo que el usuario tildó (no forzar True por default).
+            _cfg["adjuntar_resultados"] = bool(var_adjuntar_res.get())
+            _cfg["adjuntar_screenshots"] = bool(var_adjuntar_ss.get())
+            guardar_config_global(_cfg)
+        except Exception:
+            pass
+
+        background = not bool(var_ver_navegador.get())  # ver navegador → visible
+        stop_event = threading.Event()
+
+        if not scheduled:
+            btn_enviar.config(state="disabled", text=" EN CURSO...", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
+        log_message(f"[INFO] Iniciando ejecución {'programada' if scheduled else 'manual'}: "
+                    f"{len(market_jobs)} mercado(s) · {total_sessions} sesión(es) · "
+                    f"mercados={'paralelo' if mercados_par else 'consecutivo'} · "
+                    f"excels={'paralelo' if excels_par else 'consecutivo'}.")
+
+        # Crear modal centrado
+        modal = tk.Toplevel(root)
+        modal.overrideredirect(True) # Quitar bordes de Windows
+        modal_width = 520
+        modal_height = 370
+        MODAL_BG = "#231830"
+        MODAL_PILL_BG = "#38234D"
         
-        # Crear nueva ventana
-        ventana_ejemplos = Toplevel(root)
-        ventana_ejemplos.title(" ")
-        ventana_ejemplos.geometry("980x700")
-        ventana_ejemplos.minsize(700, 500)
-        ventana_ejemplos.configure(bg=APP_BG_COLOR)
+        # Centrar relativo a la app
+        px = root.winfo_rootx() + (root.winfo_width() - modal_width) // 2
+        py = root.winfo_rooty() + (root.winfo_height() - modal_height) // 2
+        modal.geometry(f"{modal_width}x{modal_height}+{px}+{py}")
+        modal.configure(bg=MODAL_BG, bd=1, highlightthickness=1, highlightbackground=BORDER_COLOR)
 
-        icon_path = os.path.join(ASSET_DIR, "icon.ico")
-        if os.path.exists(icon_path):
+        # Al cerrar el modal por CUALQUIER motivo, el botón vuelve a su estado original.
+        def _reset_exec_btn(_e=None):
+            if scheduled:
+                return
             try:
-                ventana_ejemplos.iconbitmap(icon_path)
+                btn_enviar.config(state="normal", text=" EJECUTAR ENVÍO",
+                                  bg=EXECUTE_BG, fg=EXECUTE_FG, cursor="hand2")
+                refresh_execute_state()
             except Exception:
                 pass
+        modal.bind("<Destroy>", lambda e: _reset_exec_btn() if str(e.widget) == str(modal) else None, add="+")
 
-        container = Frame(ventana_ejemplos, bg=APP_BG_COLOR)
-        container.pack(fill="both", expand=True)
+        def on_cerrar():
+            _reset_exec_btn()
+            modal.destroy()  # el handler <Destroy> restaura el botón Ejecutar
+            log_message("[INFO] Ventana de ejecución cerrada.")
 
-        container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=1)
+        # Modal real: bloquea la interacción con la interfaz de atrás mientras se ejecuta
+        modal.transient(root)
+        modal.attributes("-topmost", False)
+        modal.lift()
+        # No usamos grab_set() para permitir que el usuario minimice o cierre la ventana principal desde la barra de título de Windows.
+        # En su lugar, deshabilitamos la interacción con el área cliente del main window agregando BlockTag a sus widgets.
+        try:
+            modal.focus_set()
+        except Exception:
+            pass
 
-        canvas = Canvas(container, bg=APP_BG_COLOR, highlightthickness=0)
-        v_scroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        h_scroll = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
-        canvas.configure(yscrollcommand=lambda f, l, _sb=v_scroll: _autohide_yscroll(_sb, f, l),
-                         xscrollcommand=h_scroll.set)
-
-        canvas.grid(row=0, column=0, sticky="nsew")
-        v_scroll.grid(row=0, column=1, sticky="ns")
-        h_scroll.grid(row=1, column=0, sticky="ew")
-
-        content_frame = Frame(canvas, bg=APP_BG_COLOR)
-        content_window = canvas.create_window((0, 0), window=content_frame, anchor="nw")
-        text_labels = []
-
-        def _refresh_scrollregion(_event=None):
-            try:
-                canvas.configure(scrollregion=canvas.bbox("all"))
-            except Exception:
-                pass
-
-        def _apply_responsive_layout():
-            try:
-                content_width = max(480, canvas.winfo_width() - 32)
-                wrap = max(420, content_width - 40)
-                for lbl in text_labels:
-                    lbl.configure(wraplength=wrap)
-                _refresh_scrollregion()
-            except Exception:
-                pass
-
-        def _on_canvas_resize(event):
-            try:
-                canvas.itemconfigure(content_window, width=max(480, event.width))
-                _apply_responsive_layout()
-            except Exception:
-                pass
-
-        def _on_mousewheel(event):
-            try:
-                if getattr(event, "state", 0) & 0x0001:
-                    delta = int(-1 * (event.delta / 120))
-                    canvas.xview_scroll(delta, "units")
+        def set_event_blocking(parent, block):
+            for child in parent.winfo_children():
+                if child == modal or str(child).startswith(str(modal)):
+                    continue
+                tags = list(child.bindtags())
+                if block:
+                    if "BlockTag" not in tags:
+                        child.bindtags(("BlockTag",) + tuple(tags))
                 else:
-                    delta = int(-1 * (event.delta / 120))
-                    canvas.yview_scroll(delta, "units")
+                    if "BlockTag" in tags:
+                        new_tags = tuple(t for t in tags if t != "BlockTag")
+                        child.bindtags(new_tags)
+                set_event_blocking(child, block)
+
+        def block_evt(e):
+            if modal.winfo_exists():
+                modal.lift()
+                modal.focus_set()
+            return "break"
+
+        root.bind_class("BlockTag", "<Button-1>", block_evt)
+        root.bind_class("BlockTag", "<ButtonRelease-1>", lambda e: "break")
+        root.bind_class("BlockTag", "<Double-Button-1>", lambda e: "break")
+        root.bind_class("BlockTag", "<B1-Motion>", lambda e: "break")
+        root.bind_class("BlockTag", "<Enter>", lambda e: "break")
+        root.bind_class("BlockTag", "<Leave>", lambda e: "break")
+        root.bind_class("BlockTag", "<Motion>", lambda e: "break")
+        root.bind_class("BlockTag", "<Key>", lambda e: "break")
+        root.bind_class("BlockTag", "<FocusIn>", lambda e: block_evt(e))
+        set_event_blocking(root, True)
+
+        def on_close_modal():
+            if not modal.winfo_exists():
+                return
+            if "Ejecutando" in title_lbl.cget("text"):
+                if messagebox.askyesno("Detener ejecución", "¿Querés detener la ejecución y cerrar la ventana?"):
+                    on_detener()
+                    _reset_exec_btn()
+                    modal.destroy()
+            else:
+                on_cerrar()
+
+        def on_root_close_request():
+            if modal.winfo_exists() and "Ejecutando" in title_lbl.cget("text"):
+                if messagebox.askyesno("Salir", "Hay un test en ejecución. ¿Querés detenerlo y salir de la app?"):
+                    on_detener()
+                    modal.destroy()
+                    root.destroy()
+            else:
+                if modal.winfo_exists():
+                    modal.destroy()
+                root.destroy()
+
+        orig_close_protocol = root.protocol("WM_DELETE_WINDOW")
+        root.protocol("WM_DELETE_WINDOW", on_root_close_request)
+
+
+
+        unmap_id = root.bind("<Unmap>", lambda e: modal.withdraw() if (e.widget == root and modal.winfo_exists()) else None, add="+")
+        map_id = root.bind("<Map>", lambda e: (modal.deiconify(), modal.lift()) if (e.widget == root and modal.winfo_exists()) else None, add="+")
+        focus_id = root.bind("<FocusIn>", lambda e: modal.lift() if (modal.winfo_exists() and e.widget.winfo_toplevel() == root and e.widget != modal and not str(e.widget).startswith(str(modal))) else None, add="+")
+
+        def cleanup_root_binds(e=None):
+            if e and str(e.widget) != str(modal):
+                return
+            try:
+                root.unbind("<Unmap>", unmap_id)
+                root.unbind("<Map>", map_id)
+                root.unbind("<FocusIn>", focus_id)
+                root.protocol("WM_DELETE_WINDOW", orig_close_protocol)
+                set_event_blocking(root, False)
             except Exception:
-                return "break"
-            return "break"
+                pass
+        modal.bind("<Destroy>", cleanup_root_binds)
 
-        def _on_linux_wheel_up(_event):
-            canvas.yview_scroll(-1, "units")
-            return "break"
+        # Custom Title Bar for minimizing and closing
+        title_bar = tk.Frame(modal, bg=MODAL_BG)
+        title_bar.pack(fill="x", side="top", padx=15, pady=(5, 0))
+        
+        title_lbl_bar = tk.Label(title_bar, text="Ejecución de Test", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+        title_lbl_bar.pack(side="left")
 
-        def _on_linux_wheel_down(_event):
-            canvas.yview_scroll(1, "units")
-            return "break"
+        # Hacer el modal arrastrable/movible
+        def _start_drag(event):
+            modal._drag_start_x = event.x
+            modal._drag_start_y = event.y
 
-        content_frame.bind("<Configure>", _refresh_scrollregion)
-        canvas.bind("<Configure>", _on_canvas_resize)
-        ventana_ejemplos.bind("<MouseWheel>", _on_mousewheel)
-        ventana_ejemplos.bind("<Shift-MouseWheel>", _on_mousewheel)
-        ventana_ejemplos.bind("<Button-4>", _on_linux_wheel_up)
-        ventana_ejemplos.bind("<Button-5>", _on_linux_wheel_down)
+        def _drag(event):
+            x = modal.winfo_x() - modal._drag_start_x + event.x
+            y = modal.winfo_y() - modal._drag_start_y + event.y
+            modal.geometry(f"+{x}+{y}")
 
-        titulo = Label(
-            content_frame,
-            text=" ",
-            font=("Segoe UI", 16, "bold"),
-            bg=APP_BG_COLOR,
-            fg="white",
-            anchor="w",
-            justify="left",
-            wraplength=920,
+        title_bar.bind("<Button-1>", _start_drag)
+        title_bar.bind("<B1-Motion>", _drag)
+        title_lbl_bar.bind("<Button-1>", _start_drag)
+        title_lbl_bar.bind("<B1-Motion>", _drag)
+        
+        btn_cls = tk.Button(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
+        btn_cls.pack(side="right")
+        btn_cls.bind("<Enter>", lambda e: btn_cls.config(bg="#E74C3C", fg="white"))
+        btn_cls.bind("<Leave>", lambda e: btn_cls.config(bg=MODAL_BG, fg="#C5A9DF"))
+
+        btn_min = tk.Button(title_bar, text="—", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=root.iconify)
+        btn_min.pack(side="right", padx=2)
+        btn_min.bind("<Enter>", lambda e: btn_min.config(bg="#38234D"))
+        btn_min.bind("<Leave>", lambda e: btn_min.config(bg=MODAL_BG))
+
+        # 1. Header (Ejecutando / Completo)
+        header_frame = tk.Frame(modal, bg=MODAL_BG)
+        header_frame.pack(fill="x", padx=20, pady=(5, 10))
+        
+        icon_lbl = tk.Label(header_frame, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+        icon_lbl.pack(side="left")
+        
+        # Animación de rotación del icono
+        rotation_glyphs = ["↻", "➔", "↻", "➔"]
+        def rotate_icon(idx=0):
+            if modal.winfo_exists() and "Ejecutando" in title_lbl.cget("text"):
+                icon_lbl.config(text=rotation_glyphs[idx % len(rotation_glyphs)])
+                modal.after(250, lambda: rotate_icon(idx + 1))
+
+        title_info = tk.Frame(header_frame, bg=MODAL_BG)
+        title_info.pack(side="left", padx=10)
+
+        title_lbl = tk.Label(title_info, text="Ejecutando...", font=("Segoe UI", 12, "bold"), bg=MODAL_BG, fg="white")
+        title_lbl.pack(anchor="w")
+        subtitle_lbl = tk.Label(title_info, text=f"0/{total_sessions} lead(s) completados", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
+        subtitle_lbl.pack(anchor="w")
+        rotate_icon()
+        
+        # Botón Detener: pide parada; el lead en curso termina y luego se cierra
+        def on_detener():
+            stop_event.set()
+            btn_detener.config(state="disabled", text=" Deteniendo...")
+            try:
+                run_note.config(text="Deteniendo… (termina el lead en curso)", fg="#F8C471")
+            except Exception:
+                pass
+            log_message("[WARN] Detención solicitada por el usuario.")
+
+        btn_detener = tk.Button(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
+                                font=("Segoe UI", 9, "bold"),
+                                bg="#3D1220", fg="#F1948A", relief="flat", bd=0, highlightthickness=1,
+                                highlightbackground="#F1948A", cursor="hand2", command=on_detener, padx=12, pady=4)
+        btn_detener.pack(side="right")
+        btn_detener.bind("<Enter>", lambda e: btn_detener.config(bg="#5E1D31") if btn_detener["state"] == "normal" else None)
+        btn_detener.bind("<Leave>", lambda e: btn_detener.config(bg="#3D1220") if btn_detener["state"] == "normal" else None)
+
+        # 2. Badges Row
+        badges_row = tk.Frame(modal, bg=MODAL_BG)
+        badges_row.pack(fill="x", padx=20, pady=5)
+
+        def make_pill(parent, text, icon=None):
+            img = get_button_icon(icon) if icon else None
+            lbl = tk.Label(parent, text=text, font=("Segoe UI", 8, "bold"), bg=MODAL_PILL_BG, fg="white", padx=8, pady=3,
+                           bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+            if img:
+                lbl.config(image=img, compound="left")
+            lbl.pack(side="left", padx=3)
+            return lbl
+
+        if url_par:
+            make_pill(badges_row, f" Por URL: Paralelo (máx {url_max})", icon="link_lav.png")
+            make_pill(badges_row, " 1 navegador por URL", icon="gear_lav.png")
+        else:
+            make_pill(badges_row, f" Mercados: {'Paralelo' if mercados_par else 'Consecutivo'}", icon="link_lav.png")
+            make_pill(badges_row, f" Excels: {'Paralelo' if excels_par else 'Consecutivo'}", icon="gear_lav.png")
+        make_pill(badges_row, f" {total_sessions} lead(s)", icon="monitor_lav.png")
+
+        # Aviso durante la ejecución (se quita al completar)
+        run_note = tk.Label(modal, text="⚠ No podés cerrar esta ventana mientras se ejecuta. Para correr otro test ahora, abrí otra ventana de la app.",
+                            font=("Segoe UI", 8, "italic"), bg=MODAL_BG, fg="#F8C471", wraplength=480, justify="left")
+        run_note.pack(anchor="w", padx=20, pady=(4, 8))
+
+        def _ui(fn):
+            try:
+                root.after(0, fn)
+            except Exception:
+                pass
+
+        # 3. Una barra de progreso por MERCADO (país). El nombre aparece una sola vez
+        #    arriba de su barra; la barra se llena a medida que avanza.
+        from collections import OrderedDict as _OrderedDict
+        _pais_totals = _OrderedDict()
+        _pais_devices = {}
+        for _s in active_sessions_list:
+            _pais_totals[_s["pais"]] = _pais_totals.get(_s["pais"], 0) + 1
+            
+            # Formatear el nombre del dispositivo para mostrar
+            dev_name = _s.get("device") or ""
+            if "·URL" in dev_name:
+                dev_name = dev_name.split("·URL")[0]
+            if dev_name == "Mac":
+                dev_name = "Mac LT"
+            elif dev_name == "Android":
+                dev_name = "Android LT"
+                
+            if _s["pais"] not in _pais_devices:
+                _pais_devices[_s["pais"]] = []
+            if dev_name and dev_name not in _pais_devices[_s["pais"]]:
+                _pais_devices[_s["pais"]].append(dev_name)
+
+        markets_frame = tk.Frame(modal, bg=MODAL_BG)
+        markets_frame.pack(fill="x", padx=20, pady=(2, 8))
+
+        _pais_bars = {}
+        for _p, _tot in _pais_totals.items():
+            _row = tk.Frame(markets_frame, bg=MODAL_BG)
+            _row.pack(fill="x", pady=(0, 9))
+            _hdr = tk.Frame(_row, bg=MODAL_BG)
+            _hdr.pack(fill="x")
+            
+            # Formatear el texto de dispositivos
+            devs_list = _pais_devices.get(_p, [])
+            devs_str = " — " + " / ".join(devs_list) if devs_list else ""
+            display_name = f"{_p}{devs_str}"
+            
+            tk.Label(_hdr, text=display_name, font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white").pack(side="left")
+            _stx = tk.Label(_hdr, text=f"0/{_tot} lead(s)", font=("Segoe UI", 8), bg=MODAL_BG, fg=TEXT_SECONDARY)
+            _stx.pack(side="right")
+            _cb = tk.Canvas(_row, height=8, bg="#35164D", highlightthickness=0)
+            _cb.pack(fill="x", pady=(3, 0))
+            _fl = _cb.create_rectangle(0, 0, 0, 8, fill="#F8C471", width=0)
+            _pais_bars[_p] = {"canvas": _cb, "fill": _fl, "status": _stx,
+                              "total": _tot, "done": 0, "ok": 0, "fail": 0}
+
+        # Fracción por sesión (para que la barra se llene también con el avance de leads)
+        _sess_frac = {}
+        _pais_of_sess = {_s["sess_id"]: _s["pais"] for _s in active_sessions_list}
+
+        def _paint_pais(pais):
+            b = _pais_bars.get(pais)
+            if not b or not b["canvas"].winfo_exists():
+                return
+            with _lock:
+                ids = [sid for sid, pp in _pais_of_sess.items() if pp == pais]
+                frac = sum(_sess_frac.get(sid, 0.0) for sid in ids) / max(1, b["total"])
+                done, tot, okc, failc = b["done"], b["total"], b["ok"], b["fail"]
+            w = int(max(1, b["canvas"].winfo_width()) * max(0.0, min(1.0, frac)))
+            b["canvas"].coords(b["fill"], 0, 0, w, 8)
+            if done >= tot:
+                col = "#F1948A" if failc else "#82E0AA"
+                b["canvas"].itemconfig(b["fill"], fill=col)
+                b["status"].config(text=f"✓ {okc} OK · {failc} error(es)", fg=col)
+            else:
+                b["status"].config(text=f"{done}/{tot} lead(s) listos", fg=TEXT_SECONDARY)
+
+        _dev_label = {"desktop": None, "mac": "Mac LT (Safari)", "android": "Android LT"}
+
+        def show_completed(ok_total, fail_total, detenido, err_msg):
+            _exec_state["running"] = False
+            if not modal.winfo_exists():
+                return
+            if detenido:
+                icon_lbl.config(text="■", fg="#F1948A", font=("Segoe UI", 16, "bold"))
+                title_lbl.config(text="Ejecución detenida")
+            elif err_msg:
+                icon_lbl.config(text="✕", fg="#F1948A", font=("Segoe UI", 16, "bold"))
+                title_lbl.config(text="Ejecución con error")
+            else:
+                icon_lbl.config(text="✓", fg="#82E0AA", font=("Segoe UI", 18, "bold"))
+                title_lbl.config(text="Ejecución completada")
+            try:
+                btn_detener.pack_forget()
+            except Exception:
+                pass
+            try:
+                run_note.destroy()
+            except Exception:
+                pass
+
+            # Completar todas las barras por mercado
+            for _p, b in _pais_bars.items():
+                if not b["canvas"].winfo_exists():
+                    continue
+                _col = "#F1948A" if (b["fail"] or err_msg or detenido) else "#82E0AA"
+                _wfull = max(1, b["canvas"].winfo_width())
+                b["canvas"].itemconfig(b["fill"], fill=_col)
+                b["canvas"].coords(b["fill"], 0, 0, _wfull, 8)
+                b["status"].config(text=f"✓ {b['ok']} OK · {b['fail']} error(es)", fg=_col)
+
+            if err_msg:
+                tk.Label(modal, text=f"✕ {err_msg}", font=("Segoe UI", 8), bg=MODAL_BG, fg="#F1948A",
+                         wraplength=480, justify="left").pack(anchor="w", padx=20, pady=(2, 0))
+
+            if scheduled:
+                tk.Label(modal, text="✓ Ya podés cerrar esta ventana. Los tests programados posteriores se ejecutarán igual.",
+                         font=("Segoe UI", 8, "italic"), bg=MODAL_BG, fg="#82E0AA", wraplength=480, justify="left").pack(anchor="w", padx=20, pady=(2, 0))
+
+            # Banner de email (el backend encola el envío si "Enviar mail" está activo)
+            if enviar_mail and not detenido:
+                if dest:
+                    _bg, _fg, _tx = "#1F3A30", "#82E0AA", f"✉  Email de resultados encolado a: {dest}"
+                else:
+                    _bg, _fg, _tx = "#3A1F22", "#F1948A", "⚠  Falta el destinatario: no se envió email."
+            else:
+                _bg, _fg, _tx = BUTTON_INACTIVE, TEXT_SECONDARY, "✉  Envío de email desactivado."
+            _eb = tk.Frame(modal, bg=_bg, bd=0, highlightthickness=1, highlightbackground=_fg)
+            _eb.pack(fill="x", padx=20, pady=5)
+            tk.Label(_eb, text=_tx, font=("Segoe UI", 9, "bold"), bg=_bg, fg=_fg, pady=4, wraplength=475, justify="center").pack(anchor="center")
+
+            summary_row = tk.Frame(modal, bg=MODAL_BG)
+            summary_row.pack(fill="x", padx=20, pady=5)
+            tk.Label(summary_row, text=f"🟢 {ok_total} OK      🔴 {fail_total} con error", font=("Segoe UI", 9, "bold"),
+                     bg=MODAL_BG, fg="white").pack(side="left")
+
+
+
+            btn_close = tk.Button(modal, text="Cerrar resultados", font=("Segoe UI", 10, "bold"), bg="#AED6F1", fg="#110518",
+                                  relief="flat", bd=0, cursor="hand2", command=on_cerrar, pady=6)
+            btn_close.pack(fill="x", padx=20, pady=(15, 10))
+            btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#D4E6F1"))
+            btn_close.bind("<Leave>", lambda e: btn_close.config(bg="#AED6F1"))
+
+        # Estado compartido entre sesiones (thread-safe)
+        _lock = threading.Lock()
+        _st = {"ok": 0, "fail": 0, "done": 0, "err": ""}
+        _email_results = []  # entradas para el email consolidado / por país
+        _email_lock = threading.Lock()
+        # LambdaTest Android suele permitir 1 sesión concurrente (device real): serializamos
+        # SOLO las sesiones Android para que TODOS los países se ejecuten (en cola), sin que
+        # una quede afuera. El resto (desktop / Mac) sigue en paralelo.
+        _android_sem = threading.Semaphore(1)
+
+        def _bump(pais, sess_id=None, ok=0, fail=0, err=""):
+            with _lock:
+                _st["ok"] += ok
+                _st["fail"] += fail
+                _st["done"] += 1
+                if err:
+                    _st["err"] = err
+                if sess_id is not None:
+                    _sess_frac[sess_id] = 1.0  # sesión terminada = barra de esa sesión llena
+                b = _pais_bars.get(pais)
+                if b:
+                    b["done"] += 1
+                    b["ok"] += ok
+                    b["fail"] += fail
+                done, total = _st["done"], total_sessions
+            def _u():
+                if modal.winfo_exists():
+                    subtitle_lbl.config(text=f"{done}/{total} lead(s) completados")
+                    _paint_pais(pais)
+            _ui(_u)
+
+        def _collect_lt_email(pais, navegador, viewport, summary):
+            """Registra el resultado LT para email y, si es modo por país, lo envía ya."""
+            if not (enviar_mail and not stop_event.is_set()):
+                return
+            _rp = summary.get("results_excel") if summary else None
+            if not _rp:
+                return
+            _entry = {"pais": pais, "navegador": navegador, "viewport": viewport,
+                      "estado": "completado", "excel_path": _rp, "screenshots_dir": None}
+            with _email_lock:
+                _email_results.append(_entry)
+            if _email_modo == "por_pais":
+                try:
+                    from interface.helpers_interface import enviar_email_resultados_consolidados
+                    enviar_email_resultados_consolidados([_entry])
+                except Exception as _e:
+                    log_message(f"[ERROR] email LT {pais}: {_e}")
+
+        def _run_session(sess):
+            """Corre una sesión (un Excel de un mercado en un dispositivo)."""
+            if stop_event.is_set():
+                return
+            pais, dtype, browser, device, excel = sess["pais"], sess["dtype"], sess["browser"], sess["device"], sess["excel"]
+
+            _sid = sess["sess_id"]
+
+            def _set_cur():
+                if modal.winfo_exists():
+                    title_lbl.config(text="Ejecutando...")
+            _ui(_set_cur)
+
+            try:
+                if dtype == "desktop":
+                    from core.generic_country_base import GenericCountryBase
+                    form = GenericCountryBase(pais, browser=browser, viewport="fullscreen",
+                                              headless=False, background=background, is_scheduled=scheduled)
+                    if excel:
+                        form.EXCEL_PATH = excel  # ← una sesión por Excel generado
+                    def _pcb(done, total):
+                        with _lock:
+                            _sess_frac[_sid] = (done / total) if total else 0.0
+                        _ui(lambda: _paint_pais(pais) if modal.winfo_exists() else None)
+                    form.run(progress_callback=_pcb)
+                    if enviar_mail and not stop_event.is_set():
+                        rp = getattr(form, "RESULTADOS_PATH", None)
+                        sd = getattr(form, "SCREENSHOT_DIR", None)
+                        if rp:
+                            _entry = {"pais": pais, "navegador": browser, "viewport": "fullscreen",
+                                      "estado": "completado", "excel_path": rp, "screenshots_dir": sd}
+                            with _email_lock:
+                                _email_results.append(_entry)
+                            if _email_modo == "por_pais":
+                                from interface.helpers_interface import enviar_email_resultados
+                                enviar_email_resultados(pais, rp, sd, browser=browser, viewport="fullscreen")
+                    _bump(pais, _sid, ok=1)
+                elif dtype == "mac":
+                    sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_mac"))
+                    import lt_controller  # type: ignore
+                    b_name = f"Osocio Automatizado LT MAC - {pais}" if scheduled else f"Osocio LT Mac - Envío Manual - {pais}"
+                    summary = lt_controller.run(pais=pais, build_name=b_name, excel_path=excel) or {}
+                    _collect_lt_email(pais, "lambdatest_mac", "mac", summary)
+                    _bump(pais, _sid, ok=int(summary.get("ok", 0)), fail=int(summary.get("failed", 0)))
+                elif dtype == "android":
+                    sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_android"))
+                    import lt_android_controller  # type: ignore
+                    with _android_sem:  # 1 sesión Android a la vez → todos los países corren
+                        if stop_event.is_set():
+                            return
+                        b_name = f"Osocio Automatizado LT ANDROID - {pais}" if scheduled else f"Osocio LT Android - Envío Manual - {pais}"
+                        summary = lt_android_controller.run(pais=pais, build_name=b_name, excel_path=excel) or {}
+                    _collect_lt_email(pais, "lambdatest_android", "android", summary)
+                    _bump(pais, _sid, ok=int(summary.get("ok", 0)), fail=int(summary.get("failed", 0)))
+            except Exception as e:
+                log_message(f"[ERROR] {pais}/{device}: {e}")
+                _bump(pais, _sid, fail=1, err=str(e)[:200])
+
+        def _run_market(sessions):
+            """Corre las sesiones de un mercado. Si mercados_par o excels_par están
+            activos, lanza todos los dispositivos/Excels del mercado en paralelo
+            (Chrome local y LambdaTest no compiten, corren en máquinas distintas)."""
+            _parallel = (excels_par or mercados_par) and len(sessions) > 1
+            if _parallel:
+                ts = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in sessions]
+                for t in ts:
+                    t.start()
+                for t in ts:
+                    t.join()
+            else:
+                for s in sessions:
+                    if stop_event.is_set():
+                        break
+                    _run_session(s)
+
+        def _worker():
+            _ensure_serialized_setup()  # evita choque de resultados en paralelo
+            if url_par:
+                # Una sesión por URL, todas en paralelo con tope de concurrencia (url_max)
+                sem = threading.Semaphore(url_max)
+
+                def _guarded(s):
+                    if stop_event.is_set():
+                        return
+                    with sem:
+                        _run_session(s)
+
+                ts = [threading.Thread(target=_guarded, args=(s,), daemon=True) for s in flat_sessions]
+                for t in ts:
+                    t.start()
+                for t in ts:
+                    t.join()
+            elif mercados_par:
+                ts = [threading.Thread(target=_run_market, args=(js,), daemon=True) for _, js in market_jobs]
+                for t in ts:
+                    t.start()
+                for t in ts:
+                    t.join()
+            else:
+                for _pais, js in market_jobs:
+                    if stop_event.is_set():
+                        break
+                    _run_market(js)
+            _detenido = stop_event.is_set()
+            # Modo consolidado: un único email al terminar TODOS los mercados/dispositivos.
+            if enviar_mail and _email_modo == "consolidado" and _email_results and not _detenido:
+                try:
+                    from interface.helpers_interface import enviar_email_resultados_consolidados
+                    enviar_email_resultados_consolidados(list(_email_results))
+                except Exception as _e:
+                    log_message(f"[ERROR] email consolidado: {_e}")
+            _ui(lambda: show_completed(_st["ok"], _st["fail"], _detenido, _st["err"]))
+
+        _exec_state["running"] = True
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def view_results_dialog():
+        carpeta = os.path.join(_APP_BASE, "resultados")
+        try:
+            os.makedirs(carpeta, exist_ok=True)
+            os.startfile(carpeta)
+            log_message("[INFO] Abriendo carpeta de resultados.")
+        except Exception as e:
+            messagebox.showinfo("Resultados", f"Carpeta de resultados:\n{carpeta}\n\n({e})")
+
+    # CTAs en la cabecera de "DATOS POR PAÍS" (junto a la fila de países)
+    btn_resultados = tk.Button(d_header, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
+                               font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg="white",
+                               relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                               padx=14, pady=4, cursor="hand2", command=view_results_dialog)
+    btn_resultados.pack(side="right", padx=(6, 0))
+    btn_resultados.bind("<Enter>", lambda e: btn_resultados.config(bg=BUTTON_HOVER))
+    btn_resultados.bind("<Leave>", lambda e: btn_resultados.config(bg=BUTTON_INACTIVE))
+
+    btn_enviar = tk.Button(d_header, text=" EJECUTAR ENVÍO", image=get_button_icon("play_green.png"), compound="left",
+                           font=("Segoe UI", 10, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
+                           relief="flat", bd=0, activebackground=EXECUTE_HOVER, activeforeground=EXECUTE_FG,
+                           padx=22, pady=7, cursor="hand2", command=execute_send_leads)
+    btn_enviar.pack(side="right", padx=(6, 0))
+    btn_enviar.bind("<Enter>", lambda e: btn_enviar.config(bg=EXECUTE_HOVER) if btn_enviar['state'] == "normal" else None)
+    btn_enviar.bind("<Leave>", lambda e: btn_enviar.config(bg=EXECUTE_BG) if btn_enviar['state'] == "normal" else None)
+
+    def refresh_execute_state():
+        if any(selected_countries.values()):
+            btn_enviar.config(state="normal", bg=EXECUTE_BG, fg=EXECUTE_FG, cursor="hand2")
+        else:
+            btn_enviar.config(state="disabled", bg=BUTTON_INACTIVE, fg="#9B86B5", cursor="arrow")
+    refresh_execute_state()
+
+
+    # ==========================================
+    # TAB 2: VALIDACIÓN DE CAMPOS (validation)
+    # ==========================================
+    # Funcionalidad completa e idéntica al run original (interface/field_validation_ui.py).
+    if BACKEND_OK and build_field_validation_tab is not None:
+        build_field_validation_tab(
+            make_scrollable_tab_container(tabs["validation"]),
+            {
+                "app_bg": APP_BG_COLOR,
+                "container_bg": CARD_BG_COLOR,
+                "section_bg": CARD_BG_COLOR,
+                "text_color": TEXT_PRIMARY,
+                "button_bg": BUTTON_ACTIVE,
+                "button_fg": TEXT_PRIMARY,
+                "entry_bg": ENTRY_BG,
+                "entry_fg": "#FFFFFF",
+                "tree_bg": CARD_BG_COLOR,
+                "tree_fg": "#FFFFFF",
+                "heading_bg": BUTTON_INACTIVE,
+            },
         )
-        titulo.pack(fill="x", padx=20, pady=(16, 8))
-        text_labels.append(titulo)
+    else:
+        tk.Label(tabs["validation"],
+                 text="Validación no disponible (backend no cargado).",
+                 bg=APP_BG_COLOR, fg=TEXT_PRIMARY, font=("Segoe UI", 10)).pack(padx=20, pady=20)
 
-        # Contenido intencionalmente vacío por ahora.
-        spacer = Frame(content_frame, bg=APP_BG_COLOR, height=640)
-        spacer.pack(fill="both", expand=True)
 
-        ventana_ejemplos.after(10, _apply_responsive_layout)
+    # ==========================================
+    # TAB: COMPARADOR DEALERS (dealers)
+    # ==========================================
+    # Deshabilitada temporalmente (todavía no está terminada): se deja el tab_button
+    # disabled y esta pestaña muestra un placeholder "Próximamente". El armado real
+    # de la pestaña (build_dealer_comparator_tab) queda listo para reactivar cambiando
+    # DEALER_COMPARATOR_ENABLED a True cuando esté terminada.
+    DEALER_COMPARATOR_ENABLED = True
+    if DEALER_COMPARATOR_ENABLED and BACKEND_OK and build_dealer_comparator_tab is not None:
+        build_dealer_comparator_tab(
+            tabs["dealers"],
+            {
+                "root": root,
+                "APP_BG_COLOR": APP_BG_COLOR,
+                "CARD_BG_COLOR": CARD_BG_COLOR,
+                "BORDER_COLOR": BORDER_COLOR,
+                "ACCENT_COLOR": ACCENT_COLOR,
+                "TEXT_PRIMARY": TEXT_PRIMARY,
+                "TEXT_SECONDARY": TEXT_SECONDARY,
+                "BUTTON_INACTIVE": BUTTON_INACTIVE,
+                "BUTTON_ACTIVE": BUTTON_ACTIVE,
+                "BUTTON_HOVER": BUTTON_HOVER,
+                "VALIDATE_BG": VALIDATE_BG,
+                "VALIDATE_FG": VALIDATE_FG,
+                "VALIDATE_HOVER": VALIDATE_HOVER,
+                "ENTRY_BG": ENTRY_BG,
+                "TEXT_DELETE": TEXT_DELETE,
+                "get_button_icon": get_button_icon,
+                "make_scrollable_tab_container": make_scrollable_tab_container,
+            },
+        )
+    else:
+        tk.Label(tabs["dealers"],
+                 text="🚧 Comparador Dealers — Próximamente",
+                 bg=APP_BG_COLOR, fg=TEXT_PRIMARY, font=("Segoe UI", 14, "bold")).pack(padx=20, pady=40)
 
-    # 5a. Izquierda: "Cómo se usa" (clickeable)
-    label_como_se_usa = Label(
-        frame_footer,
-        text="Cómo se usa",
-        font=("Segoe UI", 11, "underline bold"),
-        bg=APP_BG_COLOR,
-        fg="white",
-        cursor="hand2",
+
+    # ==========================================
+    # TAB 3: GENERAR EXCELS CON DATOS (excel)
+    # ==========================================
+    # Barra de acciones fija (Generar/Regenerar/Borrar), siempre visible sin scrollear
+    excel_actions_bar = tk.Frame(tabs["excel"], bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    excel_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
+    excel_footer_btns = tk.Frame(excel_actions_bar, bg=CARD_BG_COLOR)
+    excel_footer_btns.pack(fill="x", padx=15, pady=8)
+
+    excel_scroll_frame = make_scrollable_tab_container(tabs["excel"])
+
+    # Variables de control específicas de la pestaña de Generación
+    excel_url_mode = tk.StringVar(value="landing_form")
+    excel_selected_disp = {d.lower(): False for d in dispositivos}
+    excel_selected_disp["chrome"] = True
+    excel_disp_btns = {}
+    excel_pais_var = tk.StringVar(value="Argentina")
+    excel_warn_var = tk.StringVar(value="")
+
+    # Detección de país desde las URLs (igual criterio que el original)
+    _EXCEL_COUNTRY_KW = {
+        "argentina": "Argentina", "bolivia": "Bolivia", "brasil": "Brasil", "brazil": "Brasil",
+        "chile": "Chile", "colombia": "Colombia", "ecuador": "Ecuador",
+        "paraguay": "Paraguay", "peru": "Peru", "uruguay": "Uruguay",
+        ".com.ar": "Argentina", ".com.bo": "Bolivia", ".com.br": "Brasil", ".com.co": "Colombia",
+        ".com.ec": "Ecuador", ".com.py": "Paraguay", ".com.pe": "Peru", ".com.uy": "Uruguay",
+    }
+
+    def _detect_excel_country(text):
+        low = text.lower()
+        for kw, pais in _EXCEL_COUNTRY_KW.items():
+            if kw in low:
+                return pais
+        return None
+
+    # ── 0. CARD: MERCADO A GENERAR (un Excel por mercado a la vez) ──
+    mercado_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    mercado_card.pack(fill="x", pady=(0, 8), ipady=5)
+
+    m_header = tk.Frame(mercado_card, bg=CARD_BG_COLOR)
+    m_header.pack(fill="x", padx=15, pady=(6, 4))
+    tk.Label(m_header, text="🌐 MERCADO A GENERAR", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+    tk.Label(m_header, text="Se genera un Excel por mercado a la vez (podés incluir varios dispositivos del mismo mercado).",
+             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=12)
+
+    excel_pais_cards = {}
+    excel_pais_labels = {}
+    m_grid = tk.Frame(mercado_card, bg=CARD_BG_COLOR)
+    m_grid.pack(fill="x", padx=15, pady=2)
+
+    def select_excel_pais(name):
+        excel_pais_var.set(name)
+        for p, card in excel_pais_cards.items():
+            code_lbl, name_lbl = excel_pais_labels[p]
+            if p == name:
+                card.config(highlightbackground=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+                code_lbl.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+                name_lbl.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+            else:
+                card.config(highlightbackground=BORDER_COLOR, bg=CARD_BG_COLOR)
+                code_lbl.config(fg=TEXT_PRIMARY, bg=CARD_BG_COLOR)
+                name_lbl.config(fg=TEXT_SECONDARY, bg=CARD_BG_COLOR)
+        _on_excel_url_change()
+
+    for idx, pais in enumerate(paises_list):
+        code = p_codes[pais]
+        sel0 = (pais == "Argentina")
+        c_bg = BUTTON_INACTIVE if sel0 else CARD_BG_COLOR
+        card = tk.Frame(m_grid, bg=c_bg, bd=0, highlightthickness=1,
+                        highlightbackground=ACCENT_COLOR if sel0 else BORDER_COLOR, cursor="hand2")
+        card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
+        m_grid.columnconfigure(idx % 9, weight=1)
+        code_lbl = tk.Label(card, text=code, font=("Segoe UI", 11, "bold"), bg=c_bg,
+                            fg=ACCENT_COLOR if sel0 else TEXT_PRIMARY, cursor="hand2")
+        code_lbl.pack(pady=(5, 1))
+        name_lbl = tk.Label(card, text=pais, font=("Segoe UI", 8), bg=c_bg,
+                            fg=ACCENT_COLOR if sel0 else TEXT_SECONDARY, cursor="hand2")
+        name_lbl.pack(pady=(0, 5))
+        excel_pais_cards[pais] = card
+        excel_pais_labels[pais] = (code_lbl, name_lbl)
+        for w in (card, code_lbl, name_lbl):
+            w.bind("<Button-1>", lambda e, p=pais: select_excel_pais(p))
+
+    # ── 1. CARD: URLS A PROCESAR ──
+    urls_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    urls_card.pack(fill="x", pady=(0, 8), ipady=6)
+
+    # Cabecera con Título y Toggle Pills a la derecha
+    urls_header = tk.Frame(urls_card, bg=CARD_BG_COLOR)
+    urls_header.pack(fill="x", padx=15, pady=(6, 4))
+
+    tk.Label(urls_header, text="🔗 URLS A PROCESAR", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+
+    mode_btn_frame = tk.Frame(urls_header, bg=CARD_BG_COLOR)
+    mode_btn_frame.pack(side="right")
+
+    mode_btns = {}
+
+    def switch_url_mode(mode):
+        excel_url_mode.set(mode)
+        for m, btn in mode_btns.items():
+            if m == mode:
+                btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
+            else:
+                btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=1, highlightbackground=BUTTON_INACTIVE)
+        
+        # Actualizar formato de texto descriptivo
+        if mode == "landing_form":
+            fmt_val_lbl.config(text="FORMATO: url landing  •  url form  •  url landing  •  url form  •  ...")
+        else:
+            fmt_val_lbl.config(text="FORMATO: url form  •  url form  •  url form  •  url form  •  ...")
+        update_excel_calculation()
+
+    for m_val, m_txt in [("landing_form", "URL Landing + URL Form"), ("solo_forms", "Solo URL Form")]:
+        b = tk.Button(mode_btn_frame, text=m_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                      highlightthickness=1, highlightbackground=BUTTON_INACTIVE,
+                      padx=10, pady=3, cursor="hand2")
+        b.pack(side="left", padx=1)
+        mode_btns[m_val] = b
+        b.config(command=lambda m=m_val: switch_url_mode(m))
+
+        def make_mode_hover(btn=b, val=m_val):
+            btn.bind("<Enter>", lambda e: btn.config(bg=BUTTON_HOVER) if excel_url_mode.get() != val else None)
+            btn.bind("<Leave>", lambda e: btn.config(bg=BUTTON_INACTIVE) if excel_url_mode.get() != val else None)
+        make_mode_hover()
+
+    # Formato e Instrucción
+    fmt_row = tk.Frame(urls_card, bg=CARD_BG_COLOR)
+    fmt_row.pack(fill="x", padx=15, pady=(4, 4))
+    
+    fmt_val_lbl = tk.Label(fmt_row, text="FORMATO: url landing  •  url form  •  url landing  •  url form  •  ...",
+                           font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg="#C5A9DF")
+    fmt_val_lbl.pack(side="left")
+
+    # Aviso de discrepancia país detectado vs mercado seleccionado
+    excel_warn_lbl = tk.Label(urls_card, textvariable=excel_warn_var, font=("Segoe UI", 8, "italic"),
+                              bg=CARD_BG_COLOR, fg="#F8C471", wraplength=900, justify="left")
+    excel_warn_lbl.pack(anchor="w", padx=15, pady=(0, 2))
+
+    # Caja de texto para pegar URLs con barra de scroll vertical
+    excel_text_border = tk.Frame(urls_card, bg=BORDER_COLOR, padx=1, pady=1)
+    excel_text_border.pack(fill="x", padx=15, pady=4)
+
+    v_scroll_text = ttk.Scrollbar(excel_text_border, orient="vertical", style="TScrollbar")
+    excel_text_area = tk.Text(excel_text_border, bg=ENTRY_BG, fg="white", insertbackground="white",
+                              bd=0, relief="flat", height=5, font=("Consolas", 9),
+                              yscrollcommand=v_scroll_text.set)
+    v_scroll_text.config(command=excel_text_area.yview)
+    v_scroll_text.pack(side="right", fill="y")
+    excel_text_area.pack(fill="both", expand=True, padx=(3, 0), pady=3)
+    
+    # Rellenar con datos de prueba iniciales
+    initial_urls = (
+        "https://www.ejemplo.com/landing-de-prueba-1\n"
+        "https://www.ejemplo.com/formulario-de-prueba-1\n"
+        "https://www.ejemplo.com/landing-de-prueba-2\n"
+        "https://www.ejemplo.com/formulario-de-prueba-2\n"
     )
-    label_como_se_usa.pack(side=LEFT, padx=20)
-    label_como_se_usa.bind("<Button-1>", lambda e: mostrar_indicaciones())
+    excel_text_area.insert("1.0", initial_urls)
 
-    # 5b. Centro: "Hecho por Ariel Melgratti"
-    label_autor = Label(
-        frame_footer,
-        text="Made by Ariel Melgratti",
-        font=("Segoe UI", 11, "italic"),
-        bg=APP_BG_COLOR,
-        fg="white",
-    )
-    label_autor.pack(side=LEFT, expand=True)
+    # ── 2. CARD: DISPOSITIVOS PARA EL EXCEL ──
+    excel_devices_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    excel_devices_card.pack(fill="x", pady=(0, 8), ipady=6, before=urls_card)
 
-    # 5c. Derecha: "Más información" (clickeable)
-    label_ejemplos = Label(
-        frame_footer,
-        text="              ",
-        font=("Segoe UI", 11),
-        bg=APP_BG_COLOR,
-        fg="white",
-        #cursor="hand2",
-    )
-    label_ejemplos.pack(side=RIGHT, padx=20)
-    #label_ejemplos.bind("<Button-1>", lambda e: mostrar_ejemplos_formularios())
+    tk.Label(excel_devices_card, text="🖥 DISPOSITIVOS PARA EL EXCEL", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(6, 2))
+    tk.Label(excel_devices_card, text="Seleccioná en qué dispositivos vas a correr este form. El Excel generado incluirá una columna \"Dispositivo\" con esta info.",
+             font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(0, 6))
 
-    def _on_close():
+    # Formularios T3 2.0 (Adobe AEM): mismos datos, nombre …_T3.xlsx para diferenciar
+    var_gen_t3 = tk.BooleanVar(value=False)
+    tk.Checkbutton(excel_devices_card, text="🧩 Es formulario T3 2.0 (genera los Excels como …_T3.xlsx)", variable=var_gen_t3,
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2",
+                   command=lambda: update_excel_calculation()).pack(anchor="w", padx=15, pady=(0, 6))
+
+    # Documentos a generar (solo países con múltiples campos de documento, ej. Brasil).
+    # Cada tipo tildado se genera en su columna (CPF/CNPJ/CEP); destildado → columna vacía.
+    try:
+        from utils.data_generator import DOC_TYPES_BY_COUNTRY as _DOC_TYPES
+    except Exception:
+        _DOC_TYPES = {"Brasil": ["CPF", "CNPJ", "CEP"]}
+    excel_doc_vars = {}
+    excel_docs_frame = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR)
+    # Label creado UNA sola vez (no dentro del refresh, si no se acumulan copias)
+    tk.Label(excel_docs_frame, text="📄 DOCUMENTOS A GENERAR", font=("Segoe UI", 8, "bold"),
+             bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(2, 0))
+    _docs_cb_row = tk.Frame(excel_docs_frame, bg=CARD_BG_COLOR)
+    _docs_cb_row.pack(anchor="w", pady=(0, 4))
+
+    def refresh_doc_types_section(*_):
+        tipos = _DOC_TYPES.get(excel_pais_var.get())
+        for w in _docs_cb_row.winfo_children():
+            w.destroy()
+        if not tipos:
+            excel_docs_frame.pack_forget()
+            return
+        for t in tipos:
+            excel_doc_vars.setdefault(t, tk.BooleanVar(value=True))
+            tk.Checkbutton(_docs_cb_row, text=t, variable=excel_doc_vars[t],
+                           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                           activebackground=CARD_BG_COLOR, activeforeground="white",
+                           font=("Segoe UI", 8), cursor="hand2").pack(side="left", padx=(15 if t == tipos[0] else 8, 0))
+        excel_docs_frame.pack(fill="x")
+
+    def _selected_doc_types():
+        """dict {tipo: bool} para el país actual, o None si el país no usa multi-doc."""
+        tipos = _DOC_TYPES.get(excel_pais_var.get())
+        if not tipos:
+            return None
+        return {t: bool(excel_doc_vars.get(t, tk.BooleanVar(value=True)).get()) for t in tipos}
+
+    # Contenedor horizontal para botones de dispositivos a la izquierda y mensajes al costado
+    excel_content_row = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR)
+    excel_content_row.pack(fill="x", padx=15, pady=4)
+
+    excel_disp_btn_row = tk.Frame(excel_content_row, bg=CARD_BG_COLOR)
+    excel_disp_btn_row.pack(side="left", anchor="nw")
+
+    # Panel de cálculo dinámico para múltiples archivos
+    calc_lbl = tk.Label(excel_content_row, text="", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", justify="left", anchor="nw")
+    calc_lbl.pack(side="left", fill="both", expand=True, padx=(20, 0), anchor="nw")
+
+    def update_excel_calculation(*_):
+        # 1. Contar URLs válidas ingresadas
+        raw_text = excel_text_area.get("1.0", "end-1c")
+        lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
+        num_urls = len(lines)
+        
+        # Si es modo par (Landing+Form), dividimos por 2
+        is_pair_mode = (excel_url_mode.get() == "landing_form")
+        effective_urls = num_urls // 2 if is_pair_mode else num_urls
+
+        t3 = bool(var_gen_t3.get())
+
+        # Modo Excel compartido: un único Excel genérico para todos los dispositivos
+        if excel_mode_holder[0] == "compartido":
+            pais_actual = excel_pais_var.get()
+            calc_lbl.config(fg="#F8C471",
+                            text=f"Modo Excel compartido: se generará 1 solo Excel con {effective_urls} filas para TODOS los dispositivos.\n"
+                                 f"Archivo: {_lead_excel_name(pais_actual, 'Generico', t3)}\n"
+                                 f"⚠ Mismos datos para todos → posibles duplicados.")
+            return
+
+        # 2. Obtener lista de dispositivos seleccionados
+        selected_list = [d.capitalize() for d in dispositivos if excel_selected_disp[d.lower()]]
+        num_devices = len(selected_list)
+        
+        if num_devices == 0:
+            calc_lbl.config(text="⚠ Sin selección: se elegirá un dispositivo aleatorio para enviar y generar un solo Excel (ej. Chrome).", fg="#F8C471")
+            return
+            
+        calc_lbl.config(fg="#C5A9DF")
+        pais_actual = excel_pais_var.get()
+        
+        if num_devices == 1:
+            device_name = selected_list[0]
+            calc_lbl.config(text=f"El Excel tendrá {effective_urls} filas. Columna Dispositivo: {device_name}.\n"
+                                 f"Archivo a generar: {_lead_excel_name(pais_actual, _device_excel_suffix(device_name), t3)}")
+        else:
+            files_lines = []
+            for dev in selected_list:
+                files_lines.append(f"• {_lead_excel_name(pais_actual, _device_excel_suffix(dev), t3)} ({effective_urls} filas con datos aleatorios independientes)")
+            files_str = "\n".join(files_lines)
+            calc_lbl.config(text=f"Se generarán {num_devices} Excels independientes (uno por cada dispositivo):\n{files_str}")
+
+    def toggle_excel_disp(name):
+        key = name.lower()
+        excel_selected_disp[key] = not excel_selected_disp[key]
+        btn = excel_disp_btns[key]
+        if excel_selected_disp[key]:
+            btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
+        else:
+            btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=1, highlightbackground=BUTTON_INACTIVE)
+        update_excel_calculation()
+
+    for disp in dispositivos:
+        d_key = disp.lower()
+        init_bg = BUTTON_ACTIVE if d_key == "chrome" else BUTTON_INACTIVE
+        init_fg = "white" if d_key == "chrome" else TEXT_SECONDARY
+        init_hb = ACCENT_COLOR if d_key == "chrome" else BUTTON_INACTIVE
+        
+        b = tk.Button(excel_disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
+                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                      highlightthickness=1, highlightbackground=init_hb,
+                      padx=10, pady=4, cursor="hand2")
+        b.pack(side="left", padx=2)
+        excel_disp_btns[d_key] = b
+        b.config(command=lambda n=disp: toggle_excel_disp(n))
+
+        def make_excel_disp_hover(btn=b, k=d_key):
+            btn.bind("<Enter>", lambda e: btn.config(bg=BUTTON_HOVER) if not excel_selected_disp[k] else None)
+            btn.bind("<Leave>", lambda e: btn.config(bg=BUTTON_INACTIVE) if not excel_selected_disp[k] else None)
+        make_excel_disp_hover()
+
+    def _on_excel_url_change(*_):
+        detected = _detect_excel_country(excel_text_area.get("1.0", "end-1c"))
+        sel = excel_pais_var.get()
+        if detected and detected != sel:
+            excel_warn_var.set(f"⚠ Las URLs parecen de {detected} pero tenés seleccionado {sel}. Seleccioná el mercado correcto antes de generar.")
+        else:
+            excel_warn_var.set("")
+        refresh_doc_types_section()
+        update_excel_calculation()
+
+    excel_text_area.bind("<KeyRelease>", _on_excel_url_change)
+    refresh_doc_types_section()  # estado inicial (Argentina → oculto)
+
+
+
+    # Comandos de Generación de Excels (reales, con datos aleatorios por dispositivo)
+    def _build_excel_pares():
+        raw = excel_text_area.get("1.0", "end-1c")
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        if not lines:
+            return None, "Ingresá al menos una URL."
+        if excel_url_mode.get() == "solo_forms":
+            return [("", u) for u in lines], None
+        if len(lines) % 2 != 0:
+            return None, f"En modo Landing+Form las URLs deben ir de a pares. Tenés {len(lines)} línea(s)."
+        return [(lines[i], lines[i + 1]) for i in range(0, len(lines), 2)], None
+
+    def _email_device_token(dev):
+        """Token de dispositivo para el email: chrome/firefox/edge/ltmac/ltandroid."""
+        suf = _device_excel_suffix(dev)
+        return {"Mac": "ltmac", "Android": "ltandroid"}.get(suf, suf.lower())
+
+    def _rows_for_pais(pais, pares, columnas, device=None, doc_types=None):
+        try:
+            from utils.data_generator import fixed_values_for_url
+        except Exception:
+            fixed_values_for_url = lambda _u: {}
+        rows = []
+        for landing, form in pares:
+            datos = generar_fila_datos(pais, device=device, doc_types=doc_types)
+            # Valores fijos por form (ej. clubemyev: Modelo Spark EUV + VIN real)
+            fijos = fixed_values_for_url(form) or fixed_values_for_url(landing)
+            if fijos:
+                datos.update(fijos)
+            fila = []
+            for col in columnas:
+                if col == "URL":
+                    fila.append(landing)
+                elif col == "Formulario":
+                    fila.append(form)
+                else:
+                    fila.append(datos.get(col, ""))
+            rows.append(fila)
+        return rows
+
+    def _do_generar(title):
+        pais = excel_pais_var.get()
+        shared = excel_mode_holder[0] == "compartido"
+        selected_list = [d.capitalize() for d in dispositivos if excel_selected_disp[d.lower()]]
+        if not shared and not selected_list:
+            messagebox.showwarning(title, "⚠ Seleccioná al menos un dispositivo.")
+            return
+        pares, err = _build_excel_pares()
+        if err:
+            messagebox.showwarning(title, "⚠ " + err)
+            return
+        detected = _detect_excel_country(excel_text_area.get("1.0", "end-1c"))
+        if detected and detected != pais:
+            if not messagebox.askyesno("Verificá el mercado",
+                                       f"Las URLs parecen de {detected} pero el mercado seleccionado es {pais}.\n\n¿Generar igual para {pais}?"):
+                return
+        columnas = build_excel_columns_for_country(pais)
+        created = []
+        try:
+            import pandas as pd
+            os.makedirs(DATA_DIR, exist_ok=True)
+
+            t3 = bool(var_gen_t3.get())
+            doc_types = _selected_doc_types()  # None para países sin multi-documento
+
+            # Modo compartido: un único Excel genérico con los mismos datos para todos.
+            if shared:
+                rows = _rows_for_pais(pais, pares, columnas, doc_types=doc_types)
+                df = pd.DataFrame(rows, columns=columnas).astype(str)
+                df.to_excel(_generic_excel_path_for(pais, t3), index=False)
+                messagebox.showinfo(title,
+                                    f"✓ Generado en data/:\n\n• {_lead_excel_name(pais, 'Generico', t3)} ({len(rows)} filas)\n\n"
+                                    "ℹ Modo Excel compartido: TODOS los dispositivos usarán este mismo Excel.\n"
+                                    "⚠ Los mismos datos pueden generar leads duplicados o rechazados.")
+                log_message(f"[SUCCESS] Generado Excel genérico (compartido) para {pais}.")
+                try:
+                    if active_p_tab[0] == pais:
+                        update_table_data(pais)
+                except Exception:
+                    pass
+                return
+
+            for dev in selected_list:
+                rows = _rows_for_pais(pais, pares, columnas, device=_email_device_token(dev), doc_types=doc_types)  # datos aleatorios + email con dispositivo
+                fname = _lead_excel_name(pais, _device_excel_suffix(dev), t3)
+                pd.DataFrame(rows, columns=columnas).astype(str).to_excel(os.path.join(DATA_DIR, fname), index=False)
+                created.append(f"• {fname} ({len(rows)} filas)")
+            messagebox.showinfo(title,
+                                "✓ Generado(s) en data/:\n\n" + "\n".join(created) +
+                                "\n\nℹ En \"Datos por País\" se previsualiza el primer Excel (dispositivo).")
+            log_message(f"[SUCCESS] Generados {len(created)} Excel(s) para {pais}.")
+            try:
+                if active_p_tab[0] == pais:
+                    update_table_data(pais)
+            except Exception:
+                pass
+        except PermissionError:
+            messagebox.showerror(title, "Cerrá los Excel abiertos y volvé a intentar.")
+        except Exception as e:
+            messagebox.showerror(title, f"No se pudo generar:\n{e}")
+
+    def cmd_generar_excels():
+        _do_generar("Generar Excels")
+
+    def cmd_regen_datos():
+        _do_generar("Regenerar Datos")
+
+    def cmd_borrar_urls():
+        excel_text_area.delete("1.0", "end")
+        excel_warn_var.set("")
+        excel_text_area.focus_set()
+        update_excel_calculation()
+        log_message("[INFO] URLs borradas. Podés ingresar nuevas.")
+
+
+
+    btn_exec_excel = tk.Button(excel_footer_btns, text=" GENERAR EXCELS", image=get_button_icon("download_blue.png"), compound="left",
+                               font=("Segoe UI", 9, "bold"), bg=VALIDATE_BG, fg=VALIDATE_FG,
+                               relief="flat", bd=0, activebackground=VALIDATE_HOVER, activeforeground=VALIDATE_FG,
+                               padx=18, pady=6, cursor="hand2", command=cmd_generar_excels)
+    btn_exec_excel.pack(side="left", padx=(0, 6))
+    btn_exec_excel.bind("<Enter>", lambda e: btn_exec_excel.config(bg=VALIDATE_HOVER))
+    btn_exec_excel.bind("<Leave>", lambda e: btn_exec_excel.config(bg=VALIDATE_BG))
+
+    btn_regen_excel = tk.Button(excel_footer_btns, text=" REGENERAR DATOS", image=get_button_icon("bolt_yellow.png"), compound="left",
+                                font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_EXCEL,
+                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_EXCEL,
+                                padx=18, pady=6, cursor="hand2", command=cmd_regen_datos)
+    btn_regen_excel.pack(side="left", padx=6)
+    btn_regen_excel.bind("<Enter>", lambda e: btn_regen_excel.config(bg=BUTTON_HOVER))
+    btn_regen_excel.bind("<Leave>", lambda e: btn_regen_excel.config(bg=BUTTON_INACTIVE))
+
+    btn_borrar_urls = tk.Button(excel_footer_btns, text=" Borrar URLs", image=get_button_icon("trash_coral.png"), compound="left",
+                                font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
+                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
+                                padx=18, pady=6, cursor="hand2", command=cmd_borrar_urls)
+    btn_borrar_urls.pack(side="left", padx=6)
+    btn_borrar_urls.bind("<Enter>", lambda e: btn_borrar_urls.config(bg=BUTTON_HOVER))
+    btn_borrar_urls.bind("<Leave>", lambda e: btn_borrar_urls.config(bg=BUTTON_INACTIVE))
+
+
+
+    # Inicializar toggle de modo inicial en la pestaña de Excels
+    switch_url_mode("landing_form")
+
+
+    # ==========================================
+    # CONFIGURACIÓN DEL MOUSEWHEEL GLOBAL Y SEGURO (Scroll suave y rápido)
+    # ==========================================
+    def _on_global_mousewheel(event):
+        for canvas in scrollable_canvases:
+            if not canvas.winfo_viewable():
+                continue
+            
+            # Obtener coordenadas del cursor y del canvas para ver si el mouse está sobre él
+            x, y = root.winfo_pointerxy()
+            wx = canvas.winfo_rootx()
+            wy = canvas.winfo_rooty()
+            ww = canvas.winfo_width()
+            wh = canvas.winfo_height()
+            
+            if wx <= x <= wx + ww and wy <= y <= wy + wh:
+                scroll_amount = 3  # Multiplicador de velocidad de scroll para fluidez
+                if event.delta:
+                    # Windows y MacOS
+                    direction = -1 if event.delta > 0 else 1
+                    canvas.yview_scroll(direction * scroll_amount, "units")
+                elif event.num == 4:
+                    # Linux scroll up
+                    canvas.yview_scroll(-1 * scroll_amount, "units")
+                elif event.num == 5:
+                    # Linux scroll down
+                    canvas.yview_scroll(1 * scroll_amount, "units")
+                break
+
+    # Bindear a nivel root global
+    root.bind_all("<MouseWheel>", _on_global_mousewheel)
+    root.bind_all("<Button-4>", _on_global_mousewheel)
+    root.bind_all("<Button-5>", _on_global_mousewheel)
+
+    # Créditos (footer discreto)
+    footer_credit = tk.Frame(root, bg=APP_BG_COLOR)
+    footer_credit.pack(side="bottom", fill="x", pady=(0, 2))
+    tk.Label(footer_credit, text="Some Updates by Elian Zás", font=("Segoe UI", 7), bg=APP_BG_COLOR, fg="#8A6DB0").pack(side="right", padx=(0, 20))
+    tk.Label(footer_credit, text="Made by Ariel Melgratti", font=("Segoe UI", 8), bg=APP_BG_COLOR, fg="#D8B4FE").pack(expand=True)
+
+    # Inicializar y mostrar pestaña por defecto
+    switch_tab("leads")
+
+    def _restore_from_tray():
+        root.deiconify()
+        root.state("normal")
+        root.focus_force()
+        global _tray_instance
+        if _tray_instance:
+            try:
+                _tray_instance.remove_icon()
+                import ctypes
+                ctypes.windll.user32.DestroyWindow(_tray_instance.hwnd)
+            except Exception:
+                pass
+            _tray_instance = None
+
+    def _force_close():
         try:
             from core.browser_manager import kill_active_drivers
             kill_active_drivers()
+        except Exception:
+            pass
+        try:
+            global _tray_instance
+            if _tray_instance:
+                _tray_instance.remove_icon()
+                import ctypes
+                ctypes.windll.user32.DestroyWindow(_tray_instance.hwnd)
+                _tray_instance = None
         except Exception:
             pass
         try:
@@ -4960,8 +3842,37 @@ def iniciar_interfaz():
             pass
         os._exit(0)
 
+    def _on_close():
+        global _tray_instance
+        # Si hay una ejecución en curso (modal abierto), no cerrar: minimizar para
+        # que la corrida continúe. El usuario puede restaurar la ventana luego.
+        if _exec_state.get("running"):
+            try:
+                root.iconify()
+            except Exception:
+                pass
+            return
+        if os.name == 'nt' and var_minimizar_a_bandeja.get():
+            root.withdraw()
+            if _tray_instance is None:
+                icon_path = os.path.join(ASSET_DIR, "icon.ico")
+                try:
+                    _tray_instance = SysTrayIcon(
+                        icon_path=icon_path,
+                        hover_text="Osocio - Form Automation",
+                        on_quit=_force_close,
+                        on_double_click=_restore_from_tray
+                    )
+                except Exception:
+                    pass
+        else:
+            _force_close()
+
     root.protocol("WM_DELETE_WINDOW", _on_close)
     root.mainloop()
+
+def create_demo_interface():
+    iniciar_interfaz()
 
 if __name__ == "__main__":
     iniciar_interfaz()

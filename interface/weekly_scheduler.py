@@ -85,6 +85,7 @@ class WeeklySchedulerDialog(Toplevel):
         cfg = initial_config or {}
         self._schedule = {k: list(v) for k, v in cfg.get("horarios", {}).items()}
         self._countries = list(cfg.get("paises", []))
+        self._modo_mercados = cfg.get("modo_mercados", "consecutivo")
 
         self._build_ui()
         self._center_on(parent)
@@ -138,6 +139,7 @@ class WeeklySchedulerDialog(Toplevel):
         p = dict(padx=14, pady=8)
         self._build_days_section(body, p)
         self._build_countries_section(body, p)
+        self._build_modo_section(body, p)
 
     def _card_frame(self, parent):
         f = Frame(parent, bg=SCH_CARD, highlightbackground=SCH_BORDER,
@@ -609,6 +611,46 @@ class WeeklySchedulerDialog(Toplevel):
         self._count_lbl.config(
             text=f"{n} de {len(COUNTRIES)} países seleccionados" if n > 0 else "")
 
+    # ── Modo de mercados (consecutivo / paralelo) ───────────────────────────────
+
+    def _build_modo_section(self, parent, pad):
+        card = self._card_frame(parent)
+        card.pack(fill="x", **pad)
+
+        Label(card, text="⚙  EJECUCIÓN DE MERCADOS",
+              font=("Segoe UI", 9, "bold"), bg=SCH_CARD, fg=SCH_MUTED
+              ).pack(anchor="w", padx=12, pady=(12, 6))
+
+        self._modo_mercados_var = StringVar(value=self._modo_mercados)
+
+        row = Frame(card, bg=SCH_CARD)
+        row.pack(fill="x", padx=12, pady=(0, 4))
+        Radiobutton(row, text="Consecutivo (un mercado a la vez)",
+                    variable=self._modo_mercados_var, value="consecutivo",
+                    font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_WHITE,
+                    activebackground=SCH_CARD, selectcolor=SCH_HOVER,
+                    command=self._update_modo_disclaimer).pack(side=LEFT)
+        Radiobutton(row, text="Paralelo (todos los mercados a la vez)",
+                    variable=self._modo_mercados_var, value="paralelo",
+                    font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_WHITE,
+                    activebackground=SCH_CARD, selectcolor=SCH_HOVER,
+                    command=self._update_modo_disclaimer).pack(side=LEFT, padx=(16, 0))
+
+        self._modo_disclaimer = Label(
+            card, text="", font=("Segoe UI", 8), bg=SCH_CARD, fg=SCH_AMBER,
+            justify="left", anchor="w", wraplength=560)
+        self._modo_disclaimer.pack(anchor="w", padx=12, pady=(2, 10))
+        self._update_modo_disclaimer()
+
+    def _update_modo_disclaimer(self):
+        if getattr(self, "_modo_disclaimer", None) is None:
+            return
+        if self._modo_mercados_var.get() == "paralelo":
+            self._modo_disclaimer.config(
+                text="⚠  Si corrés en paralelo con LambdaTest, asegurate de que tu plan soporte suficientes sesiones concurrentes.")
+        else:
+            self._modo_disclaimer.config(text="")
+
     # ── Footer ─────────────────────────────────────────────────────────────────
 
     def _build_footer(self, parent, pad):
@@ -658,6 +700,7 @@ class WeeklySchedulerDialog(Toplevel):
         config = {
             "horarios": {k: v for k, v in self._schedule.items() if v},
             "paises": list(self._countries),
+            "modo_mercados": self._modo_mercados_var.get(),
         }
         self._on_save(config)
         self.destroy()

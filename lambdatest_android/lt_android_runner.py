@@ -117,21 +117,22 @@ def create_lt_android_driver(username: str, access_key: str,
 # RESULTADOS EXCEL (directorio propio para Android)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _get_android_run_number(pais: str) -> int:
-    pattern = os.path.join(_ANDROID_RESULTADOS_DIR, f"resultados_{pais}*.xlsx")
+def _get_android_run_number(pais: str, prefix: str = "resultados_") -> int:
+    pattern = os.path.join(_ANDROID_RESULTADOS_DIR, f"{prefix}{pais}_Android*.xlsx")
     matches = glob.glob(pattern)
     max_n = 0
     for m in matches:
-        base = os.path.basename(m).replace(f"resultados_{pais}", "").replace(".xlsx", "")
+        base = os.path.basename(m).replace(f"{prefix}{pais}_Android", "").replace(".xlsx", "")
         if base.isdigit():
             max_n = max(max_n, int(base))
     return max_n + 1
 
 
-def _setup_android_results_excel(pais: str, source_excel_path: str) -> tuple:
+def _setup_android_results_excel(pais: str, source_excel_path: str, build_name: str = "") -> tuple:
     os.makedirs(_ANDROID_RESULTADOS_DIR, exist_ok=True)
-    run_number   = _get_android_run_number(pais)
-    results_path = os.path.join(_ANDROID_RESULTADOS_DIR, f"resultados_{pais}{run_number}.xlsx")
+    prefix = "Automatizacion_" if "Automatización" in build_name else "resultados_"
+    run_number   = _get_android_run_number(pais, prefix=prefix)
+    results_path = os.path.join(_ANDROID_RESULTADOS_DIR, f"{prefix}{pais}_Android{run_number}.xlsx")
 
     wb = load_workbook(source_excel_path)
     ws = wb.active
