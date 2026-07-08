@@ -24,7 +24,7 @@ if _THIS_DIR not in sys.path:
 
 def run(
     pais: str,
-    device_name: str = "Galaxy S23",
+    device_name: str = "Galaxy S24",
     with_screenshots: bool = False,
     log_fn: Callable = print,
     stop_event: Optional[threading.Event] = None,

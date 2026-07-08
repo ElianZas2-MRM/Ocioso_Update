@@ -29,6 +29,8 @@ a = Analysis(
         'utils.paths',
         'utils.popup_logger',
         'utils.scheduling',
+        'utils.aem_fill',
+        'utils.ty_cta',
         'interface.main_interface',
         'interface.helpers_interface',
         'interface.weekly_scheduler',

@@ -176,6 +176,10 @@ class BrowserManager:
     @staticmethod
     def _create_chrome(viewport, headless, background=True):
         options = ChromeOptions()
+        # "eager" devuelve el control apenas el DOM está listo, sin esperar a que
+        # terminen de cargar trackers/pixels de terceros (doubleclick, demdex, etc.)
+        # que pueden tardar decenas de segundos y no afectan si el form ya está en el DOM.
+        options.page_load_strategy = "eager"
 
         if headless:
             # --start-maximized es ignorado en headless; forzar tamaño explícito
@@ -228,6 +232,7 @@ class BrowserManager:
     @staticmethod
     def _create_firefox(viewport, headless, background=True):
         options = FirefoxOptions()
+        options.page_load_strategy = "eager"
 
         firefox_binary = BrowserManager._get_firefox_binary_path()
         if firefox_binary:
@@ -286,6 +291,7 @@ class BrowserManager:
     @staticmethod
     def _create_edge(viewport, headless, background=True):
         options = EdgeOptions()
+        options.page_load_strategy = "eager"
 
         if headless:
             if viewport == "fullscreen":

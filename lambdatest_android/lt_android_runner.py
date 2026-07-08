@@ -30,7 +30,7 @@ _ANDROID_DEVICES = {
     "Galaxy S24":  "14",
     "Galaxy A54":  "13",
 }
-_DEFAULT_ANDROID_DEVICE = "Galaxy S23"
+_DEFAULT_ANDROID_DEVICE = "Galaxy S24"
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
 _THIS_DIR   = os.path.dirname(os.path.abspath(__file__))   # lambdatest_android/
@@ -106,7 +106,7 @@ def create_lt_android_driver(username: str, access_key: str,
         "deviceName":      device_name,
         "platformVersion": platform_version,
         "realMobile":      True,
-        "visual":          True,
+        "visual":          False,
         "video":           True,
         "console":         False,
         "network":         False,
@@ -143,7 +143,7 @@ def _setup_android_results_excel(pais: str, source_excel_path: str, build_name: 
 
     required_cols = [
         "Resultado", "Formulario Inserto", "Formulario Completado",
-        "TY Page", "Form URL esperada", "Form URL encontrada", "Form coincide",
+        "TY Page", "TYP con CTA", "LINK ISSUE TYP", "Form URL esperada", "Form URL encontrada", "Form coincide",
         "Video LT", "Dashboard LT",
     ]
     headers = [cell.value for cell in ws[1] if cell.value]
@@ -282,6 +282,9 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
                 ty_confirmed=result.get("ty_confirmed", False),
                 iframe_url_found=result.get("iframe_url_found", ""),
                 iframe_url_expected=lead.secure_url or "",
+                ty_cta=result.get("ty_cta", ""),
+                link_issue=result.get("link_issue", ""),
+                link_issue_present=result.get("link_issue_present", False),
             )
             try:
                 wb.save(results_path)
