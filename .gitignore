@@ -37,3 +37,7 @@ CLAUDE.md
 # Logs de ejecucion - se regeneran solos
 debug_run.log
 json/ejecutor_autonomo.log
+
+# Outputs de LambdaTest (regenerables)
+resultados_lambdatest*/
+cta_evidence/

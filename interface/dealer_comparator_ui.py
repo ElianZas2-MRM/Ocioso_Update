@@ -30,6 +30,7 @@ from core.dealer_comparator_runner import (
     StopRequested,
     capture_result_screenshot,
     compare_dealers,
+    detect_hidden_rows,
     export_results_excel,
     filter_rows,
     find_extra_dealers,
@@ -124,14 +125,14 @@ def _default_country_settings(pais):
         "col_dealer": "NOMBRE",
         "col_bac": "BAC",
         "chk_bac": False,
-        "find_extras": False,
+        "find_extras": True,
         "field_checks": [],
         "has_models": False,
         "models_field_id": "models",
         "models_mode": "all",
         "models_list": "",
         "url_mode": "landing_form",
-        "urls_text": "",
+        "url_excel_path": "",
         "browser": "chrome",
         "viewport": "fullscreen",
         "output_mode": "excel",
@@ -170,7 +171,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     style = ttk.Style()
     style.configure("Dealer.TCombobox", fieldbackground=ENTRY_BG, background=BTN_ACTIVE,
                      foreground="white", arrowcolor="white", bordercolor=BORDER,
-                     lightcolor=BORDER, darkcolor=BORDER, padding=4)
+                     lightcolor=BORDER, darkcolor=BORDER, padding=7)
     style.map("Dealer.TCombobox",
               fieldbackground=[("readonly", ENTRY_BG), ("disabled", BTN_INACTIVE)],
               foreground=[("readonly", "white")],
@@ -183,12 +184,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     all_settings = _load_all_settings()
     state = {
-        "pais": PAISES_LIST[0],
+        "pais": None,
         "headers": [], "rows": [], "filtered_rows": [], "results": [],
         "driver": None, "running": False,
         "stop_event": threading.Event(),
         "field_check_widgets": [],
         "modal": None,
+        "expect_absent": False,
     }
 
     # ── Barra de acciones fija (solo Borrar URLs + Ejecutar), siempre visible ──
@@ -199,34 +201,35 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     root_frame = make_scrollable_tab_container(tab_frame)
 
-    # ── Guía rápida (mismo lenguaje que "Envío de Leads") ───────────────────────
+    # ── Guía rápida (breve — el detalle está en la mini-guía de cada bloque) ─────
     guide_card = Frame(root_frame, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
-    guide_card.pack(fill="x", pady=(0, 8), ipady=6)
-    Label(guide_card, text="Configurá el chequeo: elegí mercado, pegá la URL del form y cargá el Excel de dealers",
-          font=("Segoe UI", 10, "bold"), bg=CARD_BG, fg=TEXT_P).pack(anchor="w", padx=15, pady=(6, 2))
-    Label(guide_card,
-          text="① Elegí el mercado y pegá la URL del formulario.   ② Cargá el Excel de dealers y mapeá sus columnas "
-               "(región/ciudad/dealer).   ③ EJECUTAR se habilita solo cuando está todo completo.",
-          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF", justify="left",
-          wraplength=1000).pack(anchor="w", padx=15, pady=(0, 6))
+    guide_card.pack(fill="x", pady=(0, 8), ipady=4)
+    Label(guide_card, text="Seguí los pasos ①→④ de cada bloque. EJECUTAR se habilita cuando está todo completo.",
+          font=("Segoe UI", 9, "bold"), bg=CARD_BG, fg=TEXT_P).pack(anchor="w", padx=15, pady=(6, 6))
 
-    def card(title, subtitle=None):
-        block = Frame(root_frame, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
-        block.pack(fill="x", pady=(0, 8), ipady=5)
+    def card(title, subtitle=None, parent=None, side=None, expand=False, subtitle_wrap=750):
+        """Crea una card. Por defecto se apila a lo ancho en root_frame; si se pasa
+        `parent`+`side` se coloca como columna dentro de un contenedor horizontal."""
+        holder = parent if parent is not None else root_frame
+        block = Frame(holder, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
+        if side:
+            block.pack(side=side, fill="both", expand=expand, padx=(0, 8), pady=(0, 8), ipady=5)
+        else:
+            block.pack(fill="x", pady=(0, 8), ipady=5)
         head = Frame(block, bg=CARD_BG)
         head.pack(fill="x", padx=15, pady=(6, 4))
         Label(head, text=title, font=("Segoe UI", 9, "bold"), bg=CARD_BG, fg=TEXT_S).pack(side="left")
         if subtitle:
             Label(head, text=subtitle, font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF",
-                  wraplength=750, justify="left").pack(side="left", padx=12)
+                  wraplength=subtitle_wrap, justify="left").pack(side="left", padx=12)
         return block
 
     def labeled_entry(parent_frame, label_text, var, width=16):
         col = Frame(parent_frame, bg=CARD_BG)
         col.pack(side="left", padx=6, pady=3)
         Label(col, text=label_text, font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(anchor="w")
-        Entry(col, textvariable=var, width=width, bg=ENTRY_BG, fg="white",
-              insertbackground="white", relief="flat").pack()
+        Entry(col, textvariable=var, width=width, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
+              insertbackground="white", relief="flat").pack(ipady=4, fill="x")
 
     def make_single_select(parent, options, var, default=None, on_select=None):
         """options: lista de (valor, etiqueta). Pills de selección única (estilo Excel/Leads)."""
@@ -243,11 +246,11 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 on_select(val)
 
         for val, label_text in options:
-            b = Button(parent, text=label_text, font=("Segoe UI", 8, "bold"), bg=BTN_INACTIVE, fg=TEXT_S,
+            b = Button(parent, text=label_text, font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg=TEXT_S,
                        relief="flat", bd=0, activebackground=BTN_HOVER, activeforeground="white",
                        highlightthickness=1, highlightbackground=BTN_INACTIVE,
-                       padx=10, pady=3, cursor="hand2", command=lambda v=val: _select(v))
-            b.pack(side="left", padx=2)
+                       padx=16, pady=6, cursor="hand2", command=lambda v=val: _select(v))
+            b.pack(side="left", padx=3)
             btns[val] = b
         if default is not None:
             _select(default)
@@ -263,25 +266,34 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             else:
                 btn.config(bg=BTN_INACTIVE, fg=TEXT_S, highlightthickness=1, highlightbackground=BTN_INACTIVE)
 
-        def _toggle():
+        def _toggle(event=None):
             if locked:
-                return
+                return "break"
             var.set(not var.get())
             _refresh()
+            return "break"
 
-        btn = Button(parent, text=label_text, font=("Segoe UI", 8, "bold"), bg=BTN_INACTIVE, fg=TEXT_S,
-                     relief="flat", bd=0, activebackground=(BTN_HOVER if not locked else BTN_ACTIVE),
-                     activeforeground="white", highlightthickness=1, highlightbackground=BTN_INACTIVE,
-                     padx=10, pady=3, cursor=("arrow" if locked else "hand2"), command=_toggle)
-        btn.pack(side="left", padx=2)
+        btn = Button(parent, text=label_text, font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg=TEXT_S,
+                     relief="flat", bd=0, activebackground=BTN_INACTIVE, activeforeground=TEXT_S,
+                     highlightthickness=1, highlightbackground=BTN_INACTIVE,
+                     padx=16, pady=6, cursor=("arrow" if locked else "hand2"))
+        # Usar bind en lugar de command para evitar que activebackground "trague" el primer click
+        btn.bind("<Button-1>", _toggle)
+        btn.pack(side="left", padx=3)
         _refresh()
-        return btn
+        return btn, _refresh
 
     def ui_log(msg, level="info"):
         LOGGER.info("[%s] %s", level, msg)
 
+    def mini_guide(parent, text):
+        """Mini instructivo dentro de un bloque (una línea, estilo del resto de la app)."""
+        Label(parent, text=text, font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF",
+              wraplength=340, justify="left").pack(anchor="w", padx=15, pady=(0, 4))
+
     # ── 1. Mercado ────────────────────────────────────────────────────────────
-    mercado_card = card("🌐 MERCADO A CHEQUEAR", "Elegí el país cuyo formulario vas a chequear.")
+    mercado_card = card("🌐 MERCADO A CHEQUEAR")
+    mini_guide(mercado_card, "① Elegí el país cuyo formulario vas a chequear.")
     m_grid = Frame(mercado_card, bg=CARD_BG)
     m_grid.pack(fill="x", padx=15, pady=2)
 
@@ -310,107 +322,117 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         for w in (c, code_lbl, name_lbl):
             w.bind("<Button-1>", lambda e, p=pais: select_country(p))
 
-    # ── 2. URLs a procesar (mismo bloque visual que "Generar Excels con Datos") ─
-    urls_card = Frame(root_frame, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
-    urls_card.pack(fill="x", pady=(0, 8), ipady=6)
+    # ── 2. Bloque de 3 columnas: Navegador · Excel de URLs · Modelos ─────────────
+    blockA = Frame(root_frame, bg=root_frame.cget("bg"))
+    blockA.pack(fill="x", pady=(0, 0))
 
-    urls_header = Frame(urls_card, bg=CARD_BG)
-    urls_header.pack(fill="x", padx=15, pady=(6, 4))
-    Label(urls_header, text="🔗 URL DEL FORMULARIO A CHEQUEAR", font=("Segoe UI", 9, "bold"),
-          bg=CARD_BG, fg=TEXT_S).pack(side="left")
-    Label(urls_header, text="Pegá la URL real del formulario a comparar contra el Excel de dealers.",
-          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF").pack(side="left", padx=12)
-
-    mode_btn_frame = Frame(urls_header, bg=CARD_BG)
-    mode_btn_frame.pack(side="right")
-
-    url_mode_var = StringVar(value="landing_form")
-    mode_btns = {}
-
-    def switch_url_mode(mode):
-        url_mode_var.set(mode)
-        for m, btn in mode_btns.items():
-            if m == mode:
-                btn.config(bg=BTN_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT)
-            else:
-                btn.config(bg=BTN_INACTIVE, fg=TEXT_S, highlightthickness=1, highlightbackground=BTN_INACTIVE)
-        if mode == "landing_form":
-            fmt_val_lbl.config(text="FORMATO: url landing  •  url form  •  url landing  •  url form  •  ... "
-                                     "(una o varias, se corren todas en la misma pasada)")
-        else:
-            fmt_val_lbl.config(text="FORMATO: url form  •  url form  •  ... (una por línea, una o varias)")
-
-    for m_val, m_txt in [("landing_form", "URL Landing + URL Form"), ("solo_forms", "Solo URL Form")]:
-        b = Button(mode_btn_frame, text=m_txt, font=("Segoe UI", 8, "bold"), bg=BTN_INACTIVE, fg=TEXT_S,
-                   relief="flat", bd=0, activebackground=BTN_HOVER, activeforeground="white",
-                   highlightthickness=1, highlightbackground=BTN_INACTIVE,
-                   padx=10, pady=3, cursor="hand2", command=lambda m=m_val: switch_url_mode(m))
-        b.pack(side="left", padx=1)
-        mode_btns[m_val] = b
-
-    fmt_row = Frame(urls_card, bg=CARD_BG)
-    fmt_row.pack(fill="x", padx=15, pady=(4, 4))
-    fmt_val_lbl = Label(fmt_row, text="FORMATO: url landing  •  url form  •  url landing  •  url form  •  ...",
-                         font=("Segoe UI", 8, "bold"), bg=CARD_BG, fg="#C5A9DF", wraplength=750, justify="left")
-    fmt_val_lbl.pack(side="left")
-
-    url_text_border = Frame(urls_card, bg=BORDER, padx=1, pady=1)
-    url_text_border.pack(fill="x", padx=15, pady=4)
-    v_scroll_url = ttk.Scrollbar(url_text_border, orient="vertical")
-    url_text_area = Text(url_text_border, bg=ENTRY_BG, fg="white", insertbackground="white",
-                          bd=0, relief="flat", height=5, font=("Consolas", 9),
-                          yscrollcommand=v_scroll_url.set)
-    v_scroll_url.config(command=url_text_area.yview)
-    v_scroll_url.pack(side="right", fill="y")
-    url_text_area.pack(fill="both", expand=True, padx=(3, 0), pady=3)
-
-    url_warn_var = StringVar(value="")
-    url_warn_lbl = Label(urls_card, textvariable=url_warn_var, font=("Segoe UI", 8, "italic"),
-                          bg=CARD_BG, fg="#F8C471", wraplength=750, justify="left")
-    url_warn_lbl.pack(anchor="w", padx=15, pady=(0, 2))
-
-    def _check_url_country_mismatch(*_a):
-        detected = _detect_url_country(url_text_area.get("1.0", "end-1c"))
-        if detected and detected != state["pais"]:
-            url_warn_var.set(
-                f"⚠ Las URLs parecen de {detected} pero tenés seleccionado {state['pais']}. "
-                "Verificá el mercado antes de ejecutar."
-            )
-        else:
-            url_warn_var.set("")
-
-    url_text_area.bind("<KeyRelease>", _check_url_country_mismatch)
-
-    device_row = Frame(urls_card, bg=CARD_BG)
-    device_row.pack(fill="x", padx=15, pady=(4, 4))
-    Label(device_row, text="Navegador:", font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(side="left")
+    # Col 1 — Dispositivos / Navegadores
+    dev_col = card("🖥 NAVEGADOR", parent=blockA, side="left", expand=True, subtitle_wrap=200)
+    mini_guide(dev_col, "② Elegí el navegador con el que se abre el form.")
     browser_var = StringVar(value="chrome")
-    make_single_select(device_row, BROWSER_OPTIONS, browser_var, default="chrome")
-
+    dev_row = Frame(dev_col, bg=CARD_BG)
+    dev_row.pack(anchor="w", padx=15, pady=(0, 2))
+    make_single_select(dev_row, BROWSER_OPTIONS, browser_var, default="chrome")
+    lt_row = Frame(dev_col, bg=CARD_BG)
+    lt_row.pack(anchor="w", padx=15, pady=(2, 2))
+    for _lt in ("Mac LT", "Android LT"):
+        Button(lt_row, text=_lt, font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg="#6E5A86",
+               relief="flat", bd=0, state="disabled", disabledforeground="#6E5A86",
+               highlightthickness=1, highlightbackground=BTN_INACTIVE,
+               padx=14, pady=6).pack(side="left", padx=3)
+    Label(lt_row, text="(próx.)", font=("Segoe UI", 8, "italic"),
+          bg=CARD_BG, fg="#6E5A86").pack(side="left", padx=4)
     ver_navegador_var = BooleanVar(value=False)
-    Checkbutton(urls_card, text="Ver navegador mientras corre (si está apagado, corre atrás sin molestar)",
+    Checkbutton(dev_col, text="Ver navegador mientras corre",
                 variable=ver_navegador_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
-                activebackground=CARD_BG).pack(anchor="w", padx=15, pady=(0, 6))
+                activebackground=CARD_BG, font=("Segoe UI", 9)).pack(anchor="w", padx=15, pady=(2, 6))
+    viewport_var = StringVar(value="fullscreen")  # siempre escritorio
 
-    # Vista siempre escritorio (sin selector: el comparador de dealers no necesita mobile)
-    viewport_var = StringVar(value="fullscreen")
+    # Col 2 — Excel de URLs del form
+    urls_col = card("🔗 EXCEL DE URLs", parent=blockA, side="left", expand=True, subtitle_wrap=200)
+    mini_guide(urls_col, "③ Cargá un Excel con columnas 'URL' y 'Formulario' (como el de Envío de Leads).")
+    url_excel_path_var = StringVar()
+
+    def _pick_url_excel():
+        path = filedialog.askopenfilename(title="Seleccionar Excel de URLs del form",
+                                          filetypes=[("Excel", "*.xlsx *.xls"), ("Todos", "*.*")])
+        if path:
+            url_excel_path_var.set(path)
+            _refresh_url_excel_preview()
+            refresh_execute_state()
+
+    Button(urls_col, text=" Seleccionar Excel de URLs", image=get_button_icon("folder_yellow.png"),
+           compound="left", font=("Segoe UI", 9, "bold"), bg=BTN_ACTIVE, fg="white", relief="flat", bd=0,
+           padx=16, pady=6, cursor="hand2", command=_pick_url_excel).pack(anchor="w", padx=15, pady=(0, 2))
+    Label(urls_col, textvariable=url_excel_path_var, font=("Segoe UI", 8), bg=CARD_BG,
+          fg=TEXT_S, wraplength=320, justify="left").pack(anchor="w", padx=15)
+
+    # Modo fijo: por cada fila decide solo — landing+form si la columna 'URL' tiene valor,
+    # o solo form si viene vacía. (Ya no hay toggle manual.)
+    url_mode_var = StringVar(value="landing_form")
+
+    fmt_val_lbl = Label(urls_col, text="Toma 'URL' (landing) + 'Formulario' por fila; si 'URL' está vacía, usa solo el form.",
+                         font=("Segoe UI", 8, "bold"), bg=CARD_BG, fg="#C5A9DF", wraplength=320, justify="left")
+    fmt_val_lbl.pack(anchor="w", padx=15, pady=(4, 0))
+    url_warn_var = StringVar(value="")
+    Label(urls_col, textvariable=url_warn_var, font=("Segoe UI", 8, "italic"),
+          bg=CARD_BG, fg="#F8C471", wraplength=320, justify="left").pack(anchor="w", padx=15, pady=(0, 6))
+
+    def switch_url_mode(_mode=None):
+        # Compatibilidad: ya no hay toggle; el modo se decide por fila.
+        _refresh_url_excel_preview()
+
+    # Col 3 — se rellena más abajo con el bloque Modelos (models_card usa este parent)
+
+    def _read_url_pairs_from_excel():
+        """Lee el Excel de URLs y devuelve pares (landing_url, form_url) — uno por fila.
+        Resuelve las columnas por nombre ('URL'→landing, 'Formulario'→form) con fallback a
+        A/B. Por fila: si 'URL' (landing) tiene valor → (landing, form); si está vacía →
+        ('', form) (solo form). Así se decide automáticamente sin toggle."""
+        path = url_excel_path_var.get().strip()
+        if not path or not os.path.exists(path):
+            return []
+        try:
+            headers, rows = read_excel_rows(path, header_row=1)
+        except Exception:
+            return []
+        landing_key = resolve_column(headers, "URL") or "_c0"
+        form_key = resolve_column(headers, "Formulario") or "_c1"
+        pairs = []
+        for r in rows:
+            form_url = (r.get(form_key, "") or "").strip()
+            landing_url = (r.get(landing_key, "") or "").strip()
+            if form_url:
+                pairs.append((landing_url, form_url))  # landing "" si la columna viene vacía
+        return pairs
+
+    def _refresh_url_excel_preview(*_a):
+        pairs = _read_url_pairs_from_excel()
+        if not url_excel_path_var.get().strip():
+            url_warn_var.set("")
+            return
+        if not pairs:
+            url_warn_var.set("⚠ No se encontraron URLs de formulario en el Excel (columna 'Formulario').")
+            return
+        detected = _detect_url_country(" ".join(f for _l, f in pairs))
+        if detected and detected != state["pais"]:
+            url_warn_var.set(f"⚠ Las URLs parecen de {detected} pero tenés seleccionado {state['pais']}. "
+                             "Verificá el mercado antes de ejecutar.")
+        else:
+            url_warn_var.set(f"✓ {len(pairs)} form(s) detectados en el Excel.")
+
+    # Alias para el resto del código que ya llamaba a _parse_urls_text()
+    def _parse_urls_text():
+        return _read_url_pairs_from_excel()
 
     switch_url_mode("landing_form")
 
-    def _parse_urls_text():
-        """Devuelve una lista de pares (landing_url, form_url) — soporta uno o varios forms
-        en la misma pasada. En modo 'solo_forms' cada línea es un form suelto (landing="")."""
-        lines = [ln.strip() for ln in url_text_area.get("1.0", "end-1c").split("\n") if ln.strip()]
-        if url_mode_var.get() == "solo_forms":
-            return [("", ln) for ln in lines]
-        pairs = []
-        for i in range(0, len(lines) - 1, 2):
-            pairs.append((lines[i], lines[i + 1]))
-        return pairs
+    # ── 3. Bloque de 2 columnas: Excel de dealers · Columnas del Excel ──────────
+    blockB = Frame(root_frame, bg=root_frame.cget("bg"))
+    blockB.pack(fill="x", pady=(0, 0))
 
-    # ── 3. Excel de dealers ──────────────────────────────────────────────────
-    excel_card = card("📄 EXCEL DE DEALERS A CHEQUEAR",
-                       "Configurá fila de encabezado y columna de filtro: el Excel varía de país a país.")
+    excel_card = card("📄 EXCEL DE DEALERS A CHEQUEAR", parent=blockB, side="left", expand=True)
+    mini_guide(excel_card, "④ Cargá el Excel de dealers esperados, la fila de encabezados y (opcional) el filtro.")
     excel_path_var = StringVar()
     excel_row = Frame(excel_card, bg=CARD_BG)
     excel_row.pack(fill="x", padx=15, pady=(0, 4))
@@ -455,17 +477,17 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         excel_filter_mode_var, default="with_filter", on_select=_refresh_filter_mode_visibility,
     )
 
-    CONDITION_LABELS = ["Incluir", "Excluir", "Buscar extras"]
+    CONDITION_LABELS = ["Incluir", "Excluir"]
     condition_mode_var = StringVar(value="Incluir")
     cond_col = Frame(filter_row, bg=CARD_BG)
     cond_col.pack(side="left", padx=6, pady=3)
     Label(cond_col, text="Condición", font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(anchor="w")
     ttk.Combobox(cond_col, textvariable=condition_mode_var, state="readonly", width=22,
-                 style="Dealer.TCombobox", values=CONDITION_LABELS).pack()
+                 style="Dealer.TCombobox", values=CONDITION_LABELS, font=("Segoe UI", 10)).pack(fill="x")
 
-    # ── 4. Columnas del Excel ────────────────────────────────────────────────
-    columns_card = card("🧭 COLUMNAS DEL EXCEL",
-                        "Decí qué columna del Excel corresponde a cada dato (Columna Dealer es obligatoria).")
+    # ── 4. Columnas del Excel (columna derecha del bloque B) ────────────────────
+    columns_card = card("🧭 COLUMNAS DEL EXCEL", parent=blockB, side="left", expand=True)
+    mini_guide(columns_card, "⑤ Mapeá qué columna del Excel es cada dato (Dealer es obligatoria).")
     levels_label_row = Frame(columns_card, bg=CARD_BG)
     levels_label_row.pack(fill="x", padx=15, pady=(0, 2))
     Label(levels_label_row, text="Campos que tiene el form (id HTML del select):", font=("Segoe UI", 8),
@@ -505,13 +527,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     Checkbutton(opts_row, text="Verificar BAC (opcional — muchos forms no exponen data-bac en el HTML)",
                 variable=chk_bac_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
                 activebackground=CARD_BG).pack(anchor="w")
-    find_extras_var = BooleanVar(value=False)
-    Checkbutton(opts_row,
-                text="También buscar dealers EXTRA (en el form pero no en el Excel) y DUPLICADOS "
-                     "(repetidos en el <select> del form) — mismo efecto que elegir \"Buscar extras\" "
-                     "en Condición",
-                variable=find_extras_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
-                activebackground=CARD_BG).pack(anchor="w")
+    # Extras y duplicados se buscan SIEMPRE (integrado en el flujo normal)
+    find_extras_var = BooleanVar(value=True)
 
     field_check_block = Frame(columns_card, bg=CARD_BG)
     field_check_block.pack(fill="x", padx=15, pady=(4, 6))
@@ -538,10 +555,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         row.pack(fill="x", pady=2)
         column_var = StringVar(value=column)
         field_id_var = StringVar(value=field_id)
-        Entry(row, textvariable=column_var, width=22, bg=ENTRY_BG, fg="white",
-              insertbackground="white", relief="flat").pack(side="left", padx=2)
-        Entry(row, textvariable=field_id_var, width=22, bg=ENTRY_BG, fg="white",
-              insertbackground="white", relief="flat").pack(side="left", padx=2)
+        Entry(row, textvariable=column_var, width=22, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
+              insertbackground="white", relief="flat").pack(side="left", padx=2, ipady=4)
+        Entry(row, textvariable=field_id_var, width=22, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
+              insertbackground="white", relief="flat").pack(side="left", padx=2, ipady=4)
 
         widgets = {"frame": row, "column_var": column_var, "field_id_var": field_id_var}
 
@@ -557,17 +574,15 @@ def build_dealer_comparator_tab(tab_frame, ctx):
            font=("Segoe UI", 8, "bold"), bg=BTN_ACTIVE, fg="white", relief="flat", bd=0,
            cursor="hand2", command=lambda: _add_field_check_row()).pack(anchor="w", pady=2)
 
-    # ── 4b. Modelos ───────────────────────────────────────────────────────────
-    models_card = card("🚗 MODELOS",
-                        "Si el form tiene selector de modelo (id \"models\"), podés correr la comparación "
-                        "para uno o varios modelos puntuales, o para todos los que tenga el form.")
+    # ── 4b. Modelos (3ra columna del bloque A: Navegador · URLs · Modelos) ──────
+    models_card = card("🚗 MODELOS", parent=blockA, side="left", expand=True, subtitle_wrap=200)
+    mini_guide(models_card, "Opcional: si el form tiene selector de Modelo (id \"models\").")
     has_models_var = BooleanVar(value=False)
     models_toggle_row = Frame(models_card, bg=CARD_BG)
     models_toggle_row.pack(fill="x", padx=15, pady=(0, 4))
-    make_toggle_pill(models_toggle_row, "El form tiene selector de Modelo", has_models_var)
-    Label(models_card, text="⚠ Este apartado solo funciona con forms T1 (el id \"models\" estándar). "
-                             "Forms T2/T3 con selector de modelo distinto no están soportados todavía.",
-          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=750,
+    models_toggle_btn, _models_refresh = make_toggle_pill(models_toggle_row, "🚗  Tiene selector de Modelo", has_models_var)
+    Label(models_card, text="⚠ Solo forms T1 (id \"models\" estándar). T2/T3 con selector distinto no soportados aún.",
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=320,
           justify="left").pack(anchor="w", padx=15, pady=(0, 4))
 
     models_body = Frame(models_card, bg=CARD_BG)
@@ -604,8 +619,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     models_list_row = Frame(models_body, bg=CARD_BG)
     Label(models_list_row, text="Modelos (separados por coma):", font=("Segoe UI", 8), bg=CARD_BG,
           fg=TEXT_S).pack(anchor="w")
-    Entry(models_list_row, textvariable=models_list_var, bg=ENTRY_BG, fg="white",
-          insertbackground="white", relief="flat", width=60).pack(anchor="w", pady=(2, 0))
+    Entry(models_list_row, textvariable=models_list_var, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
+          insertbackground="white", relief="flat", width=60).pack(anchor="w", pady=(2, 0), ipady=4, fill="x")
     Label(models_list_row, text="ej: Onix, Tracker, S10", font=("Segoe UI", 8, "italic"), bg=CARD_BG,
           fg="#C5A9DF").pack(anchor="w")
     _refresh_models_mode_visibility()
@@ -649,7 +664,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     presets_row2.pack(fill="x", padx=15, pady=(0, 8))
     Label(presets_row2, text="Cargar:", font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(side="left")
     preset_combo = ttk.Combobox(presets_row2, textvariable=preset_selected_var, state="readonly", width=30,
-                                 style="Dealer.TCombobox")
+                                 style="Dealer.TCombobox", font=("Segoe UI", 10))
     preset_combo.pack(side="left", padx=(4, 10))
 
     def _refresh_preset_combo():
@@ -690,7 +705,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         filter_col_var.set(cfg.get("filter_col", ""))
         filter_value_var.set(cfg.get("filter_value", ""))
         raw_condition = cfg.get("condition_mode", "Incluir")
-        condition_mode_var.set(_LEGACY_CONDITION_MAP.get(raw_condition, raw_condition))
+        norm_condition = _LEGACY_CONDITION_MAP.get(raw_condition, raw_condition)
+        # "Buscar extras" ya no es una condición (los extras se buscan siempre): si una
+        # config vieja lo tenía guardado, se cae a "Incluir".
+        if norm_condition not in CONDITION_LABELS:
+            norm_condition = "Incluir"
+        condition_mode_var.set(norm_condition)
         has_region_var.set(bool(cfg.get("has_region", True)))
         has_city_var.set(bool(cfg.get("has_city", True)))
         col_region_var.set(cfg.get("col_region", "REGION"))
@@ -698,16 +718,15 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         col_dealer_var.set(cfg.get("col_dealer", "NOMBRE"))
         col_bac_var.set(cfg.get("col_bac", "BAC"))
         chk_bac_var.set(bool(cfg.get("chk_bac", False)))
-        find_extras_var.set(bool(cfg.get("find_extras", False)))
+        find_extras_var.set(True)  # Siempre True (extras se buscan siempre)
         has_models_var.set(bool(cfg.get("has_models", False)))
         models_field_id_var.set(cfg.get("models_field_id", "models"))
         select_models_mode(cfg.get("models_mode", "all"))
         models_list_var.set(cfg.get("models_list", ""))
         url_mode_var.set(cfg.get("url_mode", "landing_form"))
         switch_url_mode(url_mode_var.get())
-        url_text_area.delete("1.0", "end")
-        url_text_area.insert("1.0", cfg.get("urls_text", ""))
-        _check_url_country_mismatch()
+        url_excel_path_var.set(cfg.get("url_excel_path", ""))
+        _refresh_url_excel_preview()
         browser_var.set(cfg.get("browser", "chrome"))
         viewport_var.set(cfg.get("viewport", "fullscreen"))
         ver_navegador_var.set(bool(cfg.get("ver_navegador", False)))
@@ -745,7 +764,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "models_mode": models_mode_var.get(),
             "models_list": models_list_var.get(),
             "url_mode": url_mode_var.get(),
-            "urls_text": url_text_area.get("1.0", "end-1c"),
+            "url_excel_path": url_excel_path_var.get(),
             "browser": browser_var.get(),
             "viewport": viewport_var.get(),
             "ver_navegador": ver_navegador_var.get(),
@@ -809,71 +828,158 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             filtered = list(rows)
         else:
             filter_col_key = resolve_column(headers, filter_col_var.get())
-            mode = "exclude" if condition_mode_var.get() == "Excluir" else "include"
-            filtered = filter_rows(rows, filter_col_key, filter_value_var.get(), mode)
+            # Tanto Incluir como Excluir toman las filas que MATCHEAN el valor del filtro
+            # (ej. POSVENTA == "si" o == "no"). La diferencia es la verificación:
+            #   Incluir → el dealer DEBE estar en el form.
+            #   Excluir → el dealer NO debe estar (se chequea ausencia, ver expect_absent).
+            filtered = filter_rows(rows, filter_col_key, filter_value_var.get(), "include")
         state["filtered_rows"] = filtered
+        state["expect_absent"] = (
+            excel_filter_mode_var.get() != "no_filter" and condition_mode_var.get() == "Excluir"
+        )
+
+        # Disclaimer de filas OCULTAS: el Excel a veces viene pre-filtrado (filas escondidas).
+        # Se procesan igual (nada se saltea en silencio), pero se avisa cuáles estaban ocultas.
+        try:
+            hidden = detect_hidden_rows(excel_path, header_row=header_row)
+            hidden_in_filter = [r for r in filtered if r.get("__row__") in hidden]
+            state["hidden_rows"] = hidden
+            if hidden_in_filter:
+                dealer_key = resolve_column(headers, col_dealer_var.get())
+                nombres = ", ".join(
+                    f"fila {r.get('__row__')}: {r.get(dealer_key, '') or '?'}" for r in hidden_in_filter[:15]
+                )
+                mas = "…" if len(hidden_in_filter) > 15 else ""
+                ui_log(
+                    f"⚠ DISCLAIMER: {len(hidden_in_filter)} de las {len(filtered)} filas a comparar están "
+                    f"OCULTAS en el Excel (viene pre-filtrado). Se procesan igual. → {nombres}{mas}",
+                    "warn",
+                )
+        except Exception:
+            pass
+
         return headers, filtered
 
     def _should_find_extras():
-        return find_extras_var.get() or condition_mode_var.get() == "Buscar extras"
+        return True  # Siempre buscar extras y duplicados como parte del chequeo normal
 
-    # ── Modal de ejecución (mismo lenguaje visual que "Envío de Leads") ──────
+    # ── Modal de ejecución (mismo patrón que "Envío de Leads") ────────────────
     def _open_run_modal():
         modal = Toplevel(root)
-        modal.overrideredirect(True)
-        modal_width, modal_height = 460, 280
+        modal.overrideredirect(True)  # Quitar bordes de Windows
+        modal_width, modal_height = 460, 300
         px = root.winfo_rootx() + (root.winfo_width() - modal_width) // 2
         py = root.winfo_rooty() + (root.winfo_height() - modal_height) // 2
         modal.geometry(f"{modal_width}x{modal_height}+{px}+{py}")
         modal.configure(bg=MODAL_BG, bd=1, highlightthickness=1, highlightbackground=BORDER)
-        modal.transient(root)
-        modal.lift()
-        modal.focus_set()
-        modal.grab_set()  # bloquea la interacción con el resto de la app mientras corre
 
-        def _release_grab():
+        # Al cerrar el modal por CUALQUIER motivo, el botón EJECUTAR vuelve a su estado original.
+        def _reset_exec_btn(_e=None):
             try:
-                modal.grab_release()
+                btn_run.config(text=" EJECUTAR", image=get_button_icon("play_green.png"))
+                refresh_execute_state()
             except Exception:
                 pass
+        modal.bind("<Destroy>", lambda e: _reset_exec_btn() if str(e.widget) == str(modal) else None, add="+")
 
-        # La ventana principal SIEMPRE debe poder cerrarse (con aviso si hay algo corriendo),
-        # incluso con el grab del modal activo — si no, el grab puede dejar el "X" de la
-        # ventana principal sin responder en Windows.
-        orig_close_protocol = root.protocol("WM_DELETE_WINDOW")
+        def on_cerrar():
+            _reset_exec_btn()
+            modal.destroy()
+            ui_log("Ventana de ejecución cerrada.", "info")
 
-        def _on_root_close_request():
+        # Modal real: NO usamos grab_set() para permitir que el usuario minimice o cierre
+        # la ventana principal desde la barra de título de Windows. En su lugar, deshabilitamos
+        # la interacción con el área cliente del main window agregando BlockTag a sus widgets.
+        modal.transient(root)
+        modal.attributes("-topmost", False)
+        modal.lift()
+        try:
+            modal.focus_set()
+        except Exception:
+            pass
+
+        def set_event_blocking(parent, block):
+            for child in parent.winfo_children():
+                if child == modal or str(child).startswith(str(modal)):
+                    continue
+                tags = list(child.bindtags())
+                if block:
+                    if "BlockTag" not in tags:
+                        child.bindtags(("BlockTag",) + tuple(tags))
+                else:
+                    if "BlockTag" in tags:
+                        new_tags = tuple(t for t in tags if t != "BlockTag")
+                        child.bindtags(new_tags)
+                set_event_blocking(child, block)
+
+        def block_evt(e):
+            if modal.winfo_exists():
+                modal.lift()
+                modal.focus_set()
+            return "break"
+
+        root.bind_class("BlockTag", "<Button-1>", block_evt)
+        root.bind_class("BlockTag", "<ButtonRelease-1>", lambda e: "break")
+        root.bind_class("BlockTag", "<Double-Button-1>", lambda e: "break")
+        root.bind_class("BlockTag", "<B1-Motion>", lambda e: "break")
+        root.bind_class("BlockTag", "<Enter>", lambda e: "break")
+        root.bind_class("BlockTag", "<Leave>", lambda e: "break")
+        root.bind_class("BlockTag", "<Motion>", lambda e: "break")
+        root.bind_class("BlockTag", "<Key>", lambda e: "break")
+        root.bind_class("BlockTag", "<FocusIn>", lambda e: block_evt(e))
+        set_event_blocking(root, True)
+
+        def on_close_modal():
+            if not modal.winfo_exists():
+                return
+            if "Comparando" in title_lbl.cget("text"):
+                if messagebox.askyesno("Detener ejecución", "¿Querés detener la comparación y cerrar la ventana?"):
+                    state["stop_event"].set()
+                    _reset_exec_btn()
+                    modal.destroy()
+            else:
+                on_cerrar()
+
+        def on_root_close_request():
             if modal.winfo_exists() and "Comparando" in title_lbl.cget("text"):
                 if messagebox.askyesno("Salir", "Hay una comparación en curso. ¿Querés detenerla y salir de la app?"):
                     state["stop_event"].set()
-                    _release_grab()
                     modal.destroy()
                     root.destroy()
             else:
-                _release_grab()
                 if modal.winfo_exists():
                     modal.destroy()
                 root.destroy()
 
-        root.protocol("WM_DELETE_WINDOW", _on_root_close_request)
+        orig_close_protocol = root.protocol("WM_DELETE_WINDOW")
+        root.protocol("WM_DELETE_WINDOW", on_root_close_request)
 
-        def _restore_root_protocol(event=None):
-            if event is not None and event.widget is not modal:
+        # Binds para seguir minimizar/restaurar/foco de la ventana principal
+        unmap_id = root.bind("<Unmap>", lambda e: modal.withdraw() if (e.widget == root and modal.winfo_exists()) else None, add="+")
+        map_id = root.bind("<Map>", lambda e: (modal.deiconify(), modal.lift()) if (e.widget == root and modal.winfo_exists()) else None, add="+")
+        focus_id = root.bind("<FocusIn>", lambda e: modal.lift() if (modal.winfo_exists() and e.widget.winfo_toplevel() == root and e.widget != modal and not str(e.widget).startswith(str(modal))) else None, add="+")
+
+        def cleanup_root_binds(e=None):
+            if e and str(e.widget) != str(modal):
                 return
-            _release_grab()
             try:
+                root.unbind("<Unmap>", unmap_id)
+                root.unbind("<Map>", map_id)
+                root.unbind("<FocusIn>", focus_id)
                 root.protocol("WM_DELETE_WINDOW", orig_close_protocol)
+                set_event_blocking(root, False)
             except Exception:
                 pass
+        modal.bind("<Destroy>", cleanup_root_binds)
 
-        modal.bind("<Destroy>", _restore_root_protocol, add="+")
-
+        # Custom Title Bar con minimizar y cerrar
         title_bar = Frame(modal, bg=MODAL_BG)
         title_bar.pack(fill="x", padx=15, pady=(5, 0))
         title_bar_lbl = Label(title_bar, text="Comparador Dealers", font=("Segoe UI", 8, "bold"),
                                bg=MODAL_BG, fg="#C5A9DF")
         title_bar_lbl.pack(side="left")
 
+        # Hacer el modal arrastrable/movible
         def _start_drag(event):
             modal._drag_x = event.x
             modal._drag_y = event.y
@@ -888,20 +994,21 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         title_bar_lbl.bind("<Button-1>", _start_drag)
         title_bar_lbl.bind("<B1-Motion>", _drag)
 
-        def _on_close_click():
-            if "Comparando" in title_lbl.cget("text"):
-                if messagebox.askyesno("Detener ejecución", "¿Querés detener la comparación y cerrar la ventana?"):
-                    state["stop_event"].set()
-                    modal.destroy()
-            else:
-                modal.destroy()
-
         btn_cls = Button(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF",
-                          relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=_on_close_click)
+                          relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
         btn_cls.pack(side="right")
+        btn_cls.bind("<Enter>", lambda e: btn_cls.config(bg="#E74C3C", fg="white"))
+        btn_cls.bind("<Leave>", lambda e: btn_cls.config(bg=MODAL_BG, fg="#C5A9DF"))
 
+        btn_min = Button(title_bar, text="—", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF",
+                          relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=root.iconify)
+        btn_min.pack(side="right", padx=2)
+        btn_min.bind("<Enter>", lambda e: btn_min.config(bg="#38234D"))
+        btn_min.bind("<Leave>", lambda e: btn_min.config(bg=MODAL_BG))
+
+        # 1. Header (Comparando / Completo)
         header = Frame(modal, bg=MODAL_BG)
-        header.pack(fill="x", padx=20, pady=(8, 10))
+        header.pack(fill="x", padx=20, pady=(5, 10))
         icon_lbl = Label(header, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
         icon_lbl.pack(side="left")
         title_info = Frame(header, bg=MODAL_BG)
@@ -913,6 +1020,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                               bg=MODAL_BG, fg=TEXT_S)
         subtitle_lbl.pack(anchor="w")
 
+        # Animación de rotación del icono
         rotation_glyphs = ["↻", "➔", "↻", "➔"]
 
         def _rotate_icon(idx=0):
@@ -930,6 +1038,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                               highlightthickness=1, highlightbackground="#F1948A", cursor="hand2",
                               command=_on_detener, padx=12, pady=4)
         btn_detener.pack(side="right")
+        btn_detener.bind("<Enter>", lambda e: btn_detener.config(bg="#5E1D31") if btn_detener["state"] == "normal" else None)
+        btn_detener.bind("<Leave>", lambda e: btn_detener.config(bg="#3D1220") if btn_detener["state"] == "normal" else None)
 
         progress_row = Frame(modal, bg=MODAL_BG)
         progress_row.pack(fill="x", padx=20, pady=(0, 6))
@@ -944,8 +1054,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         summary_lbl = Label(modal, text="", font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white")
         summary_lbl.pack(anchor="w", padx=20, pady=(4, 4))
 
-        btn_close = Button(modal, text="Cerrar", font=("Segoe UI", 10, "bold"), bg="#AED6F1", fg="#110518",
-                            relief="flat", bd=0, cursor="hand2", pady=6, command=modal.destroy)
+        btn_close = Button(modal, text="Cerrar resultados", font=("Segoe UI", 10, "bold"), bg="#AED6F1", fg="#110518",
+                            relief="flat", bd=0, cursor="hand2", pady=6, command=on_cerrar)
+        btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#D4E6F1"))
+        btn_close.bind("<Leave>", lambda e: btn_close.config(bg="#AED6F1"))
 
         def _set_progress(cur, total, label_txt):
             def _apply():
@@ -984,7 +1096,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                                           else "#82E0AA")
                     summary_lbl.config(
                         text=f"🟢 {counts.get('PASS', 0)} PASS   🔴 {counts.get('FAIL', 0)} FAIL   "
-                             f"🟡 {counts.get('EXTRA', 0)} EXTRA"
+                             f"🟡 {counts.get('EXTRA', 0)} EXTRA   🔵 {counts.get('DUPLICADO', 0)} DUPLICADO"
                     )
                 except Exception as ui_err:  # noqa: BLE001
                     LOGGER.warning("Error actualizando modal de resultados: %s", ui_err)
@@ -1010,13 +1122,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             refresh_execute_state()
 
     def _tiene_datos_minimos():
-        """Chequeo rápido (sin leer el Excel) de lo mínimo para poder ejecutar:
-        Excel de dealers elegido, columna Dealer definida, y al menos una URL de form cargada."""
+        """Chequeo rápido de lo mínimo para poder ejecutar: Excel de dealers elegido,
+        columna Dealer definida, y Excel de URLs cargado."""
         if not excel_path_var.get().strip():
             return False
         if not col_dealer_var.get().strip():
             return False
-        if not any(form_url for _landing, form_url in _parse_urls_text()):
+        if not url_excel_path_var.get().strip() or not os.path.exists(url_excel_path_var.get().strip()):
             return False
         return True
 
@@ -1047,6 +1159,15 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
         return filtered_rows, column_map, url_pairs
 
+    def _extract_form_slug(url):
+        """Extrae un slug legible de la URL del form (ej. 'colision' de '.../gm_forms/colision')."""
+        import re as _re
+        url = (url or "").strip().rstrip("/").split("?")[0].split("#")[0]
+        parts = url.rstrip("/").split("/")
+        slug = parts[-1] if parts else "form"
+        slug = _re.sub(r"[^\w-]", "_", slug)[:40]
+        return slug or "form"
+
     def _worker_run(filtered_rows, column_map, url_pairs):
         driver = None
         counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "DUPLICADO": 0}
@@ -1062,12 +1183,26 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             screenshots = []
             output_mode = output_mode_var.get()
             total_pairs = len(url_pairs)
+            current_url_mode = url_mode_var.get()
+
+            # Subcarpeta de capturas: pais + "dealers" + columna de filtro usada.
+            # Ej. "chile_dealers_posventa". Si no hay filtro, sólo "pais_dealers".
+            import re as _re_sub
+            def _slug(txt):
+                return _re_sub.sub(r"[^\w]+", "_", str(txt or "").strip().lower()).strip("_")
+            _caps_parts = [_slug(state["pais"]), "dealers"]
+            if excel_filter_mode_var.get() == "with_filter" and filter_col_var.get().strip():
+                _caps_parts.append(_slug(filter_col_var.get()))
+            caps_subdir = os.path.join(_get_results_dir(), "_".join(p for p in _caps_parts if p))
+            os.makedirs(caps_subdir, exist_ok=True)
 
             for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
                 if state["stop_event"].is_set():
                     raise StopRequested()
                 ui_log(f"\n=== Form {pair_idx}/{total_pairs}: {form_url} ===", "info")
-                open_target(driver, url_mode_var.get(), landing_url, form_url)
+                if landing_url:
+                    ui_log(f"    Landing: {landing_url}", "info")
+                open_target(driver, current_url_mode, landing_url, form_url)
 
                 model_field_id = None
                 models_to_run = None
@@ -1081,18 +1216,30 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         models_to_run = list_model_options(driver, model_field_id)
                         ui_log(f"Modelos detectados en el form: {', '.join(models_to_run) or '(ninguno)'}", "info")
 
-                def _shot(result, _form_url=form_url, _landing_url=landing_url):
+                def _shot(result, _form_url=form_url, _landing_url=landing_url, _url_mode=current_url_mode):
                     if output_mode != "caps":
                         return
                     safe_name = "".join(
                         c for c in (result.get("dealer") or "dealer") if c.isalnum() or c in " _-"
                     )[:40]
                     filename = f"{result['status']}_{pair_idx}_{result.get('fila')}_{safe_name}.png".replace(" ", "_")
-                    path = capture_result_screenshot(driver, _get_results_dir(), filename, _form_url or _landing_url)
+                    # Pasar ambas URLs para el banner (landing solo si aplica)
+                    shot_landing = _landing_url if _url_mode == "landing_form" else ""
+                    path = capture_result_screenshot(
+                        driver, caps_subdir, filename,
+                        form_url=_form_url, landing_url=shot_landing,
+                    )
                     screenshots.append(path)
 
-                def _pair_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] {label_txt}")
+                # Progreso con la FASE explícita, para que el número se entienda: la
+                # comparación cuenta dealers (X/total dealers); la búsqueda de extras
+                # cuenta combinaciones región/ciudad (X/total combos) — antes se veía
+                # sólo el número de la última fase (ej. 29/29 combos) y confundía.
+                def _compare_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
+                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Comparando dealer {cur}/{total}: {label_txt}")
+
+                def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
+                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total} (región/ciudad): {label_txt}")
 
                 results = compare_dealers(
                     driver, filtered_rows, column_map,
@@ -1100,21 +1247,27 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     has_region=has_region_var.get(), has_city=has_city_var.get(),
                     chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
                     model_field_id=model_field_id, models=models_to_run,
-                    log_cb=ui_log, progress_cb=_pair_progress_cb, stop_flag=state["stop_event"],
+                    log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
                     screenshot_cb=_shot,
+                    expect_absent=state.get("expect_absent", False),
                 )
                 for r in results:
                     r["url_form"] = form_url
+                    r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
 
-                if _should_find_extras():
-                    ui_log("Buscando dealers EXTRA en el form...", "info")
+                # Extras y duplicados se buscan SIEMPRE — salvo en modo Excluir, donde la
+                # lista esperada son dealers que NO deben estar (buscar extras marcaría
+                # como EXTRA a cualquier dealer presente, lo cual no tiene sentido acá).
+                if _should_find_extras() and not state.get("expect_absent", False):
+                    ui_log("Buscando dealers EXTRA y DUPLICADOS en el form...", "info")
                     extras = find_extra_dealers(
                         driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
-                        log_cb=ui_log, progress_cb=_pair_progress_cb, stop_flag=state["stop_event"],
+                        log_cb=ui_log, progress_cb=_extras_progress_cb, stop_flag=state["stop_event"],
                     )
                     for r in extras:
                         r["url_form"] = form_url
+                        r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
                     results = results + extras
 
                 all_results.extend(results)
@@ -1127,19 +1280,24 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 f"EXTRA={counts.get('EXTRA', 0)} DUPLICADO={counts.get('DUPLICADO', 0)}", "ok"
             )
 
+            # Nombre descriptivo del Excel: incluye form slug + columna de filtro
+            form_slug = _extract_form_slug(url_pairs[0][1]) if url_pairs else "form"
+            filter_col_name = filter_col_var.get().strip().replace(" ", "_") if excel_filter_mode_var.get() == "with_filter" else ""
+            name_parts = ["dealer_comparator", state["pais"], form_slug]
+            if filter_col_name:
+                name_parts.append(filter_col_name)
+            name_parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
+            excel_filename = "_".join(name_parts) + ".xlsx"
+
             results_dir = _get_results_dir()
             os.makedirs(results_dir, exist_ok=True)
-            export_path = os.path.join(
-                results_dir, f"dealer_comparator_{state['pais']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            )
+            export_path = os.path.join(results_dir, excel_filename)
             export_path = export_results_excel(all_results, output_path=export_path, pais=state["pais"])
             ui_log(f"Reporte Excel: {export_path}", "ok")
 
             if output_mode == "caps" and screenshots:
-                zip_path = os.path.join(
-                    _get_results_dir(),
-                    f"capturas_{state['pais']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                )
+                zip_filename = excel_filename.replace(".xlsx", "_capturas.zip")
+                zip_path = os.path.join(_get_results_dir(), zip_filename)
                 zip_screenshots(screenshots, zip_path)
                 # Los PNG sueltos ya quedaron adentro del ZIP: no hace falta dejarlos también sueltos.
                 for shot_path in screenshots:
@@ -1190,12 +1348,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         ).start()
 
     def _borrar_urls():
-        url_text_area.delete("1.0", "end")
+        url_excel_path_var.set("")
         url_warn_var.set("")
-        ui_log("URLs borradas.", "info")
+        ui_log("Excel de URLs quitado.", "info")
         refresh_execute_state()
 
-    btn_borrar = Button(footer_btns, text=" Borrar URLs", image=get_button_icon("trash_coral.png"), compound="left",
+    btn_borrar = Button(footer_btns, text=" Quitar Excel URLs", image=get_button_icon("trash_coral.png"), compound="left",
                          font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg=TEXT_DELETE,
                          relief="flat", bd=0, activebackground=BTN_HOVER, activeforeground=TEXT_DELETE,
                          padx=18, pady=6, cursor="hand2", command=_borrar_urls)
@@ -1214,8 +1372,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     # Habilitar/deshabilitar EJECUTAR en vivo, apenas cambian los datos mínimos necesarios
     excel_path_var.trace_add("write", lambda *_a: refresh_execute_state())
     col_dealer_var.trace_add("write", lambda *_a: refresh_execute_state())
-    url_text_area.bind("<KeyRelease>", lambda e: refresh_execute_state(), add="+")
+    url_excel_path_var.trace_add("write", lambda *_a: refresh_execute_state())
 
-    select_country(state["pais"])
+    # No pre-seleccionar ningún país para no confundir al usuario
+    _refresh_pais_cards()
     refresh_execute_state()
     return root_frame

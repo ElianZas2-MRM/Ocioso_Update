@@ -21,6 +21,7 @@ from openpyxl.utils import column_index_from_string
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.common.exceptions import StaleElementReferenceException
 
 from core.browser_manager import BrowserManager
 from core.country_configs import COUNTRY_CONFIGS
@@ -126,6 +127,26 @@ def read_excel_rows(file_path, header_row=1, sheet_name=None):
     return headers, rows
 
 
+def detect_hidden_rows(file_path, header_row=1, sheet_name=None):
+    """Devuelve el set de números de fila (1-indexado) de datos que están OCULTAS en el
+    Excel (el archivo a veces viene pre-filtrado con filas escondidas). Se usa sólo para
+    avisar al usuario — no cambia qué se compara. read_only no expone row_dimensions,
+    por eso se abre en modo normal."""
+    hidden = set()
+    try:
+        wb = load_workbook(file_path, data_only=True, read_only=False)
+        try:
+            sheet = wb[sheet_name] if sheet_name else wb.worksheets[0]
+            for row_num, dim in sheet.row_dimensions.items():
+                if row_num > header_row and getattr(dim, "hidden", False):
+                    hidden.add(row_num)
+        finally:
+            wb.close()
+    except Exception:
+        pass
+    return hidden
+
+
 def resolve_column(headers, input_name):
     """Resuelve un nombre de columna ingresado por el usuario a la clave real del row dict.
     Soporta: letra de columna estilo Excel (A, B, K...), nombre exacto, o coincidencia parcial
@@ -217,8 +238,96 @@ def _select_option(driver, select_element, option_element):
     )
 
 
+def _select_by_text_robust(driver, select_id, target_text, wait_for_option=False, timeout=None):
+    """
+    Selecciona la <option> cuyo texto matchea target_text en el <select> id=select_id,
+    de forma resistente a stale elements y a selects dependientes que se repueblan
+    tarde (city tras region, dealer tras city). En cada intento re-busca el <select>
+    y sus <option> FRESCOS — así un re-render del form (que invalida referencias
+    viejas) no rompe la selección ni genera un "no encontrado" falso.
+
+    wait_for_option=True: reintenta hasta `timeout` esperando a que la opción aparezca
+    (el select dependiente todavía puede estar cargando las opciones de la nueva región).
+    Devuelve (found: bool, option_text: str|None).
+    """
+    if timeout is None:
+        # Selects dependientes (city/dealer) pueden poblar la opción buscada con retraso
+        # (ej. la 3ra opción de dealer en algunos forms carga tarde). Presupuesto amplio:
+        # el poll corta APENAS aparece, así que sólo se agota en dealers realmente ausentes.
+        timeout = DEPENDENT_SELECT_TIMEOUT if wait_for_option else 0.4
+    deadline = time.time() + timeout
+    while True:
+        try:
+            el = _get_select(driver, select_id, timeout=0.5)
+            if el is not None:
+                opt = _find_option_by_text(el, target_text)
+                if opt is not None:
+                    text = opt.text.strip()
+                    try:
+                        _select_option(driver, el, opt)
+                    except Exception as sel_err:
+                        # La opción EXISTE (dealer presente en el form) pero está
+                        # deshabilitada / no seleccionable: a los fines de la comparación
+                        # (¿está el dealer en el form?) cuenta como encontrado.
+                        if "disabled" in str(sel_err).lower():
+                            return True, text
+                        raise
+                    return True, text
+        except StaleElementReferenceException:
+            pass
+        if time.time() >= deadline:
+            return False, None
+        time.sleep(0.1)
+
+
+def _read_valid_option_texts(driver, select_id, wait_nonempty=True, timeout=None):
+    """Devuelve la lista de textos de <option> válidas (no placeholder) del select,
+    leídas de forma stale-safe (re-busca el elemento y re-lee si algo se pone stale
+    a mitad de la iteración — el form re-renderiza los selects).
+
+    wait_nonempty=True: espera hasta `timeout` a que el select tenga opciones (el select
+    dependiente se puebla async tras cambiar el padre); corta apenas aparecen."""
+    if timeout is None:
+        timeout = DEPENDENT_SELECT_TIMEOUT if wait_nonempty else 0.4
+    deadline = time.time() + timeout
+    while True:
+        try:
+            el = _get_select(driver, select_id, timeout=0.5)
+            if el is not None:
+                texts = []
+                for o in el.find_elements(By.TAG_NAME, "option"):
+                    if not o.get_attribute("value"):
+                        continue
+                    t = (o.text or "").strip()
+                    if t and not _is_placeholder(t):
+                        texts.append(t)
+                if texts or not wait_nonempty:
+                    return texts
+        except StaleElementReferenceException:
+            pass
+        if time.time() >= deadline:
+            return []
+        time.sleep(0.1)
+
+
+def _selected_dealer_option_attr(driver, dealer_id, attr):
+    """Lee un atributo (ej. data-bac) de la <option> de dealer actualmente seleccionada,
+    re-buscándola fresca (stale-safe)."""
+    for _ in range(3):
+        try:
+            el = _get_select(driver, dealer_id, timeout=0.5)
+            if el is None:
+                return ""
+            return (Select(el).first_selected_option.get_attribute(attr) or "").strip()
+        except StaleElementReferenceException:
+            time.sleep(0.1)
+    return ""
+
+
 FAST_TIMEOUT = 0.6  # primer intento: rápido, alcanza en la gran mayoría de los forms
 MAX_TIMEOUT = 1.2    # segundo intento (solo si el primero no alcanzó): tope máximo
+DEPENDENT_SELECT_TIMEOUT = 5.0  # espera máxima a que aparezca la opción buscada en un
+                                 # select dependiente (city/dealer); corta apenas la halla
                       # (ej. el select de ciudad se puebla más lento en departamentos con
                       # muchas opciones, como Montevideo)
 
@@ -399,6 +508,7 @@ def compare_dealers(
     progress_cb=None,
     stop_flag=None,
     screenshot_cb=None,
+    expect_absent=False,
 ):
     """
     rows: filas del Excel ya filtradas (dicts, ver read_excel_rows/filter_rows).
@@ -444,6 +554,14 @@ def compare_dealers(
                 continue
             time.sleep(0.3)
 
+        # Estado de navegación: qué región/ciudad están seleccionadas ahora mismo en el
+        # form. Re-seleccionar el MISMO valor rompe algunos forms (limpian el select hijo
+        # y no lo repueblan porque "no cambió") → dealers presentes daban FAIL falso. Por
+        # eso sólo se re-navega región/ciudad cuando cambian respecto a la fila anterior;
+        # si son iguales, el select de dealer ya tiene la lista cargada y se elige directo.
+        cur_region = None
+        cur_city = None
+
         for row in rows:
             counter += 1
             _check_stop(stop_flag)
@@ -461,57 +579,70 @@ def compare_dealers(
             city_found = not has_city
             dealer_found = False
             bac_ok = None
-            dealer_option = None
             extra_results = {}
 
             try:
+                # Orden SIEMPRE: región → ciudad → dealer (si no hay región, arranca en ciudad).
+                # Cada nivel usa _select_by_text_robust: re-busca el <select> fresco en cada
+                # intento (stale-safe ante re-render del form) y espera a que la opción aparezca
+                # en los selects dependientes (city tras region, dealer tras city). Sólo se
+                # (re)selecciona un nivel si su valor cambió respecto a la fila anterior.
                 if has_region and region_text:
-                    region_el = _get_select(driver, level_ids["region"])
-                    if region_el is None:
+                    if region_text == cur_region:
+                        region_found = True  # ya seleccionada de una fila previa
+                    elif _get_select(driver, level_ids["region"], timeout=2) is None:
                         fails.append(f"Select de región '{level_ids['region']}' no encontrado en el form")
+                        cur_region = None
+                        cur_city = None
                     else:
-                        opt = _find_option_by_text(region_el, region_text)
-                        region_found = opt is not None
+                        region_found, _ = _select_by_text_robust(driver, level_ids["region"], region_text)
+                        cur_city = None  # cambió la región → el select de ciudad se repuebla
                         if region_found:
-                            _select_option(driver, region_el, opt)
+                            cur_region = region_text
                             log(f"  Región: {region_text}", "ok")
                         else:
+                            cur_region = None
                             fails.append(f"Región '{region_text}' no encontrada")
                             log(f"  Región no encontrada: {region_text}", "warn")
 
                 if has_city and city_text and (region_found or not has_region):
-                    city_el = _wait_options_loaded(driver, level_ids["city"])
-                    if city_el is None:
-                        fails.append(f"Select de ciudad '{level_ids['city']}' no disponible")
+                    if city_text == cur_city:
+                        city_found = True  # ya seleccionada (misma región y ciudad que la fila previa)
                     else:
-                        opt = _find_option_by_text(city_el, city_text)
-                        city_found = opt is not None
+                        city_found, _ = _select_by_text_robust(
+                            driver, level_ids["city"], city_text, wait_for_option=True)
                         if city_found:
-                            _select_option(driver, city_el, opt)
+                            cur_city = city_text
                             log(f"  Ciudad: {city_text}", "ok")
                         else:
+                            cur_city = None
                             fails.append(f"Ciudad '{city_text}' no encontrada")
                             log(f"  Ciudad no encontrada: {city_text}", "warn")
 
                 ready_for_dealer = (region_found or not has_region) and (city_found or not has_city)
                 if dealer_text and ready_for_dealer:
-                    dealer_el = _wait_options_loaded(driver, level_ids["dealer"])
-                    if dealer_el is None:
-                        fails.append(f"Select de dealer '{level_ids['dealer']}' no disponible")
-                    else:
-                        dealer_option = _find_option_by_text(dealer_el, dealer_text)
-                        dealer_found = dealer_option is not None
-                        if dealer_found:
-                            _select_option(driver, dealer_el, dealer_option)
-                            log(f"  Dealer: {dealer_text}", "ok")
-                            time.sleep(0.3)
-                        else:
-                            fails.append(f"Dealer '{dealer_text}' no encontrado")
-                            log(f"  Dealer no encontrado: {dealer_text}", "warn")
+                    dealer_found, _ = _select_by_text_robust(
+                        driver, level_ids["dealer"], dealer_text, wait_for_option=True)
+                    if dealer_found:
+                        log(f"  Dealer: {dealer_text}", "ok")
+                        time.sleep(0.2)
+                    elif not expect_absent:
+                        fails.append(f"Dealer '{dealer_text}' no encontrado")
+                        log(f"  Dealer no encontrado: {dealer_text}", "warn")
 
-                if dealer_found and dealer_option is not None:
+                if expect_absent:
+                    # Modo EXCLUIR: este dealer NO debería estar en el form. Sólo importa
+                    # su presencia — se descartan los fails de región/ciudad (si no están,
+                    # el dealer tampoco puede estar → correctamente ausente).
+                    fails = []
+                    if dealer_found:
+                        fails.append(f"Dealer '{dealer_text}' ESTÁ en el form pero NO debería (excluido)")
+                        log(f"  ✗ '{dealer_text}' presente cuando debería estar ausente", "warn")
+                    else:
+                        log(f"  ✓ '{dealer_text}' correctamente ausente del form", "ok")
+                elif dealer_found:
                     if chk_bac and bac_key and bac_excel:
-                        bac_form = (dealer_option.get_attribute("data-bac") or "").strip()
+                        bac_form = _selected_dealer_option_attr(driver, level_ids["dealer"], "data-bac")
                         bac_ok = normalize_text(bac_excel) == normalize_text(bac_form)
                         if not bac_ok:
                             fails.append(f"BAC no coincide (excel='{bac_excel}' form='{bac_form}')")
@@ -519,23 +650,24 @@ def compare_dealers(
                         excel_val = row.get(extra["column"], "")
                         if not excel_val:
                             continue
-                        form_val = (dealer_option.get_attribute(f"data-{extra['attr']}") or "").strip()
+                        form_val = _selected_dealer_option_attr(driver, level_ids["dealer"], f"data-{extra['attr']}")
                         ok = normalize_text(excel_val) == normalize_text(form_val)
                         extra_results[extra["label"]] = {"ok": ok, "excel": excel_val, "form": form_val}
                         if not ok:
                             fails.append(f"{extra['label']} no coincide (excel='{excel_val}' form='{form_val}')")
 
-                for check in field_checks:
-                    excel_val = row.get(check["column"], "")
-                    if not excel_val:
-                        continue
-                    form_val = _read_form_field_value(driver, check["field_id"]) or ""
-                    ok = normalize_text(excel_val) == normalize_text(form_val)
-                    extra_results[check["field_id"]] = {"ok": ok, "excel": excel_val, "form": form_val}
-                    if not ok:
-                        fails.append(
-                            f"Campo '{check['field_id']}' no coincide (excel='{excel_val}' form='{form_val}')"
-                        )
+                if not expect_absent:
+                    for check in field_checks:
+                        excel_val = row.get(check["column"], "")
+                        if not excel_val:
+                            continue
+                        form_val = _read_form_field_value(driver, check["field_id"]) or ""
+                        ok = normalize_text(excel_val) == normalize_text(form_val)
+                        extra_results[check["field_id"]] = {"ok": ok, "excel": excel_val, "form": form_val}
+                        if not ok:
+                            fails.append(
+                                f"Campo '{check['field_id']}' no coincide (excel='{excel_val}' form='{form_val}')"
+                            )
 
                 status = "PASS" if not fails else "FAIL"
 
@@ -611,36 +743,30 @@ def find_extra_dealers(
 
         try:
             if has_region and region_text:
-                region_el = _get_select(driver, level_ids["region"])
-                opt = _find_option_by_text(region_el, region_text) if region_el is not None else None
-                if opt is None:
+                ok, _ = _select_by_text_robust(driver, level_ids["region"], region_text)
+                if not ok:
                     continue
-                _select_option(driver, region_el, opt)
 
             if has_city and city_text:
-                city_el = _wait_options_loaded(driver, level_ids["city"])
-                opt = _find_option_by_text(city_el, city_text) if city_el is not None else None
-                if opt is None:
+                ok, _ = _select_by_text_robust(driver, level_ids["city"], city_text, wait_for_option=True)
+                if not ok:
                     continue
-                _select_option(driver, city_el, opt)
 
-            dealer_el = _wait_options_loaded(driver, level_ids["dealer"])
-            if dealer_el is None:
+            option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
+            if not option_texts:
                 continue
             expected = expected_by_combo[(region_text, city_text)]
             seen_in_form = {}
-            for opt in _valid_options(dealer_el):
-                if _is_placeholder(opt.text):
-                    continue
-                norm = normalize_text(opt.text)
-                seen_in_form.setdefault(norm, []).append(opt.text.strip())
+            for text in option_texts:
+                norm = normalize_text(text)
+                seen_in_form.setdefault(norm, []).append(text)
                 if norm not in expected:
-                    log(f"  EXTRA: {opt.text} ({region_text}/{city_text})", "warn")
+                    log(f"  EXTRA: {text} ({region_text}/{city_text})", "warn")
                     extra_results.append({
                         "status": "EXTRA",
                         "region": region_text,
                         "city": city_text,
-                        "dealer": opt.text.strip(),
+                        "dealer": text,
                     })
             for norm, texts in seen_in_form.items():
                 if len(texts) > 1:
@@ -663,11 +789,14 @@ def find_extra_dealers(
 # ──────────────────────────────────────────────────────────────────────────────
 # Captura de pantalla con banner de URL + ZIP
 # ──────────────────────────────────────────────────────────────────────────────
-def capture_result_screenshot(driver, screenshot_dir, filename, form_url):
-    """Toma una captura de página completa con la URL del form pegada en un banner
+def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", landing_url=""):
+    """Toma una captura de página completa con las URLs del form y landing pegadas en un banner
     superior (reusa ScreenshotManager, que ya soporta esto)."""
     os.makedirs(screenshot_dir, exist_ok=True)
     manager = ScreenshotManager(driver, screenshot_dir)
+    # Pasar ambas URLs para que el banner muestre las dos (si aplica)
+    if landing_url:
+        manager.url_landing = landing_url
     manager.url_form_esperado = form_url
     manager.take_full_page_screenshot(filename)
     manager._add_url_banner(os.path.join(screenshot_dir, filename))
@@ -693,16 +822,33 @@ def export_results_excel(results, output_path=None, pais=""):
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(results_dir, f"dealer_comparator_{pais}_{stamp}.xlsx")
 
+    from openpyxl.styles import Alignment, Border, Side
+
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+    header_border = Border(
+        left=Side(style="thin", color="FFFFFF"),
+        right=Side(style="thin", color="FFFFFF"),
+        top=Side(style="thin", color="FFFFFF"),
+        bottom=Side(style="medium", color="7D4E9F"),
+    )
+
     wb = Workbook()
     ws = wb.active
-    ws.title = "resultados"
+    ws.title = "Resultados"
 
-    headers = ["Estado", "URL Form", "Modelo", "Región", "Ciudad", "Dealer", "BAC Excel", "BAC OK",
-               "Detalle", "Fila Excel"]
+    headers = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Dealer",
+               "BAC Excel", "BAC OK", "Detalle", "Fila Excel"]
     ws.append(headers)
     for cell in ws[1]:
         cell.fill = _HEADER_FILL
         cell.font = _HEADER_FONT
+        cell.border = header_border
+        cell.alignment = Alignment(horizontal="center", vertical="center")
 
     fill_by_status = {
         "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
@@ -712,6 +858,7 @@ def export_results_excel(results, output_path=None, pais=""):
     for r in results:
         ws.append([
             r.get("status", ""),
+            r.get("url_landing", ""),
             r.get("url_form", ""),
             r.get("modelo", ""),
             r.get("region", ""),
@@ -724,23 +871,69 @@ def export_results_excel(results, output_path=None, pais=""):
         ])
         row_idx = ws.max_row
         fill = fill_by_status.get(r.get("status"))
-        if fill:
-            for cell in ws[row_idx]:
+        for cell in ws[row_idx]:
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            if fill:
                 cell.fill = fill
 
-    for i, width in enumerate((10, 40, 16, 18, 18, 28, 14, 10, 60, 10), start=1):
-        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
+    # Auto-fit column widths (basado en contenido, con mínimos y máximos razonables)
+    col_widths = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 14, 9: 10, 10: 60, 11: 10}
+    for col_idx, width in col_widths.items():
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = width
 
+    # Fijar encabezado (freeze panes)
+    ws.freeze_panes = "A2"
+
+    # Autofiltro
+    ws.auto_filter.ref = ws.dimensions
+
+    # ── Hoja Resumen ──
     total = len(results)
     counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "MISSING": 0, "DUPLICADO": 0}
     for r in results:
         counts[r.get("status", "FAIL")] = counts.get(r.get("status", "FAIL"), 0) + 1
 
-    summary_ws = wb.create_sheet("resumen")
-    summary_ws.append(["País", pais])
-    summary_ws.append(["Total", total])
-    for status, count in counts.items():
-        summary_ws.append([status, count])
+    summary_ws = wb.create_sheet("Resumen")
+    summary_data = [
+        ["País", pais],
+        ["Fecha", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        ["", ""],
+        ["Total chequeados", total],
+        ["", ""],
+        ["🟢 PASS", counts.get("PASS", 0)],
+        ["🔴 FAIL", counts.get("FAIL", 0)],
+        ["🟡 EXTRA", counts.get("EXTRA", 0)],
+        ["🔵 DUPLICADO", counts.get("DUPLICADO", 0)],
+        ["🟣 MISSING", counts.get("MISSING", 0)],
+    ]
+
+    # Agregar URLs únicas usadas
+    urls_form = sorted(set(r.get("url_form", "") for r in results if r.get("url_form")))
+    urls_landing = sorted(set(r.get("url_landing", "") for r in results if r.get("url_landing")))
+    if urls_form or urls_landing:
+        summary_data.append(["", ""])
+        summary_data.append(["URLs procesadas", ""])
+        for url in urls_landing:
+            summary_data.append(["  Landing", url])
+        for url in urls_form:
+            summary_data.append(["  Form", url])
+
+    for row_data in summary_data:
+        summary_ws.append(row_data)
+
+    # Formato básico de la hoja resumen
+    summary_ws.column_dimensions["A"].width = 22
+    summary_ws.column_dimensions["B"].width = 60
+    for row in summary_ws.iter_rows(min_row=1, max_row=summary_ws.max_row, max_col=2):
+        for cell in row:
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center")
+    # Encabezados en negrita
+    for cell in [summary_ws.cell(1, 1), summary_ws.cell(1, 2),
+                 summary_ws.cell(4, 1), summary_ws.cell(4, 2)]:
+        cell.font = Font(bold=True)
 
     wb.save(output_path)
     return output_path

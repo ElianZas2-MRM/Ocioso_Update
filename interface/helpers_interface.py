@@ -576,6 +576,7 @@ def analizar_errores_excel(ruta_excel):
         col_form_url_esperada   = next((c for c in df.columns if c.lower() in ("formulario", "form url esperada")), None)
         col_form_url_encontrada = next((c for c in df.columns if c.lower() == "form url encontrada"), None)
         col_form_coincide       = next((c for c in df.columns if c.lower() == "form coincide"), None)
+        col_link_issue          = next((c for c in df.columns if c.lower() == "link issue typ"), None)
 
         total_filas = len(df)
 
@@ -654,6 +655,19 @@ def analizar_errores_excel(ruta_excel):
                     'url_encontrada': url_encontrada,
                 })
 
+        # Detectar links raros en la TY (columna 'LINK ISSUE TYP' con valor distinto de '-')
+        detalles_link_issue = []
+        if col_link_issue:
+            _li = df[col_link_issue].astype(str).str.strip()
+            link_issue_mask = _li.notna() & ~_li.isin(["", "-", "nan", "None"])
+            for idx, fila in df[link_issue_mask].iterrows():
+                url_landing = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
+                detalles_link_issue.append({
+                    'linea': idx + 2,
+                    'url_landing': url_landing,
+                    'detalle': str(fila[col_link_issue]).strip(),
+                })
+
         if con_errores == 0:
             if no_procesados > 0:
                 mensaje = (
@@ -671,6 +685,7 @@ def analizar_errores_excel(ruta_excel):
                 'detalles': [],
                 'detalles_ok': detalles_ok,
                 'detalles_form': detalles_form,
+                'detalles_link_issue': detalles_link_issue,
                 'mensaje': mensaje
             }
 
@@ -694,6 +709,7 @@ def analizar_errores_excel(ruta_excel):
             'detalles': detalles,
             'detalles_ok': detalles_ok,
             'detalles_form': detalles_form,
+            'detalles_link_issue': detalles_link_issue,
             'mensaje': mensaje
         }
 
@@ -1190,6 +1206,12 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             cuerpo += f"FAILED ({len(_fail_urls)}): {pais}\n"
         if _pass_urls:
             cuerpo += f"PASSED ({len(_pass_urls)}): {pais}\n"
+
+        _link_issues = errores.get('detalles_link_issue') or []
+        if _link_issues:
+            cuerpo += f"\n⚠️ LINK ISSUE en la TY page ({len(_link_issues)} fila/s) — link raro fuera de un <a> normal:\n"
+            for _li in _link_issues:
+                cuerpo += f"  • Línea {_li['linea']} — {_url_short(_li.get('url_landing',''))}: {_li.get('detalle','')}\n"
 
         cuerpo += "\nSaludos,\nAutomación de Formularios"
 
