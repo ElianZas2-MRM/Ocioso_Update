@@ -266,6 +266,9 @@ class BaseFormFiller:
         self._campos_sin_mapeo_exitoso = []
         self._campos_dropdown_no_encontrados = []
         self._current_step = 1
+        self._ty_cta = ""
+        self._link_issue = "-"
+        self._link_issue_present = False
 
     def _normalize_field_id(self, field_id):
         """Normaliza un field_id para uso como clave/columna."""
@@ -2044,6 +2047,10 @@ class BaseFormFiller:
         viewport_height = self.driver.execute_script("return window.innerHeight")
         scroll_step = max(viewport_height * 0.8, 800)
 
+        headless = self.config.get('headless', False)
+        step_wait = 0.5 if headless else 0.15
+        end_wait = 1 if headless else 0.3
+
         _SCROLL_JS = (
             "window.scrollTo(0, arguments[0]);"
             "window.dispatchEvent(new Event('scroll', {bubbles:true,cancelable:false}));"
@@ -2053,15 +2060,15 @@ class BaseFormFiller:
         current_position = 0
         while current_position < total_height:
             self.driver.execute_script(_SCROLL_JS, current_position)
-            time.sleep(0.5)
+            time.sleep(step_wait)
             current_position += scroll_step
 
         self.driver.execute_script(_SCROLL_JS, 999999)
-        time.sleep(1)
+        time.sleep(end_wait)
 
         self.driver.execute_script(_SCROLL_JS, 0)
-        time.sleep(1)
-    
+        time.sleep(end_wait)
+
     def process_landing_page(self, landing_url, ss_counter):
         """Procesa la página de destino inicial"""
         try:
@@ -2070,19 +2077,21 @@ class BaseFormFiller:
             pass
         landing_url = self._sanitize_url(landing_url)
         self.driver.get(landing_url)
-        
+
         self.handle_cookie_popups()
-        
+
         try:
-            WebDriverWait(self.driver, 20).until(
-                lambda d: d.execute_script("return document.readyState") == "complete"
+            # "interactive" alcanza: con page_load_strategy="eager" el DOM ya está armado ahí;
+            # "complete" puede tardar mucho más porque incluye trackers/pixels de terceros de fondo.
+            WebDriverWait(self.driver, 8).until(
+                lambda d: d.execute_script("return document.readyState") in ("interactive", "complete")
             )
         except:
             pass
-        
-        extra_wait = 2
+
+        extra_wait = 1.5 if self.config.get('headless', False) else 0.4
         time.sleep(extra_wait)
-        
+
         self.pre_scroll_for_dynamic_content()
 
         # En headless el JS necesita más tiempo para procesar los eventos de scroll e inyectar el iframe
@@ -2181,10 +2190,10 @@ class BaseFormFiller:
                     self.driver.execute_script(
                         "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", el
                     )
-                    time.sleep(0.1)
+                    time.sleep(0.05)
                     for char in str(valor):
                         el.send_keys(char)
-                        time.sleep(0.04)
+                        time.sleep(0.005)
                     self.driver.execute_script(
                         "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
                         "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
@@ -4555,6 +4564,24 @@ class BaseFormFiller:
                 print("TY Page no detectada (sin errores). Señalando para retry...")
                 return "Enviado sin confirmación TY Page", None
 
+            # TY con CTA: buscar link/CTA en la TY, verificarlo con click real y dejar
+            # captura de evidencia en la carpeta de screenshots del browser. (gm_forms /
+            # gm_front — no aplica a forms 2.0/AEM, que tienen su propio flujo.)
+            try:
+                _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if _root not in sys.path:
+                    sys.path.insert(0, _root)
+                from utils.ty_cta import investigate_ty_cta, format_ty_cta, format_link_issue
+                _cta_info = investigate_ty_cta(
+                    self.driver, log=print,
+                    evidence_dir=self.SCREENSHOT_DIR, take_screenshot=True,
+                )
+                self._ty_cta = format_ty_cta(_cta_info)
+                self._link_issue = format_link_issue(_cta_info)
+                self._link_issue_present = bool(_cta_info.get("has_weird"))
+            except Exception as _cta_e:
+                print(f"Error investigando CTA en TY: {_cta_e}")
+
             # TY div detectado — capturar TY Page
             self.driver.switch_to.default_content()
             print("Salido del contexto iframe")
@@ -4601,6 +4628,7 @@ class BaseFormFiller:
             # Verificar y crear columnas necesarias
             headers = [cell.value for cell in sheet[1] if cell.value]
             required_columns = ["Resultado", "Formulario Inserto", "Formulario Completado", "TY Page",
+                                "TYP con CTA", "LINK ISSUE TYP",
                                 "Form URL esperada", "Form URL encontrada", "Form coincide"]
 
             for col_name in required_columns:
@@ -4617,6 +4645,8 @@ class BaseFormFiller:
             form_inserto_col = headers.index("Formulario Inserto") + 1
             form_completado_col = headers.index("Formulario Completado") + 1
             ty_page_col = headers.index("TY Page") + 1
+            ty_cta_col = headers.index("TYP con CTA") + 1 if "TYP con CTA" in headers else None
+            link_issue_col = headers.index("LINK ISSUE TYP") + 1 if "LINK ISSUE TYP" in headers else None
             form_url_esperada_col   = headers.index("Form URL esperada") + 1
             form_url_encontrada_col = headers.index("Form URL encontrada") + 1
             form_coincide_col = headers.index("Form coincide") + 1
@@ -4730,8 +4760,17 @@ class BaseFormFiller:
                                 self.screenshot_manager.url_form_encontrado = _iframe_src
                             self._url_form_encontrado = _iframe_src
                             print("Cambiado al contexto del iframe")
-                            # solicitar-contato / raq-revamp Brasil: click en #contact-by-form dentro del iframe
-                            if "solicitar-contato" in (landing_url or "").lower() or "raq-revamp" in (landing_url or "").lower():
+                            # solicitar-contato / raq-revamp Brasil: click en #contact-by-form dentro
+                            # del iframe. Matcheo genérico "gm_forms/raq" (igual que lt_runner.py) para
+                            # cubrir cualquier variante raq-* sin tener que listar cada una a mano —
+                            # excepto "raq-eletricos", que no tiene esa pantalla de selección previa.
+                            _raq_lower = (landing_url or "").lower() + " " + (_iframe_src or "").lower()
+                            _is_eletricos = "eletricos" in _raq_lower
+                            _is_brasil = str(self.config.get("pais", "")).lower() in ("brasil", "brazil", "br")
+                            _has_raq = "raq" in _raq_lower
+                            if _is_brasil and _has_raq and (not _is_eletricos) and (
+                                "solicitar-contato" in _raq_lower or "gm_forms/raq" in _raq_lower or "raq-revamp" in _raq_lower
+                            ):
                                 try:
                                     _btn = WebDriverWait(self.driver, 8).until(
                                         EC.element_to_be_clickable((By.ID, "contact-by-form"))
@@ -4955,6 +4994,10 @@ class BaseFormFiller:
                 sheet.cell(row=i, column=form_inserto_col).value = form_inserto_name
                 sheet.cell(row=i, column=form_completado_col).value = form_completado_name if form_completado_name else "-"
                 sheet.cell(row=i, column=ty_page_col).value = ty_page_name if ty_page_name else "-"
+                if ty_cta_col:
+                    sheet.cell(row=i, column=ty_cta_col).value = getattr(self, "_ty_cta", "") or "-"
+                if link_issue_col:
+                    sheet.cell(row=i, column=link_issue_col).value = getattr(self, "_link_issue", "-") or "-"
                 if expected_form_url:
                     sheet.cell(row=i, column=form_url_esperada_col).value = expected_form_url
                 _found_url = getattr(self, "_url_form_encontrado", "")
@@ -4975,6 +5018,12 @@ class BaseFormFiller:
                 # Colorear SOLO las columnas de resultado: verde si lead OK, rojo si error
                 self._apply_row_color(sheet, i, _lead_ok, start_col=result_col,
                                       form_coincide_col=form_coincide_col, form_coincide_ok=_form_coincide_ok)
+
+                # LINK ISSUE TYP: rojo si hay link raro, aunque el lead se haya enviado OK
+                if link_issue_col and getattr(self, "_link_issue_present", False):
+                    _cell = sheet.cell(row=i, column=link_issue_col)
+                    _cell.fill = PatternFill(fill_type="solid", fgColor="C00000")
+                    _cell.font = Font(color="FFFFFF", bold=True)
 
                 self.safe_save_workbook(wb, self.RESULTADOS_PATH)
                 _done_leads += 1

@@ -19,7 +19,7 @@ Qué es igual a Osocio:
   - Screenshots en resultados/screenshots_<Pais><N>/
 
 Qué es diferente (mejoras para LambdaTest):
-  - Driver: LambdaTest Remote Mac + Chrome 1920x1080
+  - Driver: LambdaTest Remote Mac + Safari 1440x900
   - Capturas: driver.save_screenshot() DIRECTAMENTE desde LT
     → LambdaTest captura la imagen con el frame de Mac incluido
     → NO se sale al default_content para las capturas (eso da pantalla en blanco)
@@ -192,12 +192,12 @@ def create_lt_driver(username: str, access_key: str,
             "platformName":  "macOS Sonoma",
             "browserName":   "Safari",
             "browserVersion":"latest",
-            "visual":        True,
+            "visual":        False,
             "video":         True,
             "console":       False,
             "network":       True,
             "w3c":           True,
-            "resolution":    "1920x1080",
+            "resolution":    "1440x900",
         })
         driver = Remote(command_executor=LT_HUB, options=options, client_config=_cfg)
         driver.maximize_window()
@@ -401,6 +401,41 @@ def _fill_text_js(driver, element, value: str):
     )
 
 
+def _fill_text_sendkeys(driver, element, value: str):
+    """
+    Re-ingresa el input carácter a carácter (send_keys real), en vez de setear
+    .value por JS. Usado como método PRIMARIO en Mac/Safari: el fill por JS
+    (value + dispatchEvent) puede mostrar el valor en el DOM sin que el estado
+    interno de React lo registre ahí — send_keys pasa por el pipeline real de
+    eventos de teclado y evita ese desync desde el arranque.
+    """
+    try:
+        element.clear()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].value='';", element)
+        except Exception:
+            pass
+    try:
+        driver.execute_script("arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element)
+    except Exception:
+        pass
+    for char in str(value):
+        try:
+            element.send_keys(char)
+        except Exception:
+            pass
+        time.sleep(0.005)
+    try:
+        driver.execute_script(
+            "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
+            "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
+            element,
+        )
+    except Exception:
+        pass
+
+
 def _fill_required_synthetic_lt(driver, log=print):
     """Rellena con valores sintéticos aleatorios los campos REQUERIDOS visibles que
     quedaron vacíos (ej. Rua, Número, Data de Nascimento). Una sola llamada JS (rápido en LT).
@@ -447,24 +482,38 @@ def _fill_required_synthetic_lt(driver, log=print):
 
 def _fill_text_android(driver, element, value: str):
     """
-    Ingreso de texto para Android real device via JS puro.
-    Sin click ni send_keys (evita abrir teclado y escribir char a char).
-    Usa native setter + touch events para que React/Angular registre el valor.
+    Ingreso de texto para Android real device vía send_keys real (teclado real,
+    letra por letra) — igual que Mac/Safari. Más confiable que el fill por JS
+    para que React/Angular registre el valor correctamente.
     """
-    driver.execute_script(
-        "const el = arguments[0], val = arguments[1];"
-        "el.focus();"
-        "try {"
-        "  var proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;"
-        "  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, val);"
-        "} catch(e) { el.value = val; }"
-        "el.dispatchEvent(new Event('touchstart', {bubbles:true}));"
-        "el.dispatchEvent(new Event('touchend',   {bubbles:true}));"
-        "el.dispatchEvent(new Event('input',      {bubbles:true}));"
-        "el.dispatchEvent(new Event('change',     {bubbles:true}));"
-        "el.dispatchEvent(new Event('blur',       {bubbles:true}));",
-        element, str(value),
-    )
+    try:
+        element.click()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].click();", element)
+        except Exception:
+            pass
+    try:
+        element.clear()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].value='';", element)
+        except Exception:
+            pass
+    for char in str(value):
+        try:
+            element.send_keys(char)
+        except Exception:
+            pass
+        time.sleep(0.005)
+    try:
+        driver.execute_script(
+            "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
+            "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
+            element,
+        )
+    except Exception:
+        pass
 
 
 def _fill_text_js_mobile(driver, element, value: str):
@@ -728,10 +777,10 @@ def _refill_brasil_doc_sendkeys(driver, field_mapping: list, pais: str,
                 driver.execute_script(
                     "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", el
                 )
-                time.sleep(0.1)
+                time.sleep(0.05)
                 for char in str(valor):
                     el.send_keys(char)
-                    time.sleep(0.04)
+                    time.sleep(0.005)
                 driver.execute_script(
                     "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
                     "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
@@ -776,7 +825,9 @@ def _tiene_thankyou_texto_2_0(driver) -> bool:
         ) or ""
     except Exception:
         _txt = ""
+    import unicodedata as _ud
     _txt = _txt.lower()
+    _txt_noaccent = "".join(c for c in _ud.normalize("NFKD", _txt) if not _ud.combining(c))
     _markers = (
         "obrigado", "obrigada",
         "recebemos sua solicit", "recebemos seu contato",
@@ -785,8 +836,32 @@ def _tiene_thankyou_texto_2_0(driver) -> bool:
         "enviado com sucesso", "cadastro realizado",
         "dados enviados", "mensagem enviada",
         "gracias por", "thank you for",
+        "sucesso", "exito", "éxito", "success",
     )
-    return any(m in _txt for m in _markers)
+    return any(m in _txt or m in _txt_noaccent for m in _markers)
+
+
+def _investigate_ty_cta(driver, log=print):
+    """Wrapper del módulo compartido utils/ty_cta. En LambdaTest (Mac/Android) NO se
+    guardan capturas — el click al CTA y la landing quedan grabados en el video."""
+    if _OSOCIO_DIR not in sys.path:
+        sys.path.insert(0, _OSOCIO_DIR)
+    from utils.ty_cta import investigate_ty_cta
+    return investigate_ty_cta(driver, log=log, take_screenshot=False)
+
+
+def _format_ty_cta(info):
+    if _OSOCIO_DIR not in sys.path:
+        sys.path.insert(0, _OSOCIO_DIR)
+    from utils.ty_cta import format_ty_cta
+    return format_ty_cta(info)
+
+
+def _format_link_issue(info):
+    if _OSOCIO_DIR not in sys.path:
+        sys.path.insert(0, _OSOCIO_DIR)
+    from utils.ty_cta import format_link_issue
+    return format_link_issue(info)
 
 
 def _describir_errores_visuales(driver) -> str:
@@ -871,45 +946,94 @@ def _generate_valid_cnpj() -> str:
     return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
 
 
+def _cpf_checksum_ok(digits: str) -> bool:
+    """Valida el dígito verificador real de un CPF de 11 dígitos."""
+    if len(digits) != 11 or len(set(digits)) == 1 or not digits.isdigit():
+        return False
+    d = [int(c) for c in digits]
+    r1 = sum(v * (10 - i) for i, v in enumerate(d[:9])) % 11
+    c1 = 0 if r1 < 2 else 11 - r1
+    if c1 != d[9]:
+        return False
+    r2 = sum(v * (11 - i) for i, v in enumerate(d[:10])) % 11
+    c2 = 0 if r2 < 2 else 11 - r2
+    return c2 == d[10]
+
+
+def _cnpj_checksum_ok(digits: str) -> bool:
+    """Valida el dígito verificador real de un CNPJ de 14 dígitos."""
+    if len(digits) != 14 or len(set(digits)) == 1 or not digits.isdigit():
+        return False
+    d = [int(c) for c in digits]
+    w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    r1 = sum(v * w for v, w in zip(d[:12], w1)) % 11
+    c1 = 0 if r1 < 2 else 11 - r1
+    if c1 != d[12]:
+        return False
+    w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    r2 = sum(v * w for v, w in zip(d[:12] + [c1], w2)) % 11
+    c2 = 0 if r2 < 2 else 11 - r2
+    return c2 == d[13]
+
+
 def _generate_brazil_document(field_id: str) -> str:
-    """Genera CPF (sin puntos), CNPJ (con puntos) o CEP (sin puntos) via API 4devs con fallback local."""
+    """
+    Genera CPF (sin puntos), CNPJ (con puntos) o CEP (sin puntos) SIEMPRE vía la API
+    real de 4devs — nunca con el generador local sintético (checksum válido pero no
+    es un documento real, y el form puede rechazarlo). Si la API falla tras varios
+    reintentos, devuelve "" — el campo queda sin llenar y el error de validación
+    real queda registrado en el Excel de resultados, en vez de disfrazarlo con un
+    doc falso.
+    """
     import re as _re
     fid = field_id.lower()
     is_cep  = "cep" in fid or "zip" in fid or "postal" in fid
     is_cnpj = "cnpj" in fid
 
     if is_cep:
-        try:
-            html = _fetch_4devs("gerar_cep", {
-                "estado": "", "cidade": "São Paulo",
-                "bairro": "", "tipo_cep": "residencial",
-            })
-            m = _re.search(r'(\d{5}-\d{3})', html)
-            if m:
-                return m.group(1).replace("-", "")
-        except Exception:
-            pass
-        return random.choice(_VALID_CEPS)
+        for _attempt in range(5):
+            try:
+                html = _fetch_4devs("gerar_cep", {
+                    "estado": "", "cidade": "São Paulo",
+                    "bairro": "", "tipo_cep": "residencial",
+                })
+                m = _re.search(r'(\d{5}-\d{3})', html)
+                if m:
+                    return m.group(1).replace("-", "")
+            except Exception:
+                pass
+            time.sleep(0.3)
+        return ""
 
     if is_cnpj:
-        try:
-            raw = _fetch_4devs("gerar_cnpj", {"pontuacao": "S"})
-            digits = "".join(c for c in (raw or "") if c.isdigit())
-            if len(digits) >= 14:
-                return raw
-        except Exception:
-            pass
-        return _generate_valid_cnpj()
+        for _attempt in range(5):
+            try:
+                raw = _fetch_4devs("gerar_cnpj", {"pontuacao": "S"})
+                # Extraer el patrón exacto (evita ruido de la respuesta) y validar el
+                # dígito verificador real — la respuesta a veces trae basura y "al menos
+                # 14 dígitos en cualquier lado" podía armar un CNPJ inválido.
+                m = _re.search(r'(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})', raw or "")
+                if m:
+                    formatted = m.group(1)
+                    digits = "".join(c for c in formatted if c.isdigit())
+                    if _cnpj_checksum_ok(digits):
+                        return formatted
+            except Exception:
+                pass
+            time.sleep(0.3)
+        return ""
 
     # CPF — solo dígitos
-    try:
-        raw = _fetch_4devs("gerar_cpf", {"pontuacao": "N"})
-        digits = "".join(c for c in (raw or "") if c.isdigit())
-        if len(digits) >= 11:
-            return digits
-    except Exception:
-        pass
-    return _generate_valid_cpf()
+    for _attempt in range(5):
+        try:
+            raw = _fetch_4devs("gerar_cpf", {"pontuacao": "N"})
+            m = _re.search(r'(\d{11})', raw or "")
+            if m and _cpf_checksum_ok(m.group(1)):
+                return m.group(1)
+        except Exception:
+            pass
+        time.sleep(0.3)
+    return ""
 
 
 def _sanitize_peru_document(doc_type_value: str, raw_value: str) -> str:
@@ -987,15 +1111,55 @@ return{ok:true,text:target.text,wasRandom:!arguments[1]||!target};
 
 def _scroll_to_bottom_parent_aware(driver, log: Callable = print):
     """
-    Scrollea al fondo de la página de forma segura y parent-aware sin cambiar el contexto del iframe
-    (evitando saltos a la parte superior en Safari Mac).
+    Centra el botón Enviar (o el checkbox de términos) en el viewport en vez de saltar
+    ciegamente al fondo de la página — en páginas cortas (form pegado al footer) un salto
+    fijo se pasa de largo y deja el footer en pantalla, sin el form a la vista.
+    Si no encuentra ningún ancla, hace un scroll incremental acotado (no directo al fondo)
+    y, si aun así queda posicionado fuera del form, vuelve a centrarlo.
     """
     try:
+        anchored = driver.execute_script(
+            """
+            var sels = arguments[0];
+            var el = null;
+            for (var i=0;i<sels.length;i++){
+                var e = document.querySelector(sels[i]);
+                if (e && e.offsetParent !== null) { el = e; break; }
+            }
+            if (!el) el = document.querySelector('input[name="terms"],input[type="checkbox"]');
+            if (el) { el.scrollIntoView({block:'center', behavior:'instant'}); return true; }
+            return false;
+            """,
+            _SUBMIT_SELECTORS,
+        )
+        if anchored:
+            time.sleep(0.3)
+            return
+    except Exception as e:
+        log(f"  ⚠ Error anclando scroll a Enviar/checkbox: {e}")
+
+    # Fallback: sin ancla visible — scroll acotado (no directo al fondo/footer)
+    try:
         from selenium.webdriver.common.action_chains import ActionChains
-        ActionChains(driver).scroll_by_amount(0, 900).perform()
+        ActionChains(driver).scroll_by_amount(0, 400).perform()
         time.sleep(0.3)
     except Exception as e:
         log(f"  ⚠ Error scroll bottom parent-aware: {e}")
+
+    # Red de seguridad: si el form/checkbox/botón quedó fuera del viewport (footer), re-centrar
+    try:
+        driver.execute_script(
+            """
+            var f = document.querySelector('input[type="checkbox"], button.submit-button, form');
+            if (!f) return;
+            var r = f.getBoundingClientRect();
+            var vh = window.innerHeight || document.documentElement.clientHeight;
+            if (!(r.top < vh && r.bottom > 0)) f.scrollIntoView({block:'center', behavior:'instant'});
+            """
+        )
+        time.sleep(0.2)
+    except Exception:
+        pass
 
 def _scroll_to_element_parent_aware(driver, element, log: Callable = print):
     """
@@ -1094,7 +1258,8 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
     elif is_mobile:
         fill_text = _fill_text_js_mobile
     else:
-        fill_text = _fill_text_js
+        # Mac/Safari desktop: send_keys real desde el arranque (ver _fill_text_sendkeys)
+        fill_text = _fill_text_sendkeys
     scroll_to  = _scroll_to_mobile     if is_mobile else _scroll_to
 
     child_to_parent = {v: k for k, v in dependencies.items()}
@@ -1597,11 +1762,11 @@ def _ensure_checkbox_selected(driver, candidate: Dict, log: Callable = print,
                               is_android: bool = False) -> bool:
     """
     Marca un checkbox.
-    Mac/Safari: ActionChains → native click → React fiber → JS → _click_stable (4 iteraciones)
-    Android/Chrome: JS click → native click (2 iteraciones, sin ActionChains ni React fiber)
+    Mac/Safari: ActionChains → teclado (Space) → JS label.click() (2 iteraciones)
+    Android/Chrome: JS click → native click (2 iteraciones)
     """
     lbl_name = candidate.get("label", "checkbox")
-    max_iters = 2 if is_android else 4
+    max_iters = 2
 
     for attempt in range(max_iters):
         cb = _locate_checkbox(driver, candidate)
@@ -1642,51 +1807,41 @@ def _ensure_checkbox_selected(driver, candidate: Dict, log: Callable = print,
                     pass
             else:
                 from selenium.webdriver.common.action_chains import ActionChains
-                # Intento 1: ActionChains (Safari Mac lo procesa como evento real)
-                if attempt == 0:
-                    try:
-                        ActionChains(driver).move_to_element(click_target).click().perform()
-                        time.sleep(0.35)
-                        cb = _locate_checkbox(driver, candidate) or cb
-                        if cb.is_selected():
-                            log(f"  ✓ {lbl_name} marcado vía ActionChains")
-                            return True
-                    except Exception:
-                        pass
-
-                # Intento 2: native click
+                # Intento 1: ActionChains sobre el label (Safari Mac lo procesa como evento real)
                 try:
-                    click_target.click()
-                    time.sleep(0.3)
+                    ActionChains(driver).move_to_element(click_target).click().perform()
+                    time.sleep(0.35)
                     cb = _locate_checkbox(driver, candidate) or cb
                     if cb.is_selected():
-                        log(f"  ✓ {lbl_name} marcado vía click nativo")
+                        log(f"  ✓ {lbl_name} marcado vía ActionChains")
                         return True
                 except Exception:
                     pass
 
-                # Intento 3: React fiber
-                if _react_check_checkbox(driver, cb):
+                # Intento 2: click real más preciso, sobre el ícono visual del checkbox en vez
+                # del label completo — en labels largos (ej. texto de términos) el "centro" del
+                # label puede caer lejos del ícono clickeable.
+                try:
+                    icon_el = driver.execute_script(
+                        "var l=arguments[0];"
+                        "return l.querySelector('.icon,svg,.content') || l;",
+                        click_target,
+                    )
+                    ActionChains(driver).move_to_element(icon_el).click().perform()
                     time.sleep(0.3)
                     cb = _locate_checkbox(driver, candidate) or cb
                     if cb.is_selected():
-                        log(f"  ✓ {lbl_name} marcado vía React fiber")
+                        log(f"  ✓ {lbl_name} marcado vía click preciso")
                         return True
+                except Exception:
+                    pass
 
-                # Intento 4: JS label.click()
+                # Intento 3: JS label.click() (último recurso, best-effort)
                 if _set_checkbox_js(driver, cb):
                     time.sleep(0.3)
                     cb = _locate_checkbox(driver, candidate) or cb
                     if cb.is_selected():
                         log(f"  ✓ {lbl_name} marcado vía JS")
-                        return True
-
-                # Intento 5: _click_stable
-                if _click_stable(driver, click_target):
-                    time.sleep(0.25)
-                    cb = _locate_checkbox(driver, candidate) or cb
-                    if cb.is_selected():
-                        log(f"  ✓ {lbl_name} marcado por click directo")
                         return True
 
         except StaleElementReferenceException:
@@ -1873,6 +2028,76 @@ def _ensure_terms_marked_before_submit(driver, log: Callable = print):
                 continue
     except Exception as e:
         log(f"  Error verificando checkboxes pre-submit: {e}")
+
+
+def _ensure_fields_filled_before_submit(driver, field_mapping: List[Dict], all_tracked: Dict[str, str],
+                                         log: Callable = print,
+                                         is_mobile: bool = False, is_android: bool = False):
+    """
+    Re-ingresa inputs de texto carácter a carácter (send_keys real) justo antes de
+    cada click submit. Safari puede mostrar el valor en el DOM (el.value con texto)
+    sin que el estado interno de React/validación lo haya registrado nunca — el
+    fill por JS (value + dispatchEvent) no alcanza a sincronizar ahí, aunque en
+    Chrome sí funciona. Por eso NO se chequea el valor actual: se re-ingresa
+    siempre, igual que ya se hacía solo para CPF/CNPJ/CEP en
+    _refill_brasil_doc_sendkeys.
+    """
+    # Último valor conocido por nombre de campo (name del mapping), sin importar el paso.
+    last_value_by_name: Dict[str, str] = {}
+    for key, val in (all_tracked or {}).items():
+        name = key.split("::", 1)[1] if "::" in key else key
+        if val:
+            last_value_by_name[name] = val
+
+    for fc in field_mapping or []:
+        fname = fc.get("name", "")
+        expected = last_value_by_name.get(fname)
+        if not expected:
+            continue
+        ftype = fc.get("type", "text")
+        fid_raw = fc.get("id", "")
+        ids = fid_raw if isinstance(fid_raw, list) else [fid_raw]
+        for fid in ids:
+            if not fid:
+                continue
+            try:
+                els = driver.find_elements(By.ID, fid)
+            except Exception:
+                els = []
+            if not els or not els[0].is_displayed():
+                continue
+            el = els[0]
+            try:
+                if ftype == "select":
+                    current = None
+                    try:
+                        current = Select(el).first_selected_option.text.strip()
+                    except Exception:
+                        pass
+                    if current and current.strip().lower() == str(expected).strip().lower():
+                        break
+                    _select_option(driver, fid, expected, fname, log=log)
+                else:
+                    try:
+                        el.clear()
+                    except Exception:
+                        driver.execute_script("arguments[0].value='';", el)
+                    driver.execute_script(
+                        "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", el
+                    )
+                    time.sleep(0.05)
+                    for char in str(expected):
+                        el.send_keys(char)
+                        time.sleep(0.005)
+                    driver.execute_script(
+                        "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
+                        "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
+                        el,
+                    )
+                    log(f"  ↺ Re-ingresado '{fname}' ({fid}) via send_keys: '{expected}'")
+            except Exception as e:
+                log(f"  ✗ Error re-ingresando '{fname}' ({fid}): {e}")
+            break
 
 
 _INFER_DATAKEY_MAP = {
@@ -2137,6 +2362,13 @@ _SUBMIT_SELECTORS = [
     "input[type='submit']",
     "button[class*='submit']",
     "button[type='button'][class*='submit']",
+    # AEM/T3 (guide container): en Safari/Mac el botón real puede ser este widget
+    # específico en vez de un button[type=submit] genérico (igual que base_form_filler.py).
+    'button[name="guideContainer-rootPanel-guidebutton___jqName"]',
+    'button[type="submit"][aria-label="Enviar"]',
+    "button[id*='guidebutton']",
+    "button[name*='guidebutton']",
+    "[id*='guidebutton'] button",
 ]
 
 
@@ -2349,13 +2581,11 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
     except Exception:
         pass
 
-    # Último recurso (Mac/Safari): reducir el zoom para que el botón entre en el
-    # viewport (equivalente a "sacarle zoom al navegador" que hacía el usuario).
+    # Último recurso (Mac/Safari): un scroll más, sin tocar el zoom — reducir el zoom
+    # deforma cómo se ve/renderiza el form (no representativo) y nunca funcionó en la
+    # práctica, así que se saca directamente en vez de seguir intentándolo en vano.
     if not is_android:
         try:
-            log("  ⤺ Reduciendo zoom del navegador para revelar el botón Enviar...")
-            driver.execute_script("document.body.style.zoom='0.7';")
-            time.sleep(0.6)
             _scroll_to_bottom_parent_aware(driver, log)
             time.sleep(0.4)
             for sel in _SUBMIT_SELECTORS:
@@ -2369,7 +2599,7 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
                         btn.click()
                     except Exception:
                         driver.execute_script("arguments[0].click();", btn)
-                    log(f"  ✓ Enviar clickeado ({sel}) tras reducir zoom")
+                    log(f"  ✓ Enviar clickeado ({sel}) tras scroll adicional")
                     return True
                 except Exception:
                     continue
@@ -2429,7 +2659,7 @@ def _setup_results_excel(pais: str, source_excel_path: str, platform: str, build
 
     required_cols = [
         "Resultado", "Formulario Inserto", "Formulario Completado",
-        "TY Page", "Form URL esperada", "Form URL encontrada", "Form coincide",
+        "TY Page", "TYP con CTA", "LINK ISSUE TYP", "Form URL esperada", "Form URL encontrada", "Form coincide",
         "Video LT", "Dashboard LT",
     ]
     headers = [cell.value for cell in ws[1] if cell.value]
@@ -2461,7 +2691,9 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
                       iframe_url_found: str = "",
                       iframe_url_expected: str = "",
                       video_url: str = "",
-                      dashboard_url: str = ""):
+                      dashboard_url: str = "",
+                      ty_cta: str = "",
+                      link_issue: str = "", link_issue_present: bool = False):
     """Escribe resultado con las mismas columnas que el desktop."""
     resultado_cell = ws.cell(row=row_num, column=col_idx.get("Resultado", 1))
     resultado_cell.value = result_text
@@ -2483,6 +2715,13 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
     ws.cell(row=row_num, column=col_idx.get("TY Page", 4)).value = (
         "✓ TY detectada" if ty_confirmed else "-"
     )
+    if "TYP con CTA" in col_idx:
+        ws.cell(row=row_num, column=col_idx["TYP con CTA"]).value = ty_cta or "-"
+    if "LINK ISSUE TYP" in col_idx:
+        _li_cell = ws.cell(row=row_num, column=col_idx["LINK ISSUE TYP"])
+        _li_cell.value = link_issue or "-"
+        if link_issue_present:
+            _mark_red(_li_cell)
     if "Form URL esperada" in col_idx and iframe_url_expected:
         ws.cell(row=row_num, column=col_idx["Form URL esperada"]).value = iframe_url_expected
     if "Form URL encontrada" in col_idx:
@@ -2546,6 +2785,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         "result_text": "", "tracked": tracked,
         "iframe_found": False, "submitted": False,
         "ty_confirmed": False, "iframe_url_found": "",
+        "ty_cta": "", "link_issue": "", "link_issue_present": False,
     }
 
     try:
@@ -2788,10 +3028,18 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         # El formulario RAQ de Brasil muestra primero una pantalla de selección
         # "Formulário / WhatsApp". Hay que clickear el botón id="contact-by-form"
         # para que aparezca el formulario real antes de continuar con el llenado.
-        # Solo aplica cuando el src del iframe contiene /brasil/gm_forms/raq
+        # Solo aplica cuando el src del iframe contiene /brasil/gm_forms/raq — la
+        # variante "raq-eletricos" NO tiene esa pantalla de selección (va directo
+        # al form real), así que se excluye para no perder tiempo buscando un botón
+        # que nunca va a aparecer ahí.
         iframe_src_lower = (lead.secure_url or "").lower()
         landing_url_lower = (lead.public_url or "").lower()
-        if "/brasil/gm_forms/raq" in iframe_src_lower or "solicitar-contato" in landing_url_lower:
+        _is_eletricos = "eletricos" in iframe_src_lower or "eletricos" in landing_url_lower
+        _is_brasil = pais.lower() in ("brasil", "brazil", "br")
+        _has_raq = "raq" in iframe_src_lower or "raq" in landing_url_lower
+        if _is_brasil and _has_raq and (not _is_eletricos) and (
+            "/brasil/gm_forms/raq" in iframe_src_lower or "solicitar-contato" in landing_url_lower
+        ):
             log("  🇧🇷 Excepción RAQ Brasil: buscando botón 'contact-by-form'...")
             try:
                 btn_form = WebDriverWait(driver, 10).until(
@@ -2894,6 +3142,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     driver, _aem_form_data(), _is_brasil_aem,
                     gen_doc=_generate_brazil_document, log=log,
                     record=lambda k, v: step_tracked.__setitem__(k, v),
+                    is_android=is_android,
                 )
                 _aem.mark_aem_terms(driver, log=log)
             else:
@@ -2987,6 +3236,12 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
 
         # ── 7. Submit (dentro del iframe) ────────────────────────────────────
         for _submit_attempt in range(1, 3):  # max 2 intentos totales
+            # El re-ingreso vía send_keys es costoso (varios campos, char a char) y el
+            # llenado normal ya funciona la mayoría de las veces — solo se hace en el
+            # reintento (cuando ya hubo un submit fallido), no antes del primer intento.
+            if _submit_attempt > 1:
+                _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
+                                                     is_mobile=is_mobile, is_android=is_android)
             _ensure_terms_marked_before_submit(driver, log)
             submitted_click = _click_submit(driver, log, is_android=is_android)
 
@@ -3022,6 +3277,13 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                 WebDriverWait(driver, 15).until(_ty_visible)
                 ty_confirmed = True
                 log("  ✓ TY div detectado.")
+                try:
+                    _cta_info = _investigate_ty_cta(driver, log=log)
+                    result["ty_cta"] = _format_ty_cta(_cta_info)
+                    result["link_issue"] = _format_link_issue(_cta_info)
+                    result["link_issue_present"] = bool(_cta_info.get("has_weird"))
+                except Exception:
+                    pass
                 if is_android:
                     try:
                         ty_el = driver.find_element(By.CSS_SELECTOR, "div#thank-you, div.rp-wrapper")
@@ -3085,15 +3347,26 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     continue  # intento 2 sin reload
 
             # Intento 1: rellenar campos con error class visible y reintentar sin reload
-            if _submit_attempt == 1:
+            # (no en AEM: re-randomizaría el select Pessoa/Empresa y pisaría el CNPJ/CPF
+            # ya cargado según el Excel — ver _is_aem_form)
+            if _submit_attempt == 1 and not _is_aem_form:
                 _filled_post = _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
                 if _filled_post:
                     log("  ↺ Campos con error rellenados — reintentando submit sin reload...")
+                    _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
+                                                         is_mobile=is_mobile, is_android=is_android)
                     _ensure_terms_marked_before_submit(driver, log)
                     if _click_submit(driver, log, is_android=is_android):
                         try:
                             WebDriverWait(driver, 15).until(_ty_visible)
                             ty_confirmed = True
+                            try:
+                                _cta_info = _investigate_ty_cta(driver, log=log)
+                                result["ty_cta"] = _format_ty_cta(_cta_info)
+                                result["link_issue"] = _format_link_issue(_cta_info)
+                                result["link_issue_present"] = bool(_cta_info.get("has_weird"))
+                            except Exception:
+                                pass
                         except TimeoutException:
                             time.sleep(0.5)
                     if ty_confirmed:
@@ -3170,21 +3443,32 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     )
                 except Exception:
                     pass
-                # Re-llenar campos
+                # Re-llenar campos — respetar el mismo motor que el paso 1 (AEM/T3 vs
+                # genérico); usar fill_form_fields en un form AEM re-randomiza el select
+                # Pessoa/Empresa y pisa el CNPJ/empresa ya cargado (ver _is_aem_form arriba).
                 _step_tracked: Dict[str, str] = {}
                 _xp_r: set = set()  # set fresco para el reintento (form recargado)
                 for _iter in range(max_iter):
                     _iter_tracked: Dict[str, str] = {}
-                    fill_form_fields(
-                        driver, lead, pais, field_mapping,
-                        dependencies, ids_dinamicos, _iter_tracked, log=log,
-                        is_mobile=is_mobile,
-                        is_android=is_android,
-                        iframe_el=iframe_el if is_mobile else None,
-                        brasil_doc_type=brasil_doc_type,
-                        cross_processed=_xp_r,
-                    )
-                    _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
+                    if _is_aem_form:
+                        _aem.fill_aem_form(
+                            driver, _aem_form_data(), _is_brasil_aem,
+                            gen_doc=_generate_brazil_document, log=log,
+                            record=lambda k, v: _iter_tracked.__setitem__(k, v),
+                            is_android=is_android,
+                        )
+                        _aem.mark_aem_terms(driver, log=log)
+                    else:
+                        fill_form_fields(
+                            driver, lead, pais, field_mapping,
+                            dependencies, ids_dinamicos, _iter_tracked, log=log,
+                            is_mobile=is_mobile,
+                            is_android=is_android,
+                            iframe_el=iframe_el if is_mobile else None,
+                            brasil_doc_type=brasil_doc_type,
+                            cross_processed=_xp_r,
+                        )
+                        _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
                     _paso_r = _iter + 1
                     for _k, _v in _iter_tracked.items():
                         _step_tracked[f"Reintento{_paso_r}::{_k}"] = _v
@@ -3329,6 +3613,9 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
                 ty_confirmed=result.get("ty_confirmed", False),
                 iframe_url_found=result.get("iframe_url_found", ""),
                 iframe_url_expected=lead.secure_url or "",
+                ty_cta=result.get("ty_cta", ""),
+                link_issue=result.get("link_issue", ""),
+                link_issue_present=result.get("link_issue_present", False),
             )
             try:
                 wb.save(results_path)
@@ -3349,31 +3636,43 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
         if driver:
             try:
                 time.sleep(2)  # margen para que el último lead termine de procesar
-                mark_lt_status(driver, passed=(summary["failed"] == 0 and summary["error"] is None))
-                driver.quit()
-                log("\n✓ Driver cerrado.")
-
-                # Obtener URL del video + dashboard (disponibles solo tras quit())
-                if session_id and username and access_key:
-                    video_url = _fetch_lt_video_url(session_id, username, access_key)
-                    dashboard_url = f"https://automation.lambdatest.com/test?testID={session_id}"
-                    summary["video_url"] = video_url
-                    if video_url:
-                        log(f"  Video LT: {video_url}")
-                    log(f"  Dashboard LT: {dashboard_url}")
-                    if results_path:
-                        try:
-                            # Actualizar video/dashboard en todas las filas de datos
-                            for _r in range(2, ws.max_row + 1):
-                                if video_url and "Video LT" in col_idx:
-                                    ws.cell(row=_r, column=col_idx["Video LT"]).value = video_url
-                                if "Dashboard LT" in col_idx:
-                                    ws.cell(row=_r, column=col_idx["Dashboard LT"]).value = dashboard_url
-                            wb.save(results_path)
-                        except Exception:
-                            pass
             except Exception:
                 pass
+            try:
+                mark_lt_status(driver, passed=(summary["failed"] == 0 and summary["error"] is None))
+            except Exception as e:
+                log(f"  ⚠ Error marcando estado LT: {e}")
+            try:
+                driver.quit()
+                log("\n✓ Driver cerrado.")
+            except Exception as e:
+                log(f"  ⚠ Error cerrando driver: {e}")
+
+            # Dashboard/video: independientes de que el driver haya cerrado bien —
+            # solo dependen de session_id, que ya lo tenemos guardado localmente.
+            if session_id:
+                dashboard_url = f"https://automation.lambdatest.com/test?testID={session_id}"
+                video_url = ""
+                if username and access_key:
+                    try:
+                        video_url = _fetch_lt_video_url(session_id, username, access_key)
+                    except Exception as e:
+                        log(f"  ⚠ Error obteniendo video LT: {e}")
+                summary["video_url"] = video_url
+                if video_url:
+                    log(f"  Video LT: {video_url}")
+                log(f"  Dashboard LT: {dashboard_url}")
+                if results_path:
+                    try:
+                        # Actualizar video/dashboard en todas las filas de datos
+                        for _r in range(2, ws.max_row + 1):
+                            if video_url and "Video LT" in col_idx:
+                                ws.cell(row=_r, column=col_idx["Video LT"]).value = video_url
+                            if "Dashboard LT" in col_idx:
+                                ws.cell(row=_r, column=col_idx["Dashboard LT"]).value = dashboard_url
+                        wb.save(results_path)
+                    except Exception as e:
+                        log(f"  ⚠ Error guardando Video/Dashboard LT en Excel: {e}")
 
     log(f"\n{'='*60}")
     log(f"RESUMEN: {summary['ok']}/{summary['total']} OK, {summary['failed']} con issues.")

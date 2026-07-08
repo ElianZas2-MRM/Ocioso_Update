@@ -4,3 +4,4 @@ pandas
 pillow
 pytz
 pywin32
+requests

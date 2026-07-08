@@ -1092,7 +1092,7 @@ def iniciar_interfaz():
         ("Programación de Tests", "scheduler", False),
         ("Validación de Campos", "validation", False),
         ("Generar Excels con Datos", "excel", False),
-        ("Comparador Dealers", "dealers", False),
+        ("Comparar Dealers vs Form", "dealers", False),
     ]
     for t_text, t_name, t_disabled in tabs_data:
         btn = tk.Button(tab_bar, text=t_text, font=("Segoe UI", 9, "bold"), bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG,

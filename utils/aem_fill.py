@@ -13,7 +13,38 @@ import time
 import unicodedata
 
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import StaleElementReferenceException
+
+
+def _cpf_checksum_ok(digits: str) -> bool:
+    """Valida el dígito verificador real de un CPF de 11 dígitos."""
+    if len(digits) != 11 or len(set(digits)) == 1 or not digits.isdigit():
+        return False
+    d = [int(c) for c in digits]
+    r1 = sum(v * (10 - i) for i, v in enumerate(d[:9])) % 11
+    c1 = 0 if r1 < 2 else 11 - r1
+    if c1 != d[9]:
+        return False
+    r2 = sum(v * (11 - i) for i, v in enumerate(d[:10])) % 11
+    c2 = 0 if r2 < 2 else 11 - r2
+    return c2 == d[10]
+
+
+def _cnpj_checksum_ok(digits: str) -> bool:
+    """Valida el dígito verificador real de un CNPJ de 14 dígitos."""
+    if len(digits) != 14 or len(set(digits)) == 1 or not digits.isdigit():
+        return False
+    d = [int(c) for c in digits]
+    w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    r1 = sum(v * w for v, w in zip(d[:12], w1)) % 11
+    c1 = 0 if r1 < 2 else 11 - r1
+    if c1 != d[12]:
+        return False
+    w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    r2 = sum(v * w for v, w in zip(d[:12] + [c1], w2)) % 11
+    c2 = 0 if r2 < 2 else 11 - r2
+    return c2 == d[13]
 
 
 def normalize_text(value):
@@ -90,7 +121,15 @@ def _resolve_value(form_data, spec, is_brasil, gen_doc):
         need = 14 if arg == "cnpj" else (8 if arg == "cep" else 11)
         if digits and len(digits) == need - 1:
             digits = digits.zfill(need)
-        if is_brasil and (not digits or len(digits) < need):
+        # No basta con el largo correcto: si el valor del Excel no tiene un dígito
+        # verificador válido (CPF/CNPJ), el form real lo va a rechazar igual —
+        # se regenera por API en vez de usarlo tal cual.
+        checksum_ok = True
+        if arg == "cpf":
+            checksum_ok = _cpf_checksum_ok(digits) if digits else False
+        elif arg == "cnpj":
+            checksum_ok = _cnpj_checksum_ok(digits) if digits else False
+        if is_brasil and (not digits or len(digits) < need or not checksum_ok):
             return gen_doc(arg)
         return digits if digits else (gen_doc(arg) if is_brasil else "")
     # kind == "data"
@@ -115,6 +154,39 @@ def _fill_text(driver, el, value):
     )
 
 
+def _fill_text_sendkeys(driver, el, value):
+    """Texto libre vía send_keys real. Usado en Android: igual que en los forms de
+    React, el value+dispatchEvent puede no registrar en el estado interno del form."""
+    try:
+        el.click()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].click();", el)
+        except Exception:
+            pass
+    try:
+        el.clear()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].value='';", el)
+        except Exception:
+            pass
+    for ch in str(value):
+        try:
+            el.send_keys(ch)
+        except Exception:
+            pass
+        time.sleep(0.005)
+    try:
+        driver.execute_script(
+            "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
+            "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
+            el,
+        )
+    except Exception:
+        pass
+
+
 def _fill_masked(driver, el, digits):
     """Campos con máscara (tel/CPF/CNPJ/CEP): setear DÍGITOS CRUDOS sin focus() previo
     (el focus mueve el caret y la máscara sólo formatea hasta ahí) y sin maxlength
@@ -132,6 +204,65 @@ def _fill_masked(driver, el, digits):
     )
 
 
+def _fill_masked_sendkeys(driver, el, digits):
+    """
+    Campos con máscara (tel/CPF/CNPJ/CEP) vía send_keys real, dígito a dígito.
+    Usado en Android: la librería de máscara puede no reaccionar a un value+dispatchEvent
+    (sin keystrokes reales), igual que ya vimos en los forms de React — send_keys pasa
+    por el pipeline real de eventos de teclado y la máscara formatea correctamente.
+    Verifica al final que entraron todos los dígitos (secuencias largas como CNPJ a
+    veces pierden alguno bajo latencia de LambdaTest) y reintenta si no coinciden.
+    """
+    for _attempt in range(3):
+        try:
+            driver.execute_script("arguments[0].removeAttribute('maxlength');", el)
+        except Exception:
+            pass
+        try:
+            el.click()
+        except Exception:
+            try:
+                driver.execute_script("arguments[0].click();", el)
+            except Exception:
+                pass
+        try:
+            el.clear()
+        except Exception:
+            try:
+                driver.execute_script("arguments[0].value='';", el)
+            except Exception:
+                pass
+        for ch in str(digits):
+            try:
+                el.send_keys(ch)
+                # La máscara reposiciona el cursor al reformatear (ej. tras insertar el
+                # ")" o el "-"); si el siguiente dígito entra donde quedó el cursor y no
+                # al final, el reformateo posterior corta la cola. End real lo corrige.
+                el.send_keys(Keys.END)
+            except Exception:
+                pass
+            time.sleep(0.015)
+        time.sleep(0.15)
+        try:
+            # Solo 'change' acá — el 'blur' sintético entra en conflicto con el blur
+            # REAL que dispara Selenium al mover el foco al siguiente campo (doble
+            # blur), y algunas máscaras truncan el valor en el segundo. El blur real
+            # de la transición al próximo campo alcanza para que la máscara valide.
+            driver.execute_script(
+                "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));",
+                el,
+            )
+        except Exception:
+            pass
+        try:
+            current_digits = "".join(c for c in (el.get_attribute("value") or "") if c.isdigit())
+        except Exception:
+            current_digits = ""
+        if current_digits == str(digits):
+            return
+        time.sleep(0.2)
+
+
 def _scroll_into_view(driver, el):
     try:
         driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
@@ -140,13 +271,61 @@ def _scroll_into_view(driver, el):
         pass
 
 
-def _fill_selects(driver, form_data, log):
-    """Selecciona los <select> AEM. En el selector persona/empresa elige según el doc del
-    Excel: si viene CNPJ → 'Empresa'; si viene CPF → 'Pessoa'; si ninguno → 'Empresa' por
-    defecto. El resto de selects: primera opción válida."""
+def _select_option_js(driver, sel, chosen):
+    _scroll_into_view(driver, sel)
+    driver.execute_script(
+        "var s=arguments[0];s.value=arguments[1];"
+        "s.dispatchEvent(new Event('input',{bubbles:true}));"
+        "s.dispatchEvent(new Event('change',{bubbles:true}));"
+        "s.dispatchEvent(new Event('blur',{bubbles:true}));",
+        sel, chosen,
+    )
+
+
+def _is_persona_select(valid_options):
+    texts = [normalize_text(t) for _, t in valid_options]
+    return any("empresa" in x for x in texts) and any("pessoa" in x for x in texts)
+
+
+def _fill_persona_select(driver, form_data, log):
+    """
+    Solo el selector Pessoa/Empresa: elige según el doc del Excel (CNPJ→'Empresa',
+    CPF→'Pessoa', ninguno→'Empresa'). Debe correr ANTES que el resto del llenado
+    porque determina qué campos (CPF vs CNPJ/empresa) quedan visibles.
+    """
     has_cnpj = bool(str(form_data.get("cnpj", "") or "").strip())
     has_cpf = bool(str(form_data.get("cpf", "") or "").strip())
     prefer = "empresa" if has_cnpj else ("pessoa" if has_cpf else "empresa")
+    try:
+        selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='widget']")
+    except Exception:
+        return 0
+    for sel in selects:
+        try:
+            if not sel.is_displayed() or not sel.is_enabled():
+                continue
+            options = [(o.get_attribute("value") or "", (o.text or "").strip())
+                       for o in sel.find_elements(By.TAG_NAME, "option")]
+            valid = [(v, t) for v, t in options if v and not _is_placeholder(t)]
+            if not valid or not _is_persona_select(valid):
+                continue
+            chosen = next((v for v, t in valid if prefer in normalize_text(t)), valid[0][0])
+            _select_option_js(driver, sel, chosen)
+            return 1
+        except StaleElementReferenceException:
+            continue
+        except Exception as e:
+            log(f" AEM select persona: {e}")
+    return 0
+
+
+def _fill_other_selects(driver, form_data, log):
+    """
+    El resto de los <select> (Modelo, etc.), primera opción válida. Se llama DESPUÉS
+    del llenado de texto (Nome/Sobrenome primero) para respetar el orden visual —
+    antes se llenaba todo junto con _fill_persona_select y Modelo (un select) siempre
+    quedaba primero aunque estuviera más abajo en la página.
+    """
     try:
         selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='widget']")
     except Exception:
@@ -159,22 +338,13 @@ def _fill_selects(driver, form_data, log):
             options = [(o.get_attribute("value") or "", (o.text or "").strip())
                        for o in sel.find_elements(By.TAG_NAME, "option")]
             valid = [(v, t) for v, t in options if v and not _is_placeholder(t)]
-            if not valid:
-                continue
-            texts = [normalize_text(t) for _, t in valid]
-            is_persona = any("empresa" in x for x in texts) and any("pessoa" in x for x in texts)
-            if is_persona:
-                chosen = next((v for v, t in valid if prefer in normalize_text(t)), valid[0][0])
-            else:
-                chosen = valid[0][0]
-            _scroll_into_view(driver, sel)
-            driver.execute_script(
-                "var s=arguments[0];s.value=arguments[1];"
-                "s.dispatchEvent(new Event('input',{bubbles:true}));"
-                "s.dispatchEvent(new Event('change',{bubbles:true}));"
-                "s.dispatchEvent(new Event('blur',{bubbles:true}));",
-                sel, chosen,
-            )
+            if not valid or _is_persona_select(valid):
+                continue  # ya resuelto por _fill_persona_select
+            current = (sel.get_attribute("value") or "").strip()
+            if current:
+                continue  # ya tiene un valor (ej. re-selección tras reload)
+            chosen = valid[0][0]
+            _select_option_js(driver, sel, chosen)
             done += 1
         except StaleElementReferenceException:
             continue
@@ -183,37 +353,73 @@ def _fill_selects(driver, form_data, log):
     return done
 
 
-def fill_aem_form(driver, form_data, is_brasil, gen_doc, log=print, record=None):
+def fill_aem_form(driver, form_data, is_brasil, gen_doc, log=print, record=None, is_android=False):
     """Llena un AEM Adaptive Form. form_data: dict con firstname/lastname/email/phone/
-    document/comment y cpf/cnpj/cep. gen_doc(kind) genera doc brasileño ('cpf'/'cnpj'/'cep')."""
-    _fill_selects(driver, form_data, log)   # persona según doc del Excel (CNPJ→Empresa, CPF→Pessoa)
-    time.sleep(0.8)
+    document/comment y cpf/cnpj/cep. gen_doc(kind) genera doc brasileño ('cpf'/'cnpj'/'cep').
+    is_android=True: campos enmascarados (tel/cpf/cnpj/cep) vía send_keys real —
+    en Android la máscara puede no reaccionar a value+dispatchEvent sin keystrokes reales."""
+    _fill_persona_select(driver, form_data, log)   # CNPJ→Empresa, CPF→Pessoa (define qué campos se ven)
+    # Android es más lento para terminar de renderizar el form tras el selector de
+    # persona — si el snapshot de widgets se toma antes de tiempo, Nome/Sobrenome
+    # (arriba del todo) pueden no estar aún en el DOM y quedar directamente afuera
+    # (no es un problema de orden de llenado, es que ni se detectaron). Se espera un
+    # poco más ahí y después el llenado en sí va rápido igual.
+    if is_android:
+        for _ in range(20):  # hasta ~3s, corta apenas aparecen widgets
+            try:
+                if driver.execute_script(
+                    "return document.querySelectorAll(\"input[id*='widget'], textarea[id*='widget']\").length;"
+                ):
+                    break
+            except Exception:
+                pass
+            time.sleep(0.15)
+        time.sleep(0.5)
+    else:
+        time.sleep(0.8)
 
+    # Un solo round-trip para reunir id/tipo/visible/label/posición de TODOS los widgets,
+    # en vez de 5-6 llamadas remotas por campo (crítico en Android/LambdaTest: cada
+    # round-trip pesa varios cientos de ms). Se ordena por posición visual (top, left)
+    # para que se llene de arriba hacia abajo — document.querySelectorAll no garantiza
+    # ese orden, sólo el orden del DOM, que en layouts AEM no siempre coincide.
     try:
-        widgets = driver.find_elements(By.CSS_SELECTOR, "input[id*='widget'], textarea[id*='widget']")
+        candidates = driver.execute_script(r"""
+            var out = [];
+            var els = document.querySelectorAll("input[id*='widget'], textarea[id*='widget']");
+            for (var i=0; i<els.length; i++) {
+                var el = els[i];
+                var id = el.id || "";
+                if (id.toLowerCase().indexOf("widget") < 0) continue;
+                var type = (el.getAttribute("type") || "text").toLowerCase();
+                var cs = getComputedStyle(el);
+                var displayed = cs.display !== "none" && cs.visibility !== "hidden"
+                    && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0);
+                var lbl = document.querySelector('label[for="' + id + '"]');
+                var r = el.getBoundingClientRect();
+                out.push({
+                    id: id, type: type, displayed: displayed, enabled: !el.disabled,
+                    label: lbl ? lbl.textContent : "", top: r.top, left: r.left,
+                });
+            }
+            out.sort(function(a, b) { return (a.top - b.top) || (a.left - b.left); });
+            return out;
+        """) or []
     except Exception as e:
         log(f" AEM: error buscando widgets — {e}")
         return 0
 
     skip_types = ("hidden", "submit", "button", "checkbox", "radio", "file", "reset")
     filled = 0
-    for el in widgets:
+    for cand in candidates:
         try:
-            if not el.is_displayed() or not el.is_enabled():
+            wid = cand.get("id") or ""
+            if not cand.get("displayed") or not cand.get("enabled"):
                 continue
-            wid = el.get_attribute("id") or ""
-            if "widget" not in wid.lower():
-                continue
-            if (el.get_attribute("type") or "text").lower() in skip_types:
+            if (cand.get("type") or "text") in skip_types:
                 continue
 
-            lbl = ""
-            try:
-                lbl = driver.execute_script(
-                    "var l=document.querySelector('label[for=\"'+arguments[0]+'\"]');"
-                    "return l ? l.textContent : '';", wid) or ""
-            except Exception:
-                pass
+            lbl = cand.get("label") or ""
             hint = normalize_text(lbl) + " " + wid.lower()
 
             entry = next((e for e in _FIELD_KEYWORDS if any(k in hint for k in e[0])), None)
@@ -224,16 +430,30 @@ def fill_aem_form(driver, form_data, is_brasil, gen_doc, log=print, record=None)
             if not value:
                 continue
 
+            try:
+                el = driver.find_element(By.ID, wid)
+            except Exception:
+                continue
+
             _scroll_into_view(driver, el)
             kind, arg = entry[1]
+            logged_value = value
             if kind == "brasil" or arg == "phone":
-                _fill_masked(driver, el, "".join(c for c in value if c.isdigit()))
+                digits = "".join(c for c in value if c.isdigit())
+                logged_value = digits  # lo que realmente se tipeó, sin puntuación
+                if is_android:
+                    _fill_masked_sendkeys(driver, el, digits)
+                else:
+                    _fill_masked(driver, el, digits)
             else:
-                _fill_text(driver, el, value)
-            log(f"✅ AEM '{(lbl or wid).strip()}' = {value}")
+                if is_android:
+                    _fill_text_sendkeys(driver, el, value)
+                else:
+                    _fill_text(driver, el, value)
+            log(f"✅ AEM '{(lbl or wid).strip()}' = {logged_value}")
             if record:
                 try:
-                    record(wid, value)
+                    record(wid, logged_value)
                 except Exception:
                     pass
             filled += 1
@@ -243,6 +463,11 @@ def fill_aem_form(driver, form_data, is_brasil, gen_doc, log=print, record=None)
             log(f" AEM: error llenando widget — {e}")
 
     log(f" AEM: {filled} input(s) llenado(s) por keyword")
+
+    # Resto de selects (Modelo, etc.) al final — respeta el orden visual: texto
+    # (Nome/Sobrenome/CPF/Celular/Email arriba) primero, Modelo después.
+    _fill_other_selects(driver, form_data, log)
+
     return filled
 
 
