@@ -1269,8 +1269,8 @@ def iniciar_interfaz():
         sub_texts={"consecutivo": "Un mercado a la vez (AR → BO → …)", "paralelo": "Todos los mercados a la vez"},
         on_change=lambda v: _save_ui_prefs())
     excels_mode = make_pill_group(
-        row_config, "EXCELS POR MERCADO", "", [("Secuencial", "consecutivo"), ("Paralelo", "paralelo")], saved_excels_mode,
-        sub_texts={"consecutivo": "Los Excels del mercado, uno tras otro", "paralelo": "Todos a la vez (solo browsers locales Chrome/FF/Edge)"},
+        row_config, "EXCELS POR DISPOSITIVO", "", [("Secuencial", "consecutivo"), ("Paralelo", "paralelo")], saved_excels_mode,
+        sub_texts={"consecutivo": "Un dispositivo a la vez (Chrome → Firefox → …)", "paralelo": "Todos a la vez (solo browsers locales Chrome/FF/Edge)"},
         on_change=lambda v: [_refresh_excel_par_warning(), _save_ui_prefs()])
 
     # Dispositivos y Navegadores
