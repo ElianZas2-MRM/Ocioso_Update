@@ -1,10 +1,11 @@
 @echo off
 REM -- Changelog -----------------------------------------------------------------
-REM Jul 2026: Nueva pestana "Comparador Dealers": chequea region/ciudad/dealer/BAC/modelos
+REM Jul 2026: Nueva pestaña "Comparador Dealers": chequea region/ciudad/dealer/BAC/modelos
 REM           contra un Excel de dealers (fila de encabezado y columnas configurables,
-REM           multiples forms por pasada, deteccion de duplicados y extras, capturas +
-REM           reporte Excel en Dealerscheck_resultados/). Icono de la app (Asset/icon.ico)
-REM           y AppUserModelID propios para que la barra de tareas no muestre el de python.
+REM           múltiples forms por pasada, detección de duplicados y extras de forma jerárquica,
+REM           desbloqueo de nivel dealer, columnas adicionales como píldoras-checkbox en vivo,
+REM           ejecución en dos fases (comparación rápida primero + capturas ZIP opcionales después),
+REM           corrección de screenshots en Chrome dentro de iframe, e icono de la app propio.
 REM Jun 2026: Generar Excels: panel Brasil visible al seleccionar pais (pack before fix)
 REM           Generar Excels: boton "Regenerar datos (URLs actuales)" sin ingresar URLs
 REM           Generar Excels: radio buttons modo envio (redondelitos, sin indicatoron=0)

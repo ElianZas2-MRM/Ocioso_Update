@@ -44,9 +44,16 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
 **Paso a paso:**
 
-1. **Email destinatario** (arriba a la derecha): si querés recibir un resumen por mail, escribí el destinatario y tildá **Enviar mail**. Se habilitan "Adjuntar resultados", "Adjuntar screenshots" y el modo de envío (**1 por país** o **Consolidado**).
-2. **⚙ Configurar**: abre la configuración avanzada — elegís "Un Excel por dispositivo" o "Un Excel compartido para todos los dispositivos" (ojo: con el modo compartido, **todos** los dispositivos usan los mismos datos, así que aparece un aviso naranja de que los leads pueden salir duplicados o rechazados; cambiá el modo desde acá si te aparece), y tildás "Ver navegador mientras corre" / "Minimizar a la bandeja al cerrar" si los necesitás.
-3. **MERCADOS** y **EXCELS POR MERCADO**: Consecutivo (uno detrás del otro) o Paralelo (todos a la vez).
+1. **Email destinatario** (arriba a la derecha): si querés recibir un resumen por mail, escribí el destinatario y tildá **Enviar mail**. Se habilitan "Adjuntar resultados", "Adjuntar screenshots" y el modo de envío.
+2. **⚙ Configurar** (botón destacado a la derecha de las pestañas): abre la configuración avanzada unificada para toda la aplicación. Permite configurar:
+   - "Un Excel por dispositivo" o "Un Excel compartido para todos los dispositivos" (con aviso naranja si es compartido).
+   - **Ver navegador mientras corre**: determina si el navegador se abre visible u oculto (headless) en segundo plano de manera global (aplica tanto a envíos de leads, programación, como al Comparador de Dealers).
+   - **Pausar para login manual antes de llenar el primer formulario**: al activarse, la app abre el navegador en la landing y **frena ahí** con un cartel emergente para que inicies sesión a mano (SSO, MFA, credenciales). Recién cuando apretás 'Aceptar' cierra cookies, saca la captura de la landing, detecta el formulario y arranca el llenado normal; con 'Cancelar' se corta la ejecución. Aplica a envíos manuales, programados y al Comparador de Dealers.
+   - **Minimizar a la bandeja al cerrar**: controla la acción de cierre (ocultar en la bandeja del sistema o salir).
+
+   ![Configuración avanzada](Asset/screenshots/16_configuracion_global.png)
+
+3. **MERCADOS** y **EXCELS POR MERCADO**: Secuencial (uno detrás del otro) o Paralelo (todos a la vez).
 4. **DISPOSITIVOS / NAVEGADORES**: selección múltiple — Chrome, Firefox, Edge, Mac LT, Android LT.
    - **⚡ Enviar en paralelo por URL (una sesión por URL)**: en vez de correr todo el Excel de un dispositivo como una sola sesión de a un lead por vez, abre **una ventana de navegador por cada fila** del Excel, todas al mismo tiempo — mucho más rápido para volúmenes grandes. Solo aplica a los navegadores locales (Chrome/Firefox/Edge); LambdaTest siempre corre como una sola sesión, ignora este modo. El campo **"máx. simultáneas"** (por defecto 6, límite real de 1 a 20) controla cuántas ventanas se abren a la vez para no saturar la PC. Este modo **se desactiva solo** cuando el envío lo dispara la Programación de Tests (ahí siempre corre secuencial, aunque hayas dejado la casilla tildada).
    - **🧩 Formularios T3 2.0 (usa los Excels …_T3)**: tildalo si los formularios de este envío son la versión nueva Adobe AEM — la app busca directamente los Excels con sufijo `_T3.xlsx` en vez de los normales. 
@@ -73,6 +80,25 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para LambdaTest, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda como una columna **"Video LT"** dentro del Excel de resultados — abrilo desde ahí y hacé click en el link.
 
 > Antes de ejecutar necesitás tener generado el Excel de datos correspondiente — si falta, andá primero a la pestaña **Generar Excels con Datos**.
+
+**Qué capturas deja cada lead** (en `resultados/screenshots_<País>_<Navegador><N>/`):
+
+1. `landing_inicial_…` — la landing con el formulario inserto. Si está tildada la pausa para login manual, se toma **después** de que aceptás el cartel (así queda con la sesión ya iniciada).
+2. `form_errores_…` — la app aprieta primero **Enviar/Siguiente con el formulario vacío** para forzar las validaciones y captura los mensajes de error. En formularios de varios pasos hay una por paso: `form_errores_paso1`, `form_errores_paso2`, …
+3. `form_completado_paso1`, `form_completado_paso2`, … — cada paso ya cargado con los datos del Excel, justo antes de pasar al siguiente (solo en formularios multi-paso).
+4. `form_completado_…` — el formulario completo con todos los datos, antes de enviar.
+5. `landing_typage_…` — la Thank You page.
+
+Las capturas del formulario recortan **solo el área del form** (en varias partes unidas si es más alto que la pantalla), así que no arrastran toda la landing cuando ésta es kilométrica, y los PNG largos se comprimen para que la carpeta de una corrida pese poco (~1-2 MB por lead).
+
+**Chequeo de la Thank You page (columnas "TYP con CTA" y "LINK ISSUE TYP")**
+
+Después de enviar el lead, la app no se queda solo con la captura de la TY page: revisa los links que hay adentro y deja el resultado en dos columnas del Excel de resultados.
+
+- **TYP con CTA**: busca los `<a>` dentro de la TY (`div#thank-you` / `div.rp-wrapper`). Si no hay ninguno queda en `NO`; si hay, los abre uno por uno y anota, por cada link, el texto, el `href`, el `target`, a qué URL terminó llegando y el nombre de la captura que dejó. Si hay varios, van todos separados por ` || ` (`SÍ (2 links) || …`).
+- **LINK ISSUE TYP**: detecta links **rotos por HTML mal escapado** — un `href`/`data-href`/`data-url`/`src` cuyo valor trae adentro un tag literal (`</span`, `&lt;`, etc.), típico de una inyección de contenido mal armada. Si aparece, marca `SÍ` con la descripción, una captura señalando dónde está el link, y adónde llevó al clickearlo. Si no hay nada raro, queda en `-`.
+
+Las capturas de este chequeo se guardan aparte, en `cta_evidence/`. En LambdaTest (Mac/Android) el CTA se reporta igual en el Excel, pero **sin** captura de evidencia.
 
 **La app recuerda tu configuración:** todo lo que elegís en esta pestaña (dispositivos tildados, modo Mercados/Excels, "enviar en paralelo por URL" + su máximo, "T3 2.0", y toda la config de email) se guarda solo, apenas lo cambiás, en `json/config_global.json`. Si cerrás la app y la volvés a abrir, la encontrás tal cual la dejaste — no hace falta volver a tildar todo de nuevo.
 
@@ -178,22 +204,29 @@ La pestaña está organizada en bloques con una **mini-guía numerada (①→⑤
 **Paso a paso:**
 
 1. **① MERCADO A CHEQUEAR**: tarjeta del país. Cada país guarda su propia configuración (columnas, Excels, etc.) automáticamente al cambiar de mercado — no hace falta guardar nada a mano para no perder lo que cargaste en ese país.
-2. **② NAVEGADOR**: elegí Chrome/Firefox/Edge (las opciones **Mac LT / Android LT** figuran como *próximamente*) y tildá **"Ver navegador mientras corre"** si querés verlo (apagado por defecto, corre atrás sin molestar).
-3. **③ EXCEL DE URLs**: en vez de pegar URLs a mano, cargás un Excel (el mismo tipo que usa "Envío de Leads") con columnas **`URL`** (landing) y **`Formulario`** (form). Por cada fila decide solo: si `URL` tiene valor usa landing+form; si viene vacía usa solo el form. Muestra un aviso en vivo con la cantidad de forms detectados, o si las URLs parecen de otro país que el mercado elegido.
+2. **② NAVEGADOR**: elegí Chrome/Firefox/Edge (las opciones **Mac LT / Android LT** figuran como *próximamente*). La visibilidad del navegador se configura de manera global usando el botón **⚙ Configurar** en el extremo derecho de las pestañas (se aplica a toda la aplicación).
+3. **③ EXCEL DE URLs**: en vez de pegar URLs a mano, cargás un Excel (el mismo tipo que usa "Envío de Leads") con columnas **`URL`** (landing) y **`Formulario`** (form). Podés reemplazar un archivo seleccionando otro directamente desde este botón. Muestra un aviso en vivo con la cantidad de forms detectados, o si las URLs parecen de otro país que el mercado elegido.
 4. **④ EXCEL DE DEALERS A CHEQUEAR**: botón **"Seleccionar Excel"** (cualquier .xlsx/.xls), **"Fila encabezados"** (número de fila donde arrancan los títulos — el Excel real no siempre arranca en la fila 1), y el toggle **"Tiene columna de filtro"** / **"No tiene filtro (usar todas las filas)"**. Con filtro activo definís **Columna filtro**, **Valor filtro** y la **Condición**:
    - **Incluir**: los dealers de las filas que matchean el filtro (ej. `POSVENTA = si`) **deben estar** en el form.
    - **Excluir**: los dealers de las filas que matchean (ej. `POSVENTA = no`) **NO deben estar** en el form (se verifica su ausencia: si aparecen, es FAIL).
    - Si el Excel viene **pre-filtrado con filas ocultas**, se procesan igual pero se muestra un **disclaimer** en el log con cuáles estaban ocultas.
-   - La búsqueda de dealers **EXTRA / DUPLICADOS** (presentes en el form pero que no están en la lista esperada) se hace **siempre** en modo Incluir; en modo Excluir no aplica.
-5. **⑤ COLUMNAS DEL EXCEL**: pills **region / city / dealer** (son los ids reales del `<select>` del HTML — no cambian de país a país aunque el label visible sí, ej. en Argentina se ve "Provincia" pero el id sigue siendo `region`); `dealer` siempre es obligatorio. Definís qué columna del Excel corresponde a cada uno, más **Columna BAC** (opcional, con "Verificar BAC") y **columnas adicionales a comprobar** (par columna-del-Excel + id de cualquier campo del HTML, ej. "CEP" → id `customer-cep`). La navegación es siempre **región → ciudad → dealer** (si desmarcás región, arranca en ciudad), y se compara **toda la fila en conjunto**.
+   - La búsqueda de **EXTRA / DUPLICADOS** (opciones en el form que no están en el Excel) se realiza de forma **jerárquica en conjunto**, adaptándose a los niveles que estén activos. Si tenés habilitados Región, Ciudad y Dealer:
+     1. **Región**: Chequea si hay regiones extra en el formulario no declaradas en el Excel.
+     2. **Ciudad (en conjunto)**: Selecciona cada región válida del Excel y valida que las ciudades mostradas en el formulario pertenezcan a esa región según el Excel (detecta si una ciudad está cargada bajo una región incorrecta).
+     3. **Dealer (en conjunto)**: Selecciona cada combinación válida de `(Región, Ciudad)` del Excel y valida que los dealers correspondan a esa combinación (evita falsos extras por nombres de dealers duplicados entre distintas ciudades).
+     Si desactivás un nivel (ej. `dealer`), la app se adapta y realiza la validación jerárquica hasta el nivel más bajo activo (ej. buscando ciudades extras en conjunto con su región).
+5. **⑤ COLUMNAS DEL EXCEL**: pills **region / city / dealer** (los ids reales de los selects del HTML del formulario, ej. `region` / `city` / `dealer`). 
+   - El nivel `dealer` ya no es obligatorio: podés desmarcarlo para realizar la validación de solo región y ciudad. Definís qué columna de tu Excel corresponde a cada nivel activo.
+   - Podés configurar **columnas adicionales a comprobar** (ej. "CEP" → id `customer-cep`). Al agregarlas y escribir el ID en el form, **estas columnas se añaden automáticamente como píldoras-checkbox** junto a `region`/`city`/`dealer`. Podés activarlas o desactivarlas de forma interactiva antes de correr la prueba.
+   - Todas estas píldoras y sus estados (habilitada/deshabilitada) se guardan y cargan de forma persistente con tus configuraciones del país.
 6. **Modelos** (opcional, 3ra columna del primer bloque): tildá **"Tiene selector de Modelo"** si aplica — **solo funciona con formularios T1** (el id estándar `models`); T2/T3 con selector distinto todavía no están soportados. Elegís **"Todos los modelos"** o **"Modelo(s) específico(s)"** (separados por coma). Cuando hay modelo, **primero se selecciona el modelo y después se revisan los dealers** (la lista de dealers puede depender del modelo).
-7. **Modo de salida**: "Solo Excel" o "Excel + Capturas (ZIP)". Las capturas quedan en una subcarpeta por país + filtro (ej. `chile_dealers_posventa`).
+7. **Modo de salida**: "Solo Excel" o "Excel + Capturas (ZIP)".
 8. **Configuraciones guardadas**: guardá el mapeo completo con un nombre (ej. "GMUY Livianos") con **💾 Guardar**, recuperalo con **📂 Cargar** o borralo con **🗑 Eliminar**.
-9. **EJECUTAR**: arranca deshabilitado hasta que cargues Excel de URLs + Excel de dealers + Columna Dealer; se pone verde apenas está todo completo. Abre un modal de progreso que indica la fase: **"Comparando dealer X/total"** o **"Buscando extras X/total (región/ciudad)"**, con botón **Detener**:
-
-   ![Modal de ejecución](Asset/screenshots/11_modal_ejecucion.png)
-
-   Al terminar muestra **Cerrar** más el resumen 🟢 PASS / 🔴 FAIL / 🟡 EXTRA / DUPLICADO.
+9. **EJECUTAR**: se habilita cuando tenés cargados el Excel de URLs, el Excel de dealers, y mapeadas las columnas de los niveles activos.
+   - Durante la corrida, el botón principal se deshabilita mostrando `" EJECUCIÓN EN CURSO"`. El botón de parar queda centralizado de forma segura en el modal de progreso.
+   - **Flujo en 2 Fases**:
+     - **Fase 1 (Comparación Rápida):** Compara los dealers y campos de inmediato sin tomar capturas. Al finalizar esta fase, **genera y guarda el Excel de resultados en el disco** de inmediato, permitiéndote abrirlo y revisarlo sin demoras.
+     - **Fase 2 (Generación de Capturas):** Si seleccionaste la opción de capturas, la aplicación realiza una segunda pasada rápida para capturar cada pantalla y empaquetar el archivo ZIP de resultados.
 10. Los reportes (Excel con colores por estado, y el ZIP de capturas si corresponde) quedan en `Dealerscheck_resultados/`.
 
 ---
@@ -207,8 +240,30 @@ La pestaña está organizada en bloques con una **mini-guía numerada (①→⑤
 - `data/`: archivos Excel de entrada (datos de prueba por país/dispositivo).
 - `drivers/`: drivers locales del navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`).
 - `resultados/`: resultados y capturas de "Envío de Leads" / LambdaTest.
+- `cta_evidence/`: capturas del chequeo de CTA / links rotos de la Thank You page.
 - `Dealerscheck_resultados/`: reportes y capturas del Comparador Dealers.
 - `json/`: configuración persistente (email, programación, reglas de validación, presets del Comparador Dealers).
+- `utils/`: generación de datos de prueba, llenado AEM (T3), chequeo de CTA, programación y rutas.
+- `validation/`: motor de la pestaña Validación de Campos (regex, mensajes de error, export).
+- `tests/`: regression test (ver abajo).
+
+## Regression test
+
+Chequeo rápido de que nada se rompió, sin abrir navegador ni tocar formularios reales:
+
+```powershell
+.\venv\Scripts\python.exe tests\regression_test.py
+```
+
+Corre 21 chequeos en ~5 segundos y termina con `PASS: 21   FAIL: 0`. Cubre:
+
+- **Generación de datos**: que las 9 filas de país se generen, y que los documentos salgan **matemáticamente válidos** — CPF y CNPJ de Brasil con dígito verificador, RUT de Chile (incluida la variante con K), cédula de Ecuador, VIN de 17 caracteres sin I/O/Q, celular y email por país.
+- **Comparador de Dealers**: normalización de texto (acentos/mayúsculas), lectura de Excel con encabezados que no arrancan en la fila 1, resolución de columnas por letra (`A`, `K`) / nombre exacto / coincidencia parcial, filtros Incluir y Excluir, detección de filas ocultas y exportación del Excel de resultados.
+- **Programación de tests**: guardar → cargar → limpiar el schedule semanal sin perder horarios ni países.
+- **Validación de campos**: que las regex compilen, discriminen valor válido de inválido, y que una regex rota tire error en vez de pasar silenciosa.
+- **Integridad general**: que los 28 módulos importen, que los 9 países tengan runner y `field_mapping`, y que todos los Excel de `data/` sean legibles y tengan columna de URL.
+
+Si tocás código de datos, del comparador o de la programación, corré esto antes de compilar.
 
 ## Drivers locales (sin descargas automáticas)
 

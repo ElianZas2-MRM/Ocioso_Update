@@ -988,6 +988,18 @@ def iniciar_interfaz():
     # Por defecto DESTILDADO: al cerrar la ventana el programa se cierra directo.
     # Si el usuario lo tilda, la X minimiza a la bandeja (persistente).
     var_minimizar_a_bandeja = tk.BooleanVar(value=bool(_ui_prefs.get("minimizar_a_bandeja", False)))
+    var_pausar_autenticacion = tk.BooleanVar(value=bool(_ui_prefs.get("pausar_autenticacion", False)))
+
+    def _on_pause_change(*_):
+        if var_pausar_autenticacion.get():
+            var_ver_navegador.set(True)
+
+    def _on_visible_change(*_):
+        if not var_ver_navegador.get() and var_pausar_autenticacion.get():
+            var_pausar_autenticacion.set(False)
+
+    var_pausar_autenticacion.trace_add("write", _on_pause_change)
+    var_ver_navegador.trace_add("write", _on_visible_change)
 
     email_frame = tk.Frame(top_bar, bg=APP_BG_COLOR)
     email_frame.pack(side="right")
@@ -1106,6 +1118,13 @@ def iniciar_interfaz():
             btn.config(command=lambda name=t_name: switch_tab(name))
         tab_buttons.append(btn)
 
+    global_config_btn = tk.Button(
+        tab_bar, text="⚙ Configurar", font=("Segoe UI", 9, "bold"),
+        bg="#1F618D", fg="#f4f4f4", activebackground="#2980B9", activeforeground="#f4f4f4",
+        relief="flat", bd=0, padx=15, pady=8, cursor="hand2"
+    )
+    global_config_btn.pack(side="right", padx=(0, 2))
+
     for _, t_name, _ in tabs_data:
         tabs[t_name] = tk.Frame(content_area, bg=APP_BG_COLOR)
 
@@ -1156,15 +1175,9 @@ def iniciar_interfaz():
     sec_title = tk.Label(sec_head, text="Configurá tu envío: elegí mercado, modo de ejecución y dispositivos",
                          font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY)
     sec_title.pack(side="left")
-    btn_adv_cfg = tk.Button(sec_head, text=" Configurar", image=get_button_icon("gear_white.png"), compound="left",
-                            font=("Segoe UI", 8, "bold"), bg=BUTTON_ACTIVE, fg="white", relief="flat", bd=0,
-                            activebackground=BUTTON_HOVER, activeforeground="white", padx=12, pady=3,
-                            cursor="hand2", command=lambda: abrir_config_avanzada())
-    btn_adv_cfg.pack(side="right")
-
     sec_hint = tk.Label(config_card,
                         text="① Elegí el modo de mercados y de Excels.   ② Tildá los dispositivos/navegadores.   "
-                             "③ Con “Configurar” cambiás si cada dispositivo usa su Excel o uno compartido.",
+                             "③ Con el botón “Configurar” arriba a la derecha cambiás si cada dispositivo usa su Excel o uno compartido.",
                         font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", justify="left")
     sec_hint.pack(anchor="w", padx=15, pady=(0, 6))
 
@@ -1352,6 +1365,7 @@ def iniciar_interfaz():
                 cfg["ui_prefs"] = {}
             cfg["ui_prefs"]["visible_browser"] = bool(var_ver_navegador.get())
             cfg["ui_prefs"]["minimizar_a_bandeja"] = bool(var_minimizar_a_bandeja.get())
+            cfg["ui_prefs"]["pausar_autenticacion"] = bool(var_pausar_autenticacion.get())
             cfg["ui_prefs"]["selected_disp"] = selected_disp
             if 'mercados_mode' in globals() or 'mercados_mode' in locals():
                 cfg["ui_prefs"]["mercados_mode"] = mercados_mode[0]
@@ -1387,6 +1401,7 @@ def iniciar_interfaz():
             pass
 
     var_ver_navegador.trace_add("write", _save_ui_prefs)
+    var_pausar_autenticacion.trace_add("write", _save_ui_prefs)
     var_minimizar_a_bandeja.trace_add("write", _save_ui_prefs)
 
     # Enviar en paralelo POR URL: una sesión (navegador) por URL, todas en simultáneo
@@ -1527,7 +1542,7 @@ def iniciar_interfaz():
         tk.Label(win, text="Opciones que no forman parte de la pantalla principal.",
                  font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18, pady=(0, 12))
 
-        tk.Label(win, text="EXCEL POR DISPOSITIVO", font=("Segoe UI", 9, "bold"),
+        tk.Label(win, text="EXCEL POR DISPOSITIVO (SOLO ENVÍO DE LEADS / PROGRAMADOS)", font=("Segoe UI", 9, "bold"),
                  bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18)
 
         mode_var = tk.StringVar(value=excel_mode_holder[0])
@@ -1567,6 +1582,10 @@ def iniciar_interfaz():
                        variable=var_minimizar_a_bandeja, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
                        selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
                        anchor="w").pack(anchor="w", pady=2)
+        tk.Checkbutton(beh_frame, text="Pausar para login manual en primer formulario (Envío de Leads / Comparador)",
+                       variable=var_pausar_autenticacion, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
+                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
+                       anchor="w").pack(anchor="w", pady=2)
 
         btns = tk.Frame(win, bg=CARD_BG_COLOR)
         btns.pack(side="bottom", fill="x", padx=18, pady=14)
@@ -1594,6 +1613,7 @@ def iniciar_interfaz():
                   relief="flat", bd=0, padx=14, pady=6, cursor="hand2", command=win.destroy).pack(side="right", padx=(0, 8))
 
     actualizar_warning()  # reflejar el modo persistido al abrir la app
+    global_config_btn.config(command=abrir_config_avanzada)
 
     # --- 2. PAÍSES A EJECUTAR (Card Panel) ---
     paises_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
@@ -3168,8 +3188,10 @@ def iniciar_interfaz():
             try:
                 if dtype == "desktop":
                     from core.generic_country_base import GenericCountryBase
+                    _pausar = var_pausar_autenticacion.get()
                     form = GenericCountryBase(pais, browser=browser, viewport="fullscreen",
-                                              headless=False, background=background, is_scheduled=scheduled)
+                                              headless=False, background=background, is_scheduled=scheduled,
+                                              pausar_autenticacion=_pausar)
                     if excel:
                         form.EXCEL_PATH = excel  # ← una sesión por Excel generado
                     def _pcb(done, total):
