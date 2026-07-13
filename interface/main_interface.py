@@ -2789,11 +2789,15 @@ def iniciar_interfaz():
                     f"mercados={'paralelo' if mercados_par else 'consecutivo'} · "
                     f"excels={'paralelo' if excels_par else 'consecutivo'}.")
 
-        # Crear modal centrado
+        # Crear modal centrado. El alto se calcula según cuántos mercados hay que mostrar:
+        # con alto fijo, a partir del 5º mercado las barras quedaban fuera de la ventana.
         modal = tk.Toplevel(root)
         modal.overrideredirect(True) # Quitar bordes de Windows
         modal_width = 520
-        modal_height = 370
+        _n_mercados = max(len({_s["pais"] for _s in active_sessions_list}), 1)
+        # 260 = encabezado + pastillas + aviso + espacio del resumen final; 46 = alto de cada barra
+        modal_height = 260 + 46 * _n_mercados
+        modal_height = max(370, min(modal_height, int(root.winfo_screenheight() * 0.85)))
         MODAL_BG = "#231830"
         MODAL_PILL_BG = "#38234D"
         
@@ -3033,8 +3037,33 @@ def iniciar_interfaz():
             if dev_name and dev_name not in _pais_devices[_s["pais"]]:
                 _pais_devices[_s["pais"]].append(dev_name)
 
-        markets_frame = tk.Frame(modal, bg=MODAL_BG)
-        markets_frame.pack(fill="x", padx=20, pady=(2, 8))
+        # Área de mercados con scroll: si no entran todas las barras (muchos mercados en
+        # una pantalla chica), aparece la barra lateral en vez de recortarse.
+        markets_wrap = tk.Frame(modal, bg=MODAL_BG)
+        markets_wrap.pack(fill="both", expand=True, padx=20, pady=(2, 8))
+        markets_canvas = tk.Canvas(markets_wrap, bg=MODAL_BG, highlightthickness=0)
+        markets_sb = tk.Scrollbar(markets_wrap, orient="vertical", command=markets_canvas.yview)
+        markets_canvas.configure(yscrollcommand=markets_sb.set)
+        markets_canvas.pack(side="left", fill="both", expand=True)
+        markets_frame = tk.Frame(markets_canvas, bg=MODAL_BG)
+        _mk_win = markets_canvas.create_window((0, 0), window=markets_frame, anchor="nw")
+
+        def _sync_markets_scroll(_e=None):
+            try:
+                markets_canvas.configure(scrollregion=markets_canvas.bbox("all"))
+                markets_canvas.itemconfig(_mk_win, width=markets_canvas.winfo_width())
+                hace_falta = markets_frame.winfo_reqheight() > markets_canvas.winfo_height()
+                if hace_falta and not markets_sb.winfo_ismapped():
+                    markets_sb.pack(side="right", fill="y")
+                elif not hace_falta and markets_sb.winfo_ismapped():
+                    markets_sb.pack_forget()
+            except Exception:
+                pass
+
+        markets_frame.bind("<Configure>", _sync_markets_scroll)
+        markets_canvas.bind("<Configure>", _sync_markets_scroll)
+        markets_canvas.bind("<MouseWheel>",
+                            lambda e: markets_canvas.yview_scroll(int(-e.delta / 120), "units"))
 
         _pais_bars = {}
         for _p, _tot in _pais_totals.items():
