@@ -103,7 +103,16 @@ mkdir "%PORTABLE_DIR%"
 copy /y "dist\%APP_NAME%.exe" "%PORTABLE_DIR%\%APP_NAME%.exe" >nul
 if errorlevel 1 goto :error
 
-for %%D in (data drivers resultados temporales Dealerscheck_resultados resultados_lambdatestmac resultados_lambdatest_android) do (
+REM data/ se copia aparte: hay que dejar afuera los Excel reales de clientes
+REM (rankings/listados de dealers), que no deben viajar en el portable ni en el ZIP
+if exist ".\data" (
+    robocopy ".\data" "%PORTABLE_DIR%\data" /E /NFL /NDL /NJH /NJS /NC /NS /XF "*Ranking Dealers*.xls*" >nul
+    if errorlevel 8 goto :error
+) else (
+    mkdir "%PORTABLE_DIR%\data"
+)
+
+for %%D in (drivers resultados temporales Dealerscheck_resultados resultados_lambdatestmac resultados_lambdatest_android) do (
     if exist ".\%%D" (
         robocopy ".\%%D" "%PORTABLE_DIR%\%%D" /E /NFL /NDL /NJH /NJS /NC /NS >nul
         if errorlevel 8 goto :error
@@ -116,7 +125,7 @@ REM Copiar json/ sin los archivos de estado del scheduler, la config personal de
 REM Comparador Dealers, ni config_global.json (tiene el email y la access key de
 REM LambdaTest en texto plano) — el portable arranca limpio, sin datos de otra PC
 if exist ".\json" (
-    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json dealer_comparator_settings.json config_global.json >nul
+    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json dealer_comparator_settings.json config_global.json ejecutor_autonomo.log >nul
     if errorlevel 8 goto :error
 ) else (
     mkdir "%PORTABLE_DIR%\json"
