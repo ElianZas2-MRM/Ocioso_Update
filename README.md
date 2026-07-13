@@ -53,7 +53,9 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
    ![Configuración avanzada](Asset/screenshots/16_configuracion_global.png)
 
-3. **MERCADOS** y **EXCELS POR MERCADO**: Secuencial (uno detrás del otro) o Paralelo (todos a la vez).
+3. **MERCADOS** y **EXCELS POR DISPOSITIVO**: cada uno se pone en **Secuencial** (uno detrás del otro) o **Paralelo** (todos a la vez), y son independientes entre sí.
+   - **MERCADOS** decide cómo se recorren los países: uno por vez (AR → BO → …) o todos juntos.
+   - **EXCELS POR DISPOSITIVO** decide, dentro de cada país, cómo se corren los Excels de los dispositivos que tildaste: Chrome → Firefox → Edge uno detrás del otro, o los tres a la vez. El modo Paralelo acá solo aplica a los navegadores locales (Chrome/Firefox/Edge); LambdaTest corre siempre secuencial.
 4. **DISPOSITIVOS / NAVEGADORES**: selección múltiple — Chrome, Firefox, Edge, Mac LT, Android LT.
    - **⚡ Enviar en paralelo por URL (una sesión por URL)**: en vez de correr todo el Excel de un dispositivo como una sola sesión de a un lead por vez, abre **una ventana de navegador por cada fila** del Excel, todas al mismo tiempo — mucho más rápido para volúmenes grandes. Solo aplica a los navegadores locales (Chrome/Firefox/Edge); LambdaTest siempre corre como una sola sesión, ignora este modo. El campo **"máx. simultáneas"** (por defecto 6, límite real de 1 a 20) controla cuántas ventanas se abren a la vez para no saturar la PC. Este modo **se desactiva solo** cuando el envío lo dispara la Programación de Tests (ahí siempre corre secuencial, aunque hayas dejado la casilla tildada).
    - **🧩 Formularios T3 2.0 (usa los Excels …_T3)**: tildalo si los formularios de este envío son la versión nueva Adobe AEM — la app busca directamente los Excels con sufijo `_T3.xlsx` en vez de los normales. 
