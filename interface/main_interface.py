@@ -1215,8 +1215,10 @@ def iniciar_interfaz():
                     pass
 
         for opt in options:
-            opt_val = opt.lower()
-            b = tk.Button(btn_row, text=opt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+            # opt puede ser "Texto" (el valor se deriva en minúscula) o ("Texto visible", "valor_interno"),
+            # para poder cambiar la etiqueta sin romper lo que ya está guardado en config/schedule.
+            opt_txt, opt_val = opt if isinstance(opt, tuple) else (opt, opt.lower())
+            b = tk.Button(btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
                           relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                           highlightthickness=1, highlightbackground=BUTTON_INACTIVE,
                           padx=12, pady=4, cursor="hand2")
@@ -1244,11 +1246,11 @@ def iniciar_interfaz():
     saved_excels_mode = _ui_prefs.get("excels_mode", "consecutivo")
 
     mercados_mode = make_pill_group(
-        row_config, "MERCADOS", "", ["Consecutivo", "Paralelo"], saved_mercados_mode,
+        row_config, "MERCADOS", "", [("Secuencial", "consecutivo"), ("Paralelo", "paralelo")], saved_mercados_mode,
         sub_texts={"consecutivo": "Un mercado a la vez (AR → BO → …)", "paralelo": "Todos los mercados a la vez"},
         on_change=lambda v: _save_ui_prefs())
     excels_mode = make_pill_group(
-        row_config, "EXCELS POR MERCADO", "", ["Consecutivo", "Paralelo"], saved_excels_mode,
+        row_config, "EXCELS POR MERCADO", "", [("Secuencial", "consecutivo"), ("Paralelo", "paralelo")], saved_excels_mode,
         sub_texts={"consecutivo": "Los Excels del mercado, uno tras otro", "paralelo": "Todos a la vez (solo browsers locales Chrome/FF/Edge)"},
         on_change=lambda v: [_refresh_excel_par_warning(), _save_ui_prefs()])
 
@@ -1499,8 +1501,9 @@ def iniciar_interfaz():
         except Exception as e:
             messagebox.showerror("LambdaTest", f"Error al guardar credenciales:\n{e}")
     
+    # Debajo de User/Key (antes iba a la derecha en una 3ra columna y quedaba cortado)
     lt_save_btn = make_icon_btn(lt_creds_frame, "💾 Guardar", TEXT_SAVE, command=_save_lt_creds, pack_btn=False)
-    lt_save_btn.grid(row=1, column=2, rowspan=2, padx=6, pady=1, sticky="ns")
+    lt_save_btn.grid(row=3, column=0, columnspan=2, padx=4, pady=(5, 1), sticky="ew")
 
     # ADVERTENCIA DINÁMICA DE MÚLTIPLES DISPOSITIVOS (Figma Style)
     warning_box = tk.Frame(config_card, bg=WARN_BG, bd=1, highlightthickness=1, highlightbackground=WARN_BORDER)
@@ -1834,7 +1837,7 @@ def iniciar_interfaz():
     sched_warning_lbl = tk.Label(right_col, text="", font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#F8C471", justify="left")
 
     _mode_opts = [
-        ("Consecutivo", "consecutivo"),
+        ("Secuencial", "consecutivo"),
         ("Paralelo", "paralelo")
     ]
     for opt_txt, opt_val in _mode_opts:
@@ -1936,7 +1939,7 @@ def iniciar_interfaz():
 
             # Pill de modo de ejecución
             cur_mode = scheduler_cfg.get("modo_excel", "consecutivo")
-            mode_txt = "CONSECUTIVO" if cur_mode == "consecutivo" else "PARALELO"
+            mode_txt = "SECUENCIAL" if cur_mode == "consecutivo" else "PARALELO"
             pill_m = tk.Frame(details_frame, bg="#2C3E50", bd=0, highlightthickness=1, highlightbackground="#5DADE2")
             pill_m.pack(side="left", padx=4, pady=2)
             tk.Label(pill_m, text=f" {mode_txt} ", font=("Segoe UI", 8, "bold"), bg="#2C3E50", fg="#AED6F1").pack(side="left", pady=1)
@@ -2974,8 +2977,8 @@ def iniciar_interfaz():
             make_pill(badges_row, f" Por URL: Paralelo (máx {url_max})", icon="link_lav.png")
             make_pill(badges_row, " 1 navegador por URL", icon="gear_lav.png")
         else:
-            make_pill(badges_row, f" Mercados: {'Paralelo' if mercados_par else 'Consecutivo'}", icon="link_lav.png")
-            make_pill(badges_row, f" Excels: {'Paralelo' if excels_par else 'Consecutivo'}", icon="gear_lav.png")
+            make_pill(badges_row, f" Mercados: {'Paralelo' if mercados_par else 'Secuencial'}", icon="link_lav.png")
+            make_pill(badges_row, f" Excels: {'Paralelo' if excels_par else 'Secuencial'}", icon="gear_lav.png")
         make_pill(badges_row, f" {total_sessions} mercado(s)", icon="monitor_lav.png")
 
         # Aviso durante la ejecución (se quita al completar)
