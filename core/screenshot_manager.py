@@ -60,37 +60,69 @@ class ScreenshotManager:
             combined = Image.new("RGB", (w, banner_h + h))
             combined.paste(banner, (0, 0))
             combined.paste(img, (0, banner_h))
-            combined.save(path)
+            self._save_compressed(combined, path)
         except Exception as e:
             print(f"Error banner URLs: {e}")
+
+    def _save_compressed(self, img, path):
+        """Guarda el PNG pesando lo menos posible sin perder legibilidad: las capturas
+        largas (landings kilométricas) se cuantizan a 256 colores."""
+        try:
+            if img.height > 2500:
+                img = img.quantize(colors=256, method=Image.MEDIANCUT).convert("P")
+            img.save(path, "PNG", optimize=True)
+        except Exception:
+            img.save(path)
         
     def take_full_page_screenshot(self, filename):
         """Toma screenshot completa de toda la página uniendo múltiples capturas"""
         screenshot_path = os.path.join(self.screenshot_dir, filename)
+        in_iframe = (self.current_frame is not None)
         
         # Firefox: no puede capturar estando dentro de un iframe; salir a default_content primero
+        # y volver al iframe después (si no, el llenado posterior no encuentra los campos).
         if self.driver.name.lower() == 'firefox':
-            if self.current_frame is not None:
+            if in_iframe:
                 try:
                     self.driver.switch_to.default_content()
                 except Exception:
                     pass
             try:
-                self.driver.get_full_page_screenshot_as_file(screenshot_path)
-                print(f"Captura completa Firefox (nativa) guardada: {filename}")
-                return True
-            except Exception as e:
-                print(f"Error en captura nativa Firefox: {e}")
                 try:
-                    self.driver.save_screenshot(screenshot_path)
-                    print(f"Captura de respaldo Firefox guardada: {filename}")
+                    self.driver.get_full_page_screenshot_as_file(screenshot_path)
+                    print(f"Captura completa Firefox (nativa) guardada: {filename}")
                     return True
-                except Exception as e2:
-                    print(f"Error crítico captura Firefox: {e2}")
-                    return False
+                except Exception as e:
+                    print(f"Error en captura nativa Firefox: {e}")
+                    try:
+                        self.driver.save_screenshot(screenshot_path)
+                        print(f"Captura de respaldo Firefox guardada: {filename}")
+                        return True
+                    except Exception as e2:
+                        print(f"Error crítico captura Firefox: {e2}")
+                        return False
+            finally:
+                if in_iframe:
+                    try:
+                        self.driver.switch_to.frame(self.current_frame)
+                    except Exception:
+                        pass
         
         # Chrome, Edge y otros navegadores: método original con scroll y merge
+        scroll_y = 0
         try:
+            if in_iframe:
+                try:
+                    self.driver.switch_to.default_content()
+                except Exception:
+                    pass
+            # Guardar el scroll del documento principal para devolverlo al terminar
+            # (si no, la página queda arriba de todo tras cada captura full-page).
+            try:
+                scroll_y = self.driver.execute_script("return window.pageYOffset;") or 0
+            except Exception:
+                scroll_y = 0
+
             total_width = self.driver.execute_script("return document.body.scrollWidth")
             total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
             viewport_width = self.driver.execute_script("return window.innerWidth")
@@ -138,7 +170,7 @@ class ScreenshotManager:
                 print(f"Uniendo {len(screenshots)} secciones...")
                 final_image = self._merge_screenshots(screenshots, total_width, total_height)
                 if final_image:
-                    final_image.save(screenshot_path, 'PNG', quality=85)
+                    final_image.save(screenshot_path, 'PNG', optimize=True)
                     print(f"Captura completa guardada: {filename}")
                 else:
                     Image.open(screenshots[0]['path']).save(screenshot_path)
@@ -163,7 +195,17 @@ class ScreenshotManager:
             except:
                 print(f"Error crítico al tomar screenshot")
                 return False
-    
+        finally:
+            try:
+                self.driver.execute_script(f"window.scrollTo(0, {int(scroll_y)});")
+            except Exception:
+                pass
+            if in_iframe:
+                try:
+                    self.driver.switch_to.frame(self.current_frame)
+                except Exception:
+                    pass
+
     def _merge_screenshots(self, screenshots, total_width, total_height):
         """Une múltiples screenshots en una sola imagen"""
         try:
@@ -194,13 +236,122 @@ class ScreenshotManager:
         self._add_url_banner(os.path.join(self.screenshot_dir, filename))
         return result
 
+    def _find_form_region_element(self):
+        """Elemento del documento principal que contiene el formulario: el iframe si el
+        form está embebido, o el <form> más grande de la página si no hay iframe."""
+        if self.current_frame is not None:
+            return self.current_frame
+        try:
+            self.driver.switch_to.default_content()
+        except Exception:
+            pass
+        best, best_area = None, 0
+        try:
+            for f in self.driver.find_elements(By.TAG_NAME, "form"):
+                try:
+                    if not f.is_displayed():
+                        continue
+                    area = f.size.get("width", 0) * f.size.get("height", 0)
+                    if area > best_area:
+                        best, best_area = f, area
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return best
+
+    def take_form_area_screenshot(self, filename):
+        """Captura SOLO el área del formulario (no toda la landing, que puede ser larguísima).
+        Si el form no entra en el viewport, se toma por partes y se unen."""
+        screenshot_path = os.path.join(self.screenshot_dir, filename)
+        in_iframe = (self.current_frame is not None)
+        scroll_y = 0
+        temp_files = []
+        try:
+            el = self._find_form_region_element()
+            if el is None:
+                return False
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+
+            scroll_y = self.driver.execute_script("return window.pageYOffset;") or 0
+            rect = self.driver.execute_script(
+                "var r = arguments[0].getBoundingClientRect();"
+                "return {top: r.top + window.pageYOffset, left: r.left + window.pageXOffset,"
+                " width: r.width, height: r.height};", el)
+            vh = self.driver.execute_script("return window.innerHeight;")
+            vw = self.driver.execute_script("return window.innerWidth;")
+
+            top = max(0, int(rect["top"]))
+            height = int(rect["height"])
+            if height <= 0:
+                return False
+
+            sections = []
+            pos = top
+            idx = 0
+            while pos < top + height and idx <= 30:
+                self.driver.execute_script(f"window.scrollTo(0, {pos});")
+                time.sleep(0.35)
+                real_y = self.driver.execute_script("return window.pageYOffset;") or 0
+                tmp = os.path.join(self.screenshot_dir, f"temp_form_{idx}.png")
+                self.driver.save_screenshot(tmp)
+                temp_files.append(tmp)
+                img = Image.open(tmp)
+                # Escala por devicePixelRatio / zoom del navegador
+                scale = img.width / float(vw) if vw else 1.0
+                crop_top = max(0, int((pos - real_y) * scale))
+                remaining = (top + height) - pos
+                crop_h = int(min(vh - (pos - real_y), remaining) * scale)
+                if crop_h <= 0:
+                    break
+                sections.append(img.crop((0, crop_top, img.width, min(img.height, crop_top + crop_h))))
+                pos += int(vh - (pos - real_y))
+                idx += 1
+
+            if not sections:
+                return False
+
+            total_h = sum(s.height for s in sections)
+            final = Image.new("RGB", (sections[0].width, total_h), "white")
+            y = 0
+            for s in sections:
+                final.paste(s, (0, y))
+                y += s.height
+            final.save(screenshot_path, "PNG", optimize=True)
+            print(f"Captura del formulario ({len(sections)} parte/s) guardada: {filename}")
+            return True
+        except Exception as e:
+            print(f"Error en captura del área del formulario: {e}")
+            return False
+        finally:
+            for t in temp_files:
+                try:
+                    os.remove(t)
+                except Exception:
+                    pass
+            try:
+                self.driver.execute_script(f"window.scrollTo(0, {int(scroll_y)});")
+            except Exception:
+                pass
+            if in_iframe:
+                try:
+                    self.driver.switch_to.frame(self.current_frame)
+                except Exception:
+                    pass
+
     def take_form_screenshot(self, ss_number, stage, full_page=False):
         """Toma screenshot del formulario dentro del iframe.
-        full_page=True → captura de página completa (scroll+merge), útil para forms
-        T3 2.0 que son más largos en alto y no entran en el viewport."""
+        full_page=True → captura del área completa del formulario (por partes si es largo),
+        sin arrastrar toda la landing cuando ésta es kilométrica."""
         filename = f"form_{stage}_{ss_number}_{self.browser_name}.png"
         if full_page:
             try:
+                if self.take_form_area_screenshot(filename):
+                    self._add_url_banner(os.path.join(self.screenshot_dir, filename))
+                    return True
                 result = self.take_full_page_screenshot(filename)
                 self._add_url_banner(os.path.join(self.screenshot_dir, filename))
                 print(f"Captura de formulario (página completa) guardada: {filename}")

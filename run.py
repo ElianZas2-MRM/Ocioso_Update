@@ -36,7 +36,7 @@ def _load_country_run_function(country_name):
         try:
             from forms._runner_common import get_runner
         except ImportError:
-            from _runner_common import get_runner
+            from _runner_common import get_runner  # type: ignore[import-not-found]
         return get_runner(country_name)
     except (ImportError, AttributeError):
         module_name = f"Formulario_{country_name}_Main"

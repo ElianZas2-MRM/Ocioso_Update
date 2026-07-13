@@ -26,6 +26,9 @@ Thumbs.db
 lambdatest_credentials.txt
 config_global.json
 
+# Excels reales de clientes (rankings/listados de dealers) - no versionar
+*Ranking Dealers*.xls*
+
 # PyInstaller output — regenerable con build.bat
 build/
 dist/

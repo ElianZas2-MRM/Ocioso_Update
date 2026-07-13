@@ -509,6 +509,7 @@ def compare_dealers(
     stop_flag=None,
     screenshot_cb=None,
     expect_absent=False,
+    has_dealer=True,
 ):
     """
     rows: filas del Excel ya filtradas (dicts, ver read_excel_rows/filter_rows).
@@ -536,7 +537,7 @@ def compare_dealers(
 
     region_key = column_map.get("region")
     city_key = column_map.get("city")
-    dealer_key = column_map.get("dealer")
+    dealer_key = column_map.get("dealer") if has_dealer else None
     bac_key = column_map.get("bac")
 
     results = []
@@ -566,12 +567,12 @@ def compare_dealers(
             counter += 1
             _check_stop(stop_flag)
             if progress_cb:
-                label = row.get(dealer_key) or row.get(city_key) or f"Fila {row.get('__row__')}"
+                label = (row.get(dealer_key) if dealer_key else None) or row.get(city_key) or row.get(region_key) or f"Fila {row.get('__row__')}"
                 progress_cb(counter, total, f"{model_text} · {label}" if model_text else label)
 
             region_text = row.get(region_key, "") if has_region else ""
             city_text = row.get(city_key, "") if has_city else ""
-            dealer_text = row.get(dealer_key, "")
+            dealer_text = row.get(dealer_key, "") if (has_dealer and dealer_key) else ""
             bac_excel = row.get(bac_key, "") if chk_bac and bac_key else ""
 
             fails = []
@@ -620,7 +621,7 @@ def compare_dealers(
                             log(f"  Ciudad no encontrada: {city_text}", "warn")
 
                 ready_for_dealer = (region_found or not has_region) and (city_found or not has_city)
-                if dealer_text and ready_for_dealer:
+                if has_dealer and dealer_text and ready_for_dealer:
                     dealer_found, _ = _select_by_text_robust(
                         driver, level_ids["dealer"], dealer_text, wait_for_option=True)
                     if dealer_found:
@@ -714,12 +715,15 @@ def find_extra_dealers(
     log_cb=None,
     progress_cb=None,
     stop_flag=None,
+    has_dealer=True,
 ):
-    """Recorre las combinaciones región/ciudad presentes en el Excel (filtrado o no, según
-    corresponda) y reporta, mirando el <select> real del form:
-    - EXTRA: dealers que aparecen en el form pero no están en la lista esperada del Excel.
-    - DUPLICADO: dealers que aparecen más de una vez como <option> en el mismo <select> del
-      form (no importa si el Excel tiene duplicados — lo que importa es el form)."""
+    """
+    Recorre las combinaciones del nivel superior presentes en el Excel y reporta:
+    - EXTRA: opciones que aparecen en el form pero no están en la lista esperada del Excel.
+    - DUPLICADO: opciones que aparecen más de una vez como <option> en el form.
+    Este chequeo se realiza de forma jerárquica (Región -> Ciudad -> Dealer) según los niveles activos,
+    buscando en conjunto y reportando la combinación exacta de forma contextual.
+    """
     level_ids = level_ids or DEFAULT_SELECT_IDS
     log = log_cb or (lambda *_a, **_k: None)
 
@@ -727,61 +731,302 @@ def find_extra_dealers(
     city_key = column_map.get("city")
     dealer_key = column_map.get("dealer")
 
-    expected_by_combo = {}
+    # Estructuras esperadas indexadas por valores normalizados
+    expected_regions = set()
+    expected_cities_by_region = {}  # norm_region -> set(norm_cities)
+    expected_dealers_by_region_city = {}  # (norm_region, norm_city) -> set(norm_dealers)
+
+    # Mapeo de texto normalizado a original para reportar con el texto original del Excel
+    orig_region_by_norm = {}
+    orig_city_by_norm = {}  # norm_city -> original city
+
     for row in rows:
-        combo = (row.get(region_key, "") if has_region else "", row.get(city_key, "") if has_city else "")
-        expected_by_combo.setdefault(combo, set()).add(normalize_text(row.get(dealer_key, "")))
+        reg_val = str(row.get(region_key, "")).strip() if (has_region and region_key) else ""
+        city_val = str(row.get(city_key, "")).strip() if (has_city and city_key) else ""
+        dealer_val = str(row.get(dealer_key, "")).strip() if (has_dealer and dealer_key) else ""
 
-    combos = list(expected_by_combo.keys()) or [("", "")]
+        norm_reg = normalize_text(reg_val)
+        norm_city = normalize_text(city_val)
+        norm_dealer = normalize_text(dealer_val)
+
+        if has_region and reg_val:
+            expected_regions.add(norm_reg)
+            orig_region_by_norm[norm_reg] = reg_val
+        
+        if has_city and city_val:
+            expected_cities_by_region.setdefault(norm_reg, set()).add(norm_city)
+            orig_city_by_norm[norm_city] = city_val
+            
+        if has_dealer and dealer_val:
+            expected_dealers_by_region_city.setdefault((norm_reg, norm_city), set()).add(norm_dealer)
+
     extra_results = []
-    total = len(combos)
+    
+    # --------------------------------------------------------------------------
+    # FASE A: Chequeo de Región (sólo si has_region es True)
+    # --------------------------------------------------------------------------
+    regions_to_check = [""]
+    if has_region:
+        log("Chequeando EXTRAS y DUPLICADOS en Regiones...", "info")
+        option_texts = _read_valid_option_texts(driver, level_ids["region"])
+        seen_in_form = {}
+        for text in option_texts:
+            norm = normalize_text(text)
+            seen_in_form.setdefault(norm, []).append(text)
+            if norm not in expected_regions:
+                log(f"  EXTRA REGION: {text}", "warn")
+                extra_results.append({
+                    "status": "EXTRA",
+                    "region": text,
+                    "city": "",
+                    "dealer": "",
+                    "fails": ["Región extra (no declarada en el Excel)"],
+                })
+        for norm, texts in seen_in_form.items():
+            if len(texts) > 1:
+                log(f"  DUPLICADA REGION: {texts[0]} x{len(texts)}", "warn")
+                extra_results.append({
+                    "status": "DUPLICADO",
+                    "region": texts[0],
+                    "city": "",
+                    "dealer": "",
+                    "fails": [f"Región aparece {len(texts)} veces en el dropdown"],
+                })
+        
+        # Filtramos para quedarnos sólo con las regiones que están en el Excel y existen en el form
+        regions_to_check = [norm for norm in expected_regions if norm in seen_in_form]
 
-    for idx, (region_text, city_text) in enumerate(combos, start=1):
-        _check_stop(stop_flag)
-        if progress_cb:
-            progress_cb(idx, total, f"{region_text} / {city_text}".strip(" /"))
-
-        try:
-            if has_region and region_text:
-                ok, _ = _select_by_text_robust(driver, level_ids["region"], region_text)
+    # --------------------------------------------------------------------------
+    # FASE B: Chequeo de Ciudad (sólo si has_city es True)
+    # --------------------------------------------------------------------------
+    cities_to_check = []  # lista de (norm_reg, norm_city)
+    
+    if has_city:
+        if has_region:
+            log("Chequeando EXTRAS y DUPLICADOS en Ciudades por Región...", "info")
+            for norm_reg in regions_to_check:
+                _check_stop(stop_flag)
+                reg_orig_text = orig_region_by_norm[norm_reg]
+                if progress_cb:
+                    progress_cb(1, 1, f"Región: {reg_orig_text}")
+                
+                # Seleccionar la región para ver sus ciudades
+                ok, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
                 if not ok:
                     continue
-
-            if has_city and city_text:
-                ok, _ = _select_by_text_robust(driver, level_ids["city"], city_text, wait_for_option=True)
-                if not ok:
-                    continue
-
-            option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
-            if not option_texts:
-                continue
-            expected = expected_by_combo[(region_text, city_text)]
+                time.sleep(0.6)  # Pausa estable para repoblar ciudades
+                
+                option_texts = _read_valid_option_texts(driver, level_ids["city"])
+                expected_cities = expected_cities_by_region.get(norm_reg, set())
+                seen_in_form = {}
+                for text in option_texts:
+                    norm = normalize_text(text)
+                    seen_in_form.setdefault(norm, []).append(text)
+                    if norm not in expected_cities:
+                        log(f"  EXTRA CIUDAD: {text} (en Región: {reg_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "EXTRA",
+                            "region": reg_orig_text,
+                            "city": text,
+                            "dealer": "",
+                            "fails": [f"Ciudad extra para la región '{reg_orig_text}'"],
+                        })
+                for norm, texts in seen_in_form.items():
+                    if len(texts) > 1:
+                        log(f"  DUPLICADA CIUDAD: {texts[0]} x{len(texts)} (en Región: {reg_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "DUPLICADO",
+                            "region": reg_orig_text,
+                            "city": texts[0],
+                            "dealer": "",
+                            "fails": [f"Ciudad aparece {len(texts)} veces en el dropdown de la región '{reg_orig_text}'"],
+                        })
+                
+                for norm_city in expected_cities:
+                    if norm_city in seen_in_form:
+                        cities_to_check.append((norm_reg, norm_city))
+        else:
+            # Sin Región, las ciudades son globales
+            log("Chequeando EXTRAS y DUPLICADOS en Ciudades...", "info")
+            option_texts = _read_valid_option_texts(driver, level_ids["city"])
+            expected_cities = expected_cities_by_region.get("", set())
             seen_in_form = {}
             for text in option_texts:
                 norm = normalize_text(text)
                 seen_in_form.setdefault(norm, []).append(text)
-                if norm not in expected:
-                    log(f"  EXTRA: {text} ({region_text}/{city_text})", "warn")
+                if norm not in expected_cities:
+                    log(f"  EXTRA CIUDAD: {text}", "warn")
                     extra_results.append({
                         "status": "EXTRA",
-                        "region": region_text,
-                        "city": city_text,
-                        "dealer": text,
+                        "region": "",
+                        "city": text,
+                        "dealer": "",
+                        "fails": ["Ciudad extra (no declarada en el Excel)"],
                     })
             for norm, texts in seen_in_form.items():
                 if len(texts) > 1:
-                    log(f"  DUPLICADO en el form: {texts[0]} x{len(texts)} ({region_text}/{city_text})", "warn")
+                    log(f"  DUPLICADA CIUDAD: {texts[0]} x{len(texts)}", "warn")
                     extra_results.append({
                         "status": "DUPLICADO",
-                        "region": region_text,
-                        "city": city_text,
-                        "dealer": texts[0],
-                        "fails": [f"Aparece {len(texts)} veces en el <select> del form"],
+                        "region": "",
+                        "city": texts[0],
+                        "dealer": "",
+                        "fails": [f"Ciudad aparece {len(texts)} veces en el dropdown"],
                     })
-        except StopRequested:
-            raise
-        except Exception as e:  # noqa: BLE001
-            log(f"  Error buscando extras en {region_text}/{city_text}: {e}", "err")
+            for norm_city in expected_cities:
+                if norm_city in seen_in_form:
+                    cities_to_check.append(("", norm_city))
+
+    # --------------------------------------------------------------------------
+    # FASE C: Chequeo de Dealer (sólo si has_dealer es True)
+    # --------------------------------------------------------------------------
+    if has_dealer:
+        log("Chequeando EXTRAS y DUPLICADOS en Dealers...", "info")
+        if has_region and has_city:
+            for norm_reg, norm_city in cities_to_check:
+                _check_stop(stop_flag)
+                reg_orig_text = orig_region_by_norm[norm_reg]
+                city_orig_text = orig_city_by_norm[norm_city]
+                if progress_cb:
+                    progress_cb(1, 1, f"{reg_orig_text} / {city_orig_text}")
+                
+                # Seleccionar región y luego ciudad
+                ok, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
+                if not ok:
+                    continue
+                ok, _ = _select_by_text_robust(driver, level_ids["city"], city_orig_text, wait_for_option=True)
+                if not ok:
+                    continue
+                time.sleep(0.6)  # Pausa estable para repoblar dealers
+                
+                option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
+                expected_dealers = expected_dealers_by_region_city.get((norm_reg, norm_city), set())
+                seen_in_form = {}
+                for text in option_texts:
+                    norm = normalize_text(text)
+                    seen_in_form.setdefault(norm, []).append(text)
+                    if norm not in expected_dealers:
+                        log(f"  EXTRA DEALER: {text} ({reg_orig_text} / {city_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "EXTRA",
+                            "region": reg_orig_text,
+                            "city": city_orig_text,
+                            "dealer": text,
+                            "fails": [f"Dealer extra para la combinación '{reg_orig_text} / {city_orig_text}'"],
+                        })
+                for norm, texts in seen_in_form.items():
+                    if len(texts) > 1:
+                        log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)} ({reg_orig_text} / {city_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "DUPLICADO",
+                            "region": reg_orig_text,
+                            "city": city_orig_text,
+                            "dealer": texts[0],
+                            "fails": [f"Dealer aparece {len(texts)} veces en el dropdown de '{reg_orig_text} / {city_orig_text}'"],
+                        })
+        elif not has_region and has_city:
+            for _, norm_city in cities_to_check:
+                _check_stop(stop_flag)
+                city_orig_text = orig_city_by_norm[norm_city]
+                if progress_cb:
+                    progress_cb(1, 1, f"Ciudad: {city_orig_text}")
+                
+                ok, _ = _select_by_text_robust(driver, level_ids["city"], city_orig_text)
+                if not ok:
+                    continue
+                time.sleep(0.6)
+                
+                option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
+                expected_dealers = expected_dealers_by_region_city.get(("", norm_city), set())
+                seen_in_form = {}
+                for text in option_texts:
+                    norm = normalize_text(text)
+                    seen_in_form.setdefault(norm, []).append(text)
+                    if norm not in expected_dealers:
+                        log(f"  EXTRA DEALER: {text} ({city_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "EXTRA",
+                            "region": "",
+                            "city": city_orig_text,
+                            "dealer": text,
+                            "fails": [f"Dealer extra para la ciudad '{city_orig_text}'"],
+                        })
+                for norm, texts in seen_in_form.items():
+                    if len(texts) > 1:
+                        log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)} ({city_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "DUPLICADO",
+                            "region": "",
+                            "city": city_orig_text,
+                            "dealer": texts[0],
+                            "fails": [f"Dealer aparece {len(texts)} veces en el dropdown de '{city_orig_text}'"],
+                        })
+        elif has_region and not has_city:
+            for norm_reg in regions_to_check:
+                _check_stop(stop_flag)
+                reg_orig_text = orig_region_by_norm[norm_reg]
+                if progress_cb:
+                    progress_cb(1, 1, f"Región: {reg_orig_text}")
+                
+                ok, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
+                if not ok:
+                    continue
+                time.sleep(0.6)
+                
+                option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
+                expected_dealers = expected_dealers_by_region_city.get((norm_reg, ""), set())
+                seen_in_form = {}
+                for text in option_texts:
+                    norm = normalize_text(text)
+                    seen_in_form.setdefault(norm, []).append(text)
+                    if norm not in expected_dealers:
+                        log(f"  EXTRA DEALER: {text} (Región: {reg_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "EXTRA",
+                            "region": reg_orig_text,
+                            "city": "",
+                            "dealer": text,
+                            "fails": [f"Dealer extra para la región '{reg_orig_text}'"],
+                        })
+                for norm, texts in seen_in_form.items():
+                    if len(texts) > 1:
+                        log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)} (Región: {reg_orig_text})", "warn")
+                        extra_results.append({
+                            "status": "DUPLICADO",
+                            "region": reg_orig_text,
+                            "city": "",
+                            "dealer": texts[0],
+                            "fails": [f"Dealer aparece {len(texts)} veces en el dropdown de la región '{reg_orig_text}'"],
+                        })
+        else:
+            # Sin región ni ciudad, dealers globales
+            option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
+            expected_dealers = expected_dealers_by_region_city.get(("", ""), set())
+            seen_in_form = {}
+            for text in option_texts:
+                norm = normalize_text(text)
+                seen_in_form.setdefault(norm, []).append(text)
+                if norm not in expected_dealers:
+                    log(f"  EXTRA DEALER: {text}", "warn")
+                    extra_results.append({
+                        "status": "EXTRA",
+                        "region": "",
+                        "city": "",
+                        "dealer": text,
+                        "fails": ["Dealer extra (no declarado en el Excel)"],
+                    })
+            for norm, texts in seen_in_form.items():
+                if len(texts) > 1:
+                    log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)}", "warn")
+                    extra_results.append({
+                        "status": "DUPLICADO",
+                        "region": "",
+                        "city": "",
+                        "dealer": texts[0],
+                        "fails": [f"Dealer aparece {len(texts)} veces en el dropdown"],
+                    })
+
+    return extra_results
 
     return extra_results
 
