@@ -260,7 +260,7 @@ La pestaña está organizada en bloques con una **mini-guía numerada (①→⑤
 - `forms/`: scripts de entrada para ejecutar los formularios de cada país.
 - `interface/`: UI de administración (una pestaña por archivo) y utilidades de soporte.
 - `lambdatest_mac/` y `lambdatest_android/`: runners y controllers específicos para correr los formularios sobre LambdaTest (Mac y Android).
-- `data/`: archivos Excel de entrada (datos de prueba por país/dispositivo).
+- `data/`: archivos Excel de entrada (datos de prueba por país/dispositivo). **No se versionan**: los generás vos desde la pestaña "Generar Excels con Datos".
 - `drivers/`: drivers locales del navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`).
 - `resultados/`: resultados y capturas de "Envío de Leads" / LambdaTest.
 - `cta_evidence/`: capturas del chequeo de CTA / links rotos de la Thank You page.
@@ -287,6 +287,29 @@ Corre 21 chequeos en ~5 segundos y termina con `PASS: 21   FAIL: 0`. Cubre:
 - **Integridad general**: que los 28 módulos importen, que los 9 países tengan runner y `field_mapping`, y que todos los Excel de `data/` sean legibles y tengan columna de URL.
 
 Si tocás código de datos, del comparador o de la programación, corré esto antes de compilar.
+
+## Qué hay adentro de `json/` (no la borres)
+
+Es la memoria de la app: sin esta carpeta, la app abre pero **no sabe cómo llenar los formularios**. Se divide en dos grupos.
+
+**1. Conocimiento de los formularios — la app no funciona sin esto.** Viaja dentro del portable y del ZIP, y es lo que hace que el `.exe` sirva apenas lo abrís:
+
+| Archivo | Para qué sirve |
+|---|---|
+| `field_validation_rules.json` + `field_validation_rules_<país>.json` | Las reglas de la pestaña **Validación de Campos** (regex, largos, mensajes de error esperados, dependencias). Una por país, más la general. |
+| `ids_dinamicos.json` | Campos que hay que llenar con un valor fijo tuyo y no con un dato aleatorio (ej. "Número de contrato" = `324` en Argentina). |
+| `fixed_field_mappings.json` | Mapeos fijos de campo → valor, para formularios que necesitan siempre lo mismo. |
+| `nuevos_campos_<país>.json` | Campos extra que aparecieron en el form de ese país y no estaban en la configuración base. |
+
+**2. Tu configuración personal — se regenera sola.** Si borrás alguno, la app lo vuelve a crear vacío la próxima vez. **Ninguno de estos entra en el portable**, a propósito (así el ZIP que le pasás a otro no se lleva tu email, tu access key ni tus horarios):
+
+| Archivo | Qué guarda |
+|---|---|
+| `config_global.json` | Email destinatario, **access key de LambdaTest**, dispositivos tildados, y todas tus preferencias de la UI. **Está en `.gitignore`: nunca se sube ni se distribuye.** |
+| `programacion_test.json` | El calendario semanal de la pestaña Programación de Tests. |
+| `scheduler_triggered.json` | Marca qué horarios ya se dispararon hoy (para no repetir una corrida). |
+| `dealer_comparator_settings.json` | Los presets guardados del Comparador de Dealers, por país. |
+| `ejecutor_autonomo.log` | Log del modo autónomo (`python run.py --autonomous`). Basura regenerable. |
 
 ## Drivers locales (sin descargas automáticas)
 
