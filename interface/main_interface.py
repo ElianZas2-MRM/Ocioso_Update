@@ -790,11 +790,30 @@ def iniciar_interfaz():
     root.minsize(1100, 600)
     root.configure(bg=APP_BG_COLOR)
 
-    # Establecer el icono del oso de Ocioso
+    # Establecer el icono del oso de Ocioso.
+    # iconbitmap(default=...) lo aplica a la ventana Y a las Toplevel; sin default= el .exe
+    # empaquetado se queda con el icono genérico de Tk en la barra de tareas.
     icon_path = os.path.join(ASSET_DIR, "icon.ico")
     if os.path.exists(icon_path):
         try:
-            root.iconbitmap(icon_path)
+            root.iconbitmap(default=icon_path)
+        except Exception:
+            try:
+                root.iconbitmap(icon_path)
+            except Exception:
+                pass
+        # Refuerzo vía Win32: fija el icono grande (barra de tareas / Alt-Tab) y el chico
+        # (barra de título) directo en la ventana, que es de donde Windows los toma.
+        try:
+            import ctypes
+            root.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id()) or root.winfo_id()
+            LR_LOADFROMFILE, IMAGE_ICON, WM_SETICON = 0x0010, 1, 0x0080
+            for size, which in ((32, 1), (16, 0)):  # 1 = ICON_BIG, 0 = ICON_SMALL
+                h = ctypes.windll.user32.LoadImageW(None, icon_path, IMAGE_ICON,
+                                                    size, size, LR_LOADFROMFILE)
+                if h:
+                    ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, which, h)
         except Exception:
             pass
 
