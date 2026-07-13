@@ -91,7 +91,7 @@ Qué muestra, de arriba abajo:
 
 - **Ejecutando… / N de M mercado(s) completados**: el avance general de la corrida.
 - **Detener**: corta todo. No mata el proceso de golpe: le avisa a las sesiones que frenen, así que puede tardar unos segundos en cerrar los navegadores que estén a mitad de un lead.
-- **Las tres pastillas** (*Mercados: Consecutivo · Excels: Consecutivo · N mercado(s)*): un recordatorio de con qué configuración arrancó **esta** corrida. Sirve para no confundirte si después cambiás los selectores de atrás.
+- **Las tres pastillas** (*Mercados: Secuencial · Excels: Secuencial · N mercado(s)*): un recordatorio de con qué configuración arrancó **esta** corrida. Sirve para no confundirte si después cambiás los selectores de atrás.
 - **Una barra por mercado + dispositivo** (`Bolivia — Chrome`, `Brasil — Chrome`, …): cada una avanza sola. A la derecha ves el estado: mientras corre dice cuántos leads van (`0/1 lead(s) listos`) y al terminar cambia al resultado (`✓ 1 OK · 0 error(es)`). La barra queda **verde** cuando el mercado terminó y **naranja** mientras está en curso.
 
 Mientras el modal está abierto, **la ventana de atrás queda bloqueada** (no podés tocar los selectores ni cambiar de pestaña) para que no le muevas la configuración a una corrida en progreso — por eso el aviso amarillo *"No podés cerrar esta ventana mientras se ejecuta. Para correr otro test ahora, abrí otra ventana de la app."* El botón EJECUTAR ENVÍO de atrás también se deshabilita y pasa a decir **"EN CURSO…"**:
