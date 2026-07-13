@@ -29,8 +29,8 @@ ENVIRONMENTS = {
 }
 
 
-def run_country_form(form_class, country_name, browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None):
-    formulario = form_class(browser=browser, viewport=viewport, headless=headless, background=background)
+def run_country_form(form_class, country_name, browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None, pausar_autenticacion=False):
+    formulario = form_class(browser=browser, viewport=viewport, headless=headless, background=background, pausar_autenticacion=pausar_autenticacion)
     formulario.run(progress_callback=progress_callback)
 
     if not enviar_email:
@@ -75,10 +75,10 @@ def get_runner(country_name: str):
     """
     from generic_country_base import GenericCountryBase
 
-    def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None, is_scheduled=False):
+    def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None, is_scheduled=False, pausar_autenticacion=False):
         class _DynamicCountry(GenericCountryBase):
-            def __init__(self, browser=browser, viewport=viewport, headless=headless, background=background):
-                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background, is_scheduled=is_scheduled)
+            def __init__(self, browser=browser, viewport=viewport, headless=headless, background=background, pausar_autenticacion=pausar_autenticacion):
+                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background, is_scheduled=is_scheduled, pausar_autenticacion=pausar_autenticacion)
 
         return run_country_form(
             _DynamicCountry,
@@ -91,6 +91,7 @@ def get_runner(country_name: str):
             progress_callback=progress_callback,
             email_callback=email_callback,
             stop_event=stop_event,
+            pausar_autenticacion=pausar_autenticacion,
         )
 
     _runner.__name__ = f"run_formularios_{country_name}"

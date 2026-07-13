@@ -28,6 +28,7 @@ from core.browser_manager import BrowserManager
 from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     StopRequested,
+    _find_form_iframe,
     capture_result_screenshot,
     compare_dealers,
     detect_hidden_rows,
@@ -343,9 +344,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     Label(lt_row, text="(próx.)", font=("Segoe UI", 8, "italic"),
           bg=CARD_BG, fg="#6E5A86").pack(side="left", padx=4)
     ver_navegador_var = BooleanVar(value=False)
-    Checkbutton(dev_col, text="Ver navegador mientras corre",
-                variable=ver_navegador_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
-                activebackground=CARD_BG, font=("Segoe UI", 9)).pack(anchor="w", padx=15, pady=(2, 6))
     viewport_var = StringVar(value="fullscreen")  # siempre escritorio
 
     # Col 2 — Excel de URLs del form
@@ -431,7 +429,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     blockB = Frame(root_frame, bg=root_frame.cget("bg"))
     blockB.pack(fill="x", pady=(0, 0))
 
-    excel_card = card("📄 EXCEL DE DEALERS A CHEQUEAR", parent=blockB, side="left", expand=True)
+    excel_card = card("📄 EXCEL DE DEALERS A CHEQUEAR", parent=blockB, side="left", expand=False)
     mini_guide(excel_card, "④ Cargá el Excel de dealers esperados, la fila de encabezados y (opcional) el filtro.")
     excel_path_var = StringVar()
     excel_row = Frame(excel_card, bg=CARD_BG)
@@ -447,7 +445,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
            font=("Segoe UI", 8, "bold"), bg=BTN_ACTIVE, fg="white", relief="flat", bd=0,
            cursor="hand2", command=_pick_excel).pack(side="left")
     Label(excel_row, textvariable=excel_path_var, font=("Segoe UI", 8), bg=CARD_BG,
-          fg=TEXT_S, wraplength=650, justify="left").pack(side="left", padx=10)
+          fg=TEXT_S, wraplength=300, justify="left").pack(side="left", padx=10)
 
     header_row_row = Frame(excel_card, bg=CARD_BG)
     header_row_row.pack(fill="x", padx=9, pady=(4, 0))
@@ -500,14 +498,14 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     has_dealer_var = BooleanVar(value=True)
     make_toggle_pill(levels_row, "region", has_region_var)
     make_toggle_pill(levels_row, "city", has_city_var)
-    make_toggle_pill(levels_row, "dealer", has_dealer_var, locked=True)
+    make_toggle_pill(levels_row, "dealer", has_dealer_var, locked=False)
 
     Label(columns_card,
           text="ℹ Estos son los id tal cual aparecen en el HTML del <select> del form (region / city / "
                "dealer) — no cambian de país a país aunque el texto que ve el usuario sí (ej. en Argentina "
                "se ve como \"Provincia\" pero el id sigue siendo \"region\"). Desactivá acá el que tu form "
-               "no tenga; dealer siempre es obligatorio.",
-          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF", wraplength=750,
+               "no tenga.",
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF", wraplength=340,
           justify="left").pack(anchor="w", padx=15, pady=(2, 6))
 
     cols_row = Frame(columns_card, bg=CARD_BG)
@@ -526,7 +524,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     chk_bac_var = BooleanVar(value=False)
     Checkbutton(opts_row, text="Verificar BAC (opcional — muchos forms no exponen data-bac en el HTML)",
                 variable=chk_bac_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
-                activebackground=CARD_BG).pack(anchor="w")
+                activebackground=CARD_BG, wraplength=340, justify="left").pack(anchor="w")
     # Extras y duplicados se buscan SIEMPRE (integrado en el flujo normal)
     find_extras_var = BooleanVar(value=True)
 
@@ -538,7 +536,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
           text="Agregá cualquier otro campo del form que quieras validar: el nombre de la columna del "
                "Excel y el id del campo tal cual aparece en el HTML del form (ej. columna \"CEP\" → id "
                "\"customer-cep\").",
-          font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S, wraplength=750, justify="left").pack(anchor="w", pady=(0, 4))
+          font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S, wraplength=340, justify="left").pack(anchor="w", pady=(0, 4))
 
     field_check_header = Frame(field_check_block, bg=CARD_BG)
     field_check_header.pack(fill="x")
@@ -550,7 +548,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     field_check_rows_container = Frame(field_check_block, bg=CARD_BG)
     field_check_rows_container.pack(fill="x", pady=(2, 4))
 
-    def _add_field_check_row(column="", field_id=""):
+    def _add_field_check_row(column="", field_id="", active=True):
         row = Frame(field_check_rows_container, bg=CARD_BG)
         row.pack(fill="x", pady=2)
         column_var = StringVar(value=column)
@@ -560,10 +558,36 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         Entry(row, textvariable=field_id_var, width=22, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
               insertbackground="white", relief="flat").pack(side="left", padx=2, ipady=4)
 
-        widgets = {"frame": row, "column_var": column_var, "field_id_var": field_id_var}
+        widgets = {
+            "frame": row,
+            "column_var": column_var,
+            "field_id_var": field_id_var,
+            "active_var": BooleanVar(value=active),
+            "pill_btn": None
+        }
+
+        def _add_to_form_fields():
+            f_id = field_id_var.get().strip()
+            if not f_id:
+                messagebox.showwarning("Comparador Dealers", "Ingresá un ID de campo válido antes de agregarlo.")
+                return
+            if widgets["pill_btn"]:
+                widgets["pill_btn"].destroy()
+                widgets["pill_btn"] = None
+            btn, _ = make_toggle_pill(levels_row, f_id, widgets["active_var"])
+            widgets["pill_btn"] = btn
+
+        if field_id.strip():
+            _add_to_form_fields()
+
+        btn_add = Button(row, text="➕ Agregar a campos del form", font=("Segoe UI", 8, "bold"), bg="#1a3d24", fg="#39c55a",
+                         relief="flat", bd=0, cursor="hand2", padx=6, command=_add_to_form_fields)
+        btn_add.pack(side="left", padx=4)
 
         def _remove():
             row.destroy()
+            if widgets["pill_btn"]:
+                widgets["pill_btn"].destroy()
             state["field_check_widgets"].remove(widgets)
 
         Button(row, text="×", font=("Segoe UI", 9, "bold"), bg="#3d1414", fg="#f85149",
@@ -607,6 +631,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     _orig_select_models_mode = _select_models_mode
 
     def select_models_mode(val):
+        if not has_models_var.get():
+            return
         _orig_select_models_mode(val)
         _refresh_models_mode_visibility()
 
@@ -623,7 +649,28 @@ def build_dealer_comparator_tab(tab_frame, ctx):
           insertbackground="white", relief="flat", width=60).pack(anchor="w", pady=(2, 0), ipady=4, fill="x")
     Label(models_list_row, text="ej: Onix, Tracker, S10", font=("Segoe UI", 8, "italic"), bg=CARD_BG,
           fg="#C5A9DF").pack(anchor="w")
-    _refresh_models_mode_visibility()
+
+    def _update_models_section_state(*_a):
+        is_enabled = has_models_var.get()
+        for child in models_mode_row.winfo_children():
+            if isinstance(child, Button):
+                if is_enabled:
+                    child.config(state="normal", cursor="hand2")
+                    val = "all" if child.cget("text") == "Todos los modelos" else "specific"
+                    if models_mode_var.get() == val:
+                        child.config(bg=BTN_ACTIVE, fg="white")
+                    else:
+                        child.config(bg=BTN_INACTIVE, fg=TEXT_S)
+                else:
+                    child.config(state="disabled", cursor="arrow", bg=BTN_INACTIVE, fg="#7D6695")
+        
+        if is_enabled:
+            _refresh_models_mode_visibility()
+        else:
+            models_list_row.pack_forget()
+
+    has_models_var.trace_add("write", _update_models_section_state)
+    _update_models_section_state()
 
     # ── 5. Modo de salida ─────────────────────────────────────────────────────
     output_card = card("📦 MODO DE SALIDA")
@@ -713,6 +760,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         condition_mode_var.set(norm_condition)
         has_region_var.set(bool(cfg.get("has_region", True)))
         has_city_var.set(bool(cfg.get("has_city", True)))
+        has_dealer_var.set(bool(cfg.get("has_dealer", True)))
         col_region_var.set(cfg.get("col_region", "REGION"))
         col_city_var.set(cfg.get("col_city", "CIUDAD"))
         col_dealer_var.set(cfg.get("col_dealer", "NOMBRE"))
@@ -736,7 +784,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             row_widgets["frame"].destroy()
         state["field_check_widgets"] = []
         for check in cfg.get("field_checks", []):
-            _add_field_check_row(check.get("column", ""), check.get("field_id", ""))
+            _add_field_check_row(check.get("column", ""), check.get("field_id", ""), active=bool(check.get("active", True)))
         refresh_execute_state()
 
     def _apply_country_settings(pais):
@@ -753,6 +801,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "condition_mode": condition_mode_var.get(),
             "has_region": has_region_var.get(),
             "has_city": has_city_var.get(),
+            "has_dealer": has_dealer_var.get(),
             "col_region": col_region_var.get(),
             "col_city": col_city_var.get(),
             "col_dealer": col_dealer_var.get(),
@@ -770,7 +819,11 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "ver_navegador": ver_navegador_var.get(),
             "output_mode": output_mode_var.get(),
             "field_checks": [
-                {"column": w["column_var"].get().strip(), "field_id": w["field_id_var"].get().strip()}
+                {
+                    "column": w["column_var"].get().strip(),
+                    "field_id": w["field_id_var"].get().strip(),
+                    "active": bool(w["active_var"].get())
+                }
                 for w in state["field_check_widgets"]
                 if w["column_var"].get().strip() and w["field_id_var"].get().strip()
             ],
@@ -795,16 +848,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     def _column_map():
         headers = state["headers"]
         return {
-            "region": resolve_column(headers, col_region_var.get()),
-            "city": resolve_column(headers, col_city_var.get()),
-            "dealer": resolve_column(headers, col_dealer_var.get()),
-            "bac": resolve_column(headers, col_bac_var.get()),
+            "region": resolve_column(headers, col_region_var.get()) if has_region_var.get() else None,
+            "city": resolve_column(headers, col_city_var.get()) if has_city_var.get() else None,
+            "dealer": resolve_column(headers, col_dealer_var.get()) if has_dealer_var.get() else None,
+            "bac": resolve_column(headers, col_bac_var.get()) if chk_bac_var.get() else None,
         }
 
     def _field_checks_resolved():
         headers = state["headers"]
         out = []
         for w in state["field_check_widgets"]:
+            if not w["active_var"].get():
+                continue
             field_id = w["field_id_var"].get().strip()
             col_key = resolve_column(headers, w["column_var"].get())
             if field_id and col_key:
@@ -845,9 +900,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             hidden_in_filter = [r for r in filtered if r.get("__row__") in hidden]
             state["hidden_rows"] = hidden
             if hidden_in_filter:
-                dealer_key = resolve_column(headers, col_dealer_var.get())
+                dealer_key = resolve_column(headers, col_dealer_var.get()) if has_dealer_var.get() else None
                 nombres = ", ".join(
-                    f"fila {r.get('__row__')}: {r.get(dealer_key, '') or '?'}" for r in hidden_in_filter[:15]
+                    f"fila {r.get('__row__')}: {r.get(dealer_key, '') or '?'}" if dealer_key else f"fila {r.get('__row__')}"
+                    for r in hidden_in_filter[:15]
                 )
                 mas = "…" if len(hidden_in_filter) > 15 else ""
                 ui_log(
@@ -1115,18 +1171,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     def _set_running(running):
         state["running"] = running
         if running:
-            btn_run.config(text=" DETENER", image=get_button_icon("stop_coral.png"), bg="#b91c1c", fg="white",
-                            state="normal", cursor="hand2")
+            btn_run.config(text="  EJECUCIÓN EN CURSO", image="", bg=BTN_INACTIVE, fg="#8A7E9E",
+                           disabledforeground="#8A7E9E", state="disabled", cursor="arrow")
         else:
-            btn_run.config(text=" EJECUTAR", image=get_button_icon("play_green.png"))
+            btn_run.config(text=" EJECUTAR", image=get_button_icon("play_green.png"), state="normal", cursor="hand2")
             refresh_execute_state()
 
     def _tiene_datos_minimos():
         """Chequeo rápido de lo mínimo para poder ejecutar: Excel de dealers elegido,
-        columna Dealer definida, y Excel de URLs cargado."""
+        columna Dealer definida (solo si está activo), y Excel de URLs cargado."""
         if not excel_path_var.get().strip():
             return False
-        if not col_dealer_var.get().strip():
+        if has_dealer_var.get() and not col_dealer_var.get().strip():
             return False
         if not url_excel_path_var.get().strip() or not os.path.exists(url_excel_path_var.get().strip()):
             return False
@@ -1150,8 +1206,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             raise ValueError("No hay filas para comparar después del filtro.")
 
         column_map = _column_map()
-        if not column_map["dealer"]:
+        if has_dealer_var.get() and not column_map["dealer"]:
             raise ValueError(f"No se encontró la columna de dealer '{col_dealer_var.get()}' en el Excel.")
+        if has_region_var.get() and not column_map["region"]:
+            raise ValueError(f"No se encontró la columna de región '{col_region_var.get()}' en el Excel.")
+        if has_city_var.get() and not column_map["city"]:
+            raise ValueError(f"No se encontró la columna de ciudad '{col_city_var.get()}' en el Excel.")
 
         url_pairs = [(landing, form_url) for landing, form_url in _parse_urls_text() if form_url]
         if not url_pairs:
@@ -1172,10 +1232,22 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         driver = None
         counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "DUPLICADO": 0}
         error_msg = None
+
+        # Cargar config de visible_browser y pausar_autenticacion
+        _ver_navegador = False
+        _pausar_auth = False
+        try:
+            from .helpers_interface import cargar_config_global
+            _cfg = cargar_config_global().get("ui_prefs", {})
+            _ver_navegador = bool(_cfg.get("visible_browser", False))
+            _pausar_auth = bool(_cfg.get("pausar_autenticacion", False))
+        except Exception:
+            pass
+
         try:
             driver = BrowserManager.create_browser(
                 browser_type=browser_var.get(), viewport=viewport_var.get(),
-                headless=False, background=not ver_navegador_var.get(),
+                headless=False, background=not _ver_navegador,
             )
             state["driver"] = driver
 
@@ -1196,6 +1268,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             caps_subdir = os.path.join(_get_results_dir(), "_".join(p for p in _caps_parts if p))
             os.makedirs(caps_subdir, exist_ok=True)
 
+            # --- FASE 1: COMPARACIÓN RÁPIDA (sin capturas) ---
+            ui_log("INICIANDO FASE 1: Comparación rápida (sin capturas de pantalla)...", "info")
             for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
                 if state["stop_event"].is_set():
                     raise StopRequested()
@@ -1203,6 +1277,28 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 if landing_url:
                     ui_log(f"    Landing: {landing_url}", "info")
                 open_target(driver, current_url_mode, landing_url, form_url)
+
+                # Pausa opcional para login manual en la primera URL
+                if pair_idx == 1 and _pausar_auth:
+                    from tkinter import messagebox
+                    ui_log("PAUSA DE AUTENTICACIÓN: Esperando que el usuario inicie sesión...", "info")
+                    res = messagebox.askokcancel(
+                        "Ocioso — Autenticación Manual",
+                        "Se ha pausado la comparación de dealers antes del primer formulario para que puedas iniciar sesión.\n\n"
+                        "1. Completá la autenticación / login en la ventana del navegador.\n"
+                        "2. Asegurate de estar en la página del formulario.\n"
+                        "3. Hacé click en 'Aceptar' para continuar con la comparación, o 'Cancelar' para detener el proceso.",
+                        parent=None
+                    )
+                    if not res:
+                        raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación.")
+                    
+                    ui_log("Resumiendo comparación. Buscando contexto del formulario...", "info")
+                    driver.switch_to.default_content()
+                    iframe = _find_form_iframe(driver, form_url)
+                    if iframe is not None:
+                        driver.switch_to.frame(iframe)
+                        ui_log("Contexto cambiado al iframe del formulario.", "info")
 
                 model_field_id = None
                 models_to_run = None
@@ -1216,54 +1312,34 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         models_to_run = list_model_options(driver, model_field_id)
                         ui_log(f"Modelos detectados en el form: {', '.join(models_to_run) or '(ninguno)'}", "info")
 
-                def _shot(result, _form_url=form_url, _landing_url=landing_url, _url_mode=current_url_mode):
-                    if output_mode != "caps":
-                        return
-                    safe_name = "".join(
-                        c for c in (result.get("dealer") or "dealer") if c.isalnum() or c in " _-"
-                    )[:40]
-                    filename = f"{result['status']}_{pair_idx}_{result.get('fila')}_{safe_name}.png".replace(" ", "_")
-                    # Pasar ambas URLs para el banner (landing solo si aplica)
-                    shot_landing = _landing_url if _url_mode == "landing_form" else ""
-                    path = capture_result_screenshot(
-                        driver, caps_subdir, filename,
-                        form_url=_form_url, landing_url=shot_landing,
-                    )
-                    screenshots.append(path)
-
-                # Progreso con la FASE explícita, para que el número se entienda: la
-                # comparación cuenta dealers (X/total dealers); la búsqueda de extras
-                # cuenta combinaciones región/ciudad (X/total combos) — antes se veía
-                # sólo el número de la última fase (ej. 29/29 combos) y confundía.
                 def _compare_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Comparando dealer {cur}/{total}: {label_txt}")
+                    _progress_cb(cur, total, f"[Fase 1 - Form {_pair_idx}/{total_pairs}] Comparando {cur}/{total}: {label_txt}")
 
                 def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total} (región/ciudad): {label_txt}")
+                    _progress_cb(cur, total, f"[Fase 1 - Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total} (región/ciudad): {label_txt}")
 
                 results = compare_dealers(
                     driver, filtered_rows, column_map,
                     level_ids=DEFAULT_SELECT_IDS,
                     has_region=has_region_var.get(), has_city=has_city_var.get(),
+                    has_dealer=has_dealer_var.get(),
                     chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
                     model_field_id=model_field_id, models=models_to_run,
                     log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
-                    screenshot_cb=_shot,
+                    screenshot_cb=None,
                     expect_absent=state.get("expect_absent", False),
                 )
                 for r in results:
                     r["url_form"] = form_url
                     r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
 
-                # Extras y duplicados se buscan SIEMPRE — salvo en modo Excluir, donde la
-                # lista esperada son dealers que NO deben estar (buscar extras marcaría
-                # como EXTRA a cualquier dealer presente, lo cual no tiene sentido acá).
                 if _should_find_extras() and not state.get("expect_absent", False):
-                    ui_log("Buscando dealers EXTRA y DUPLICADOS en el form...", "info")
+                    ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
                     extras = find_extra_dealers(
                         driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
                         log_cb=ui_log, progress_cb=_extras_progress_cb, stop_flag=state["stop_event"],
+                        has_dealer=has_dealer_var.get(),
                     )
                     for r in extras:
                         r["url_form"] = form_url
@@ -1295,11 +1371,90 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             export_path = export_results_excel(all_results, output_path=export_path, pais=state["pais"])
             ui_log(f"Reporte Excel: {export_path}", "ok")
 
-            if output_mode == "caps" and screenshots:
+            if output_mode == "caps" and not state["stop_event"].is_set():
+                ui_log("\n=== FASE 2: Generando capturas de pantalla en segundo plano... ===", "info")
+                for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
+                    if state["stop_event"].is_set():
+                        raise StopRequested()
+                    ui_log(f"Capturando Form {pair_idx}/{total_pairs}...", "info")
+                    open_target(driver, current_url_mode, landing_url, form_url)
+
+                    # Pausa opcional para login manual en la primera URL en la Fase 2
+                    if pair_idx == 1 and _pausar_auth:
+                        from tkinter import messagebox
+                        ui_log("FASE 2 - PAUSA DE AUTENTICACIÓN: Esperando confirmación de inicio de sesión...", "info")
+                        res = messagebox.askokcancel(
+                            "Ocioso — Autenticación Manual (Fase Capturas)",
+                            "Se ha pausado la Fase 2 (Capturas) antes del primer formulario para que puedas verificar que tu sesión siga activa.\n\n"
+                            "1. Si el navegador perdió la sesión, iniciá sesión nuevamente.\n"
+                            "2. Asegurate de estar en la página del formulario.\n"
+                            "3. Hacé click en 'Aceptar' para continuar con la captura de pantallas.",
+                            parent=None
+                        )
+                        if not res:
+                            raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación de Fase 2.")
+                        
+                        ui_log("Resumiendo Fase 2. Buscando contexto del formulario...", "info")
+                        driver.switch_to.default_content()
+                        iframe = _find_form_iframe(driver, form_url)
+                        if iframe is not None:
+                            driver.switch_to.frame(iframe)
+                            ui_log("Contexto cambiado al iframe del formulario.", "info")
+
+                    model_field_id = None
+                    models_to_run = None
+                    if has_models_var.get():
+                        model_field_id = models_field_id_var.get().strip() or "models"
+                        if models_mode_var.get() == "specific":
+                            models_to_run = [m.strip() for m in models_list_var.get().split(",") if m.strip()]
+                        else:
+                            models_to_run = list_model_options(driver, model_field_id)
+
+                    def _shot(result, _form_url=form_url, _landing_url=landing_url, _url_mode=current_url_mode):
+                        combo_parts = []
+                        if has_region_var.get() and result.get("region"):
+                            combo_parts.append(result["region"])
+                        if has_city_var.get() and result.get("city"):
+                            combo_parts.append(result["city"])
+                        if has_dealer_var.get() and result.get("dealer"):
+                            combo_parts.append(result["dealer"])
+                        if not combo_parts:
+                            combo_parts.append("dealer")
+                        
+                        import re
+                        safe_parts = []
+                        for part in combo_parts:
+                            clean = re.sub(r"[^\w\s\.-]+", "", str(part)).strip()
+                            clean = re.sub(r"\s+", "_", clean)
+                            if clean:
+                                safe_parts.append(clean)
+                        combo_name = "_".join(safe_parts)[:60]
+                        filename = f"{result['status']}_form{pair_idx}_fila{result.get('fila') or 'x'}_{combo_name}.png"
+                        shot_landing = _landing_url if _url_mode == "landing_form" else ""
+                        path = capture_result_screenshot(
+                            driver, caps_subdir, filename,
+                            form_url=_form_url, landing_url=shot_landing,
+                        )
+                        screenshots.append(path)
+
+                    def _capture_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
+                        _progress_cb(cur, total, f"[Fase 2 - Form {_pair_idx}/{total_pairs}] Capturando {cur}/{total}: {label_txt}")
+
+                    compare_dealers(
+                        driver, filtered_rows, column_map,
+                        level_ids=DEFAULT_SELECT_IDS,
+                        has_region=has_region_var.get(), has_city=has_city_var.get(),
+                        has_dealer=has_dealer_var.get(),
+                        chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
+                        model_field_id=model_field_id, models=models_to_run,
+                        log_cb=lambda *_a: None, progress_cb=_capture_progress_cb, stop_flag=state["stop_event"],
+                        screenshot_cb=_shot,
+                        expect_absent=state.get("expect_absent", False),
+                    )
+
                 zip_filename = excel_filename.replace(".xlsx", "_capturas.zip")
                 zip_path = os.path.join(_get_results_dir(), zip_filename)
                 zip_screenshots(screenshots, zip_path)
-                # Los PNG sueltos ya quedaron adentro del ZIP: no hace falta dejarlos también sueltos.
                 for shot_path in screenshots:
                     try:
                         os.remove(shot_path)
@@ -1347,19 +1502,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             target=_worker_run, args=(filtered_rows, column_map, url_pairs), daemon=True
         ).start()
 
-    def _borrar_urls():
-        url_excel_path_var.set("")
-        url_warn_var.set("")
-        ui_log("Excel de URLs quitado.", "info")
-        refresh_execute_state()
 
-    btn_borrar = Button(footer_btns, text=" Quitar Excel URLs", image=get_button_icon("trash_coral.png"), compound="left",
-                         font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg=TEXT_DELETE,
-                         relief="flat", bd=0, activebackground=BTN_HOVER, activeforeground=TEXT_DELETE,
-                         padx=18, pady=6, cursor="hand2", command=_borrar_urls)
-    btn_borrar.pack(side="left", padx=(0, 6))
-    btn_borrar.bind("<Enter>", lambda e: btn_borrar.config(bg=BTN_HOVER))
-    btn_borrar.bind("<Leave>", lambda e: btn_borrar.config(bg=BTN_INACTIVE))
 
     btn_run = Button(footer_btns, text=" EJECUTAR", image=get_button_icon("play_green.png"), compound="left",
                       font=("Segoe UI", 9, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
@@ -1373,6 +1516,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     excel_path_var.trace_add("write", lambda *_a: refresh_execute_state())
     col_dealer_var.trace_add("write", lambda *_a: refresh_execute_state())
     url_excel_path_var.trace_add("write", lambda *_a: refresh_execute_state())
+    has_dealer_var.trace_add("write", lambda *_a: refresh_execute_state())
 
     # No pre-seleccionar ningún país para no confundir al usuario
     _refresh_pais_cards()

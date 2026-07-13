@@ -1372,13 +1372,14 @@ class BaseFormFiller:
                 pass
 
         for iteration in range(max_iter):
-            # Clic preliminar opcional para forzar validación y activar mensajes de error
+            paso = iteration + 1
+            # Clic preliminar para forzar validación y activar mensajes de error de este paso
             try:
                 # Buscar el botón Siguiente o Enviar visible en este paso
                 boton_accion = self._find_next_button()
                 if not boton_accion:
                     boton_accion, _ = self._resolve_submit_button(wait_seconds=1)
-                
+
                 if boton_accion and boton_accion.is_displayed() and boton_accion.is_enabled():
                     print("⚡ [DEBUG] Clic preliminar sobre botón de acción para forzar validaciones antes de rellenar...")
                     try:
@@ -1386,6 +1387,15 @@ class BaseFormFiller:
                     except Exception:
                         self.driver.execute_script("arguments[0].click();", boton_accion)
                     time.sleep(1.0)  # Esperar a que se pinten/activen los mensajes de error
+
+                    # Captura de errores de este paso. En el paso 1 de un form de un solo paso ya
+                    # la tomó el bloque de "click enviar vacío" (_errores_ss_taken).
+                    if self.screenshot_manager and not (iteration == 0 and getattr(self, "_errores_ss_taken", False)):
+                        _sufijo = "errores" if (iteration == 0 and not self._has_next_button()) else f"errores_paso{paso}"
+                        self.screenshot_manager.take_form_screenshot(
+                            current_ss_number, _sufijo, full_page=True)
+                        self._errores_ss_taken = True
+                        print(f"Captura form_{_sufijo} tomada")
             except Exception as _e:
                 print(f"⚠️ No se pudo realizar clic preliminar de validación: {_e}")
 
@@ -1396,6 +1406,12 @@ class BaseFormFiller:
 
             if not self._has_next_button():
                 break
+
+            # Form multi-paso: captura del paso ya completado antes de pasar al siguiente
+            if self.screenshot_manager:
+                self.screenshot_manager.take_form_screenshot(
+                    current_ss_number, f"completado_paso{paso}", full_page=True)
+                print(f"Captura form_completado_paso{paso} tomada")
 
             sig_before = self._dom_signature_visible_mapping()
             if not self._click_next_button("auto"):
@@ -1432,7 +1448,7 @@ class BaseFormFiller:
 
         self.reposition_to_form(self.expected_form_url)
         form_completado_name = f"form_completado_{current_ss_number}.png"
-        self.screenshot_manager.take_form_screenshot(current_ss_number, "completado", full_page=getattr(self, "_is_aem", False))
+        self.screenshot_manager.take_form_screenshot(current_ss_number, "completado", full_page=True)
         print("Captura 2/3: Formulario completado")
         return form_completado_name
 
@@ -2069,7 +2085,7 @@ class BaseFormFiller:
         self.driver.execute_script(_SCROLL_JS, 0)
         time.sleep(end_wait)
 
-    def process_landing_page(self, landing_url, ss_counter):
+    def process_landing_page(self, landing_url, ss_counter, take_screenshot=True):
         """Procesa la página de destino inicial"""
         try:
             self.driver.switch_to.default_content()
@@ -2123,9 +2139,10 @@ class BaseFormFiller:
                 print(f"Chevrolet BR: no se encontró #contact-by-form — {e}")
 
         form_inserto_name = f"landing_inicial_{ss_counter}.png"
-        self.screenshot_manager.url_landing = landing_url
-        self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
-        print("Captura 1/3: Formulario inserto en landing")
+        if take_screenshot:
+            self.screenshot_manager.url_landing = landing_url
+            self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
+            print("Captura 1/3: Formulario inserto en landing")
 
         return form_inserto_name
 
@@ -4693,6 +4710,7 @@ class BaseFormFiller:
                 form_completado_name = ""
                 ty_page_name = ""
                 self._url_form_encontrado = ""
+                self._errores_ss_taken = False
                 # Resetear URLs y frame en screenshot_manager al inicio de cada fila
                 if self.screenshot_manager:
                     self.screenshot_manager.url_form_esperado   = expected_form_url
@@ -4702,8 +4720,35 @@ class BaseFormFiller:
                 print(f"\n Procesando fila {i}: {landing_url}")
 
                 try:
-                    # 1. Procesar landing page
-                    form_inserto_name = self.process_landing_page(landing_url, ss_counter)
+                    # 1. Procesar landing page. Si vamos a pausar para login manual (solo en la
+                    #    primera fila), la captura de landing se toma DESPUÉS del login.
+                    _pausar = (i == 2 and bool(self.config.get('pausar_autenticacion', False)))
+                    form_inserto_name = self.process_landing_page(landing_url, ss_counter,
+                                                                  take_screenshot=not _pausar)
+
+                    # 1b. Pausa opcional para autenticación manual (SSO / MFA / credenciales)
+                    if _pausar:
+                        from tkinter import messagebox
+                        self._log("[INFO] Pausando ejecución para autenticación manual...")
+                        res = messagebox.askokcancel(
+                            "Ocioso — Autenticación Manual",
+                            "Se pausó la ejecución antes del primer formulario para que puedas iniciar sesión.\n\n"
+                            "1. Completá la autenticación / login en la ventana del navegador.\n"
+                            "2. Asegurate de quedar en la página del formulario.\n"
+                            "3. 'Aceptar' continúa con el llenado automático; 'Cancelar' detiene el proceso.",
+                        )
+                        if not res:
+                            raise InterruptedError("Ejecución cancelada por el usuario durante la pausa de autenticación.")
+                        self._log("[INFO] Resumiendo ejecución...")
+                        try:
+                            self.driver.switch_to.default_content()
+                        except Exception:
+                            pass
+                        self.handle_cookie_popups()
+                        if self.screenshot_manager:
+                            self.screenshot_manager.url_landing = landing_url
+                            self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
+                            print("Captura 1/3: Formulario inserto en landing")
 
                     # 2. Buscar iframe (solo si hay URL esperada en columna B); si no, formulario embebido en la página
                     if use_iframe:
@@ -4812,7 +4857,8 @@ class BaseFormFiller:
                                     self.driver.execute_script("arguments[0].click();", _btn_empty)
                                 time.sleep(0.5)  # esperar a que JS muestre los errores de validación
                                 if self.screenshot_manager:
-                                    self.screenshot_manager.take_form_screenshot(ss_counter, "errores", full_page=self._is_aem)
+                                    self.screenshot_manager.take_form_screenshot(ss_counter, "errores", full_page=True)
+                                    self._errores_ss_taken = True
                                     print("Captura form_errores tomada (formulario vacío)")
                         except Exception as _e:
                             print(f"  ⚠ Click enviar vacío: {_e}")
@@ -4857,7 +4903,7 @@ class BaseFormFiller:
                                 else:
                                     form_completado_name = self.fill_form_fields(form_data)
                                 if self.screenshot_manager:
-                                    self.screenshot_manager.take_form_screenshot(ss_counter, "completado_intento2")
+                                    self.screenshot_manager.take_form_screenshot(ss_counter, "completado_intento2", full_page=True)
                                     print("Captura formulario completo (intento 2 tras error event_id)")
                                 result_text_2, ty_page_name_2 = self.submit_and_verify_form(ss_counter, expected_form_url)
                                 if ty_page_name_2 is not None:

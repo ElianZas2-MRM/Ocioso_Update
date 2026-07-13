@@ -625,7 +625,7 @@ class WeeklySchedulerDialog(Toplevel):
 
         row = Frame(card, bg=SCH_CARD)
         row.pack(fill="x", padx=12, pady=(0, 4))
-        Radiobutton(row, text="Consecutivo (un mercado a la vez)",
+        Radiobutton(row, text="Secuencial (un mercado a la vez)",
                     variable=self._modo_mercados_var, value="consecutivo",
                     font=("Segoe UI", 9), bg=SCH_CARD, fg=SCH_WHITE,
                     activebackground=SCH_CARD, selectcolor=SCH_HOVER,
