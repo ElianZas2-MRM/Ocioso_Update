@@ -27,6 +27,8 @@ O usá el ejecutable ya compilado: `dist/OsocioFormAutomation.exe` (o la carpeta
 
 Al abrir, vas a ver la barra superior con el logo, el campo de **Email destinatario** y el checkbox **Enviar mail** (configuración compartida por todas las pestañas), debajo las 5 pestañas de la app, y al fondo de la ventana una **consola de log** (ver más abajo). La app recuerda casi toda tu configuración entre una sesión y otra — no hace falta reconfigurar todo cada vez que la abrís (ver "La app recuerda tu configuración" en la pestaña Envío de Leads).
 
+> **Cómo leer las capturas:** en las imágenes de cada pestaña vas a ver **recuadros rojos numerados** (①, ②, ③…). Cada número se corresponde con el punto del mismo número en el "Paso a paso" que está debajo de la imagen, así ubicás en pantalla exactamente el control del que se habla.
+
 ---
 
 ## Elementos comunes a toda la ventana
@@ -253,6 +255,19 @@ La pestaña está organizada en bloques con una **mini-guía numerada (①→⑤
      - **Fase 1 (Comparación Rápida):** Compara los dealers y campos de inmediato sin tomar capturas. Al finalizar esta fase, **genera y guarda el Excel de resultados en el disco** de inmediato, permitiéndote abrirlo y revisarlo sin demoras.
      - **Fase 2 (Generación de Capturas):** Si seleccionaste la opción de capturas, la aplicación realiza una segunda pasada rápida para capturar cada pantalla y empaquetar el archivo ZIP de resultados.
 10. Los reportes (Excel con colores por estado, y el ZIP de capturas si corresponde) quedan en `Dealerscheck_resultados/`.
+
+### El modal del Comparador
+
+Igual que en Envío de Leads, la comparación corre dentro de un modal que bloquea la ventana de atrás:
+
+![Modal del Comparador](Asset/screenshots/18_modal_comparador.png)
+
+- **Comparando dealers… / país**: arriba te recuerda sobre qué mercado está corriendo.
+- **La barra de progreso** avanza sobre el total de dealers del Excel.
+- **La línea de estado** de abajo es la más útil: te dice exactamente en qué está, con este formato → `2/3 — [Fase 1 - Form 1/5] Buscando extras 2/3 (región/ciudad): Montevideo / Montevideo`. Ahí leés la fase (1 = comparación, 2 = capturas), qué formulario de la lista está procesando (`Form 1/5`), y qué dealer o combinación región/ciudad está mirando en ese momento.
+- **Detener** corta la corrida. Como el Excel de resultados se guarda al terminar la Fase 1, si frenás durante la Fase 2 (capturas) igual te queda el reporte.
+
+![Modal del Comparador sobre la app](Asset/screenshots/19_modal_comparador_sobre_app.png)
 
 ---
 
