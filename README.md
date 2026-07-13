@@ -76,10 +76,33 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
    ![Datos por país](Asset/screenshots/09_datos_por_pais.png)
 
-7. **EJECUTAR ENVÍO**: se habilita apenas elegís al menos un país. Abre un modal que bloquea la ventana mientras corre, mostrando el progreso mercado por mercado.
+7. **EJECUTAR ENVÍO**: se habilita apenas elegís al menos un país. Antes de arrancar, la app **valida que exista un Excel con al menos un lead** para cada combinación país + dispositivo elegida; si alguno falta o está vacío, no ejecuta nada y te lo dice con el detalle (ej. *"Colombia · Chrome: … (vacío / sin leads)"*). Si está todo bien, abre el **modal de ejecución** (ver abajo).
 8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para LambdaTest, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda como una columna **"Video LT"** dentro del Excel de resultados — abrilo desde ahí y hacé click en el link.
 
 > Antes de ejecutar necesitás tener generado el Excel de datos correspondiente — si falta, andá primero a la pestaña **Generar Excels con Datos**.
+
+### El modal de ejecución
+
+Mientras corre el envío, la app abre una ventana "Ejecución de Test" que es tu único tablero de control: te dice qué está pasando y es lo que usás para frenar.
+
+![Modal de ejecución](Asset/screenshots/11_modal_ejecucion.png)
+
+Qué muestra, de arriba abajo:
+
+- **Ejecutando… / N de M mercado(s) completados**: el avance general de la corrida.
+- **Detener**: corta todo. No mata el proceso de golpe: le avisa a las sesiones que frenen, así que puede tardar unos segundos en cerrar los navegadores que estén a mitad de un lead.
+- **Las tres pastillas** (*Mercados: Consecutivo · Excels: Consecutivo · N mercado(s)*): un recordatorio de con qué configuración arrancó **esta** corrida. Sirve para no confundirte si después cambiás los selectores de atrás.
+- **Una barra por mercado + dispositivo** (`Bolivia — Chrome`, `Brasil — Chrome`, …): cada una avanza sola. A la derecha ves el estado: mientras corre dice cuántos leads van (`0/1 lead(s) listos`) y al terminar cambia al resultado (`✓ 1 OK · 0 error(es)`). La barra queda **verde** cuando el mercado terminó y **naranja** mientras está en curso.
+
+Mientras el modal está abierto, **la ventana de atrás queda bloqueada** (no podés tocar los selectores ni cambiar de pestaña) para que no le muevas la configuración a una corrida en progreso — por eso el aviso amarillo *"No podés cerrar esta ventana mientras se ejecuta. Para correr otro test ahora, abrí otra ventana de la app."* El botón EJECUTAR ENVÍO de atrás también se deshabilita y pasa a decir **"EN CURSO…"**:
+
+![Modal sobre la app](Asset/screenshots/17_modal_sobre_app.png)
+
+**Cuando termina**, el modal no se cierra solo: se le agregan abajo tres cosas y espera a que las leas.
+
+1. Un **banner de email**: verde con *"✉ Email de resultados encolado a: …"* si tenías "Enviar mail" tildado, rojo si lo tildaste pero **te olvidaste del destinatario** (*"Falta el destinatario: no se envió email"*), o gris si el envío de mail estaba apagado.
+2. El **resumen final**: `🟢 N OK` / `🔴 N con error`, sumando todos los mercados.
+3. El botón **Cerrar resultados**, que es el que libera la ventana de atrás.
 
 **Qué capturas deja cada lead** (en `resultados/screenshots_<País>_<Navegador><N>/`):
 
