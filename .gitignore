@@ -29,6 +29,10 @@ config_global.json
 # Excels reales de clientes (rankings/listados de dealers) - no versionar
 *Ranking Dealers*.xls*
 
+# Excels de datos - se generan desde la app, no se versionan
+data/Lead_information_*.xls*
+data/Estado_Cidade_BR.xlsx
+
 # PyInstaller output — regenerable con build.bat
 build/
 dist/
