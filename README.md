@@ -268,25 +268,6 @@ La pestaña está organizada en bloques con una **mini-guía numerada (①→⑤
 - `json/`: configuración persistente (email, programación, reglas de validación, presets del Comparador Dealers).
 - `utils/`: generación de datos de prueba, llenado AEM (T3), chequeo de CTA, programación y rutas.
 - `validation/`: motor de la pestaña Validación de Campos (regex, mensajes de error, export).
-- `tests/`: regression test (ver abajo).
-
-## Regression test
-
-Chequeo rápido de que nada se rompió, sin abrir navegador ni tocar formularios reales:
-
-```powershell
-.\venv\Scripts\python.exe tests\regression_test.py
-```
-
-Corre 21 chequeos en ~5 segundos y termina con `PASS: 21   FAIL: 0`. Cubre:
-
-- **Generación de datos**: que las 9 filas de país se generen, y que los documentos salgan **matemáticamente válidos** — CPF y CNPJ de Brasil con dígito verificador, RUT de Chile (incluida la variante con K), cédula de Ecuador, VIN de 17 caracteres sin I/O/Q, celular y email por país.
-- **Comparador de Dealers**: normalización de texto (acentos/mayúsculas), lectura de Excel con encabezados que no arrancan en la fila 1, resolución de columnas por letra (`A`, `K`) / nombre exacto / coincidencia parcial, filtros Incluir y Excluir, detección de filas ocultas y exportación del Excel de resultados.
-- **Programación de tests**: guardar → cargar → limpiar el schedule semanal sin perder horarios ni países.
-- **Validación de campos**: que las regex compilen, discriminen valor válido de inválido, y que una regex rota tire error en vez de pasar silenciosa.
-- **Integridad general**: que los 28 módulos importen, que los 9 países tengan runner y `field_mapping`, y que todos los Excel de `data/` sean legibles y tengan columna de URL.
-
-Si tocás código de datos, del comparador o de la programación, corré esto antes de compilar.
 
 ## Qué hay adentro de `json/` (no la borres)
 
