@@ -174,6 +174,25 @@ class BrowserManager:
         return None
     
     @staticmethod
+    def _fix_headless_user_agent(driver):
+        """
+        En headless, Chrome/Edge se anuncian como "HeadlessChrome"/"HeadlessEdg" en el
+        user-agent. chevrolet.com.br detecta eso y NO carga el iframe del formulario (queda
+        solo el data-src, sin src) → la app no encontraba ningún iframe y no llenaba nada.
+
+        Le saca el "Headless" al UA real del navegador (sin hardcodear una versión, que se
+        desactualizaría). Firefox no lo necesita: su UA headless es idéntico al normal.
+        """
+        try:
+            ua = driver.execute_script("return navigator.userAgent") or ""
+            if "Headless" not in ua:
+                return
+            clean = ua.replace("HeadlessChrome", "Chrome").replace("HeadlessEdg", "Edg")
+            driver.execute_cdp_cmd("Network.setUserAgentOverride", {"userAgent": clean})
+        except Exception:
+            pass
+
+    @staticmethod
     def _create_chrome(viewport, headless, background=True):
         options = ChromeOptions()
         # "eager" devuelve el control apenas el DOM está listo, sin esperar a que
@@ -226,6 +245,7 @@ class BrowserManager:
                 })
             except Exception:
                 pass
+            BrowserManager._fix_headless_user_agent(driver)
         _reg_pid(service)
         return driver
 
@@ -321,5 +341,7 @@ class BrowserManager:
             lambda: webdriver.Edge(service=service, options=options),
             "msedgedriver.exe",
         )
+        if headless:
+            BrowserManager._fix_headless_user_agent(driver)
         _reg_pid(service)
         return driver
