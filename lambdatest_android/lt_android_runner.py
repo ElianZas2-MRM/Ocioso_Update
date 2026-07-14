@@ -63,7 +63,6 @@ from lt_runner import (  # type: ignore[import]
     _write_row_result,
 )
 from lt_excel_reader import read_osocio_excel  # type: ignore[import]
-from lt_screenshots import LTScreenshotManager  # type: ignore[import]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -77,7 +76,7 @@ class LTAndroidRunOptions:
     credentials_file: str = ""
     build_name: str = ""
     device_name: str = _DEFAULT_ANDROID_DEVICE
-    with_screenshots: bool = False
+    with_screenshots: bool = False   # ignorado: LambdaTest no saca capturas (queda el video)
     brasil_docs: dict = None
 
 
@@ -222,10 +221,6 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
         log(f"✓ Session ID: {session_id}")
         log(f"  Dashboard: https://automation.lambdatest.com/logs/?testID={session_id}")
 
-        screenshots_dir = os.path.join(_ANDROID_RESULTADOS_DIR,
-                                       f"screenshots_{opts.pais}{run_number}")
-        _all_screenshot_managers = []
-
         for i, lead in enumerate(leads, start=1):
             if stop_event and stop_event.is_set():
                 log("  ⛔ Ejecución detenida por el usuario.")
@@ -248,20 +243,11 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
                 elif _form_idx in _br_docs.get("cpf_rows", []):
                     _br_doc_type = "cpf"
 
+            # Sin capturas en LambdaTest: la evidencia es el video de la sesión, que queda
+            # linkeado en la columna "Video LT" del Excel de resultados. Cada captura es un
+            # round-trip al device real (lento) y no aporta nada que el video no muestre.
+            # Mac LT ya funcionaba así (nunca pasó un screenshot_manager).
             sm = None
-            if opts.with_screenshots:
-                sm = LTScreenshotManager(
-                    driver=driver,
-                    screenshots_dir=screenshots_dir,
-                    lead_num=i,
-                    session_id=session_id,
-                    username=username,
-                    access_key=access_key,
-                    iframe_src=lead.secure_url or "",
-                    log=log,
-                    landing_url=lead.public_url or "",
-                )
-                _all_screenshot_managers.append(sm)
 
             result = _run_single_lead(
                 driver, opts.pais, lead,
@@ -308,10 +294,6 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
                 mark_lt_status(driver, passed=(summary["failed"] == 0 and summary["error"] is None))
                 driver.quit()
                 log("\n✓ Driver cerrado.")
-
-                if _all_screenshot_managers:
-                    for _sm in _all_screenshot_managers:
-                        _sm.descargar_con_frame_mac()
 
                 if session_id and username and access_key:
                     video_url = _fetch_lt_video_url(session_id, username, access_key)
