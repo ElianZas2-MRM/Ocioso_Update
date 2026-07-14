@@ -2953,10 +2953,26 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
 _CTA_EMPTY_JS = r"""
 var subSel = arguments[0];
 function vis(e){ return e && e.getClientRects().length && !e.disabled; }
+
+// ¿Hay algun campo obligatorio visible? Si NO, clickear "Enviar" con el form vacio no
+// dispara validaciones: lo manda de una y genera un lead basura (ej. el Libro de
+// Reclamaciones de Peru, donde todos los campos son voluntarios). Ahi no se toca el Enviar.
+var hayObligatorios = false;
+var req = document.querySelectorAll(
+    'input[required], select[required], textarea[required], [aria-required="true"]');
+for (var i = 0; i < req.length; i++) {
+    if (req[i].type !== 'hidden' && !req[i].disabled && req[i].getClientRects().length) {
+        hayObligatorios = true;
+        break;
+    }
+}
+
 // 1) Enviar visible (form de un solo paso) → ese es el CTA del paso actual
-for (var i=0; i<subSel.length; i++){
-    var e = document.querySelector(subSel[i]);
-    if (vis(e)){ e.scrollIntoView({block:'center',behavior:'instant'}); e.click(); return 'Enviar'; }
+if (hayObligatorios) {
+    for (var i=0; i<subSel.length; i++){
+        var e = document.querySelector(subSel[i]);
+        if (vis(e)){ e.scrollIntoView({block:'center',behavior:'instant'}); e.click(); return 'Enviar'; }
+    }
 }
 // 2) Wizard: el Enviar vive en un paso oculto → el CTA del paso actual es Siguiente
 var nx = [].filter.call(
@@ -2982,7 +2998,7 @@ def _click_cta_empty(driver, log: Callable = print):
     if cta:
         log(f"  ✓ CTA vacío clickeado ({cta}) — validaciones disparadas")
     else:
-        log("  ℹ Sin CTA visible para el click vacío")
+        log("  ℹ Sin CTA para el click vacío (o el form no tiene campos obligatorios)")
 
 
 def _raq_brasil_gate(driver, lead: LeadRow, pais: str, log: Callable = print):

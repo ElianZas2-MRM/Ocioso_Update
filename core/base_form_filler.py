@@ -609,6 +609,29 @@ class BaseFormFiller:
         except Exception:
             pass
 
+    def _tiene_campos_obligatorios(self):
+        """
+        ¿El formulario tiene al menos un campo obligatorio visible?
+
+        Si no tiene ninguno, clickear "Enviar" con el form vacío NO dispara validaciones:
+        lo manda de una y genera un lead basura. Es el caso del Libro de Reclamaciones de
+        Perú (form-reclamos), donde todos los campos son voluntarios.
+        """
+        try:
+            return bool(self.driver.execute_script("""
+                var campos = document.querySelectorAll(
+                    'input[required], select[required], textarea[required],' +
+                    '[aria-required="true"]');
+                for (var i = 0; i < campos.length; i++) {
+                    var e = campos[i];
+                    if (e.type === 'hidden' || e.disabled) continue;
+                    if (e.getClientRects().length) return true;
+                }
+                return false;
+            """))
+        except Exception:
+            return True   # ante la duda, comportarse como siempre
+
     def _revalidar_campos_llenos(self):
         """
         Hace que el formulario limpie SOLO los mensajes de error que ya no corresponden.
@@ -1420,7 +1443,11 @@ class BaseFormFiller:
 
         current_ss_number = getattr(self, 'ss_counter', 0)
         if self.screenshot_manager:
-            self.screenshot_manager.take_form_screenshot(current_ss_number, "completado")
+            # full_page: el Libro de Reclamaciones es larguísimo y sin esto la captura salía
+            # recortada al viewport (solo Pedido/VIN/Ciudad/Enviar, sin los datos personales).
+            self._revalidar_campos_llenos()
+            self.screenshot_manager.take_form_screenshot(current_ss_number, "completado",
+                                                         full_page=True)
             print("Captura 2/3: Formulario completado")
         return f"form_completado_{current_ss_number}.png"
 
@@ -1482,8 +1509,19 @@ class BaseFormFiller:
             try:
                 # Buscar el botón Siguiente o Enviar visible en este paso
                 boton_accion = self._find_next_button()
+                es_submit = False
                 if not boton_accion:
                     boton_accion, _ = self._resolve_submit_button(wait_seconds=1)
+                    es_submit = boton_accion is not None
+
+                # Si el botón es ENVIAR y el form no tiene ningún campo obligatorio, el clic
+                # preliminar NO dispara validaciones: manda el formulario vacío y genera un
+                # lead basura (ej. el Libro de Reclamaciones de Perú, donde todos los campos
+                # son voluntarios). En ese caso no se clickea: se llena y recién ahí se envía.
+                if es_submit and not self._tiene_campos_obligatorios():
+                    print("⚠️ [DEBUG] El form no tiene campos obligatorios — se omite el clic "
+                          "preliminar sobre Enviar (lo enviaría vacío).")
+                    boton_accion = None
 
                 if boton_accion and boton_accion.is_displayed() and boton_accion.is_enabled():
                     print("⚡ [DEBUG] Clic preliminar sobre botón de acción para forzar validaciones antes de rellenar...")
