@@ -663,113 +663,134 @@ _tray_instance = None
 
 if os.name == 'nt':
     try:
-        import ctypes
-        from ctypes import wintypes
+        import queue
+        import threading
         import win32gui
         import win32con
+        import win32api
 
-        # Define WNDPROC callback type
-        WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_int64, wintypes.HWND, ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM)
-
-        class WNDCLASSW(ctypes.Structure):
-            _fields_ = [
-                ('style', ctypes.c_uint),
-                ('lpfnWndProc', WNDPROC),
-                ('cbClsExtra', ctypes.c_int),
-                ('cbWndExtra', ctypes.c_int),
-                ('hInstance', wintypes.HINSTANCE),
-                ('hIcon', wintypes.HICON),
-                ('hCursor', wintypes.HICON),
-                ('hbrBackground', wintypes.HBRUSH),
-                ('lpszMenuName', wintypes.LPCWSTR),
-                ('lpszClassName', wintypes.LPCWSTR)
-            ]
-
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
+        # OJO — por qué el tray corre en su propio hilo:
+        #
+        # Antes esto era un WNDPROC de ctypes (ctypes.WINFUNCTYPE) colgado del hilo de Tk.
+        # El mainloop de Tk bombea los mensajes de Windows CON EL GIL LIBERADO, así que cuando
+        # Windows invocaba el WNDPROC de Python el intérprete se caía en seco:
+        #   Fatal Python error: PyEval_RestoreThread ... the GIL is released
+        # Por eso el icono se veía (Shell_NotifyIcon no necesita callback) pero el click derecho
+        # mostraba un recuadro blanco y mataba el proceso.
+        # (Además DefWindowProcW se llamaba sin argtypes → "OverflowError: int too long to
+        # convert" en cada mensaje, en Windows de 64 bits.)
+        #
+        # Solución: la ventana del icono vive en un hilo propio con su propio PumpMessages().
+        # Ahí pywin32 sí adquiere el GIL bien. Los clicks no tocan Tk directamente: se encolan
+        # y el hilo de Tk los consume con after() (Tk no es thread-safe).
+        _TRAY_MSG = win32con.WM_USER + 20
 
         class SysTrayIcon:
-            def __init__(self, icon_path, hover_text, on_quit, on_double_click=None):
+            def __init__(self, icon_path, hover_text, on_quit, on_double_click=None,
+                         on_right_click=None):
                 self.icon_path = icon_path
                 self.hover_text = hover_text
                 self.on_quit = on_quit
                 self.on_double_click = on_double_click
-                
-                self.hinst = kernel32.GetModuleHandleW(None)
-                
-                # Keep reference to callback to prevent garbage collection
-                self.wndproc_cb = WNDPROC(self.wnd_proc)
-                
-                wc = WNDCLASSW()
-                wc.hInstance = self.hinst
-                wc.lpszClassName = "PythonCtypesMixTaskbarIcon"
-                wc.lpfnWndProc = self.wndproc_cb
-                
-                user32.RegisterClassW(ctypes.byref(wc))
-                
-                self.hwnd = user32.CreateWindowExW(
-                    0,
-                    "PythonCtypesMixTaskbarIcon",
-                    "Taskbar",
-                    0,
-                    0, 0, 0, 0,
-                    0, 0, self.hinst, None
+                # El menú del click derecho lo dibuja Tk (ver _menu_tray). TrackPopupMenu no
+                # sirve acá: la ventana propietaria del icono es invisible y de 0x0,
+                # SetForegroundWindow sobre ella falla y Windows 11 dibuja el menú vacío.
+                self.on_right_click = on_right_click
+
+                self.hwnd = None
+                self.notify_id = None
+                self.events = queue.Queue()      # ("restore" | "menu", x, y)
+                self._listo = threading.Event()
+
+                self._hilo = threading.Thread(target=self._correr, daemon=True)
+                self._hilo.start()
+                self._listo.wait(timeout=5)
+
+            # ── hilo del icono ────────────────────────────────────────────────
+            def _correr(self):
+                hinst = win32api.GetModuleHandle(None)
+                wc = win32gui.WNDCLASS()
+                wc.hInstance = hinst
+                wc.lpszClassName = "OsocioTrayIcon"
+                wc.lpfnWndProc = {
+                    win32con.WM_DESTROY: self._on_destroy,
+                    _TRAY_MSG: self._on_tray_msg,
+                }
+                try:
+                    clase = win32gui.RegisterClass(wc)
+                except win32gui.error:
+                    clase = "OsocioTrayIcon"   # ya registrada en esta sesión
+
+                self.hwnd = win32gui.CreateWindow(
+                    clase, "Osocio Tray", win32con.WS_OVERLAPPED,
+                    0, 0, 0, 0, 0, 0, hinst, None
                 )
-                
-                # Load icon using win32gui
+
                 if os.path.exists(self.icon_path):
                     self.hicon = win32gui.LoadImage(
-                        self.hinst, self.icon_path, win32con.IMAGE_ICON, 0, 0,
+                        hinst, self.icon_path, win32con.IMAGE_ICON, 0, 0,
                         win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE
                     )
                 else:
                     self.hicon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
-                    
-                self.notify_id = None
+
                 self.show_icon()
-                
-            def wnd_proc(self, hwnd, msg, wparam, lparam):
-                if msg == win32con.WM_DESTROY:
-                    self.remove_icon()
-                    return 0
-                elif msg == win32con.WM_USER+20:
-                    if lparam in (win32con.WM_LBUTTONDBLCLK, win32con.WM_LBUTTONUP):
-                        if self.on_double_click:
-                            self.on_double_click()
-                    elif lparam == win32con.WM_RBUTTONUP:
-                        self.show_menu()
-                    return 0
-                return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
-                
+                self._listo.set()
+                win32gui.PumpMessages()          # loop propio, no el de Tk
+
+            def _on_destroy(self, hwnd, msg, wparam, lparam):
+                self.remove_icon()
+                win32gui.PostQuitMessage(0)
+                return 0
+
+            def _on_tray_msg(self, hwnd, msg, wparam, lparam):
+                # Solo encolar: tocar Tk desde este hilo lo rompe.
+                if lparam in (win32con.WM_LBUTTONDBLCLK, win32con.WM_LBUTTONUP):
+                    self.events.put(("restore", 0, 0))
+                elif lparam == win32con.WM_RBUTTONUP:
+                    x, y = win32gui.GetCursorPos()
+                    self.events.put(("menu", x, y))
+                return 0
+
+            # ── API desde el hilo de Tk ───────────────────────────────────────
+            def procesar_eventos(self):
+                """La llama el hilo de Tk periódicamente (after)."""
+                while True:
+                    try:
+                        accion, x, y = self.events.get_nowait()
+                    except queue.Empty:
+                        return
+                    if accion == "restore" and self.on_double_click:
+                        self.on_double_click()
+                    elif accion == "menu" and self.on_right_click:
+                        self.on_right_click(x, y)
+
             def show_icon(self):
                 flags = win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP
-                nid = (self.hwnd, 0, flags, win32con.WM_USER+20, self.hicon, self.hover_text)
+                nid = (self.hwnd, 0, flags, _TRAY_MSG, self.hicon, self.hover_text)
                 if self.notify_id is None:
                     win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, nid)
                 else:
                     win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, nid)
                 self.notify_id = nid
-                
+
             def remove_icon(self):
                 if self.notify_id:
-                    win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, self.notify_id)
+                    try:
+                        win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, self.notify_id)
+                    except Exception:
+                        pass
                     self.notify_id = None
-                    
-            def show_menu(self):
-                menu = win32gui.CreatePopupMenu()
-                win32gui.AppendMenu(menu, win32con.MF_STRING, 1, "Restaurar")
-                win32gui.AppendMenu(menu, win32con.MF_STRING, 2, "Salir")
-                
-                pos = win32gui.GetCursorPos()
-                win32gui.SetForegroundWindow(self.hwnd)
-                cmd = win32gui.TrackPopupMenu(menu, win32con.TPM_RETURNCMD, pos[0], pos[1], 0, self.hwnd, None)
-                win32gui.DestroyMenu(menu)
-                
-                if cmd == 1:
-                    if self.on_double_click:
-                        self.on_double_click()
-                elif cmd == 2:
-                    self.on_quit()
+
+            def destroy(self):
+                """Saca el icono y baja el hilo del tray."""
+                self.remove_icon()
+                if self.hwnd:
+                    try:
+                        win32gui.PostMessage(self.hwnd, win32con.WM_DESTROY, 0, 0)
+                    except Exception:
+                        pass
+                    self.hwnd = None
     except Exception:
         pass
 else:
@@ -3949,9 +3970,7 @@ def iniciar_interfaz():
         global _tray_instance
         if _tray_instance:
             try:
-                _tray_instance.remove_icon()
-                import ctypes
-                ctypes.windll.user32.DestroyWindow(_tray_instance.hwnd)
+                _tray_instance.destroy()
             except Exception:
                 pass
             _tray_instance = None
@@ -3965,9 +3984,7 @@ def iniciar_interfaz():
         try:
             global _tray_instance
             if _tray_instance:
-                _tray_instance.remove_icon()
-                import ctypes
-                ctypes.windll.user32.DestroyWindow(_tray_instance.hwnd)
+                _tray_instance.destroy()
                 _tray_instance = None
         except Exception:
             pass
@@ -3976,6 +3993,77 @@ def iniciar_interfaz():
         except Exception:
             pass
         os._exit(0)
+
+    def _menu_tray(x, y):
+        """
+        Menú del click derecho sobre el icono de la bandeja.
+
+        Se dibuja con Tk (no con TrackPopupMenu): la ventana propietaria del icono es una
+        ventana ctypes de 0x0 invisible, SetForegroundWindow sobre ella falla y Windows 11
+        terminaba mostrando el menú como un recuadro blanco vacío.
+
+        OJO: esto lo llama wnd_proc, que es un callback de ctypes. Tocar Tk ahí adentro
+        crashea el intérprete ("PyEval_RestoreThread ... GIL"), así que se difiere con
+        after() para que el menú se arme dentro del loop de Tk.
+        """
+        def _popup():
+            # La ventana principal está withdrawn, así que no puede tomar el foco y el menú
+            # quedaba abierto para siempre al clickear afuera. Se usa un Toplevel de 1x1
+            # transparente como dueño del menú: ese sí toma el foco, y cuando lo pierde
+            # (click en cualquier otro lado) cerramos el menú.
+            owner = tk.Toplevel(root)
+            owner.overrideredirect(True)
+            owner.geometry(f"1x1+{x}+{y}")
+            owner.attributes("-alpha", 0.0)
+            owner.attributes("-topmost", True)
+            owner.focus_force()
+
+            menu = tk.Menu(owner, tearoff=0)
+
+            def _cerrar(*_):
+                try:
+                    menu.unpost()
+                except Exception:
+                    pass
+                try:
+                    owner.destroy()
+                except Exception:
+                    pass
+
+            def _elegir(accion):
+                _cerrar()
+                accion()
+
+            menu.add_command(label="Restaurar", command=lambda: _elegir(_restore_from_tray))
+            menu.add_separator()
+            menu.add_command(label="Salir", command=lambda: _elegir(_force_close))
+            owner.bind("<FocusOut>", _cerrar)
+            menu.bind("<Unmap>", _cerrar)
+
+            try:
+                menu.tk_popup(x, y)
+            finally:
+                menu.grab_release()
+
+        try:
+            root.after(0, _popup)
+        except Exception:
+            pass
+
+    def _bombear_eventos_tray():
+        # El icono corre en su propio hilo (ver SysTrayIcon): los clicks llegan por una cola
+        # y se ejecutan acá, en el hilo de Tk, porque Tk no es thread-safe.
+        global _tray_instance
+        if _tray_instance is None:
+            return
+        try:
+            _tray_instance.procesar_eventos()
+        except Exception:
+            pass
+        try:
+            root.after(80, _bombear_eventos_tray)
+        except Exception:
+            pass
 
     def _on_close():
         global _tray_instance
@@ -3996,8 +4084,10 @@ def iniciar_interfaz():
                         icon_path=icon_path,
                         hover_text="Osocio - Form Automation",
                         on_quit=_force_close,
-                        on_double_click=_restore_from_tray
+                        on_double_click=_restore_from_tray,
+                        on_right_click=_menu_tray,
                     )
+                    _bombear_eventos_tray()
                 except Exception:
                     pass
         else:
