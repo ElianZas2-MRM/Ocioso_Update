@@ -609,6 +609,56 @@ class BaseFormFiller:
         except Exception:
             pass
 
+    def _revalidar_campos_llenos(self):
+        """
+        Hace que el formulario limpie SOLO los mensajes de error que ya no corresponden.
+
+        No borra nada a mano: dispara en cada campo ya completo los mismos eventos que
+        genera una persona escribiendo (keyup / focusout / blur) y deja que el form decida.
+        Hace falta porque el "click enviar vacío" pinta las validaciones ANTES de llenar, y
+        el llenado por JS setea el .value sin disparar keyup — que es justo el evento con el
+        que jquery-validation borra el mensaje. Resultado: el campo quedaba válido pero con
+        el cartelito rojo puesto, y la captura mostraba un falso error.
+
+        Los campos vacíos no se tocan: ahí el error es legítimo y tiene que verse.
+        """
+        try:
+            revalidados = self.driver.execute_script(r"""
+                var revalidados = 0;
+                var campos = document.querySelectorAll('input, select, textarea');
+                for (var i = 0; i < campos.length; i++) {
+                    var el = campos[i];
+                    if (el.type === 'hidden' || el.disabled) continue;
+                    if (!el.getClientRects().length) continue;              // paso oculto
+                    if (!el.value || !String(el.value).trim()) continue;    // vacío: error real
+                    el.dispatchEvent(new Event('keyup',    {bubbles: true}));
+                    el.dispatchEvent(new Event('focusout', {bubbles: true}));
+                    el.dispatchEvent(new Event('blur',     {bubbles: true}));
+                    revalidados++;
+                }
+                // jquery-validation: su propia API para revalidar campo por campo
+                try {
+                    var $ = window.jQuery;
+                    if ($) {
+                        $('form').each(function () {
+                            var v = $(this).data('validator');
+                            if (!v) return;
+                            $(this).find('input, select, textarea').each(function () {
+                                if (this.type === 'hidden' || this.disabled) return;
+                                if (!this.getClientRects().length) return;
+                                if (!this.value || !String(this.value).trim()) return;
+                                try { v.element(this); } catch (e) {}
+                            });
+                        });
+                    }
+                } catch (e) {}
+                return revalidados;
+            """)
+            if revalidados:
+                print(f" ✓ {revalidados} campos revalidados (limpieza de errores ya resueltos)")
+        except Exception as e:
+            print(f" Revalidación de campos: error no crítico — {e}")
+
     def extract_form_data(self, row):
         """Convierte una fila del Excel en un diccionario normalizado"""
         row_list = list(row) if row is not None else []
@@ -1500,6 +1550,9 @@ class BaseFormFiller:
         except Exception as _e:
             print(f" Auto-relleno de requeridos: error no crítico — {_e}")
         self._handle_terms_checkboxes()
+        # Antes de la captura: limpiar los errores que quedaron pintados en campos que ya
+        # están completos (si no, la captura muestra falsos errores).
+        self._revalidar_campos_llenos()
 
         self.reposition_to_form(self.expected_form_url)
         form_completado_name = f"form_completado_{current_ss_number}.png"
