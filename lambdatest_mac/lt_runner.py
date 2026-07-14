@@ -401,13 +401,44 @@ def _fill_text_js(driver, element, value: str):
     )
 
 
+# Campos con máscara de jquery-mask (CPF/CNPJ/CEP/teléfono): la máscara se reformatea en
+# cada tecla, así que estos se siguen tipeando carácter a carácter. El resto va en un solo
+# send_keys: cada send_keys es un round-trip HTTP a LambdaTest, y letra por letra un email
+# de 34 chars tardaba ~23s contra un device real.
+_MASKED_FIELD_HINTS = ("cpf", "cnpj", "cep", "telephone", "phone", "celular", "zip", "postal")
+
+
+def _is_masked_field(element) -> bool:
+    try:
+        ident = ((element.get_attribute("id") or "") + " " +
+                 (element.get_attribute("name") or "")).lower()
+    except Exception:
+        return True  # ante la duda, el modo lento (seguro)
+    return any(h in ident for h in _MASKED_FIELD_HINTS)
+
+
+def _send_keys_fast(element, value: str):
+    """send_keys en 1 sola llamada, salvo campos enmascarados (char a char)."""
+    if _is_masked_field(element):
+        for char in str(value):
+            try:
+                element.send_keys(char)
+            except Exception:
+                pass
+            time.sleep(0.005)
+        return
+    try:
+        element.send_keys(str(value))
+    except Exception:
+        pass
+
+
 def _fill_text_sendkeys(driver, element, value: str):
     """
-    Re-ingresa el input carácter a carácter (send_keys real), en vez de setear
-    .value por JS. Usado como método PRIMARIO en Mac/Safari: el fill por JS
-    (value + dispatchEvent) puede mostrar el valor en el DOM sin que el estado
-    interno de React lo registre ahí — send_keys pasa por el pipeline real de
-    eventos de teclado y evita ese desync desde el arranque.
+    Re-ingresa el input vía send_keys real, en vez de setear .value por JS.
+    Usado como método PRIMARIO en Mac/Safari: el fill por JS (value + dispatchEvent)
+    puede mostrar el valor en el DOM sin que el estado interno de React lo registre
+    ahí — send_keys pasa por el pipeline real de eventos de teclado y evita ese desync.
     """
     try:
         element.clear()
@@ -420,12 +451,7 @@ def _fill_text_sendkeys(driver, element, value: str):
         driver.execute_script("arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element)
     except Exception:
         pass
-    for char in str(value):
-        try:
-            element.send_keys(char)
-        except Exception:
-            pass
-        time.sleep(0.005)
+    _send_keys_fast(element, value)
     try:
         driver.execute_script(
             "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
@@ -482,9 +508,9 @@ def _fill_required_synthetic_lt(driver, log=print):
 
 def _fill_text_android(driver, element, value: str):
     """
-    Ingreso de texto para Android real device vía send_keys real (teclado real,
-    letra por letra) — igual que Mac/Safari. Más confiable que el fill por JS
-    para que React/Angular registre el valor correctamente.
+    Ingreso de texto para Android real device vía send_keys real (teclado real)
+    — igual que Mac/Safari. Más confiable que el fill por JS para que React/Angular
+    registre el valor correctamente.
     """
     try:
         element.click()
@@ -500,12 +526,7 @@ def _fill_text_android(driver, element, value: str):
             driver.execute_script("arguments[0].value='';", element)
         except Exception:
             pass
-    for char in str(value):
-        try:
-            element.send_keys(char)
-        except Exception:
-            pass
-        time.sleep(0.005)
+    _send_keys_fast(element, value)
     try:
         driver.execute_script(
             "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
@@ -1060,7 +1081,7 @@ def _sanitize_peru_document(doc_type_value: str, raw_value: str) -> str:
 
 _VALID_OPTS_JS = (
     "var e=document.getElementById(arguments[0]);"
-    "if(!e||getComputedStyle(e).display==='none'||e.disabled)return false;"
+    "if(!e||!e.getClientRects().length||e.disabled)return false;"
     "return Array.from(e.options).some(function(o){"
     "return o.value&&o.value!=='0'&&!o.disabled&&o.text&&o.text.trim()!=='';"
     "});"
@@ -1085,7 +1106,9 @@ var id=arguments[0], val=arguments[1], isEmpty=arguments[2];
 var el=document.getElementById(id);
 if(!el)return{ok:false,r:'notfound'};
 var cs=getComputedStyle(el);
-if(cs.display==='none'||cs.visibility==='hidden')return{ok:false,r:'hidden'};
+// getClientRects()==0 tambien cuando un ANCESTRO esta display:none (paso oculto del wizard);
+// getComputedStyle(el).display del hijo NO refleja eso.
+if(!el.getClientRects().length||cs.visibility==='hidden')return{ok:false,r:'hidden'};
 el.removeAttribute('disabled');el.disabled=false;
 el.scrollIntoView({block:'center',behavior:'instant'});
 var bad=/^(selec|eligi|choos|escolh|--)/i;
@@ -1314,18 +1337,22 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
         _ids_batch.append(_ids)
     try:
         _batch_raw = driver.execute_script("""
+            // getClientRects().length==0 cuando el campo O CUALQUIER ANCESTRO esta display:none
+            // (paso oculto del wizard). getComputedStyle(campo).display NO detecta el ancestro:
+            // por eso antes se "llenaban" los pasos 2/3 ocultos, el send_keys fallaba en silencio
+            // y el campo quedaba vacio.
+            var vis=function(e){return e&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';};
             var cfgs=arguments[0],res={};
             for(var i=0;i<cfgs.length;i++){
                 var ids=cfgs[i];
                 for(var j=0;j<ids.length;j++){
-                    var e=document.getElementById(ids[j]);
-                    if(e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden'){res[i]=ids[j];break;}
+                    if(vis(document.getElementById(ids[j]))){res[i]=ids[j];break;}
                 }
                 if(res[i]===undefined){
                     for(var j=0;j<ids.length;j++){
                         var all=document.querySelectorAll('input[id^="'+ids[j]+'-"],select[id^="'+ids[j]+'-"],textarea[id^="'+ids[j]+'-"]');
                         for(var k=0;k<all.length;k++){
-                            if(getComputedStyle(all[k]).display!=='none'&&getComputedStyle(all[k]).visibility!=='hidden'){res[i]=all[k].id;break;}
+                            if(vis(all[k])){res[i]=all[k].id;break;}
                         }
                         if(res[i]!==undefined)break;
                     }
@@ -1351,12 +1378,12 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
             # aparecen tras 'Siguiente'.
             try:
                 resolved = driver.execute_script("""
+                    var vis=function(e){return e&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';};
                     var ids=arguments[0];
                     for(var j=0;j<ids.length;j++){
-                        var e=document.getElementById(ids[j]);
-                        if(e&&getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden')return ids[j];
+                        if(vis(document.getElementById(ids[j])))return ids[j];
                         var all=document.querySelectorAll('input[id^="'+ids[j]+'-"],select[id^="'+ids[j]+'-"],textarea[id^="'+ids[j]+'-"]');
-                        for(var k=0;k<all.length;k++){if(getComputedStyle(all[k]).display!=='none'&&getComputedStyle(all[k]).visibility!=='hidden')return all[k].id;}
+                        for(var k=0;k<all.length;k++){if(vis(all[k]))return all[k].id;}
                     }
                     return null;
                 """, _ids_batch[i])
@@ -1422,7 +1449,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
             try:
                 el = driver.execute_script(
                     "var e=document.getElementById(arguments[0]);"
-                    "if(!e||e.disabled||getComputedStyle(e).display==='none'"
+                    "if(!e||e.disabled||!e.getClientRects().length"
                     "||getComputedStyle(e).visibility==='hidden')return null;"
                     "e.scrollIntoView({block:'center',behavior:'instant'});"
                     "return e;",
@@ -1477,7 +1504,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
         try:
             el = driver.execute_script(
                 "var e=document.getElementById(arguments[0]);"
-                "if(!e||e.disabled||getComputedStyle(e).display==='none'"
+                "if(!e||e.disabled||!e.getClientRects().length"
                 "||getComputedStyle(e).visibility==='hidden')return null;"
                 "e.scrollIntoView({block:'center',behavior:'instant'});"
                 "return e;",
@@ -1855,11 +1882,54 @@ def _ensure_checkbox_selected(driver, candidate: Dict, log: Callable = print,
     return cb.is_selected() if cb else False
 
 
-def _mark_required_checkboxes(driver, log: Callable = print, is_android: bool = False) -> int:
+_CHECKBOX_SI = {"si", "sí", "yes", "true", "1", "x", "marcar", "on"}
+_CHECKBOX_NO = {"no", "false", "0", "off", "desmarcar"}
+
+
+def _checkbox_prefs(lead) -> Dict[str, bool]:
     """
-    Marca todos los checkboxes de términos/privacy.
-    Busca por name conocidos + required. Igual que Osocio.
+    Preferencias de checkbox tomadas del Excel: una columna cuyo encabezado es el `name`
+    (o el `id`) del checkbox, con valor SI/NO. Ej: columna "test-drive" = "NO".
+
+    Solo se aplica si el form tiene un checkbox con ese name/id, así que una columna con
+    SI/NO que no corresponda a ningún checkbox se ignora sola.
     """
+    prefs: Dict[str, bool] = {}
+    for header, value in (getattr(lead, "data", None) or {}).items():
+        v = str(value or "").strip().lower()
+        key = str(header or "").strip().lower()
+        if not v or not key:
+            continue
+        if v in _CHECKBOX_SI:
+            prefs[key] = True
+        elif v in _CHECKBOX_NO:
+            prefs[key] = False
+    return prefs
+
+
+_UNCHECK_JS = r"""
+var id = arguments[0], name = arguments[1];
+var cb = (id && document.getElementById(id)) ||
+         (name && document.querySelector('input[type="checkbox"][name="' + name + '"]'));
+if (!cb) return false;
+if (!cb.checked) return true;
+cb.checked = false;
+cb.dispatchEvent(new Event('click',  {bubbles:true}));
+cb.dispatchEvent(new Event('change', {bubbles:true}));
+cb.checked = false;   // por si algún handler lo volvió a marcar
+return !cb.checked;
+"""
+
+
+def _mark_required_checkboxes(driver, log: Callable = print, is_android: bool = False,
+                              prefs: Optional[Dict[str, bool]] = None) -> int:
+    """
+    Marca los checkboxes de términos/privacy (por name conocido + required).
+
+    `prefs` (del Excel, ver _checkbox_prefs) manda sobre el default: uno con NO se desmarca
+    y no se vuelve a tocar; uno con SI se marca aunque no sea required ni conocido.
+    """
+    prefs = prefs or {}
     try:
         raw = driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']")
     except Exception:
@@ -1875,9 +1945,20 @@ def _mark_required_checkboxes(driver, log: Callable = print, is_android: bool = 
             data_dtm   = (cb.get_attribute("data-dtm") or "").strip()
             value_attr = (cb.get_attribute("value")    or "").strip()
 
+            pref = prefs.get(lower_name)
+            if pref is None:
+                pref = prefs.get(cb_id.lower())
+            if pref is False:
+                try:
+                    driver.execute_script(_UNCHECK_JS, cb_id, name_attr)
+                except Exception:
+                    pass
+                log(f"  ⊘ {name_attr or cb_id} desmarcado (Excel = NO)")
+                continue
+
             is_known = lower_name in _KNOWN_CHECKBOX_NAMES
             is_html_required = bool(required)
-            if not is_known and not is_html_required:
+            if not is_known and not is_html_required and pref is not True:
                 # Incluir si tiene layout DOM y no está ya marcado (igual que desktop)
                 try:
                     if cb.is_selected() or not cb.is_enabled():
@@ -1975,10 +2056,11 @@ def _mark_preferred_radios(driver, log: Callable = print) -> int:
     return marked
 
 
-def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = False) -> bool:
+def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = False,
+                             prefs: Optional[Dict[str, bool]] = None) -> bool:
     """
     Marca radios y checkboxes de términos.
-    Exactamente igual que Osocio: primero radios, después checkboxes.
+    `prefs`: preferencias SI/NO por checkbox tomadas del Excel (ver _checkbox_prefs).
     """
     try:
         radios_marked = _mark_preferred_radios(driver, log)
@@ -1987,7 +2069,8 @@ def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = F
         radios_marked = 0
 
     try:
-        checkboxes_marked = _mark_required_checkboxes(driver, log, is_android=is_android)
+        checkboxes_marked = _mark_required_checkboxes(driver, log, is_android=is_android,
+                                                      prefs=prefs)
     except Exception as e:
         log(f"  ⚠ Error checkboxes: {e}")
         checkboxes_marked = 0
@@ -1996,11 +2079,14 @@ def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = F
     return (radios_marked + checkboxes_marked) > 0
 
 
-def _ensure_terms_marked_before_submit(driver, log: Callable = print):
+def _ensure_terms_marked_before_submit(driver, log: Callable = print,
+                                        prefs: Optional[Dict[str, bool]] = None):
     """
     Re-verifica checkboxes de términos justo antes de cada click submit.
     Safari puede deseleccionarlos tras una re-renderización del formulario.
+    Los que el Excel marcó como NO se dejan como están (ver _checkbox_prefs).
     """
+    prefs = prefs or {}
     try:
         driver.execute_script(
             "window.scrollTo(0, document.body.scrollHeight);"
@@ -2016,6 +2102,9 @@ def _ensure_terms_marked_before_submit(driver, log: Callable = print):
             try:
                 name = (cb.get_attribute("name") or "").strip().lower()
                 required = cb.get_attribute("required")
+                cb_id_l = (cb.get_attribute("id") or "").strip().lower()
+                if prefs.get(name) is False or prefs.get(cb_id_l) is False:
+                    continue  # el Excel pidió NO marcarlo
                 if name not in _KNOWN_CHECKBOX_NAMES and not required:
                     if not _checkbox_in_dom_js(driver, cb):
                         continue
@@ -2457,26 +2546,86 @@ def _click_next_button(driver, log: Callable = print) -> bool:
         return False
 
 
+_DOM_SIGNATURE_JS = r"""
+var cfgs = arguments[0], sig = [];
+for (var i = 0; i < cfgs.length; i++) {
+    var ids = cfgs[i];
+    for (var j = 0; j < ids.length; j++) {
+        var e = document.getElementById(ids[j]);
+        if (e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden') {
+            sig.push(ids[j]);
+            break;
+        }
+    }
+}
+return sig;
+"""
+
+
 def _dom_signature_visible(driver, field_mapping: List[Dict]) -> tuple:
     """
-    Firma del DOM: IDs del mapping que están visibles ahora.
-    Igual que Osocio._dom_signature_visible_mapping — para detectar si el DOM cambió.
+    Firma del DOM: IDs del mapping que están visibles ahora, para detectar si el DOM
+    cambió tras clickear "Siguiente".
+
+    Un solo execute_script: antes hacía un find_elements + is_displayed() por ID (~26
+    round-trips a LambdaTest, ~10s por llamada contra un device real), y se llama varias
+    veces por cada transición de paso.
     """
-    sig = []
+    ids_batch = []
     for fc in field_mapping or []:
         fid_raw = fc.get("id", "")
         ids = fid_raw if isinstance(fid_raw, list) else [fid_raw]
-        for fid in ids:
-            if not fid:
-                continue
-            try:
-                els = driver.find_elements(By.ID, fid)
-                if els and els[0].is_displayed():
-                    sig.append(fid)
-                    break
-            except Exception:
-                continue
+        ids_batch.append([f for f in ids if f])
+    if not ids_batch:
+        return tuple()
+    try:
+        sig = driver.execute_script(_DOM_SIGNATURE_JS, ids_batch) or []
+    except Exception:
+        return tuple()
     return tuple(sorted(sig))
+
+
+# ¿El form reaccionó al click en Enviar? (TY visible, form removido del DOM, botón en
+# loading/disabled, o errores de validación pintados). Si nada de eso pasó, el click no llegó.
+_SUBMIT_REACTED_JS = r"""
+var ty = document.getElementById('thank-you');
+if (ty && ty.getClientRects().length) return true;
+if (document.querySelector('div.rp-wrapper')) return true;
+var form = document.getElementById('formulario');
+if (form && !form.getClientRects().length) return true;   // form oculto/removido tras enviar
+var sb = document.querySelector('button.submit-button');
+if (sb && (sb.disabled || /loading/.test(sb.className || ''))) return true;
+return [].some.call(document.querySelectorAll('span.error, label.error'), function(e){
+    return e.textContent.trim() !== '' && e.getClientRects().length;
+});
+"""
+
+
+def _click_and_verify(driver, btn, log: Callable = print) -> None:
+    """
+    Click nativo y, si el form no reaccionó, re-click por JS.
+
+    En LambdaTest el click nativo es un tap por coordenadas: en algunos forms (raq-eletricos)
+    no aterriza en el botón y Selenium NO lanza excepción, así que el fallback por except
+    nunca se activaba y el submit no se disparaba nunca. Sólo re-clickea si el form no
+    reaccionó, así que no puede duplicar el envío.
+    """
+    try:
+        btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn)
+        return
+    time.sleep(1.2)
+    try:
+        if driver.execute_script(_SUBMIT_REACTED_JS):
+            return
+    except Exception:
+        return
+    log("  ↺ El click nativo no disparó el submit — reintentando por JS")
+    try:
+        driver.execute_script("arguments[0].click();", btn)
+    except Exception:
+        pass
 
 
 def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bool:
@@ -2506,10 +2655,7 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
                 "arguments[0].scrollIntoView({behavior:'smooth',block:'center'});", btn
             )
             time.sleep(0.3 if is_android else 0.5)
-            try:
-                btn.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", btn)
+            _click_and_verify(driver, btn, log)
             log(f"  ✓ Enviar clickeado ({sel})")
             return True
         except TimeoutException:
@@ -2553,10 +2699,7 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
                 "arguments[0].scrollIntoView({behavior:'smooth',block:'center'});", btn
             )
             time.sleep(0.3 if is_android else 0.5)
-            try:
-                btn.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", btn)
+            _click_and_verify(driver, btn, log)
             log(f"  ✓ Enviar clickeado ({sel}) tras scroll")
             return True
         except Exception:
@@ -2595,10 +2738,7 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
                     )
                     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
                     time.sleep(0.4)
-                    try:
-                        btn.click()
-                    except Exception:
-                        driver.execute_script("arguments[0].click();", btn)
+                    _click_and_verify(driver, btn, log)
                     log(f"  ✓ Enviar clickeado ({sel}) tras scroll adicional")
                     return True
                 except Exception:
@@ -2761,6 +2901,79 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
 # PROCESAMIENTO DE UN LEAD (secuencia igual que Osocio)
 # ══════════════════════════════════════════════════════════════════════════════
 
+_CTA_EMPTY_JS = r"""
+var subSel = arguments[0];
+function vis(e){ return e && e.getClientRects().length && !e.disabled; }
+// 1) Enviar visible (form de un solo paso) → ese es el CTA del paso actual
+for (var i=0; i<subSel.length; i++){
+    var e = document.querySelector(subSel[i]);
+    if (vis(e)){ e.scrollIntoView({block:'center',behavior:'instant'}); e.click(); return 'Enviar'; }
+}
+// 2) Wizard: el Enviar vive en un paso oculto → el CTA del paso actual es Siguiente
+var nx = [].filter.call(
+    document.querySelectorAll("button.next, button[class*='next'], .next-button"), vis)[0];
+if (nx){ nx.scrollIntoView({block:'center',behavior:'instant'}); nx.click(); return 'Siguiente'; }
+return '';
+"""
+
+
+def _click_cta_empty(driver, log: Callable = print):
+    """
+    Click en el CTA del paso actual con el form vacío, para disparar las validaciones.
+
+    Un solo JS call. Antes se usaba _click_submit, que barre 12 selectores con un
+    WebDriverWait cada uno: en los wizards (RAQ Brasil) el Enviar vive en un paso oculto,
+    así que ese barrido SIEMPRE falla y quemaba ~150s en Mac / ~50s en Android por lead.
+    """
+    try:
+        cta = driver.execute_script(_CTA_EMPTY_JS, _SUBMIT_SELECTORS)
+    except Exception as e:
+        log(f"  ⚠ Error en click CTA vacío: {e}")
+        return
+    if cta:
+        log(f"  ✓ CTA vacío clickeado ({cta}) — validaciones disparadas")
+    else:
+        log("  ℹ Sin CTA visible para el click vacío")
+
+
+def _raq_brasil_gate(driver, lead: LeadRow, pais: str, log: Callable = print):
+    """
+    El formulario RAQ de Brasil muestra primero una pantalla de selección
+    "Formulário / WhatsApp". Hay que clickear id="contact-by-form" para que aparezca
+    el formulario real. La variante "raq-eletricos" NO tiene esa pantalla (va directo
+    al form real), así que se excluye para no perder tiempo buscando un botón que
+    nunca va a aparecer.
+
+    Se llama tanto en el primer ingreso al iframe como tras recargar la landing en el
+    reintento: si no, el form queda tapado por el chooser, no hay botón "Siguiente"
+    visible, el wizard nunca avanza y el submit (que vive en el paso 3) queda oculto.
+    """
+    iframe_src_lower = (lead.secure_url or "").lower()
+    landing_url_lower = (lead.public_url or "").lower()
+    _is_eletricos = "eletricos" in iframe_src_lower or "eletricos" in landing_url_lower
+    _is_brasil = pais.lower() in ("brasil", "brazil", "br")
+    _has_raq = "raq" in iframe_src_lower or "raq" in landing_url_lower
+    if not (_is_brasil and _has_raq and (not _is_eletricos) and (
+        "/brasil/gm_forms/raq" in iframe_src_lower or "solicitar-contato" in landing_url_lower
+    )):
+        return
+    log("  🇧🇷 Excepción RAQ Brasil: buscando botón 'contact-by-form'...")
+    try:
+        btn_form = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "contact-by-form"))
+        )
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn_form)
+        time.sleep(0.5)
+        try:
+            btn_form.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", btn_form)
+        log("  ✓ Botón 'Formulário' clickeado — formulario RAQ visible")
+        time.sleep(1.5)  # esperar que cargue el formulario real
+    except Exception as e:
+        log(f"  ⚠ No se encontró contact-by-form (RAQ Brasil): {e}")
+
+
 def _run_single_lead(driver, pais: str, lead: LeadRow,
                      field_mapping: List[Dict],
                      dependencies: Dict[str, str],
@@ -2787,6 +3000,10 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         "ty_confirmed": False, "iframe_url_found": "",
         "ty_cta": "", "link_issue": "", "link_issue_present": False,
     }
+
+    _cb_prefs = _checkbox_prefs(lead)
+    if _cb_prefs:
+        log(f"  ☑ Preferencias de checkbox (Excel): {_cb_prefs}")
 
     try:
         # ── 1. Landing page ──────────────────────────────────────────────────
@@ -3024,43 +3241,10 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         else:
             log("  ✓ Formulario embebido en documento principal (sin iframe)")
 
-        # ── EXCEPCIÓN RAQ BRASIL ─────────────────────────────────────────────
-        # El formulario RAQ de Brasil muestra primero una pantalla de selección
-        # "Formulário / WhatsApp". Hay que clickear el botón id="contact-by-form"
-        # para que aparezca el formulario real antes de continuar con el llenado.
-        # Solo aplica cuando el src del iframe contiene /brasil/gm_forms/raq — la
-        # variante "raq-eletricos" NO tiene esa pantalla de selección (va directo
-        # al form real), así que se excluye para no perder tiempo buscando un botón
-        # que nunca va a aparecer ahí.
-        iframe_src_lower = (lead.secure_url or "").lower()
-        landing_url_lower = (lead.public_url or "").lower()
-        _is_eletricos = "eletricos" in iframe_src_lower or "eletricos" in landing_url_lower
-        _is_brasil = pais.lower() in ("brasil", "brazil", "br")
-        _has_raq = "raq" in iframe_src_lower or "raq" in landing_url_lower
-        if _is_brasil and _has_raq and (not _is_eletricos) and (
-            "/brasil/gm_forms/raq" in iframe_src_lower or "solicitar-contato" in landing_url_lower
-        ):
-            log("  🇧🇷 Excepción RAQ Brasil: buscando botón 'contact-by-form'...")
-            try:
-                btn_form = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.ID, "contact-by-form"))
-                )
-                driver.execute_script(
-                    "arguments[0].scrollIntoView({block:'center'});", btn_form
-                )
-                time.sleep(0.5)
-                try:
-                    btn_form.click()
-                except Exception:
-                    driver.execute_script("arguments[0].click();", btn_form)
-                log("  ✓ Botón 'Formulário' clickeado — formulario RAQ visible")
-                time.sleep(1.5)  # esperar que cargue el formulario real
-            except Exception as e:
-                log(f"  ⚠ No se encontró contact-by-form (RAQ Brasil): {e}", )
-        # ── FIN EXCEPCIÓN ────────────────────────────────────────────────────
+        _raq_brasil_gate(driver, lead, pais, log)
 
-        # ── 4. Click enviar vacío (para activar validaciones antes de llenar) ─
-        _click_submit(driver, log, is_android=is_android)
+        # ── 4. Click en el CTA vacío (para activar validaciones antes de llenar) ─
+        _click_cta_empty(driver, log)
         time.sleep(0.5)  # esperar a que JS muestre los errores de validación
         if screenshot_manager:
             screenshot_manager.captura_form_errores()
@@ -3230,7 +3414,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             time.sleep(0.4)
         except Exception:
             pass
-        _handle_terms_checkboxes(driver, log, is_android=is_android)
+        _handle_terms_checkboxes(driver, log, is_android=is_android, prefs=_cb_prefs)
         if screenshot_manager:
             screenshot_manager.captura_form_completado()
 
@@ -3242,7 +3426,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             if _submit_attempt > 1:
                 _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
                                                      is_mobile=is_mobile, is_android=is_android)
-            _ensure_terms_marked_before_submit(driver, log)
+            _ensure_terms_marked_before_submit(driver, log, prefs=_cb_prefs)
             submitted_click = _click_submit(driver, log, is_android=is_android)
 
             if not submitted_click:
@@ -3355,7 +3539,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     log("  ↺ Campos con error rellenados — reintentando submit sin reload...")
                     _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
                                                          is_mobile=is_mobile, is_android=is_android)
-                    _ensure_terms_marked_before_submit(driver, log)
+                    _ensure_terms_marked_before_submit(driver, log, prefs=_cb_prefs)
                     if _click_submit(driver, log, is_android=is_android):
                         try:
                             WebDriverWait(driver, 15).until(_ty_visible)
@@ -3443,6 +3627,8 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     )
                 except Exception:
                     pass
+                # Tras recargar, el chooser "Formulário / WhatsApp" vuelve a tapar el form
+                _raq_brasil_gate(driver, lead, pais, log)
                 # Re-llenar campos — respetar el mismo motor que el paso 1 (AEM/T3 vs
                 # genérico); usar fill_form_fields en un form AEM re-randomiza el select
                 # Pessoa/Empresa y pisa el CNPJ/empresa ya cargado (ver _is_aem_form arriba).
@@ -3483,7 +3669,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                             break
                         time.sleep(0.25)
                 all_tracked.update(_step_tracked)
-                _handle_terms_checkboxes(driver, log, is_android=is_android)
+                _handle_terms_checkboxes(driver, log, is_android=is_android, prefs=_cb_prefs)
                 # continuar loop → intento 2 (con _ensure_terms al inicio del loop)
 
         # Volver al contexto principal para el próximo lead
