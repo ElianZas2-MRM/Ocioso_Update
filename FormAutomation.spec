@@ -45,6 +45,10 @@ a = Analysis(
         'validation.validation_exporter',
         'pytz',
         'openpyxl',
+        # Icono de la bandeja (SysTrayIcon en interface/main_interface.py)
+        'win32gui',
+        'win32con',
+        'win32api',
         'selenium.webdriver.chrome.webdriver',
         'selenium.webdriver.firefox.webdriver',
         'selenium.webdriver.edge.webdriver',
