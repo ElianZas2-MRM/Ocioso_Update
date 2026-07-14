@@ -1882,11 +1882,54 @@ def _ensure_checkbox_selected(driver, candidate: Dict, log: Callable = print,
     return cb.is_selected() if cb else False
 
 
-def _mark_required_checkboxes(driver, log: Callable = print, is_android: bool = False) -> int:
+_CHECKBOX_SI = {"si", "sí", "yes", "true", "1", "x", "marcar", "on"}
+_CHECKBOX_NO = {"no", "false", "0", "off", "desmarcar"}
+
+
+def _checkbox_prefs(lead) -> Dict[str, bool]:
     """
-    Marca todos los checkboxes de términos/privacy.
-    Busca por name conocidos + required. Igual que Osocio.
+    Preferencias de checkbox tomadas del Excel: una columna cuyo encabezado es el `name`
+    (o el `id`) del checkbox, con valor SI/NO. Ej: columna "test-drive" = "NO".
+
+    Solo se aplica si el form tiene un checkbox con ese name/id, así que una columna con
+    SI/NO que no corresponda a ningún checkbox se ignora sola.
     """
+    prefs: Dict[str, bool] = {}
+    for header, value in (getattr(lead, "data", None) or {}).items():
+        v = str(value or "").strip().lower()
+        key = str(header or "").strip().lower()
+        if not v or not key:
+            continue
+        if v in _CHECKBOX_SI:
+            prefs[key] = True
+        elif v in _CHECKBOX_NO:
+            prefs[key] = False
+    return prefs
+
+
+_UNCHECK_JS = r"""
+var id = arguments[0], name = arguments[1];
+var cb = (id && document.getElementById(id)) ||
+         (name && document.querySelector('input[type="checkbox"][name="' + name + '"]'));
+if (!cb) return false;
+if (!cb.checked) return true;
+cb.checked = false;
+cb.dispatchEvent(new Event('click',  {bubbles:true}));
+cb.dispatchEvent(new Event('change', {bubbles:true}));
+cb.checked = false;   // por si algún handler lo volvió a marcar
+return !cb.checked;
+"""
+
+
+def _mark_required_checkboxes(driver, log: Callable = print, is_android: bool = False,
+                              prefs: Optional[Dict[str, bool]] = None) -> int:
+    """
+    Marca los checkboxes de términos/privacy (por name conocido + required).
+
+    `prefs` (del Excel, ver _checkbox_prefs) manda sobre el default: uno con NO se desmarca
+    y no se vuelve a tocar; uno con SI se marca aunque no sea required ni conocido.
+    """
+    prefs = prefs or {}
     try:
         raw = driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']")
     except Exception:
@@ -1902,9 +1945,20 @@ def _mark_required_checkboxes(driver, log: Callable = print, is_android: bool = 
             data_dtm   = (cb.get_attribute("data-dtm") or "").strip()
             value_attr = (cb.get_attribute("value")    or "").strip()
 
+            pref = prefs.get(lower_name)
+            if pref is None:
+                pref = prefs.get(cb_id.lower())
+            if pref is False:
+                try:
+                    driver.execute_script(_UNCHECK_JS, cb_id, name_attr)
+                except Exception:
+                    pass
+                log(f"  ⊘ {name_attr or cb_id} desmarcado (Excel = NO)")
+                continue
+
             is_known = lower_name in _KNOWN_CHECKBOX_NAMES
             is_html_required = bool(required)
-            if not is_known and not is_html_required:
+            if not is_known and not is_html_required and pref is not True:
                 # Incluir si tiene layout DOM y no está ya marcado (igual que desktop)
                 try:
                     if cb.is_selected() or not cb.is_enabled():
@@ -2002,10 +2056,11 @@ def _mark_preferred_radios(driver, log: Callable = print) -> int:
     return marked
 
 
-def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = False) -> bool:
+def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = False,
+                             prefs: Optional[Dict[str, bool]] = None) -> bool:
     """
     Marca radios y checkboxes de términos.
-    Exactamente igual que Osocio: primero radios, después checkboxes.
+    `prefs`: preferencias SI/NO por checkbox tomadas del Excel (ver _checkbox_prefs).
     """
     try:
         radios_marked = _mark_preferred_radios(driver, log)
@@ -2014,7 +2069,8 @@ def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = F
         radios_marked = 0
 
     try:
-        checkboxes_marked = _mark_required_checkboxes(driver, log, is_android=is_android)
+        checkboxes_marked = _mark_required_checkboxes(driver, log, is_android=is_android,
+                                                      prefs=prefs)
     except Exception as e:
         log(f"  ⚠ Error checkboxes: {e}")
         checkboxes_marked = 0
@@ -2023,11 +2079,14 @@ def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = F
     return (radios_marked + checkboxes_marked) > 0
 
 
-def _ensure_terms_marked_before_submit(driver, log: Callable = print):
+def _ensure_terms_marked_before_submit(driver, log: Callable = print,
+                                        prefs: Optional[Dict[str, bool]] = None):
     """
     Re-verifica checkboxes de términos justo antes de cada click submit.
     Safari puede deseleccionarlos tras una re-renderización del formulario.
+    Los que el Excel marcó como NO se dejan como están (ver _checkbox_prefs).
     """
+    prefs = prefs or {}
     try:
         driver.execute_script(
             "window.scrollTo(0, document.body.scrollHeight);"
@@ -2043,6 +2102,9 @@ def _ensure_terms_marked_before_submit(driver, log: Callable = print):
             try:
                 name = (cb.get_attribute("name") or "").strip().lower()
                 required = cb.get_attribute("required")
+                cb_id_l = (cb.get_attribute("id") or "").strip().lower()
+                if prefs.get(name) is False or prefs.get(cb_id_l) is False:
+                    continue  # el Excel pidió NO marcarlo
                 if name not in _KNOWN_CHECKBOX_NAMES and not required:
                     if not _checkbox_in_dom_js(driver, cb):
                         continue
@@ -2484,25 +2546,42 @@ def _click_next_button(driver, log: Callable = print) -> bool:
         return False
 
 
+_DOM_SIGNATURE_JS = r"""
+var cfgs = arguments[0], sig = [];
+for (var i = 0; i < cfgs.length; i++) {
+    var ids = cfgs[i];
+    for (var j = 0; j < ids.length; j++) {
+        var e = document.getElementById(ids[j]);
+        if (e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden') {
+            sig.push(ids[j]);
+            break;
+        }
+    }
+}
+return sig;
+"""
+
+
 def _dom_signature_visible(driver, field_mapping: List[Dict]) -> tuple:
     """
-    Firma del DOM: IDs del mapping que están visibles ahora.
-    Igual que Osocio._dom_signature_visible_mapping — para detectar si el DOM cambió.
+    Firma del DOM: IDs del mapping que están visibles ahora, para detectar si el DOM
+    cambió tras clickear "Siguiente".
+
+    Un solo execute_script: antes hacía un find_elements + is_displayed() por ID (~26
+    round-trips a LambdaTest, ~10s por llamada contra un device real), y se llama varias
+    veces por cada transición de paso.
     """
-    sig = []
+    ids_batch = []
     for fc in field_mapping or []:
         fid_raw = fc.get("id", "")
         ids = fid_raw if isinstance(fid_raw, list) else [fid_raw]
-        for fid in ids:
-            if not fid:
-                continue
-            try:
-                els = driver.find_elements(By.ID, fid)
-                if els and els[0].is_displayed():
-                    sig.append(fid)
-                    break
-            except Exception:
-                continue
+        ids_batch.append([f for f in ids if f])
+    if not ids_batch:
+        return tuple()
+    try:
+        sig = driver.execute_script(_DOM_SIGNATURE_JS, ids_batch) or []
+    except Exception:
+        return tuple()
     return tuple(sorted(sig))
 
 
@@ -2922,6 +3001,10 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         "ty_cta": "", "link_issue": "", "link_issue_present": False,
     }
 
+    _cb_prefs = _checkbox_prefs(lead)
+    if _cb_prefs:
+        log(f"  ☑ Preferencias de checkbox (Excel): {_cb_prefs}")
+
     try:
         # ── 1. Landing page ──────────────────────────────────────────────────
         log(f"  Navegando a {lead.public_url}")
@@ -3331,7 +3414,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             time.sleep(0.4)
         except Exception:
             pass
-        _handle_terms_checkboxes(driver, log, is_android=is_android)
+        _handle_terms_checkboxes(driver, log, is_android=is_android, prefs=_cb_prefs)
         if screenshot_manager:
             screenshot_manager.captura_form_completado()
 
@@ -3343,7 +3426,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             if _submit_attempt > 1:
                 _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
                                                      is_mobile=is_mobile, is_android=is_android)
-            _ensure_terms_marked_before_submit(driver, log)
+            _ensure_terms_marked_before_submit(driver, log, prefs=_cb_prefs)
             submitted_click = _click_submit(driver, log, is_android=is_android)
 
             if not submitted_click:
@@ -3456,7 +3539,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     log("  ↺ Campos con error rellenados — reintentando submit sin reload...")
                     _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
                                                          is_mobile=is_mobile, is_android=is_android)
-                    _ensure_terms_marked_before_submit(driver, log)
+                    _ensure_terms_marked_before_submit(driver, log, prefs=_cb_prefs)
                     if _click_submit(driver, log, is_android=is_android):
                         try:
                             WebDriverWait(driver, 15).until(_ty_visible)
@@ -3586,7 +3669,7 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                             break
                         time.sleep(0.25)
                 all_tracked.update(_step_tracked)
-                _handle_terms_checkboxes(driver, log, is_android=is_android)
+                _handle_terms_checkboxes(driver, log, is_android=is_android, prefs=_cb_prefs)
                 # continuar loop → intento 2 (con _ensure_terms al inicio del loop)
 
         # Volver al contexto principal para el próximo lead
