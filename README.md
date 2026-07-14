@@ -105,8 +105,7 @@ Detalles:
 - Si la columna no corresponde a ningún checkbox del formulario, **se ignora sola** (no rompe nada).
 - Un `SI` tilda el checkbox aunque no sea obligatorio; un `NO` lo destilda y evita que la app lo vuelva a marcar antes de enviar.
 - No hace falta recompilar el portable: los Excels viven en `data/`, afuera del `.exe`.
-
-> **Ojo — alcance:** hoy esto funciona en **Mac LT** y **Android LT**. Los navegadores locales (Chrome / Firefox / Edge) todavía marcan todos los checkboxes que reconocen e **ignoran** esta columna.
+- Funciona en **todos los dispositivos**: Chrome, Firefox, Edge, Mac LT y Android LT.
 
 > **Solo aplica a checkboxes.** Para campos de texto o selects el Excel funciona distinto: la columna se mapea al campo por el **nombre del campo** o por el **`id` del HTML**, pero el campo tiene que estar declarado en el `field_mapping` del país (`json/fixed_field_mappings.json`). Si querés que un campo se llene siempre con un valor fijo sin tocar el Excel, usá `json/ids_dinamicos.json` (ver la sección *Qué hay adentro de `json/`*).
 
