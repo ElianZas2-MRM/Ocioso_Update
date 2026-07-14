@@ -2056,6 +2056,55 @@ def _mark_preferred_radios(driver, log: Callable = print) -> int:
     return marked
 
 
+_REVALIDAR_JS = r"""
+// Limpia los mensajes de error que quedaron pintados en campos que YA estan completos.
+//
+// El "click enviar vacio" dispara las validaciones antes de llenar. Despues llenamos por
+// JS/send_keys, pero jquery-validation solo borra el mensaje cuando escucha keyup/focusout,
+// asi que el cartelito rojo quedaba puesto aunque el campo fuera valido -> falso error en
+// la captura. Solo se revalida lo que tiene valor: los vacios conservan su error (es real).
+var revalidados = 0;
+var campos = document.querySelectorAll('input, select, textarea');
+for (var i = 0; i < campos.length; i++) {
+    var el = campos[i];
+    if (el.type === 'hidden' || el.disabled) continue;
+    if (!el.getClientRects().length) continue;      // no visible (paso oculto)
+    if (!el.value || !String(el.value).trim()) continue;   // vacio: el error es legitimo
+    el.dispatchEvent(new Event('keyup',    {bubbles: true}));
+    el.dispatchEvent(new Event('focusout', {bubbles: true}));
+    el.dispatchEvent(new Event('blur',     {bubbles: true}));
+    revalidados++;
+}
+// jquery-validation: pedirle que revalide campo por campo (borra el mensaje si ya pasa)
+try {
+    var $ = window.jQuery;
+    if ($) {
+        $('form').each(function () {
+            var v = $(this).data('validator');
+            if (!v) return;
+            $(this).find('input, select, textarea').each(function () {
+                if (this.type === 'hidden' || this.disabled) return;
+                if (!this.getClientRects().length) return;
+                if (!this.value || !String(this.value).trim()) return;
+                try { v.element(this); } catch (e) {}
+            });
+        });
+    }
+} catch (e) {}
+return revalidados;
+"""
+
+
+def _revalidar_campos_llenos(driver, log: Callable = print):
+    """Saca los mensajes de error que quedaron colgados en campos que ya están completos."""
+    try:
+        n = driver.execute_script(_REVALIDAR_JS)
+        if n:
+            log(f"  ✓ {n} campos revalidados (limpieza de errores ya resueltos)")
+    except Exception as e:
+        log(f"  ⚠ Error revalidando campos: {e}")
+
+
 def _handle_terms_checkboxes(driver, log: Callable = print, is_android: bool = False,
                              prefs: Optional[Dict[str, bool]] = None) -> bool:
     """
@@ -3415,6 +3464,9 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         except Exception:
             pass
         _handle_terms_checkboxes(driver, log, is_android=is_android, prefs=_cb_prefs)
+        # Antes de la captura: limpiar los errores que quedaron pintados en campos que ya
+        # están completos (si no, la captura muestra falsos errores).
+        _revalidar_campos_llenos(driver, log)
         if screenshot_manager:
             screenshot_manager.captura_form_completado()
 
