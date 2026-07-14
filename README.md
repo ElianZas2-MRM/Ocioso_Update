@@ -83,6 +83,8 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 7. **EJECUTAR ENVÍO**: se habilita apenas elegís al menos un país. Antes de arrancar, la app **valida que exista un Excel con al menos un lead** para cada combinación país + dispositivo elegida; si alguno falta o está vacío, no ejecuta nada y te lo dice con el detalle (ej. *"Colombia · Chrome: … (vacío / sin leads)"*). Si está todo bien, abre el **modal de ejecución** (ver abajo).
 8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para LambdaTest, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda como una columna **"Video LT"** dentro del Excel de resultados — abrilo desde ahí y hacé click en el link.
 
+> **Capturas: solo en los navegadores locales.** Chrome, Firefox y Edge guardan las capturas de cada lead (landing, formulario completado, Thank You) en `resultados/`. **Mac LT y Android LT no sacan capturas**: la evidencia es el **video completo de la sesión**, que se ve desde la columna **"Video LT"** del Excel de resultados. Cada captura contra un dispositivo real es lenta y no muestra nada que el video no muestre, así que la casilla "Adjuntar screenshots" no aplica a LambdaTest.
+
 > Antes de ejecutar necesitás tener generado el Excel de datos correspondiente — si falta, andá primero a la pestaña **Generar Excels con Datos**.
 
 ### Columnas especiales del Excel: marcar o no un checkbox
