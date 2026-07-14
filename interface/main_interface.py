@@ -711,18 +711,23 @@ if os.name == 'nt':
                 hinst = win32api.GetModuleHandle(None)
                 wc = win32gui.WNDCLASS()
                 wc.hInstance = hinst
-                wc.lpszClassName = "OsocioTrayIcon"
+                # Nombre de clase ÚNICO por instancia: en pywin32 el WNDPROC va atado a la
+                # CLASE, no a la ventana. Si se reusa la clase de un tray anterior (al
+                # minimizar → restaurar → minimizar de nuevo), los mensajes del icono nuevo
+                # caen en los handlers del objeto viejo — cuyo hilo ya murió y cuya cola no
+                # lee nadie: el icono aparecía pero no respondía ni al click derecho ni al
+                # doble click.
+                self._clase_nombre = f"OsocioTrayIcon_{id(self)}"
+                wc.lpszClassName = self._clase_nombre
                 wc.lpfnWndProc = {
                     win32con.WM_DESTROY: self._on_destroy,
+                    win32con.WM_CLOSE: self._on_close_msg,
                     _TRAY_MSG: self._on_tray_msg,
                 }
-                try:
-                    clase = win32gui.RegisterClass(wc)
-                except win32gui.error:
-                    clase = "OsocioTrayIcon"   # ya registrada en esta sesión
+                self._clase_atom = win32gui.RegisterClass(wc)
 
                 self.hwnd = win32gui.CreateWindow(
-                    clase, "Osocio Tray", win32con.WS_OVERLAPPED,
+                    self._clase_atom, "Osocio Tray", win32con.WS_OVERLAPPED,
                     0, 0, 0, 0, 0, 0, hinst, None
                 )
 
@@ -738,9 +743,21 @@ if os.name == 'nt':
                 self._listo.set()
                 win32gui.PumpMessages()          # loop propio, no el de Tk
 
+            def _on_close_msg(self, hwnd, msg, wparam, lparam):
+                # DestroyWindow sólo se puede llamar desde el hilo dueño de la ventana:
+                # destroy() postea WM_CLOSE y la destrucción real pasa acá.
+                win32gui.DestroyWindow(hwnd)
+                return 0
+
             def _on_destroy(self, hwnd, msg, wparam, lparam):
                 self.remove_icon()
-                win32gui.PostQuitMessage(0)
+                win32gui.PostQuitMessage(0)      # corta el PumpMessages de este hilo
+                try:
+                    # Liberar la clase, si no queda una registrada por cada minimizado
+                    win32gui.UnregisterClass(self._clase_atom,
+                                             win32api.GetModuleHandle(None))
+                except Exception:
+                    pass
                 return 0
 
             def _on_tray_msg(self, hwnd, msg, wparam, lparam):
@@ -787,7 +804,9 @@ if os.name == 'nt':
                 self.remove_icon()
                 if self.hwnd:
                     try:
-                        win32gui.PostMessage(self.hwnd, win32con.WM_DESTROY, 0, 0)
+                        # WM_CLOSE (no WM_DESTROY): postear WM_DESTROY llama al handler pero
+                        # no destruye la ventana. El hilo dueño hace el DestroyWindow real.
+                        win32gui.PostMessage(self.hwnd, win32con.WM_CLOSE, 0, 0)
                     except Exception:
                         pass
                     self.hwnd = None
