@@ -260,6 +260,120 @@ class ScreenshotManager:
             pass
         return best
 
+    def _medir_scroll_interno_iframe(self):
+        """
+        ¿El form vive en un iframe de altura fija con scroll propio adentro?
+
+        Si es así, el rectángulo del iframe en la página padre es solo la "ventanita" visible:
+        capturar eso deja el formulario cortado (se ven los últimos campos y el botón Enviar,
+        pero no los de arriba). Devuelve {'content', 'client'} del documento del iframe, o None.
+        Deja el scroll interno del iframe en 0.
+        """
+        if self.current_frame is None:
+            return None
+        try:
+            # OJO: hay que volver al documento principal ANTES de entrar al iframe. Si el
+            # driver ya estaba adentro, switch_to.frame() con un elemento del padre falla.
+            self.driver.switch_to.default_content()
+            self.driver.switch_to.frame(self.current_frame)
+            info = self.driver.execute_script("""
+                window.scrollTo(0, 0);
+                var d = document.documentElement, b = document.body;
+                return {content: Math.max(d.scrollHeight || 0, b ? b.scrollHeight : 0),
+                        client:  d.clientHeight || 0};
+            """)
+            return info
+        except Exception:
+            return None
+        finally:
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+
+    def _scroll_dentro_iframe(self, y):
+        """Scrollea el documento DE ADENTRO del iframe."""
+        try:
+            self.driver.switch_to.default_content()
+            self.driver.switch_to.frame(self.current_frame)
+            self.driver.execute_script(f"window.scrollTo(0, {int(y)});")
+            time.sleep(0.25)
+            return self.driver.execute_script("return window.pageYOffset;") or 0
+        except Exception:
+            return 0
+        finally:
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+
+    def _capturar_iframe_scrolleando_adentro(self, screenshot_path, el, contenido, visible):
+        """
+        Captura un formulario que vive en un iframe con scroll interno: va scrolleando DENTRO
+        del iframe y pega las partes, para que queden TODOS los campos y no solo los visibles.
+        """
+        temp_files = []
+        try:
+            vw = self.driver.execute_script("return window.innerWidth;")
+            partes = []
+            capturado = 0     # px del contenido del iframe que ya están en la imagen final
+            idx = 0
+            while capturado < contenido and idx <= 30:
+                real = self._scroll_dentro_iframe(capturado)
+
+                # El iframe tiene que estar en pantalla para poder fotografiarlo
+                self.driver.execute_script(
+                    "arguments[0].scrollIntoView({block:'center', behavior:'instant'});", el)
+                time.sleep(0.25)
+
+                rect = self.driver.execute_script(
+                    "var r = arguments[0].getBoundingClientRect();"
+                    "return {top: r.top, left: r.left, width: r.width, height: r.height};", el)
+
+                tmp = os.path.join(self.screenshot_dir, f"temp_iframe_{idx}.png")
+                self.driver.save_screenshot(tmp)
+                temp_files.append(tmp)
+                img = Image.open(tmp)
+                scale = img.width / float(vw) if vw else 1.0
+
+                # Al llegar al fondo, el iframe ya no puede scrollear lo que le pedimos:
+                # queda solapado con lo anterior. Sin descontarlo, el form sale DUPLICADO.
+                solapa = max(0, capturado - real)
+                nuevo = min(visible - solapa, contenido - capturado)
+                if nuevo <= 0:
+                    break
+
+                top = int((max(0, rect["top"]) + solapa) * scale)
+                alto = int(nuevo * scale)
+                partes.append(img.crop((0, top, img.width, min(img.height, top + alto))))
+
+                capturado += nuevo
+                idx += 1
+
+            if not partes:
+                return False
+
+            total_h = sum(p.height for p in partes)
+            final = Image.new("RGB", (partes[0].width, total_h), "white")
+            y = 0
+            for p in partes:
+                final.paste(p, (0, y))
+                y += p.height
+            final.save(screenshot_path, "PNG", optimize=True)
+            print(f"Captura del formulario ({len(partes)} parte/s, scroll dentro del iframe): "
+                  f"{os.path.basename(screenshot_path)}")
+            return True
+        except Exception as e:
+            print(f"Error capturando el iframe por partes: {e}")
+            return False
+        finally:
+            for t in temp_files:
+                try:
+                    os.remove(t)
+                except Exception:
+                    pass
+            self._scroll_dentro_iframe(0)
+
     def take_form_area_screenshot(self, filename):
         """Captura SOLO el área del formulario (no toda la landing, que puede ser larguísima).
         Si el form no entra en el viewport, se toma por partes y se unen."""
@@ -271,6 +385,25 @@ class ScreenshotManager:
             el = self._find_form_region_element()
             if el is None:
                 return False
+
+            # Caso iframe de altura fija con scroll propio: hay que scrollear ADENTRO, si no
+            # la foto sale cortada (solo los últimos campos + el botón Enviar).
+            interno = self._medir_scroll_interno_iframe()
+            if interno and interno.get("client") and \
+                    interno["content"] > interno["client"] + 5:
+                try:
+                    self.driver.switch_to.default_content()
+                except Exception:
+                    pass
+                if self._capturar_iframe_scrolleando_adentro(
+                        screenshot_path, el, interno["content"], interno["client"]):
+                    if in_iframe:
+                        try:
+                            self.driver.switch_to.frame(self.current_frame)
+                        except Exception:
+                            pass
+                    return True
+
             try:
                 self.driver.switch_to.default_content()
             except Exception:
