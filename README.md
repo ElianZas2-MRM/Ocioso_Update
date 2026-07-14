@@ -85,6 +85,31 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
 > Antes de ejecutar necesitás tener generado el Excel de datos correspondiente — si falta, andá primero a la pestaña **Generar Excels con Datos**.
 
+### Columnas especiales del Excel: marcar o no un checkbox
+
+Por defecto la app **marca todos los checkboxes** que reconoce (términos, privacidad, y cualquier otro que el formulario declare como obligatorio). Si un formulario tiene un checkbox **opcional** y querés decidir vos si se tilda o no, agregá una columna al Excel:
+
+- **El encabezado de la columna** = el atributo `name` del checkbox (o su `id`), tal cual figura en el HTML del formulario.
+- **El valor de la celda** = `SI` o `NO`.
+
+Ejemplo: los formularios RAQ de Brasil tienen `<input type="checkbox" name="test-drive">` ("Tenho interesse em realizar um test-drive"). Para que **no** se tilde:
+
+| URL | … | Email | **test-drive** |
+|---|---|---|---|
+| https://www.chevrolet.com.br/solicitar-contato | … | veronica@mrm.com | **NO** |
+
+Detalles:
+
+- Es **por fila**: podés tener un lead con el test-drive tildado y otro sin él.
+- Valores aceptados: `SI` / `NO`, `YES` / `NO`, `TRUE` / `FALSE`, `1` / `0`, `X`.
+- Si la columna no corresponde a ningún checkbox del formulario, **se ignora sola** (no rompe nada).
+- Un `SI` tilda el checkbox aunque no sea obligatorio; un `NO` lo destilda y evita que la app lo vuelva a marcar antes de enviar.
+- No hace falta recompilar el portable: los Excels viven en `data/`, afuera del `.exe`.
+
+> **Ojo — alcance:** hoy esto funciona en **Mac LT** y **Android LT**. Los navegadores locales (Chrome / Firefox / Edge) todavía marcan todos los checkboxes que reconocen e **ignoran** esta columna.
+
+> **Solo aplica a checkboxes.** Para campos de texto o selects el Excel funciona distinto: la columna se mapea al campo por el **nombre del campo** o por el **`id` del HTML**, pero el campo tiene que estar declarado en el `field_mapping` del país (`json/fixed_field_mappings.json`). Si querés que un campo se llene siempre con un valor fijo sin tocar el Excel, usá `json/ids_dinamicos.json` (ver la sección *Qué hay adentro de `json/`*).
+
 ### El modal de ejecución
 
 Mientras corre el envío, la app abre una ventana "Ejecución de Test" que es tu único tablero de control: te dice qué está pasando y es lo que usás para frenar.
