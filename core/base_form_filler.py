@@ -164,6 +164,8 @@ class BaseFormFiller:
         self.data_columns = config.get('data_columns', list(self.DATA_COLUMNS))
         self.data_start_index = effective_country_config.get('data_start_index', config.get('data_start_index', 2))
         self.effective_data_keys = self._build_effective_data_keys()
+        # Preferencias SI/NO de checkbox del lead actual (se recarga por fila del Excel)
+        self.checkbox_prefs = {}
         # Cargar timeouts desde config_global.json (con defaults si no existe)
         _global_timeouts = {}
         try:
@@ -554,6 +556,59 @@ class BaseFormFiller:
 
         return nombres
         
+    # Valores aceptados en una columna del Excel que apunta a un checkbox (por name o id).
+    CHECKBOX_SI = {"si", "sí", "yes", "true", "1", "x", "marcar", "on"}
+    CHECKBOX_NO = {"no", "false", "0", "off", "desmarcar"}
+
+    def build_checkbox_prefs(self, raw_headers, row):
+        """
+        Preferencias de checkbox tomadas del Excel: una columna cuyo encabezado es el
+        `name` (o el `id`) del checkbox, con valor SI/NO. Ej: columna "test-drive" = "NO".
+
+        Se resuelve después contra el DOM por name/id, así que una columna con SI/NO que
+        no corresponda a ningún checkbox se ignora sola.
+        """
+        prefs = {}
+        for idx, header in enumerate(raw_headers or []):
+            key = str(header or "").strip().lower()
+            if not key or idx >= len(row):
+                continue
+            value = str(row[idx] or "").strip().lower()
+            if not value:
+                continue
+            if value in self.CHECKBOX_SI:
+                prefs[key] = True
+            elif value in self.CHECKBOX_NO:
+                prefs[key] = False
+        return prefs
+
+    def _checkbox_pref_for(self, lower_name, checkbox_id):
+        """Preferencia del Excel para este checkbox (por name o por id). None = sin preferencia."""
+        prefs = getattr(self, "checkbox_prefs", None) or {}
+        pref = prefs.get(lower_name)
+        if pref is None:
+            pref = prefs.get((checkbox_id or "").strip().lower())
+        return pref
+
+    def _uncheck_checkbox(self, checkbox_id, name_attr):
+        """Destilda un checkbox (el Excel pidió NO) y dispara los eventos del form."""
+        try:
+            self.driver.execute_script(
+                """
+                var id = arguments[0], name = arguments[1];
+                var cb = (id && document.getElementById(id)) ||
+                         (name && document.querySelector('input[type="checkbox"][name="' + name + '"]'));
+                if (!cb || !cb.checked) return;
+                cb.checked = false;
+                cb.dispatchEvent(new Event('click',  {bubbles:true}));
+                cb.dispatchEvent(new Event('change', {bubbles:true}));
+                cb.checked = false;   // por si algún handler lo volvió a marcar
+                """,
+                checkbox_id, name_attr,
+            )
+        except Exception:
+            pass
+
     def extract_form_data(self, row):
         """Convierte una fila del Excel en un diccionario normalizado"""
         row_list = list(row) if row is not None else []
@@ -3887,7 +3942,14 @@ class BaseFormFiller:
                 is_known = lower_name in known_names
                 is_html_required = bool(required_attr)
 
-                if not is_known and not is_html_required:
+                # El Excel manda: una columna con el name/id del checkbox y valor SI/NO
+                pref = self._checkbox_pref_for(lower_name, checkbox_id)
+                if pref is False:
+                    self._uncheck_checkbox(checkbox_id, name_attr)
+                    print(f"  ⊘ {name_attr or checkbox_id} desmarcado (Excel = NO)")
+                    continue
+
+                if not is_known and not is_html_required and pref is not True:
                     # No es términos ni required HTML — incluir solo si en DOM con layout + no marcado
                     # Usamos _checkbox_in_dom en vez de is_displayed() para no excluir inputs con opacity:0
                     try:
@@ -3897,7 +3959,7 @@ class BaseFormFiller:
                             continue
                     except StaleElementReferenceException:
                         continue
-                elif not lower_name and not is_html_required:
+                elif not lower_name and not is_html_required and pref is not True:
                     continue  # sin nombre y sin required: saltar (comportamiento original)
 
                 priority = priority_map.get(lower_name, 0)
@@ -4672,9 +4734,16 @@ class BaseFormFiller:
             _total_leads = max(0, sheet.max_row - 1)
             _done_leads = 0
 
+            # Encabezados SIN filtrar los vacíos: los índices tienen que alinear con la fila
+            raw_headers = [cell.value for cell in sheet[1]]
+
             # Procesar cada fila
             for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
                 self.begin_row_tracking()
+                # Columnas SI/NO que apuntan a un checkbox por name/id (ver build_checkbox_prefs)
+                self.checkbox_prefs = self.build_checkbox_prefs(raw_headers, row)
+                if self.checkbox_prefs:
+                    print(f"  ☑ Preferencias de checkbox (Excel): {self.checkbox_prefs}")
                 if len(row) < 2:
                     print(f"Saltando fila {i}: no tiene suficientes columnas")
                     continue
