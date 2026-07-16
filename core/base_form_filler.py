@@ -267,6 +267,7 @@ class BaseFormFiller:
         self.current_row_field_values = {}
         self._campos_sin_mapeo_exitoso = []
         self._campos_dropdown_no_encontrados = []
+        self._campos_sin_valor_asignado = []
         self._current_step = 1
         self._ty_cta = ""
         self._link_issue = "-"
@@ -3580,6 +3581,12 @@ class BaseFormFiller:
                         or element.get_attribute("aria-required") == "true"
                     )
                     if not is_req:
+                        # Campo no mapeado sin valor asignado: queda vacío. Se registra
+                        # para avisar en el Excel/mail que conviene setearlo en IDs Dinámicos.
+                        if not hasattr(self, "_campos_sin_valor_asignado"):
+                            self._campos_sin_valor_asignado = []
+                        if field_id not in self._campos_sin_valor_asignado:
+                            self._campos_sin_valor_asignado.append(field_id)
                         continue
 
                     # Decidir orden de prueba: si type/inputmode sugiere numérico, probar num primero
@@ -5194,7 +5201,18 @@ class BaseFormFiller:
                     _lead_ok = False
                 _sin_mapeo = getattr(self, "_campos_sin_mapeo_exitoso", [])
                 if _sin_mapeo:
-                    result_text = (result_text or "") + f" | Sin mapear: {', '.join(_sin_mapeo)}"
+                    result_text = (result_text or "") + (
+                        f" | Campos sin completar (sin valor asignado): {', '.join(_sin_mapeo)}"
+                        f" — asignales un valor en ⚙ IDs Dinámicos"
+                    )
+                    # No se pudieron completar todos los campos → el lead NO cuenta como PASS
+                    _lead_ok = False
+                _sin_valor = getattr(self, "_campos_sin_valor_asignado", [])
+                if _sin_valor:
+                    result_text = (result_text or "") + (
+                        f" | Aviso — campos opcionales vacíos (sin valor asignado): {', '.join(_sin_valor)}"
+                        f" — podés asignarles un valor en ⚙ IDs Dinámicos"
+                    )
                 _no_encontrados = getattr(self, "_campos_dropdown_no_encontrados", [])
                 if _no_encontrados:
                     result_text = (result_text or "") + f" | Dropdown no encontrado: {'; '.join(_no_encontrados)}"

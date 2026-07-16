@@ -268,6 +268,7 @@ def _build_tab_ids_excel(popup):
 
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
+    popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
     frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
     canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
 
@@ -606,6 +607,7 @@ def _build_tab_ids_unicos(popup):
 
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
+    popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
 
     def _actualizar_scroll_lista(_event=None):
         try:
@@ -1104,6 +1106,7 @@ def _build_tab_dependencias(popup):
 
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
+    popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
     frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
     canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
 
@@ -1202,36 +1205,8 @@ def leer_campos_detectados(pais):
     return campos, str(data.get("ultima_deteccion") or "")
 
 
-def _valor_asignado_para(pais, field_id):
-    """Devuelve el valor ya asignado en IDs únicos para (país, id), o '' si no hay."""
-    datos = cargar_ids_dinamicos()
-    entries = datos.get("entries", []) if isinstance(datos, dict) else []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        if str(entry.get("id") or "").strip() != str(field_id).strip():
-            continue
-        paises_entry = normalizar_paises_id_dinamico(entry.get("paises", entry.get("countries")))
-        if paises_entry and pais not in paises_entry:
-            continue
-        _, valor_raw = extraer_datos_id_dinamico(entry)
-        valores = normalizar_valores_id_dinamico(valor_raw)
-        return " | ".join(valores)
-    return ""
-
-
-def _asignar_valor_campo_detectado(pais, field_id, label, valor_texto):
-    """Crea/actualiza una entrada de IDs únicos para el campo detectado."""
-    valores = normalizar_valores_id_dinamico(valor_texto)
-    if not valores:
-        return False
-
-    d = cargar_ids_dinamicos()
-    entries = d.get("entries", []) if isinstance(d, dict) else []
-    if not isinstance(entries, list):
-        entries = []
-
-    idx_existente = None
+def _buscar_entry_para(entries, pais, field_id):
+    """Índice de la entrada de IDs únicos que aplica a (país, id), o None."""
     for i, entry in enumerate(entries):
         if not isinstance(entry, dict):
             continue
@@ -1239,25 +1214,74 @@ def _asignar_valor_campo_detectado(pais, field_id, label, valor_texto):
             continue
         paises_entry = normalizar_paises_id_dinamico(entry.get("paises", entry.get("countries")))
         if not paises_entry or pais in paises_entry:
-            idx_existente = i
-            break
+            return i
+    return None
+
+
+def _valores_asignados_para(pais, field_id):
+    """Lista de valores ya asignados en IDs únicos para (país, id)."""
+    datos = cargar_ids_dinamicos()
+    entries = datos.get("entries", []) if isinstance(datos, dict) else []
+    idx = _buscar_entry_para(entries, pais, field_id)
+    if idx is None:
+        return []
+    _, valor_raw = extraer_datos_id_dinamico(entries[idx])
+    return normalizar_valores_id_dinamico(valor_raw)
+
+
+def _agregar_valores_campo_detectado(pais, field_id, label, valor_texto):
+    """Suma valores (sin duplicar) a la entrada de IDs únicos del campo detectado."""
+    valores_nuevos = normalizar_valores_id_dinamico(valor_texto)
+    if not valores_nuevos:
+        return False
+
+    d = cargar_ids_dinamicos()
+    entries = d.get("entries", []) if isinstance(d, dict) else []
+    if not isinstance(entries, list):
+        entries = []
+
+    idx = _buscar_entry_para(entries, pais, field_id)
+    valores = _valores_asignados_para(pais, field_id) if idx is not None else []
+    for v in valores_nuevos:
+        if v not in valores:
+            valores.append(v)
 
     nueva_entry = {
         "id": field_id,
         "valor": compactar_valores_id_dinamico(valores),
-        "paises": [pais],
+        "paises": [pais] if idx is None else normalizar_paises_id_dinamico(
+            entries[idx].get("paises", entries[idx].get("countries"))
+        ) or [],
     }
     if label and str(label).strip() and str(label).strip() != str(field_id).strip():
         nueva_entry["nombre_campo"] = str(label).strip()
 
-    if idx_existente is not None:
-        entries[idx_existente] = nueva_entry
+    if idx is not None:
+        entries[idx] = nueva_entry
     else:
         entries.append(nueva_entry)
 
     d["entries"] = entries
     guardar_ids_dinamicos(d)
     return True
+
+
+def _quitar_valor_campo_detectado(pais, field_id, valor):
+    """Quita un valor puntual; si la entrada queda sin valores, la elimina."""
+    d = cargar_ids_dinamicos()
+    entries = d.get("entries", []) if isinstance(d, dict) else []
+    idx = _buscar_entry_para(entries, pais, field_id)
+    if idx is None:
+        return
+    _, valor_raw = extraer_datos_id_dinamico(entries[idx])
+    valores = [v for v in normalizar_valores_id_dinamico(valor_raw) if v != valor]
+    if valores:
+        entries[idx]["valor"] = compactar_valores_id_dinamico(valores)
+        entries[idx].pop("valores", None)
+    else:
+        entries.pop(idx)
+    d["entries"] = entries
+    guardar_ids_dinamicos(d)
 
 
 def _build_tab_campos_detectados(popup):
@@ -1274,9 +1298,9 @@ def _build_tab_campos_detectados(popup):
     Label(
         popup,
         text="Campos nuevos que la automatización detectó en los formularios durante las corridas. "
-             "Elegí un país y asigná un valor a los que necesites; se guardan como IDs únicos.\n"
-             "Tip: podés cargar varios valores separados con \" | \" (ej: rojo | azul | verde) y el sistema "
-             "elegirá uno al azar en cada envío.",
+             "Elegí un país, escribí un valor y apretá ➕ Añadir valor (o Enter) las veces que quieras: "
+             "si un campo tiene varios valores, en cada envío la app elige uno al azar, así no se llena siempre igual. "
+             "Con la ✕ de cada valor lo quitás. Todo se guarda como IDs únicos para ese país.",
         font=("Segoe UI", 9),
         bg=APP_BG_COLOR,
         fg="#ddd",
@@ -1317,6 +1341,7 @@ def _build_tab_campos_detectados(popup):
 
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
+    popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
     frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
     canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
 
@@ -1376,30 +1401,59 @@ def _build_tab_campos_detectados(popup):
                 anchor="w", justify="left", wraplength=740,
             ).pack(anchor="w")
 
-            fila_input = Frame(fila, bg=APP_BG_COLOR)
-            fila_input.pack(fill="x", pady=(2, 0))
+            # --- Valores asignados como "chips" (uno por valor, con ✕ para quitar) ---
+            chips_frame = Frame(fila, bg=APP_BG_COLOR)
+            chips_frame.pack(fill="x", pady=(3, 0), anchor="w")
 
-            Label(fila_input, text="Valor:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 6))
-            valor_var = StringVar(value=_valor_asignado_para(pais, field_id))
-            entry_valor = Entry(fila_input, font=("Segoe UI", 10), width=30, textvariable=valor_var)
+            def _render_chips(cf=None, fid=field_id, lbl=None):
+                cf = cf if cf is not None else chips_frame
+                for w in cf.winfo_children():
+                    w.destroy()
+                pais_actual = pais_var.get().strip()
+                valores = _valores_asignados_para(pais_actual, fid)
+                Label(cf, text="Valores:", bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 6))
+                if not valores:
+                    Label(cf, text="(ninguno todavía)", bg=APP_BG_COLOR, fg="#aaa",
+                          font=("Segoe UI", 9, "italic")).pack(side=LEFT)
+                    return
+                for val in valores:
+                    chip = Frame(cf, bg="#3A1D52", bd=0)
+                    chip.pack(side=LEFT, padx=(0, 5), pady=1)
+                    Label(chip, text=val, bg="#3A1D52", fg="#FFD873",
+                          font=("Segoe UI", 9, "bold"), padx=7, pady=1).pack(side=LEFT)
+
+                    def _quitar(v=val, f=fid, c=cf, l=lbl):
+                        _quitar_valor_campo_detectado(pais_var.get().strip(), f, v)
+                        _render_chips(c, f, l)
+
+                    Button(chip, text="✕", command=_quitar, bg="#3A1D52", fg="#ff9d9d",
+                           relief="flat", bd=0, font=("Segoe UI", 8, "bold"),
+                           cursor="hand2", padx=4, pady=0,
+                           activebackground="#3A1D52", activeforeground="white").pack(side=LEFT)
+
+            fila_input = Frame(fila, bg=APP_BG_COLOR)
+            fila_input.pack(fill="x", pady=(3, 0))
+
+            valor_var = StringVar(value="")
+            entry_valor = Entry(fila_input, font=("Segoe UI", 10), width=28, textvariable=valor_var)
             entry_valor.pack(side=LEFT, padx=(0, 8))
 
-            estado_var = StringVar(value="✔ asignado" if valor_var.get() else "")
-            lbl_estado = Label(fila_input, textvariable=estado_var, bg=APP_BG_COLOR, fg="#8fe0a0", font=("Segoe UI", 9))
-            lbl_estado.pack(side=LEFT, padx=(6, 0))
-
-            def _asignar(fid=field_id, lbl=label, vv=valor_var, ev=estado_var):
+            def _anadir(fid=field_id, lbl=label, vv=valor_var, cf=chips_frame):
                 pais_actual = pais_var.get().strip()
-                if not _asignar_valor_campo_detectado(pais_actual, fid, lbl, vv.get()):
-                    messagebox.showwarning("Campos detectados", "Ingresá un valor.", parent=popup)
+                if not _agregar_valores_campo_detectado(pais_actual, fid, lbl, vv.get()):
+                    messagebox.showwarning("Campos detectados", "Escribí un valor antes de añadir.", parent=popup)
                     return
-                ev.set("✔ asignado")
+                vv.set("")
+                _render_chips(cf, fid, lbl)
 
             Button(
-                fila_input, text="Asignar valor", command=_asignar,
+                fila_input, text="➕ Añadir valor", command=_anadir,
                 bg=HEADER_BG_COLOR, fg="black", relief="flat",
                 font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10, pady=2,
             ).pack(side=LEFT)
+            entry_valor.bind("<Return>", lambda _e, f=_anadir: f())
+
+            _render_chips(chips_frame, field_id, label)
 
     combo_pais.bind("<<ComboboxSelected>>", lambda _e: _refrescar())
     _refrescar()
@@ -1442,5 +1496,19 @@ def abrir_popup_ids_dinamicos(parent):
     _build_tab_ids_unicos(tab_ids_unicos)
     _build_tab_ids_excel(tab_ids_excel)
     _build_tab_dependencias(tab_dependencias)
+
+    # Scroll con ruedita en cualquier parte del popup: scrollea la lista de la
+    # solapa activa y frena la propagación al bind_all de la ventana principal.
+    def _on_popup_mousewheel(event):
+        try:
+            tab_actual = notebook_ids.nametowidget(notebook_ids.select())
+            canvas = getattr(tab_actual, "_scroll_canvas", None)
+            if canvas is not None and canvas.winfo_exists():
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except Exception:
+            pass
+        return "break"
+
+    popup.bind("<MouseWheel>", _on_popup_mousewheel)
 
     return popup
