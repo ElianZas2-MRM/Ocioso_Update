@@ -268,6 +268,7 @@ class BaseFormFiller:
         self._campos_sin_mapeo_exitoso = []
         self._campos_dropdown_no_encontrados = []
         self._campos_sin_valor_asignado = []
+        self._ids_din_cb_map = None  # re-elige SI/NO random por fila si hay varios valores
         self._current_step = 1
         self._ty_cta = ""
         self._link_issue = "-"
@@ -584,12 +585,35 @@ class BaseFormFiller:
         return prefs
 
     def _checkbox_pref_for(self, lower_name, checkbox_id):
-        """Preferencia del Excel para este checkbox (por name o por id). None = sin preferencia."""
+        """Preferencia para este checkbox: primero el Excel (por name o id), si no hay
+        columna, IDs dinámicos con valor SI/NO. None = sin preferencia."""
         prefs = getattr(self, "checkbox_prefs", None) or {}
         pref = prefs.get(lower_name)
         if pref is None:
             pref = prefs.get((checkbox_id or "").strip().lower())
+        if pref is None:
+            pref = self._checkbox_pref_dinamica(lower_name, checkbox_id)
         return pref
+
+    def _checkbox_pref_dinamica(self, lower_name, checkbox_id):
+        """SI/NO desde ids_dinamicos.json para checkboxes sin columna en el Excel.
+        Si el ID tiene varios valores SI/NO cargados, elige uno al azar por fila."""
+        try:
+            if getattr(self, "_ids_din_cb_map", None) is None:
+                _map = {}
+                for _id, _vals in (self._cargar_ids_dinamicos() or {}).items():
+                    _sino = [str(v).strip().lower() for v in (_vals or [])]
+                    _sino = [v for v in _sino if v in self.CHECKBOX_SI or v in self.CHECKBOX_NO]
+                    if not _sino:
+                        continue
+                    _map[_id.strip().lower()] = random.choice(_sino) in self.CHECKBOX_SI
+                self._ids_din_cb_map = _map
+            for _key in (lower_name, (checkbox_id or "").strip().lower()):
+                if _key and _key in self._ids_din_cb_map:
+                    return self._ids_din_cb_map[_key]
+        except Exception:
+            pass
+        return None
 
     def _uncheck_checkbox(self, checkbox_id, name_attr):
         """Destilda un checkbox (el Excel pidió NO) y dispara los eventos del form."""

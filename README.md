@@ -95,14 +95,16 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 
 ![IDs Dinámicos — Campos detectados](Asset/screenshots/20_ids_dinamicos_campos_detectados.png)
 
-- **Añadir un valor**: escribí en el cuadro y apretá **➕ Añadir valor** (o Enter). Cada valor queda como una **etiqueta** al lado de "Valores:".
-- **Varios valores = rotación aleatoria**: repetí "Añadir valor" las veces que quieras (en la captura, "Número de veículos" tiene 123, 2, 5 y 10). En cada envío la app **elige uno al azar**, así el campo no se llena siempre igual. Aplica a campos de texto y a dropdowns (elige al azar entre las opciones que coincidan).
-- **Quitar un valor**: click en la **✕** de su etiqueta. Si quitás todos, el campo queda sin valor asignado.
-- Todo se guarda como **IDs únicos** para ese país — lo ves también en la solapa IDs únicos.
+- **Añadir un valor**: escribí en el cuadro y apretá **➕ Añadir valor** (o Enter). Cada valor se **guarda al instante** y queda como una **etiqueta** al lado de "Valores:".
+- **Varios valores = rotación aleatoria**: repetí "Añadir valor" las veces que quieras. En cada envío la app **elige uno al azar**, así el campo no se llena siempre igual. Aplica a campos de texto y a dropdowns (elige al azar entre las opciones que coincidan). Si cargás uno solo, usa siempre ese.
+- **Quitar un valor**: click en la **✕** de su etiqueta.
+- **✔ Listo**: cuando terminás con un campo, lo saca de esta lista para que quede limpia — sus valores no se pierden: quedan en la solapa **IDs únicos**, y de ahí en más lo editás desde allá.
 
-**Solapa "IDs únicos"** — alta manual de cualquier ID no mapeado: escribís el ID, su valor (o varios separados con ` | `), descripción opcional y países donde aplica (sin tildar = todos). Abajo se listan los configurados, con filtro por texto y por país, y botones **Editar** / **✕** por fila:
+**Solapa "IDs únicos"** — alta manual de cualquier ID no mapeado: escribís el ID, la descripción opcional y los países donde aplica (sin tildar = todos). En **Valor** podés cargar varios: escribí uno y apretá **➕** (o Enter) — queda como etiqueta y se elige uno al azar en cada envío. Abajo se listan los configurados, con filtro por texto y por país, y botones **Editar** / **✕** por fila:
 
 ![IDs Dinámicos — IDs únicos](Asset/screenshots/21_ids_dinamicos_ids_unicos.png)
+
+**Checkboxes con SI/NO** — para un checkbox opcional (ej. `test-drive`, newsletter), cargá su ID con valor **SI** o **NO** (los mismos valores que acepta el Excel: si/no, yes/1/0, marcar/desmarcar…). La app lo marca o lo deja sin marcar en cada envío. Si le cargás SI **y** NO como dos valores, sortea entre marcar y no marcar por fila. La columna del Excel, si existe, tiene prioridad sobre esto.
 
 **Solapa "IDs Excel"** — el mapping fijo por país (los campos que se llenan desde columnas del Excel). Permite ver, agregar, editar o borrar entradas y ajustar el `data_index` → te muestra en vivo a qué columna del Excel corresponde.
 
