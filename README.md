@@ -100,7 +100,7 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 - **Quitar un valor**: click en la **✕** de su etiqueta.
 - **✔ Listo**: cuando terminás con un campo, lo saca de esta lista para que quede limpia — sus valores no se pierden: quedan en la solapa **IDs únicos**, y de ahí en más lo editás desde allá.
 
-**Solapa "IDs únicos"** — alta manual de cualquier ID no mapeado: escribís el ID, la descripción opcional y los países donde aplica (sin tildar = todos). En **Valor** podés cargar varios: escribí uno y apretá **➕** (o Enter) — queda como etiqueta y se elige uno al azar en cada envío. Abajo se listan los configurados, con filtro por texto y por país, y botones **Editar** / **✕** por fila:
+**Solapa "IDs únicos"** — alta manual de cualquier ID no mapeado: escribís el ID, la descripción opcional y los países donde aplica (sin tildar = todos). En **Valor** podés cargar varios: escribí uno y apretá **➕** (o Enter) — queda como etiqueta y se elige uno al azar en cada envío. Abajo se listan los configurados, con **filtro** que busca por ID, descripción, valor o país (podés escribir varias palabras: matchean las filas que contengan todas) más el combo de país, y botones **Editar** / **✕** por fila. Un mismo ID puede tener una fila por país (valores distintos según el mercado); si existieran entradas repetidas del mismo ID **y** mismo alcance de países, la app las fusiona sola en una al abrir el popup, así **Editar siempre te muestra todos los valores juntos**:
 
 ![IDs Dinámicos — IDs únicos](Asset/screenshots/21_ids_dinamicos_ids_unicos.png)
 

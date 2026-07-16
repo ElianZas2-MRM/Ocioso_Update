@@ -10,12 +10,6 @@
       "nombre_campo": "Número de contrato - form arrepentimiento"
     },
     {
-      "id": "comment",
-      "valor": "Este comentario es un test.",
-      "paises": [],
-      "nombre_campo": "Comentario"
-    },
-    {
       "id": "patent",
       "valor": "AAA123",
       "paises": [
@@ -373,7 +367,7 @@
       "paises": [
         "Brasil"
       ],
-      "nombre_campo": "Cantidad de Vehiculos T3 2.0"
+      "nombre_campo": "Número de veículos:"
     },
     {
       "id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_2132315__",
@@ -615,7 +609,10 @@
     },
     {
       "id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1283491___widget",
-      "valor": "Este Texto es un test",
+      "valor": [
+        "Este Texto es un test",
+        "Este texto es un test"
+      ],
       "paises": [
         "Chile"
       ],
@@ -662,14 +659,6 @@
       "nombre_campo": "Chasis T3 2.0"
     },
     {
-      "id": "guideContainer-rootPanel-panel1701281776810-guidetextbox_1283491___widget",
-      "valor": "Este texto es un test",
-      "paises": [
-        "Chile"
-      ],
-      "nombre_campo": "Comentario T3 2.0"
-    },
-    {
       "id": "guideContainer-rootPanel-panel-vehiclemodel___widget",
       "valor": "Onix",
       "paises": [
@@ -708,6 +697,13 @@
         "Chile"
       ],
       "nombre_campo": "Mensaje T3 2.0"
+    },
+    {
+      "id": "comment",
+      "valor": "Este ES UN COMENT RANDOM",
+      "paises": [
+        "Chile"
+      ]
     }
   ],
   "dependencies": [
