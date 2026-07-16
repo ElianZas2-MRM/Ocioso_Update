@@ -809,8 +809,10 @@ def _build_tab_ids_unicos(popup):
             else:
                 paises_abrev = ", ".join([pais_abreviaturas.get(p, p) for p in paises_entry])
 
+            # Filtro por ID, descripción, valores o país: se puede escribir más de una
+            # palabra y matchean las filas que contengan todas (en cualquier campo).
             texto_busqueda = f"{id_val} {nombre_campo} {valor_texto} {paises_abrev}".lower()
-            if texto_filtro and texto_filtro not in texto_busqueda:
+            if texto_filtro and not all(t in texto_busqueda for t in texto_filtro.split()):
                 continue
 
             prioridad = 0
@@ -1287,6 +1289,42 @@ def quitar_campo_detectado(pais, field_id):
         print(f"⚠️ No se pudo actualizar {os.path.basename(ruta)}: {e}")
 
 
+def consolidar_ids_dinamicos():
+    """Fusiona entradas duplicadas (mismo ID + mismo alcance de países) en una sola
+    con todos los valores. El backend ya las fusionaba al rellenar; esto alinea la UI."""
+    d = cargar_ids_dinamicos()
+    entries = d.get("entries", []) if isinstance(d, dict) else []
+    consolidadas = []
+    indice = {}  # (id, frozenset(paises)) -> posición en consolidadas
+    cambio = False
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        entry_id = str(entry.get("id") or "").strip()
+        paises = normalizar_paises_id_dinamico(entry.get("paises", entry.get("countries")))
+        clave = (entry_id, frozenset(p.lower() for p in paises))
+        nombre, valor_raw = extraer_datos_id_dinamico(entry)
+        valores = normalizar_valores_id_dinamico(valor_raw)
+        if clave in indice:
+            destino = consolidadas[indice[clave]]
+            _, dest_raw = extraer_datos_id_dinamico(destino)
+            dest_vals = normalizar_valores_id_dinamico(dest_raw)
+            for v in valores:
+                if v not in dest_vals:
+                    dest_vals.append(v)
+            destino["valor"] = compactar_valores_id_dinamico(dest_vals) if dest_vals else ""
+            if nombre and not destino.get("nombre_campo"):
+                destino["nombre_campo"] = nombre
+            cambio = True
+        else:
+            indice[clave] = len(consolidadas)
+            consolidadas.append(entry)
+    if cambio:
+        d["entries"] = consolidadas
+        guardar_ids_dinamicos(d)
+    return cambio
+
+
 def _buscar_entry_para(entries, pais, field_id):
     """Índice de la entrada de IDs únicos que aplica a (país, id), o None."""
     for i, entry in enumerate(entries):
@@ -1301,14 +1339,24 @@ def _buscar_entry_para(entries, pais, field_id):
 
 
 def _valores_asignados_para(pais, field_id):
-    """Lista de valores ya asignados en IDs únicos para (país, id)."""
+    """Todos los valores asignados en IDs únicos que aplican a (país, id) —
+    unión de todas las entradas que matcheen, igual que hace el backend al rellenar."""
     datos = cargar_ids_dinamicos()
     entries = datos.get("entries", []) if isinstance(datos, dict) else []
-    idx = _buscar_entry_para(entries, pais, field_id)
-    if idx is None:
-        return []
-    _, valor_raw = extraer_datos_id_dinamico(entries[idx])
-    return normalizar_valores_id_dinamico(valor_raw)
+    valores = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("id") or "").strip() != str(field_id).strip():
+            continue
+        paises_entry = normalizar_paises_id_dinamico(entry.get("paises", entry.get("countries")))
+        if paises_entry and pais not in paises_entry:
+            continue
+        _, valor_raw = extraer_datos_id_dinamico(entry)
+        for v in normalizar_valores_id_dinamico(valor_raw):
+            if v not in valores:
+                valores.append(v)
+    return valores
 
 
 def _agregar_valores_campo_detectado(pais, field_id, label, valor_texto):
@@ -1349,20 +1397,23 @@ def _agregar_valores_campo_detectado(pais, field_id, label, valor_texto):
 
 
 def _quitar_valor_campo_detectado(pais, field_id, valor):
-    """Quita un valor puntual; si la entrada queda sin valores, la elimina."""
+    """Quita un valor puntual de todas las entradas que apliquen a (país, id);
+    las entradas que queden sin valores se eliminan."""
     d = cargar_ids_dinamicos()
     entries = d.get("entries", []) if isinstance(d, dict) else []
-    idx = _buscar_entry_para(entries, pais, field_id)
-    if idx is None:
-        return
-    _, valor_raw = extraer_datos_id_dinamico(entries[idx])
-    valores = [v for v in normalizar_valores_id_dinamico(valor_raw) if v != valor]
-    if valores:
-        entries[idx]["valor"] = compactar_valores_id_dinamico(valores)
-        entries[idx].pop("valores", None)
-    else:
-        entries.pop(idx)
-    d["entries"] = entries
+    nuevas = []
+    for entry in entries:
+        if isinstance(entry, dict) and str(entry.get("id") or "").strip() == str(field_id).strip():
+            paises_entry = normalizar_paises_id_dinamico(entry.get("paises", entry.get("countries")))
+            if not paises_entry or pais in paises_entry:
+                _, valor_raw = extraer_datos_id_dinamico(entry)
+                valores = [v for v in normalizar_valores_id_dinamico(valor_raw) if v != valor]
+                if not valores:
+                    continue  # entrada sin valores → se elimina
+                entry["valor"] = compactar_valores_id_dinamico(valores)
+                entry.pop("valores", None)
+        nuevas.append(entry)
+    d["entries"] = nuevas
     guardar_ids_dinamicos(d)
 
 
@@ -1566,6 +1617,12 @@ def _build_tab_campos_detectados(popup):
 def abrir_popup_ids_dinamicos(parent):
     """Abre el popup unificado de IDs Dinámicos (Campos detectados, IDs únicos, IDs Excel y Dependencias)."""
     _ensure_styles()
+    # Fusionar entradas duplicadas (mismo ID + mismo alcance) para que la UI
+    # muestre y edite todos los valores juntos, igual que los usa el backend.
+    try:
+        consolidar_ids_dinamicos()
+    except Exception as e:
+        print(f"⚠️ No se pudo consolidar ids_dinamicos: {e}")
 
     popup = Toplevel(parent)
     popup.title("IDs Dinámicos")
