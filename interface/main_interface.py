@@ -39,11 +39,13 @@ try:
     from utils.scheduling import guardar_programacion, cargar_programacion, limpiar_programacion
     from interface.field_validation_ui import build_field_validation_tab
     from interface.dealer_comparator_ui import build_dealer_comparator_tab
+    from interface.ids_dinamicos_ui import abrir_popup_ids_dinamicos
 except Exception as _imp_err:  # noqa: BLE001
     BACKEND_OK = False
     _BACKEND_IMPORT_ERROR = str(_imp_err)
     build_field_validation_tab = None
     build_dealer_comparator_tab = None
+    abrir_popup_ids_dinamicos = None
     BASE_DIR = _APP_BASE
     DATA_DIR = os.path.join(_APP_BASE, "data")
     JSON_DIR = os.path.join(_APP_BASE, "json")
@@ -1216,6 +1218,39 @@ def iniciar_interfaz():
     # TAB 1: ENVÍO DE LEADS (leads)
     # ==========================================
     leads_scroll_frame = make_scrollable_tab_container(tabs["leads"])
+
+    # --- Barra superior: acceso a IDs Dinámicos (campos no mapeados) ---
+    def _abrir_ids_dinamicos():
+        if abrir_popup_ids_dinamicos is None:
+            messagebox.showwarning(
+                "IDs Dinámicos",
+                "No se pudo cargar el módulo de IDs Dinámicos.\n" + (_BACKEND_IMPORT_ERROR or ""),
+            )
+            return
+        try:
+            abrir_popup_ids_dinamicos(leads_scroll_frame.winfo_toplevel())
+        except Exception as exc:
+            messagebox.showerror("IDs Dinámicos", f"No se pudo abrir IDs Dinámicos:\n{exc}")
+
+    topbar_leads = tk.Frame(leads_scroll_frame, bg=APP_BG_COLOR)
+    topbar_leads.pack(fill="x", pady=(0, 6))
+    tk.Button(
+        topbar_leads,
+        text="⚙  IDs Dinámicos",
+        command=_abrir_ids_dinamicos,
+        bg="#FFC845",
+        fg="#3A1D52",
+        activebackground="#FFD873",
+        activeforeground="#3A1D52",
+        relief="flat",
+        bd=0,
+        highlightthickness=2,
+        highlightbackground="#FFE08A",
+        font=("Segoe UI", 10, "bold"),
+        cursor="hand2",
+        padx=16,
+        pady=6,
+    ).pack(side="right")
 
     # Modo de Excel: "por_dispositivo" (default, un Excel por dispositivo) o
     # "compartido" (un único Excel genérico con los mismos datos para todos).
