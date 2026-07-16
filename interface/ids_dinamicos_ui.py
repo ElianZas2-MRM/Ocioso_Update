@@ -512,7 +512,7 @@ def _build_tab_ids_unicos(popup):
 
     lbl_descripcion = Label(
         popup,
-        text="Asigná uno o más valores fijos a un ID de campo no mapeado.\nSirve para inputs, textareas y selects especiales. También podés volver a cargar el mismo ID para sumar más valores.",
+        text="Asigná uno o más valores fijos a un ID de campo no mapeado.\nSirve para inputs, textareas, selects y checkboxes: con ➕ cargás varios valores y en cada envío se elige uno al azar.\nPara checkboxes usá SI o NO como valor (igual que en el Excel) para que se marque o no.",
         font=("Segoe UI", 9),
         bg=APP_BG_COLOR,
         fg="#ddd",
@@ -522,7 +522,7 @@ def _build_tab_ids_unicos(popup):
     lbl_descripcion.pack(fill="x", padx=20, anchor="w")
     _registrar_label_responsivo(
         lbl_descripcion,
-        "Asigná uno o más valores fijos a un ID de campo no mapeado.\nSirve para inputs, textareas y selects especiales.\nTambién podés volver a cargar el mismo ID para sumar más valores.",
+        "Asigná uno o más valores fijos a un ID de campo no mapeado.\nSirve para inputs, textareas, selects y checkboxes: con ➕ cargás varios valores y en cada envío se elige uno al azar.\nPara checkboxes usá SI o NO como valor (igual que en el Excel) para que se marque o no.",
     )
 
     ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=10)
@@ -564,8 +564,60 @@ def _build_tab_ids_unicos(popup):
         width=8,
         anchor="w",
     ).grid(row=2, column=0, sticky="w", pady=4)
-    entry_valor = Entry(frame_inputs, font=("Segoe UI", 10), width=24)
-    entry_valor.grid(row=2, column=1, padx=(0, 10), pady=4)
+    frame_valor = Frame(frame_inputs, bg=APP_BG_COLOR)
+    frame_valor.grid(row=2, column=1, padx=(0, 10), pady=4, sticky="w")
+    entry_valor = Entry(frame_valor, font=("Segoe UI", 10), width=18)
+    entry_valor.pack(side=LEFT)
+
+    # --- Varios valores por ID: se acumulan como etiquetas y se elige uno al azar por envío ---
+    valores_chips = []
+
+    frame_chips_unicos = Frame(frame_inputs, bg=APP_BG_COLOR)
+    frame_chips_unicos.grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 0))
+
+    def _render_chips_unicos():
+        for w in frame_chips_unicos.winfo_children():
+            w.destroy()
+        if not valores_chips:
+            return
+        Label(frame_chips_unicos, text="Valores cargados:", bg=APP_BG_COLOR, fg="white",
+              font=("Segoe UI", 9)).pack(side=LEFT, padx=(0, 6))
+        for val in valores_chips:
+            chip = Frame(frame_chips_unicos, bg="#3A1D52", bd=0)
+            chip.pack(side=LEFT, padx=(0, 5), pady=1)
+            Label(chip, text=val, bg="#3A1D52", fg="#FFD873",
+                  font=("Segoe UI", 9, "bold"), padx=7, pady=1).pack(side=LEFT)
+
+            def _quitar_chip(v=val):
+                try:
+                    valores_chips.remove(v)
+                except ValueError:
+                    pass
+                _render_chips_unicos()
+
+            Button(chip, text="✕", command=_quitar_chip, bg="#3A1D52", fg="#ff9d9d",
+                   relief="flat", bd=0, font=("Segoe UI", 8, "bold"),
+                   cursor="hand2", padx=4, pady=0,
+                   activebackground="#3A1D52", activeforeground="white").pack(side=LEFT)
+        Label(frame_chips_unicos, text="(elige uno al azar en cada envío)", bg=APP_BG_COLOR,
+              fg="#c9b3de", font=("Segoe UI", 8, "italic")).pack(side=LEFT, padx=(4, 0))
+
+    def _anadir_valor_unico():
+        nuevos = normalizar_valores_id_dinamico(entry_valor.get())
+        if not nuevos:
+            return
+        for v in nuevos:
+            if v not in valores_chips:
+                valores_chips.append(v)
+        entry_valor.delete(0, "end")
+        _render_chips_unicos()
+
+    Button(
+        frame_valor, text="➕", command=_anadir_valor_unico,
+        bg=HEADER_BG_COLOR, fg="black", relief="flat",
+        font=("Segoe UI", 9, "bold"), cursor="hand2", padx=7, pady=1,
+    ).pack(side=LEFT, padx=(4, 0))
+    entry_valor.bind("<Return>", lambda _e: _anadir_valor_unico())
 
     ids_fijos_mapeados = obtener_ids_mapeados_normales()
     warning_id_var = StringVar(value="")
@@ -578,7 +630,7 @@ def _build_tab_ids_unicos(popup):
         anchor="w",
         justify="left",
     )
-    label_warning_id.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+    label_warning_id.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(2, 0))
 
     # --- Lista de IDs existentes ---
     ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=(12, 6))
@@ -701,6 +753,8 @@ def _build_tab_ids_unicos(popup):
         entry_id.delete(0, "end")
         entry_nombre_campo.delete(0, "end")
         entry_valor.delete(0, "end")
+        valores_chips.clear()
+        _render_chips_unicos()
         for var in pais_vars.values():
             var.set(False)
         filtro_texto_var.set("")
@@ -825,7 +879,9 @@ def _build_tab_ids_unicos(popup):
                 entry_nombre_campo.delete(0, "end")
                 entry_nombre_campo.insert(0, nombre_actual)
                 entry_valor.delete(0, "end")
-                entry_valor.insert(0, " | ".join(valores_actuales))
+                valores_chips.clear()
+                valores_chips.extend(valores_actuales)
+                _render_chips_unicos()
                 for pais, var in pais_vars.items():
                     var.set(pais in paises_actuales)
 
@@ -886,12 +942,17 @@ def _build_tab_ids_unicos(popup):
     def _agregar():
         id_val = entry_id.get().strip()
         nombre_campo = entry_nombre_campo.get().strip()
-        valor_val = entry_valor.get().strip()
+        # Valores = etiquetas cargadas con ➕ más lo que quede escrito en el cuadro
+        valores_todos = list(valores_chips)
+        for v in normalizar_valores_id_dinamico(entry_valor.get()):
+            if v not in valores_todos:
+                valores_todos.append(v)
+        valor_val = " | ".join(valores_todos)
         paises_seleccionados = [pais for pais, var in pais_vars.items() if var.get()]
         if _es_todos_paises(paises_seleccionados):
             paises_seleccionados = []
         if not id_val or not valor_val:
-            messagebox.showwarning("IDs únicos", "Completá ambos campos.", parent=popup)
+            messagebox.showwarning("IDs únicos", "Completá el ID y al menos un valor.", parent=popup)
             return
         if id_val in ids_fijos_mapeados:
             continuar = messagebox.askyesno(
@@ -934,7 +995,7 @@ def _build_tab_ids_unicos(popup):
 
     # Fila de filtros (columna izquierda)
     frame_filtros = Frame(frame_inputs, bg=APP_BG_COLOR)
-    frame_filtros.grid(row=4, column=0, columnspan=2, pady=(2, 0), sticky="w")
+    frame_filtros.grid(row=5, column=0, columnspan=2, pady=(2, 0), sticky="w")
 
     frame_col_filtro_texto = Frame(frame_filtros, bg=APP_BG_COLOR)
     frame_col_filtro_texto.grid(row=0, column=0, padx=(0, 10), sticky="w")
@@ -979,7 +1040,7 @@ def _build_tab_ids_unicos(popup):
 
     # CTAs debajo de la columna de países (Limpiar izquierda, Crear derecha)
     frame_ctas_paises = Frame(frame_inputs, bg=APP_BG_COLOR)
-    frame_ctas_paises.grid(row=4, column=2, pady=(2, 0), sticky="ew")
+    frame_ctas_paises.grid(row=5, column=2, pady=(2, 0), sticky="ew")
     frame_ctas_paises.grid_columnconfigure(0, weight=1)
     frame_ctas_paises.grid_columnconfigure(1, weight=1)
     ancho_cta = 12
@@ -1205,6 +1266,27 @@ def leer_campos_detectados(pais):
     return campos, str(data.get("ultima_deteccion") or "")
 
 
+def quitar_campo_detectado(pais, field_id):
+    """Saca un campo del reporte nuevos_campos_<pais>.json (ya fue configurado)."""
+    ruta = os.path.join(JSON_DIR, f"nuevos_campos_{_pais_key(pais)}.json")
+    if not os.path.exists(ruta):
+        return
+    try:
+        with open(ruta, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        campos = data.get("campos_nuevos") or []
+        data["campos_nuevos"] = [
+            c for c in campos
+            if not (isinstance(c, dict) and str(c.get("id") or "").strip() == str(field_id).strip())
+        ]
+        tmp = ruta + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, ruta)
+    except Exception as e:
+        print(f"⚠️ No se pudo actualizar {os.path.basename(ruta)}: {e}")
+
+
 def _buscar_entry_para(entries, pais, field_id):
     """Índice de la entrada de IDs únicos que aplica a (país, id), o None."""
     for i, entry in enumerate(entries):
@@ -1298,9 +1380,9 @@ def _build_tab_campos_detectados(popup):
     Label(
         popup,
         text="Campos nuevos que la automatización detectó en los formularios durante las corridas. "
-             "Elegí un país, escribí un valor y apretá ➕ Añadir valor (o Enter) las veces que quieras: "
-             "si un campo tiene varios valores, en cada envío la app elige uno al azar, así no se llena siempre igual. "
-             "Con la ✕ de cada valor lo quitás. Todo se guarda como IDs únicos para ese país.",
+             "Escribí un valor y apretá ➕ Añadir valor (o Enter) las veces que quieras: cada valor se guarda "
+             "al instante como ID único y, si hay varios, en cada envío la app elige uno al azar. "
+             "Cuando termines con un campo apretá ✔ Listo: sale de esta lista y lo seguís editando desde la solapa IDs únicos.",
         font=("Segoe UI", 9),
         bg=APP_BG_COLOR,
         fg="#ddd",
@@ -1452,6 +1534,28 @@ def _build_tab_campos_detectados(popup):
                 font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10, pady=2,
             ).pack(side=LEFT)
             entry_valor.bind("<Return>", lambda _e, f=_anadir: f())
+
+            def _listo(fid=field_id, lbl=label):
+                pais_actual = pais_var.get().strip()
+                if not _valores_asignados_para(pais_actual, fid):
+                    seguir = messagebox.askyesno(
+                        "Campos detectados",
+                        f"\"{lbl}\" no tiene ningún valor asignado.\n\n"
+                        "¿Quitarlo de la lista igual? (si es un select, la app va a elegir "
+                        "una opción al azar; si es texto, quedará vacío)",
+                        parent=popup,
+                    )
+                    if not seguir:
+                        return
+                quitar_campo_detectado(pais_actual, fid)
+                _refrescar()
+
+            Button(
+                fila_input, text="✔ Listo", command=_listo,
+                bg="#4c8a5f", fg="white", relief="flat",
+                font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10, pady=2,
+                activebackground="#5fa876", activeforeground="white",
+            ).pack(side=LEFT, padx=(8, 0))
 
             _render_chips(chips_frame, field_id, label)
 
