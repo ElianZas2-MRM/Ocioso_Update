@@ -89,18 +89,30 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
 ### ⚙ IDs Dinámicos (campos no mapeados, sin tocar el JSON)
 
-Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **⚙ IDs Dinámicos** (se ve en la captura de arriba, debajo de "Configurar"). Abre un popup para dar de alta y administrar campos no mapeados **desde la interfaz**, sin editar `json/ids_dinamicos.json` a mano. Tiene 4 solapas:
+Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **⚙ IDs Dinámicos** (se ve en la captura de arriba, debajo de "Configurar"). Abre un popup para dar de alta y administrar campos no mapeados **desde la interfaz**, sin editar `json/ids_dinamicos.json` a mano. La ruedita del mouse scrollea la lista de la solapa activa desde cualquier parte del popup.
+
+**Solapa "Campos detectados"** — los campos nuevos que la automatización encontró en los formularios durante las corridas (los que quedan registrados en `json/nuevos_campos_<país>.json`). Elegís el país y ves cada campo con su label, ID real, tipo y si es requerido:
 
 ![IDs Dinámicos — Campos detectados](Asset/screenshots/20_ids_dinamicos_campos_detectados.png)
 
-1. **Campos detectados**: lista los campos nuevos que la automatización encontró en los formularios durante las corridas (los que quedan registrados en `json/nuevos_campos_<país>.json`). Elegís el país, ves cada campo con su label, ID real, tipo y si es requerido, y le asignás un valor ahí mismo con **Asignar valor** — se guarda como ID único para ese país. Si ya tenía valor, lo pre-carga y lo marca con ✔.
-   - **Varios valores con rotación aleatoria**: podés cargar más de un valor separándolos con ` | ` (ej. `rojo | azul | verde`). En cada envío la app **elige uno al azar**, así el campo no se llena siempre igual. Aplica a campos de texto y también a dropdowns (elige al azar entre las opciones que coincidan).
+- **Añadir un valor**: escribí en el cuadro y apretá **➕ Añadir valor** (o Enter). Cada valor queda como una **etiqueta** al lado de "Valores:".
+- **Varios valores = rotación aleatoria**: repetí "Añadir valor" las veces que quieras (en la captura, "Número de veículos" tiene 123, 2, 5 y 10). En cada envío la app **elige uno al azar**, así el campo no se llena siempre igual. Aplica a campos de texto y a dropdowns (elige al azar entre las opciones que coincidan).
+- **Quitar un valor**: click en la **✕** de su etiqueta. Si quitás todos, el campo queda sin valor asignado.
+- Todo se guarda como **IDs únicos** para ese país — lo ves también en la solapa IDs únicos.
+
+**Solapa "IDs únicos"** — alta manual de cualquier ID no mapeado: escribís el ID, su valor (o varios separados con ` | `), descripción opcional y países donde aplica (sin tildar = todos). Abajo se listan los configurados, con filtro por texto y por país, y botones **Editar** / **✕** por fila:
 
 ![IDs Dinámicos — IDs únicos](Asset/screenshots/21_ids_dinamicos_ids_unicos.png)
 
-2. **IDs únicos**: alta manual de cualquier ID no mapeado con su valor (o varios, con ` | `), descripción opcional y países donde aplica (sin tildar = todos). Abajo se listan los configurados, con filtro por texto y por país, y botones **Editar** / **✕** por fila.
-3. **IDs Excel**: el mapping fijo por país (los campos que se llenan desde columnas del Excel). Permite ver, agregar, editar o borrar entradas y ajustar el `data_index` → te muestra en vivo a qué columna del Excel corresponde.
-4. **Dependencias**: registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden.
+**Solapa "IDs Excel"** — el mapping fijo por país (los campos que se llenan desde columnas del Excel). Permite ver, agregar, editar o borrar entradas y ajustar el `data_index` → te muestra en vivo a qué columna del Excel corresponde.
+
+**Solapa "Dependencias"** — registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden.
+
+> **Si un campo queda sin valor al enviar, la app te avisa.** Cuando una corrida no puede completar campos porque no tienen valor asignado:
+> - **Campos requeridos sin completar** → la fila cuenta como **FAIL** en el Excel de resultados (columna Resultado: *"Campos sin completar (sin valor asignado): …"*) y aparece como error en el mail.
+> - **Campos opcionales que quedaron vacíos** → la fila sigue PASS pero la columna Resultado suma el aviso *"campos opcionales vacíos (sin valor asignado): …"*, y el mail incluye la sección **⚠ CAMPOS SIN VALOR ASIGNADO** con línea y campos.
+>
+> En ambos casos la solución es la misma: abrí **⚙ IDs Dinámicos → Campos detectados** y asignale valor(es) a esos campos.
 
 ### Columnas especiales del Excel: marcar o no un checkbox
 
