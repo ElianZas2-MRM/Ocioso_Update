@@ -598,7 +598,11 @@ def analizar_errores_excel(ruta_excel):
         # intentos fallidos, error de event id, error de servidor, etc.) cuenta como ERROR,
         # aunque el texto no contenga literalmente la palabra "error".
         _ok_mask = resultados.str.contains("Lead enviado correctamente", case=False, na=False)
-        errores_mask = procesados_mask & ~_ok_mask
+        # "Campos sin completar" = quedaron campos sin valor asignado que no se pudieron
+        # llenar: cuenta como error aunque el lead se haya enviado (el usuario debe ir a
+        # ⚙ IDs Dinámicos a asignarles un valor).
+        _sin_completar_mask = resultados.str.contains("Campos sin completar", case=False, na=False)
+        errores_mask = procesados_mask & (~_ok_mask | _sin_completar_mask)
 
         errores = df[errores_mask]
         con_errores = int(errores_mask.sum())
@@ -655,6 +659,22 @@ def analizar_errores_excel(ruta_excel):
                     'url_encontrada': url_encontrada,
                 })
 
+        # Detectar campos opcionales que quedaron vacíos por no tener valor asignado
+        # (aviso, no error: el usuario puede asignarles valor en ⚙ IDs Dinámicos)
+        detalles_sin_valor = []
+        _aviso_sin_valor_mask = procesados_mask & resultados.str.contains(
+            "campos opcionales vacíos", case=False, na=False
+        )
+        for idx, fila in df[_aviso_sin_valor_mask].iterrows():
+            _url_sv = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
+            _res_sv = str(fila[col_resultado])
+            _m = re.search(r"campos opcionales vacíos \(sin valor asignado\):\s*(.+?)(?:\s+—|$)", _res_sv)
+            detalles_sin_valor.append({
+                'linea': idx + 2,
+                'url': _url_sv,
+                'campos': _m.group(1).strip() if _m else "(ver columna Resultado)",
+            })
+
         # Detectar links raros en la TY (columna 'LINK ISSUE TYP' con valor distinto de '-')
         detalles_link_issue = []
         if col_link_issue:
@@ -686,6 +706,7 @@ def analizar_errores_excel(ruta_excel):
                 'detalles_ok': detalles_ok,
                 'detalles_form': detalles_form,
                 'detalles_link_issue': detalles_link_issue,
+                'detalles_sin_valor': detalles_sin_valor,
                 'mensaje': mensaje
             }
 
@@ -710,6 +731,7 @@ def analizar_errores_excel(ruta_excel):
             'detalles_ok': detalles_ok,
             'detalles_form': detalles_form,
             'detalles_link_issue': detalles_link_issue,
+            'detalles_sin_valor': detalles_sin_valor,
             'mensaje': mensaje
         }
 
@@ -1213,6 +1235,13 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             for _li in _link_issues:
                 cuerpo += f"  • Línea {_li['linea']} — {_url_short(_li.get('url_landing',''))}: {_li.get('detalle','')}\n"
 
+        _sin_valor = errores.get('detalles_sin_valor') or []
+        if _sin_valor:
+            cuerpo += (f"\n⚠️ CAMPOS SIN VALOR ASIGNADO ({len(_sin_valor)} fila/s) — quedaron vacíos al enviar. "
+                       f"Asignales un valor en Osocio → Envío de Leads → ⚙ IDs Dinámicos:\n")
+            for _sv in _sin_valor:
+                cuerpo += f"  • Línea {_sv['linea']} — {_url_short(_sv.get('url',''))}: {_sv.get('campos','')}\n"
+
         cuerpo += "\nSaludos,\nAutomación de Formularios"
 
         _ok_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
@@ -1318,6 +1347,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
         adjuntos = []
         detalles_fallidos = []   # bloques de detalle solo para países FAILED
         detalles_url_pais = []   # [(pais, nav_label, vp_label, todos_urls)] para tabla por URL
+        avisos_sin_valor = []    # [(pais, nav_label, vp_label, detalles_sin_valor)]
 
         for idx, resultado in enumerate(resultados_ejecucion, start=1):
             pais = resultado.get("pais", "N/A")
@@ -1356,6 +1386,10 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
                         bloque += f"   ❌ Linea {linea} | URL: {url}\n      Error: {error}\n\n"
                 detalles_fallidos.append(bloque)
 
+            _sv_items = errores.get("detalles_sin_valor") or []
+            if _sv_items:
+                avisos_sin_valor.append((pais, nav_label, vp_label, _sv_items))
+
             # Adjuntos
             if adjuntar_resultados and os.path.getsize(excel_path) < 24 * 1024 * 1024:
                 adjuntos.append(excel_path)
@@ -1389,6 +1423,13 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             cuerpo += f"FAILED ({len(paises_failed)}): {' | '.join(paises_failed)}\n"
         if paises_passed:
             cuerpo += f"PASSED ({len(paises_passed)}): {' | '.join(paises_passed)}\n"
+
+        if avisos_sin_valor:
+            cuerpo += ("\n⚠️ CAMPOS SIN VALOR ASIGNADO — quedaron vacíos al enviar. "
+                       "Asignales un valor en Osocio → Envío de Leads → ⚙ IDs Dinámicos:\n")
+            for _p, _nav, _vp, _items in avisos_sin_valor:
+                for _sv in _items:
+                    cuerpo += f"  • {_p} ({_nav}/{_vp}) — Línea {_sv['linea']}: {_sv.get('campos','')}\n"
 
         cuerpo += "\nSaludos,\nAutomacion de Formularios"
 
