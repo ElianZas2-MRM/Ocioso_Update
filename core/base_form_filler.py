@@ -2231,6 +2231,32 @@ class BaseFormFiller:
         self.driver.execute_script(_SCROLL_JS, 0)
         time.sleep(end_wait)
 
+    def _maybe_click_raq_cta(self, *urls):
+        """Brasil RAQ (solicitar-contato / raq / raq-revamp): tiene una pantalla previa con un CTA
+        (#contact-by-form) que hay que clickear para llegar al formulario. Aplica tanto si el RAQ
+        viene dentro del iframe de una landing como si la URL del form se corre suelta.
+        raq-eletricos NO tiene esa pantalla."""
+        blob = " ".join((u or "").lower() for u in urls)
+        if str(self.config.get("pais", "")).lower() not in ("brasil", "brazil", "br"):
+            return
+        if "raq" not in blob or "eletricos" in blob:
+            return
+        if not ("solicitar-contato" in blob or "gm_forms/raq" in blob or "raq-revamp" in blob):
+            return
+        try:
+            _btn = WebDriverWait(self.driver, 8).until(
+                EC.element_to_be_clickable((By.ID, "contact-by-form"))
+            )
+            self._scroll_element_into_view(_btn)
+            try:
+                _btn.click()
+            except Exception:
+                self.driver.execute_script("arguments[0].click();", _btn)
+            print("Click en #contact-by-form (RAQ Brasil)")
+            time.sleep(1.5)
+        except Exception as _e:
+            print(f"#contact-by-form no encontrado: {_e}")
+
     def process_landing_page(self, landing_url, ss_counter, take_screenshot=True):
         """Procesa la página de destino inicial"""
         try:
@@ -4767,12 +4793,9 @@ class BaseFormFiller:
             return result_text, None
     
     def _log(self, msg):
-        """Escribe a archivo de log para diagnóstico cuando no hay consola."""
+        """Log a consola. No escribe archivo: el portable no debe dejar debug_run.log al usuario."""
         try:
-            log_path = os.path.join(self.BASE_DIR, "debug_run.log")
-            import datetime
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+            print(msg)
         except Exception:
             pass
 
@@ -4904,11 +4927,11 @@ class BaseFormFiller:
                             self.driver.switch_to.default_content()
                         except Exception:
                             pass
-                        self.handle_cookie_popups()
-                        if self.screenshot_manager:
-                            self.screenshot_manager.url_landing = landing_url
-                            self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
-                            print("Captura 1/3: Formulario inserto en landing")
+                        # El pre-scroll/lazy-load anterior corrió sobre la pantalla de login, no
+                        # sobre la landing: hay que reprocesarla ya autenticado o el iframe del
+                        # formulario nunca llega a estar en el DOM.
+                        form_inserto_name = self.process_landing_page(landing_url, ss_counter,
+                                                                      take_screenshot=True)
 
                     # 2. Buscar iframe (solo si hay URL esperada en columna B); si no, formulario embebido en la página
                     if use_iframe:
@@ -4965,30 +4988,7 @@ class BaseFormFiller:
                                 self.screenshot_manager.url_form_encontrado = _iframe_src
                             self._url_form_encontrado = _iframe_src
                             print("Cambiado al contexto del iframe")
-                            # solicitar-contato / raq-revamp Brasil: click en #contact-by-form dentro
-                            # del iframe. Matcheo genérico "gm_forms/raq" (igual que lt_runner.py) para
-                            # cubrir cualquier variante raq-* sin tener que listar cada una a mano —
-                            # excepto "raq-eletricos", que no tiene esa pantalla de selección previa.
-                            _raq_lower = (landing_url or "").lower() + " " + (_iframe_src or "").lower()
-                            _is_eletricos = "eletricos" in _raq_lower
-                            _is_brasil = str(self.config.get("pais", "")).lower() in ("brasil", "brazil", "br")
-                            _has_raq = "raq" in _raq_lower
-                            if _is_brasil and _has_raq and (not _is_eletricos) and (
-                                "solicitar-contato" in _raq_lower or "gm_forms/raq" in _raq_lower or "raq-revamp" in _raq_lower
-                            ):
-                                try:
-                                    _btn = WebDriverWait(self.driver, 8).until(
-                                        EC.element_to_be_clickable((By.ID, "contact-by-form"))
-                                    )
-                                    self._scroll_element_into_view(_btn)
-                                    try:
-                                        _btn.click()
-                                    except Exception:
-                                        self.driver.execute_script("arguments[0].click();", _btn)
-                                    print("Click en #contact-by-form (dentro del iframe)")
-                                    time.sleep(1.5)
-                                except Exception as _e:
-                                    print(f"#contact-by-form no encontrado en iframe: {_e}")
+                            self._maybe_click_raq_cta(landing_url, _iframe_src)
                         else:
                             form_url_mismatch = True
                             self.driver.switch_to.default_content()
@@ -4996,6 +4996,8 @@ class BaseFormFiller:
                     else:
                         self.driver.switch_to.default_content()
                         print("Columna B vacía: formulario embebido en documento principal (sin iframe)")
+                        # Form suelto (sin landing): el RAQ de Brasil igual arranca en la pantalla del CTA
+                        self._maybe_click_raq_cta(landing_url)
 
                     # 3. Esperar a que el formulario esté listo
                     self.wait_for_form_ready_in_iframe()
