@@ -87,6 +87,21 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
 > Antes de ejecutar necesitás tener generado el Excel de datos correspondiente — si falta, andá primero a la pestaña **Generar Excels con Datos**.
 
+### ⚙ IDs Dinámicos (campos no mapeados, sin tocar el JSON)
+
+Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **⚙ IDs Dinámicos** (se ve en la captura de arriba, debajo de "Configurar"). Abre un popup para dar de alta y administrar campos no mapeados **desde la interfaz**, sin editar `json/ids_dinamicos.json` a mano. Tiene 4 solapas:
+
+![IDs Dinámicos — Campos detectados](Asset/screenshots/20_ids_dinamicos_campos_detectados.png)
+
+1. **Campos detectados**: lista los campos nuevos que la automatización encontró en los formularios durante las corridas (los que quedan registrados en `json/nuevos_campos_<país>.json`). Elegís el país, ves cada campo con su label, ID real, tipo y si es requerido, y le asignás un valor ahí mismo con **Asignar valor** — se guarda como ID único para ese país. Si ya tenía valor, lo pre-carga y lo marca con ✔.
+   - **Varios valores con rotación aleatoria**: podés cargar más de un valor separándolos con ` | ` (ej. `rojo | azul | verde`). En cada envío la app **elige uno al azar**, así el campo no se llena siempre igual. Aplica a campos de texto y también a dropdowns (elige al azar entre las opciones que coincidan).
+
+![IDs Dinámicos — IDs únicos](Asset/screenshots/21_ids_dinamicos_ids_unicos.png)
+
+2. **IDs únicos**: alta manual de cualquier ID no mapeado con su valor (o varios, con ` | `), descripción opcional y países donde aplica (sin tildar = todos). Abajo se listan los configurados, con filtro por texto y por país, y botones **Editar** / **✕** por fila.
+3. **IDs Excel**: el mapping fijo por país (los campos que se llenan desde columnas del Excel). Permite ver, agregar, editar o borrar entradas y ajustar el `data_index` → te muestra en vivo a qué columna del Excel corresponde.
+4. **Dependencias**: registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden.
+
 ### Columnas especiales del Excel: marcar o no un checkbox
 
 Por defecto la app **marca todos los checkboxes** que reconoce (términos, privacidad, y cualquier otro que el formulario declare como obligatorio). Si un formulario tiene un checkbox **opcional** y querés decidir vos si se tilda o no, agregá una columna al Excel:
@@ -321,9 +336,9 @@ Es la memoria de la app: sin esta carpeta, la app abre pero **no sabe cómo llen
 | Archivo | Para qué sirve |
 |---|---|
 | `field_validation_rules.json` + `field_validation_rules_<país>.json` | Las reglas de la pestaña **Validación de Campos** (regex, largos, mensajes de error esperados, dependencias). Una por país, más la general. |
-| `ids_dinamicos.json` | Campos que hay que llenar con un valor fijo tuyo y no con un dato aleatorio (ej. "Número de contrato" = `324` en Argentina). |
+| `ids_dinamicos.json` | Campos que hay que llenar con un valor fijo tuyo y no con un dato aleatorio (ej. "Número de contrato" = `324` en Argentina). Admite varios valores por campo (rota al azar). Se administra desde el botón **⚙ IDs Dinámicos** de Envío de Leads — no hace falta editarlo a mano. |
 | `fixed_field_mappings.json` | Mapeos fijos de campo → valor, para formularios que necesitan siempre lo mismo. |
-| `nuevos_campos_<país>.json` | Campos extra que aparecieron en el form de ese país y no estaban en la configuración base. |
+| `nuevos_campos_<país>.json` | Campos extra que aparecieron en el form de ese país y no estaban en la configuración base. Se ven en la solapa **Campos detectados** de ⚙ IDs Dinámicos, donde les podés asignar valor. |
 
 **2. Tu configuración personal — se regenera sola.** Si borrás alguno, la app lo vuelve a crear vacío la próxima vez. **Ninguno de estos entra en el portable**, a propósito (así el ZIP que le pasás a otro no se lleva tu email, tu access key ni tus horarios):
 
