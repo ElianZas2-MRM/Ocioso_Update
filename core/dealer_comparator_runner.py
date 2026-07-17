@@ -655,13 +655,24 @@ def compare_dealers(
         for row in rows:
             counter += 1
             _check_stop(stop_flag)
-            if progress_cb:
-                label = (row.get(dealer_key) if dealer_key else None) or row.get(city_key) or row.get(region_key) or f"Fila {row.get('__row__')}"
-                progress_cb(counter, total, f"{model_text} · {label}" if model_text else label)
 
             region_text = row.get(region_key, "") if has_region else ""
             city_text = row.get(city_key, "") if has_city else ""
             dealer_text = row.get(dealer_key, "") if (has_dealer and dealer_key) else ""
+
+            if progress_cb:
+                # Etiqueta explícita con la combinación que se está revisando, para que el
+                # modal muestre Región / Ciudad / Dealer (los niveles activos).
+                _partes = []
+                if has_region and region_text:
+                    _partes.append(f"Región: {region_text}")
+                if has_city and city_text:
+                    _partes.append(f"Ciudad: {city_text}")
+                if has_dealer and dealer_text:
+                    _partes.append(f"Dealer: {dealer_text}")
+                label = " · ".join(_partes) or f"Fila {row.get('__row__')}"
+                progress_cb(counter, total, f"Modelo {model_text} · {label}" if model_text else label)
+
             bac_excel = row.get(bac_key, "") if chk_bac and bac_key else ""
 
             fails = []

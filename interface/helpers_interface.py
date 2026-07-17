@@ -1461,3 +1461,77 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
         import traceback
         print(traceback.format_exc())
         return False
+
+
+def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
+                                    form_url="", landing_url="", incluir_capturas=True):
+    """Envía por email el resultado de UNA corrida del Comparador de Dealers, con el mismo
+    criterio que el resto de la app:
+      - Respeta el flag global 'enviar_mail' (si está apagado, no envía).
+      - incluir_capturas=True (modo 'Excel + Capturas'): adjunta un ZIP con TODA la carpeta
+        del reporte (Excel + capturas). incluir_capturas=False (modo 'Solo Excel'): adjunta
+        sólo el Excel.
+      - Destinatario: el mismo 'email_destinatario' global que Envío de Leads.
+    Devuelve True si se encoló (o si el envío está deshabilitado), False ante error.
+    """
+    try:
+        config = cargar_config_global()
+        if not bool(config.get("enviar_mail", False)):
+            print("📭 Envío de email deshabilitado por Configuración Global. Se omite (Comparador).")
+            return True
+
+        c = counts or {}
+        pass_n = int(c.get("PASS", 0))
+        fail_n = int(c.get("FAIL", 0))
+        extra_n = int(c.get("EXTRA", 0))
+        dup_n = int(c.get("DUPLICADO", 0))
+        oculto_n = int(c.get("OCULTO", 0))
+        nota_n = int(c.get("NOTA", 0))
+
+        fecha_actual = datetime.now().strftime("%d/%m/%Y")
+        estado = "PASS" if fail_n == 0 else "FAILED"
+        icono = "✅" if fail_n == 0 else "❌"
+        asunto = (f"[{estado}] Comparador Dealers {_PAIS_ABREV.get(pais, pais)} {fecha_actual} — "
+                  f"{pass_n} OK / {fail_n} FAIL")
+
+        cuerpo = f"{icono} Comparador de Dealers — {pais}\nFecha: {fecha_actual}\n"
+        if form_url:
+            cuerpo += f"Formulario: {form_url}\n"
+        if landing_url:
+            cuerpo += f"Landing: {landing_url}\n"
+        cuerpo += (
+            f"\nResumen:\n"
+            f"  🟢 PASS: {pass_n}\n"
+            f"  🔴 FAIL: {fail_n}\n"
+            f"  🟡 EXTRA (en el form, no en el Excel): {extra_n}\n"
+            f"  🔵 DUPLICADO (repetido en el dropdown): {dup_n}\n"
+            f"  🟠 OCULTO (solo en filas ocultas del Excel): {oculto_n}\n"
+            f"  🔷 NOTA (mismo dealer, nombre con diferencias menores): {nota_n}\n"
+        )
+        cuerpo += "\nSaludos,\nAutomación de Formularios"
+
+        adjuntos = []
+        if incluir_capturas and carpeta_reporte and os.path.isdir(carpeta_reporte):
+            # ZIP con toda la carpeta (Excel + capturas)
+            zip_files = crear_zip_de_carpeta(carpeta_reporte)
+            if zip_files:
+                adjuntos.extend(zip_files)
+            elif excel_path and os.path.exists(excel_path):
+                adjuntos.append(excel_path)
+        elif excel_path and os.path.exists(excel_path):
+            if os.path.getsize(excel_path) < 24 * 1024 * 1024:
+                adjuntos.append(excel_path)
+            else:
+                cuerpo += f"\n⚠️ NOTA: El Excel es muy grande y no se pudo adjuntar. Ubicación: {excel_path}"
+
+        destinatario = obtener_email_destinatario()
+        try:
+            _encolar_email(destinatario, asunto, cuerpo, adjuntos)
+        except Exception as e:
+            print(f"❌ Error encolando email (Comparador): {e}")
+            return False
+        return True
+
+    except Exception as e:
+        print(f"❌ Error al enviar email del Comparador de Dealers: {e}")
+        return False
