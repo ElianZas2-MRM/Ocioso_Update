@@ -177,23 +177,44 @@ def read_excel_rows(file_path, header_row=1, sheet_name=None):
 
 
 def detect_hidden_rows(file_path, header_row=1, sheet_name=None):
-    """Devuelve el set de números de fila (1-indexado) de datos que están OCULTAS en el
-    Excel (el archivo a veces viene pre-filtrado con filas escondidas). Se usa sólo para
-    avisar al usuario — no cambia qué se compara. read_only no expone row_dimensions,
-    por eso se abre en modo normal."""
-    hidden = set()
+    """Devuelve un dict {nº de fila (1-indexado): 'filtrada' | 'oculta'} con las filas de
+    datos que NO se ven en el Excel. Distingue:
+      - 'filtrada': escondida por un AutoFilter activo (con criterios) — el Excel viene
+        pre-filtrado; la fila reaparece si sacás el filtro.
+      - 'oculta': escondida a mano (fila oculta manualmente), independiente de cualquier filtro.
+    En Excel ambas quedan hidden=True; se diferencian porque las filtradas caen dentro del
+    rango del AutoFilter que tiene criterios aplicados. Solo informativo (no cambia qué se
+    compara). read_only no expone row_dimensions, por eso se abre en modo normal."""
+    result = {}
     try:
+        from openpyxl.utils import range_boundaries
         wb = load_workbook(file_path, data_only=True, read_only=False)
         try:
             sheet = wb[sheet_name] if sheet_name else wb.worksheets[0]
+
+            # ¿Hay un AutoFilter con criterios activos? (filas escondidas por filtro)
+            af = getattr(sheet, "auto_filter", None)
+            af_ref = getattr(af, "ref", None) if af else None
+            af_activo = bool(af_ref) and bool(getattr(af, "filterColumn", None))
+            fr_min = fr_max = None
+            if af_activo:
+                try:
+                    _c1, fr_min, _c2, fr_max = range_boundaries(af_ref)
+                except Exception:
+                    af_activo = False
+
             for row_num, dim in sheet.row_dimensions.items():
-                if row_num > header_row and getattr(dim, "hidden", False):
-                    hidden.add(row_num)
+                if row_num <= header_row or not getattr(dim, "hidden", False):
+                    continue
+                if af_activo and fr_min is not None and fr_min <= row_num <= fr_max:
+                    result[row_num] = "filtrada"
+                else:
+                    result[row_num] = "oculta"
         finally:
             wb.close()
     except Exception:
         pass
-    return hidden
+    return result
 
 
 def detect_hidden_columns(file_path, header_row=1, sheet_name=None):
@@ -1084,7 +1105,7 @@ def find_extra_dealers(
     Recorre las combinaciones del nivel superior presentes en el Excel y reporta:
     - EXTRA: opciones que aparecen en el form pero no están en la lista esperada del Excel.
     - DUPLICADO: opciones que aparecen más de una vez como <option> en el form.
-    - OCULTO: opciones del form que SÓLO están declaradas en filas OCULTAS del Excel
+    - OCULTO: opciones del form que SÓLO están declaradas en filas que NO se ven (ocultas o filtradas) del Excel
       (hidden_rows_data) — están mal porque la fila está oculta; van en naranja.
     Este chequeo se realiza de forma jerárquica (Región -> Ciudad -> Dealer) según los niveles activos,
     buscando en conjunto y reportando la combinación exacta de forma contextual.
@@ -1185,13 +1206,13 @@ def find_extra_dealers(
             if norm in expected_regions:
                 pass
             elif norm in hidden_regions:
-                log(f"  OCULTO REGION: {text} (declarada solo en fila oculta del Excel)", "warn")
+                log(f"  OCULTO REGION: {text} (declarada solo en fila(s) que no se ven (ocultas/filtradas) del Excel)", "warn")
                 extra_results.append({
                     "status": "OCULTO",
                     "region": text,
                     "city": "",
                     "dealer": "",
-                    "fails": ["Región presente en el form pero declarada SOLO en fila(s) OCULTA(s) del Excel"],
+                    "fails": ["Región presente en el form pero declarada SOLO en fila(s) que NO se ven (ocultas o filtradas) del Excel"],
                 })
             else:
                 log(f"  EXTRA REGION: {text}", "warn")
@@ -1247,13 +1268,13 @@ def find_extra_dealers(
                     if norm in expected_cities:
                         pass
                     elif norm in hidden_cities:
-                        log(f"  OCULTO CIUDAD: {text} en {reg_orig_text} (solo en fila oculta del Excel)", "warn")
+                        log(f"  OCULTO CIUDAD: {text} en {reg_orig_text} (solo en fila(s) que no se ven: ocultas/filtradas)", "warn")
                         extra_results.append({
                             "status": "OCULTO",
                             "region": reg_orig_text,
                             "city": text,
                             "dealer": "",
-                            "fails": [f"Ciudad presente en el form para '{reg_orig_text}' pero declarada SOLO en fila(s) OCULTA(s) del Excel"],
+                            "fails": [f"Ciudad presente en el form para '{reg_orig_text}' pero declarada SOLO en fila(s) que NO se ven (ocultas o filtradas) del Excel"],
                         })
                     else:
                         log(f"  EXTRA CIUDAD: {text} (en Región: {reg_orig_text})", "warn")
@@ -1291,13 +1312,13 @@ def find_extra_dealers(
                 if norm in expected_cities:
                     pass
                 elif norm in hidden_cities:
-                    log(f"  OCULTO CIUDAD: {text} (solo en fila oculta del Excel)", "warn")
+                    log(f"  OCULTO CIUDAD: {text} (solo en fila(s) que no se ven: ocultas/filtradas)", "warn")
                     extra_results.append({
                         "status": "OCULTO",
                         "region": "",
                         "city": text,
                         "dealer": "",
-                        "fails": ["Ciudad presente en el form pero declarada SOLO en fila(s) OCULTA(s) del Excel"],
+                        "fails": ["Ciudad presente en el form pero declarada SOLO en fila(s) que NO se ven (ocultas o filtradas) del Excel"],
                     })
                 else:
                     log(f"  EXTRA CIUDAD: {text}", "warn")
@@ -1334,10 +1355,10 @@ def find_extra_dealers(
                 "fails": [f"Dealer extra para '{reg_orig_text} / {city_orig_text}'".strip(" /")],
             })
         for text in ocultos:
-            log(f"  OCULTO DEALER: {text} ({reg_orig_text} / {city_orig_text}) — solo en fila oculta del Excel", "warn")
+            log(f"  OCULTO DEALER: {text} ({reg_orig_text} / {city_orig_text}) — solo en fila(s) que no se ven (ocultas/filtradas)", "warn")
             extra_results.append({
                 "status": "OCULTO", "region": reg_orig_text, "city": city_orig_text, "dealer": text,
-                "fails": [f"Dealer presente en el form para '{reg_orig_text} / {city_orig_text}' pero declarado SOLO en fila(s) OCULTA(s) del Excel".strip(" /")],
+                "fails": [f"Dealer presente en el form para '{reg_orig_text} / {city_orig_text}' pero declarado SOLO en fila(s) que NO se ven (ocultas o filtradas) del Excel".strip(" /")],
             })
         for text, count in duplicated:
             log(f"  DUPLICADO DEALER: {text} x{count} ({reg_orig_text} / {city_orig_text})", "warn")
@@ -1766,7 +1787,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         ["🔴 FAIL", counts.get("FAIL", 0)],
         ["🟡 EXTRA (en el form, no declarado en el Excel)", counts.get("EXTRA", 0)],
         ["🔵 DUPLICADO (repetido en el dropdown del form)", counts.get("DUPLICADO", 0)],
-        ["🟠 OCULTO (en el form, pero declarado solo en filas OCULTAS del Excel)", counts.get("OCULTO", 0)],
+        ["🟠 OCULTO (en el form, pero declarado solo en filas que no se ven (ocultas/filtradas))", counts.get("OCULTO", 0)],
         ["🟣 MISSING", counts.get("MISSING", 0)],
         ["🔷 NOTA (dealer del form no está en el Excel, solo difiere en nombre)", counts.get("NOTA", 0)],
         ["⚠ PASS con nombre distinto en detalles menores", disclaimer_count],
@@ -1783,11 +1804,22 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         for url in urls_form:
             summary_data.append(["  Form", url])
 
-    # Avisos de calidad de datos del Excel de dealers (no afectan la comparación en sí)
+    # Avisos de calidad de datos del Excel de dealers (no afectan la comparación en sí).
+    # hidden_rows es un dict {nº fila: 'filtrada'|'oculta'} (o, por compatibilidad, un set).
     if hidden_rows:
+        if isinstance(hidden_rows, dict):
+            filtradas = sorted(r for r, tipo in hidden_rows.items() if tipo == "filtrada")
+            ocultas = sorted(r for r, tipo in hidden_rows.items() if tipo != "filtrada")
+        else:
+            filtradas, ocultas = [], sorted(hidden_rows)
         summary_data.append(["", ""])
-        summary_data.append(["⚠ Filas OCULTAS en el Excel de dealers", len(hidden_rows)])
-        summary_data.append(["  Número de fila(s)", ", ".join(str(r) for r in sorted(hidden_rows))])
+        summary_data.append(["⚠ Filas del Excel que no se ven", len(filtradas) + len(ocultas)])
+        if filtradas:
+            summary_data.append(["  🔎 Filtradas por AutoFilter", len(filtradas)])
+            summary_data.append(["     Número de fila(s)", ", ".join(str(r) for r in filtradas)])
+        if ocultas:
+            summary_data.append(["  🙈 Ocultas a mano", len(ocultas)])
+            summary_data.append(["     Número de fila(s)", ", ".join(str(r) for r in ocultas)])
     if hidden_columns:
         summary_data.append(["", ""])
         summary_data.append(["⚠ Columnas OCULTAS en el Excel de dealers", len(hidden_columns)])
