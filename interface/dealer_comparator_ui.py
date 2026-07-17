@@ -30,6 +30,7 @@ from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     StopRequested,
     _find_form_iframe,
+    advance_to_selects,
     banner_lines_for_result,
     capture_dropdown_evidence,
     capture_result_screenshot,
@@ -1442,6 +1443,14 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         driver.switch_to.frame(iframe)
                         ui_log("Contexto cambiado al iframe del formulario.", "info")
 
+                # Forms multi-paso: avanzar hasta el paso donde están los dropdowns
+                # region/city/dealer (en los de 1 paso los encuentra al instante).
+                advance_to_selects(
+                    driver, level_ids=DEFAULT_SELECT_IDS,
+                    has_region=has_region_var.get(), has_city=has_city_var.get(),
+                    has_dealer=has_dealer_var.get(), log_cb=ui_log, stop_flag=state["stop_event"],
+                )
+
                 model_field_id = None
                 models_to_run = None
                 if has_models_var.get():
@@ -1526,6 +1535,14 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         iframe = _find_form_iframe(driver, form_url)
                         if iframe is not None:
                             driver.switch_to.frame(iframe)
+
+                    # Mismo avance de pasos que en Fase 1, para llegar a los dropdowns
+                    advance_to_selects(
+                        driver, level_ids=DEFAULT_SELECT_IDS,
+                        has_region=has_region_var.get(), has_city=has_city_var.get(),
+                        has_dealer=has_dealer_var.get(), log_cb=lambda *_a, **_k: None,
+                        stop_flag=state["stop_event"],
+                    )
 
                     def _shot(result, _form_url=form_url, _landing_url=landing_url,
                               _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
