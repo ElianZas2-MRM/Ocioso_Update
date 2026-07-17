@@ -6,7 +6,8 @@ Permite cargar un Excel de dealers esperados (fila de encabezado y columnas conf
 porque el Excel que mandan varía de país a país y no siempre arranca en la fila 1), abrir
 un formulario real (landing+form o solo form, igual criterio que "Envío de Leads"), navegar
 región→ciudad→dealer y comparar contra el Excel filtrado, generando un reporte
-PASS/FAIL/EXTRA/MISSING (Excel, y opcionalmente capturas de pantalla en ZIP).
+PASS/FAIL/EXTRA/DUPLICADO/NOTA (Excel, y opcionalmente capturas de pantalla) — un reporte y
+una carpeta propia por cada formulario (landing+form o solo form) del Excel de URLs.
 
 Visualmente sigue el mismo lenguaje que "Envío de Leads" y "Generar Excels con Datos"
 (cards con código de país, bloque de URLs con pills + textarea igual al de Generar Excels,
@@ -29,8 +30,11 @@ from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     StopRequested,
     _find_form_iframe,
+    capture_dropdown_evidence,
     capture_result_screenshot,
     compare_dealers,
+    detect_duplicate_rows,
+    detect_hidden_columns,
     detect_hidden_rows,
     export_results_excel,
     filter_rows,
@@ -40,7 +44,6 @@ from core.dealer_comparator_runner import (
     open_target,
     read_excel_rows,
     resolve_column,
-    zip_screenshots,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -677,7 +680,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     output_mode_var = StringVar(value="excel")
     output_row = Frame(output_card, bg=CARD_BG)
     output_row.pack(fill="x", padx=15, pady=(0, 6))
-    for val, txt in (("excel", "Solo Excel"), ("caps", "Excel + Capturas (ZIP)")):
+    for val, txt in (("excel", "Solo Excel"), ("caps", "Excel + Capturas")):
         ttk.Radiobutton(output_row, text=txt, value=val, variable=output_mode_var).pack(side="left", padx=8)
 
     # ── 6. Configuraciones guardadas ─────────────────────────────────────────
@@ -913,6 +916,39 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 )
         except Exception:
             pass
+
+        # Disclaimer de columnas OCULTAS en el Excel de dealers.
+        try:
+            hidden_cols = detect_hidden_columns(excel_path, header_row=header_row)
+            state["hidden_columns"] = hidden_cols
+            if hidden_cols:
+                cols_txt = ", ".join(
+                    f"{hc['column']}" + (f" ({hc['header']})" if hc.get("header") else "") for hc in hidden_cols
+                )
+                ui_log(f"⚠ DISCLAIMER: el Excel tiene columna(s) OCULTAS: {cols_txt}. Se procesan igual.", "warn")
+        except Exception:
+            state["hidden_columns"] = []
+
+        # Duplicados dentro del conjunto ya filtrado (mismo dealer/región/ciudad) — problema
+        # de calidad de datos del Excel de ORIGEN, distinto de los EXTRA/DUPLICADO del form.
+        try:
+            column_map_for_dups = _column_map()
+            dup_rows = detect_duplicate_rows(
+                filtered, column_map_for_dups,
+                has_region=has_region_var.get(), has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+            )
+            state["duplicate_rows"] = dup_rows
+            if dup_rows:
+                ejemplos = "; ".join(
+                    f"{d['dealer']} ({d['region']}/{d['city']}) x{len(d['filas'])}" for d in dup_rows[:8]
+                )
+                mas = "…" if len(dup_rows) > 8 else ""
+                ui_log(
+                    f"⚠ DISCLAIMER: {len(dup_rows)} dealer(es) aparecen MÁS DE UNA VEZ en el Excel "
+                    f"(mismo dealer/región/ciudad) → {ejemplos}{mas}", "warn",
+                )
+        except Exception:
+            state["duplicate_rows"] = []
 
         return headers, filtered
 
@@ -1228,6 +1264,24 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         slug = _re.sub(r"[^\w-]", "_", slug)[:40]
         return slug or "form"
 
+    def _slug(txt):
+        import re as _re_sub
+        return _re_sub.sub(r"[^\w]+", "_", str(txt or "").strip().lower()).strip("_")
+
+    def _pair_output_dir(form_url, stamp):
+        """Carpeta propia por form: país + form + columna de filtro (o 'sinfiltro') +
+        incluidos/excluidos + timestamp. Ahí quedan el Excel y las capturas juntos, sin ZIP."""
+        form_slug = _extract_form_slug(form_url)
+        if excel_filter_mode_var.get() == "with_filter" and filter_col_var.get().strip():
+            filtro_slug = _slug(filter_col_var.get())
+        else:
+            filtro_slug = "sinfiltro"
+        incl_excl = "excluidos" if state.get("expect_absent") else "incluidos"
+        name = "_".join(p for p in (_slug(state["pais"]), form_slug, filtro_slug, incl_excl, stamp) if p)
+        path = os.path.join(_get_results_dir(), name)
+        os.makedirs(path, exist_ok=True)
+        return path
+
     def _worker_run(filtered_rows, column_map, url_pairs):
         driver = None
         counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "DUPLICADO": 0}
@@ -1251,34 +1305,26 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             )
             state["driver"] = driver
 
-            all_results = []
-            screenshots = []
             output_mode = output_mode_var.get()
             total_pairs = len(url_pairs)
             current_url_mode = url_mode_var.get()
+            expect_absent = state.get("expect_absent", False)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            all_results_all_pairs = []
+            report_paths = []
 
-            # Subcarpeta de capturas: pais + "dealers" + columna de filtro usada.
-            # Ej. "chile_dealers_posventa". Si no hay filtro, sólo "pais_dealers".
-            import re as _re_sub
-            def _slug(txt):
-                return _re_sub.sub(r"[^\w]+", "_", str(txt or "").strip().lower()).strip("_")
-            _caps_parts = [_slug(state["pais"]), "dealers"]
-            if excel_filter_mode_var.get() == "with_filter" and filter_col_var.get().strip():
-                _caps_parts.append(_slug(filter_col_var.get()))
-            caps_subdir = os.path.join(_get_results_dir(), "_".join(p for p in _caps_parts if p))
-            os.makedirs(caps_subdir, exist_ok=True)
-
-            # --- FASE 1: COMPARACIÓN RÁPIDA (sin capturas) ---
-            ui_log("INICIANDO FASE 1: Comparación rápida (sin capturas de pantalla)...", "info")
             for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
                 if state["stop_event"].is_set():
                     raise StopRequested()
                 ui_log(f"\n=== Form {pair_idx}/{total_pairs}: {form_url} ===", "info")
                 if landing_url:
                     ui_log(f"    Landing: {landing_url}", "info")
+
+                pair_dir = _pair_output_dir(form_url, stamp)
+
+                # --- FASE 1: comparación rápida (sin capturas) ---
                 open_target(driver, current_url_mode, landing_url, form_url)
 
-                # Pausa opcional para login manual en la primera URL
                 if pair_idx == 1 and _pausar_auth:
                     from tkinter import messagebox
                     ui_log("PAUSA DE AUTENTICACIÓN: Esperando que el usuario inicie sesión...", "info")
@@ -1292,7 +1338,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     )
                     if not res:
                         raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación.")
-                    
+
                     ui_log("Resumiendo comparación. Buscando contexto del formulario...", "info")
                     driver.switch_to.default_content()
                     iframe = _find_form_iframe(driver, form_url)
@@ -1313,12 +1359,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         ui_log(f"Modelos detectados en el form: {', '.join(models_to_run) or '(ninguno)'}", "info")
 
                 def _compare_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Fase 1 - Form {_pair_idx}/{total_pairs}] Comparando {cur}/{total}: {label_txt}")
+                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Comparando {cur}/{total}: {label_txt}")
 
                 def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Fase 1 - Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total} (región/ciudad): {label_txt}")
+                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total}: {label_txt}")
 
-                results = compare_dealers(
+                pair_results = compare_dealers(
                     driver, filtered_rows, column_map,
                     level_ids=DEFAULT_SELECT_IDS,
                     has_region=has_region_var.get(), has_city=has_city_var.get(),
@@ -1327,13 +1373,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     model_field_id=model_field_id, models=models_to_run,
                     log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
                     screenshot_cb=None,
-                    expect_absent=state.get("expect_absent", False),
+                    expect_absent=expect_absent,
                 )
-                for r in results:
+                for r in pair_results:
                     r["url_form"] = form_url
                     r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
 
-                if _should_find_extras() and not state.get("expect_absent", False):
+                if _should_find_extras() and not expect_absent:
                     ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
                     extras = find_extra_dealers(
                         driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
@@ -1344,73 +1390,32 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     for r in extras:
                         r["url_form"] = form_url
                         r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
-                    results = results + extras
+                    pair_results = pair_results + extras
 
-                all_results.extend(results)
-                state["results"] = all_results
+                for r in pair_results:
+                    counts[r["status"]] = counts.get(r["status"], 0) + 1
+                all_results_all_pairs.extend(pair_results)
+                state["results"] = all_results_all_pairs
+                ui_log(
+                    f"Form {pair_idx}/{total_pairs} comparado: "
+                    f"PASS={sum(1 for r in pair_results if r['status']=='PASS')} "
+                    f"FAIL={sum(1 for r in pair_results if r['status']=='FAIL')} "
+                    f"EXTRA={sum(1 for r in pair_results if r['status']=='EXTRA')} "
+                    f"DUPLICADO={sum(1 for r in pair_results if r['status']=='DUPLICADO')}", "ok",
+                )
 
-            for r in all_results:
-                counts[r["status"]] = counts.get(r["status"], 0) + 1
-            ui_log(
-                f"Comparación terminada: PASS={counts.get('PASS', 0)} FAIL={counts.get('FAIL', 0)} "
-                f"EXTRA={counts.get('EXTRA', 0)} DUPLICADO={counts.get('DUPLICADO', 0)}", "ok"
-            )
-
-            # Nombre descriptivo del Excel: incluye form slug + columna de filtro
-            form_slug = _extract_form_slug(url_pairs[0][1]) if url_pairs else "form"
-            filter_col_name = filter_col_var.get().strip().replace(" ", "_") if excel_filter_mode_var.get() == "with_filter" else ""
-            name_parts = ["dealer_comparator", state["pais"], form_slug]
-            if filter_col_name:
-                name_parts.append(filter_col_name)
-            name_parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
-            excel_filename = "_".join(name_parts) + ".xlsx"
-
-            results_dir = _get_results_dir()
-            os.makedirs(results_dir, exist_ok=True)
-            export_path = os.path.join(results_dir, excel_filename)
-            export_path = export_results_excel(all_results, output_path=export_path, pais=state["pais"])
-            ui_log(f"Reporte Excel: {export_path}", "ok")
-
-            if output_mode == "caps" and not state["stop_event"].is_set():
-                ui_log("\n=== FASE 2: Generando capturas de pantalla en segundo plano... ===", "info")
-                for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
-                    if state["stop_event"].is_set():
-                        raise StopRequested()
-                    ui_log(f"Capturando Form {pair_idx}/{total_pairs}...", "info")
+                # --- FASE 2 (opcional): capturas — mismo form, misma carpeta que el Excel ---
+                if output_mode == "caps" and not state["stop_event"].is_set():
+                    ui_log(f"Generando capturas para Form {pair_idx}/{total_pairs}...", "info")
                     open_target(driver, current_url_mode, landing_url, form_url)
-
-                    # Pausa opcional para login manual en la primera URL en la Fase 2
                     if pair_idx == 1 and _pausar_auth:
-                        from tkinter import messagebox
-                        ui_log("FASE 2 - PAUSA DE AUTENTICACIÓN: Esperando confirmación de inicio de sesión...", "info")
-                        res = messagebox.askokcancel(
-                            "Ocioso — Autenticación Manual (Fase Capturas)",
-                            "Se ha pausado la Fase 2 (Capturas) antes del primer formulario para que puedas verificar que tu sesión siga activa.\n\n"
-                            "1. Si el navegador perdió la sesión, iniciá sesión nuevamente.\n"
-                            "2. Asegurate de estar en la página del formulario.\n"
-                            "3. Hacé click en 'Aceptar' para continuar con la captura de pantallas.",
-                            parent=None
-                        )
-                        if not res:
-                            raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación de Fase 2.")
-                        
-                        ui_log("Resumiendo Fase 2. Buscando contexto del formulario...", "info")
                         driver.switch_to.default_content()
                         iframe = _find_form_iframe(driver, form_url)
                         if iframe is not None:
                             driver.switch_to.frame(iframe)
-                            ui_log("Contexto cambiado al iframe del formulario.", "info")
 
-                    model_field_id = None
-                    models_to_run = None
-                    if has_models_var.get():
-                        model_field_id = models_field_id_var.get().strip() or "models"
-                        if models_mode_var.get() == "specific":
-                            models_to_run = [m.strip() for m in models_list_var.get().split(",") if m.strip()]
-                        else:
-                            models_to_run = list_model_options(driver, model_field_id)
-
-                    def _shot(result, _form_url=form_url, _landing_url=landing_url, _url_mode=current_url_mode):
+                    def _shot(result, _form_url=form_url, _landing_url=landing_url,
+                              _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
                         combo_parts = []
                         if has_region_var.get() and result.get("region"):
                             combo_parts.append(result["region"])
@@ -1420,7 +1425,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                             combo_parts.append(result["dealer"])
                         if not combo_parts:
                             combo_parts.append("dealer")
-                        
+
                         import re
                         safe_parts = []
                         for part in combo_parts:
@@ -1429,16 +1434,28 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                             if clean:
                                 safe_parts.append(clean)
                         combo_name = "_".join(safe_parts)[:60]
-                        filename = f"{result['status']}_form{pair_idx}_fila{result.get('fila') or 'x'}_{combo_name}.png"
+                        filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
                         shot_landing = _landing_url if _url_mode == "landing_form" else ""
-                        path = capture_result_screenshot(
-                            driver, caps_subdir, filename,
-                            form_url=_form_url, landing_url=shot_landing,
-                        )
-                        screenshots.append(path)
+
+                        if expect_absent and has_dealer_var.get():
+                            # Evidencia de exclusión: clona TODAS las opciones visibles del
+                            # dropdown de dealer (el <select> nativo no es fotografiable) y
+                            # resalta si el buscado aparece o no — prueba concreta de ausencia.
+                            titulo = f"Dropdown Dealer — {result.get('region','')} / {result.get('city','')}".strip(" /")
+                            capture_dropdown_evidence(
+                                driver, DEFAULT_SELECT_IDS["dealer"], _pair_dir, filename,
+                                title=titulo, searched_text=result.get("dealer", ""),
+                                found=(result["status"] == "FAIL"),
+                                form_url=_form_url, landing_url=shot_landing,
+                            )
+                        else:
+                            capture_result_screenshot(
+                                driver, _pair_dir, filename,
+                                form_url=_form_url, landing_url=shot_landing,
+                            )
 
                     def _capture_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                        _progress_cb(cur, total, f"[Fase 2 - Form {_pair_idx}/{total_pairs}] Capturando {cur}/{total}: {label_txt}")
+                        _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Capturando {cur}/{total}: {label_txt}")
 
                     compare_dealers(
                         driver, filtered_rows, column_map,
@@ -1449,18 +1466,23 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         model_field_id=model_field_id, models=models_to_run,
                         log_cb=lambda *_a: None, progress_cb=_capture_progress_cb, stop_flag=state["stop_event"],
                         screenshot_cb=_shot,
-                        expect_absent=state.get("expect_absent", False),
+                        expect_absent=expect_absent,
                     )
 
-                zip_filename = excel_filename.replace(".xlsx", "_capturas.zip")
-                zip_path = os.path.join(_get_results_dir(), zip_filename)
-                zip_screenshots(screenshots, zip_path)
-                for shot_path in screenshots:
-                    try:
-                        os.remove(shot_path)
-                    except Exception:
-                        pass
-                ui_log(f"Capturas empaquetadas: {zip_path}", "ok")
+                # --- Exportar el reporte de ESTE form, en su propia carpeta ---
+                excel_filename = os.path.basename(pair_dir) + ".xlsx"
+                export_path = export_results_excel(
+                    pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
+                    hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
+                    duplicate_rows=state.get("duplicate_rows"),
+                )
+                report_paths.append(export_path)
+                ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
+
+            ui_log(
+                f"\nTodos los forms procesados. Reportes generados: {len(report_paths)}\n" +
+                "\n".join(f"  - {p}" for p in report_paths), "ok",
+            )
 
         except StopRequested:
             ui_log("Ejecución detenida por el usuario.", "warn")
