@@ -19,6 +19,9 @@ class ScreenshotManager:
         self.url_landing        = ""
         self.url_form_esperado  = ""
         self.url_form_encontrado = ""
+        # Líneas extra para el banner: lista de (texto, (r,g,b)) — ej. el Comparador
+        # Dealers agrega "Revisado: ..." y "Estado: PASS/FAIL".
+        self.extra_lines = []
         # Firefox no puede tomar screenshots en contexto iframe; guardamos el iframe activo
         # para salir a default_content antes del screenshot y volver después.
         self.current_frame = None
@@ -44,6 +47,11 @@ class ScreenshotManager:
                         lineas.append(("  ✓  Coincide con el esperado", VERDE))
                     else:
                         lineas.append(("  ✗  NO coincide con el esperado", ROJO))
+            for extra in (self.extra_lines or []):
+                if isinstance(extra, (list, tuple)) and len(extra) == 2:
+                    lineas.append((str(extra[0]), tuple(extra[1])))
+                else:
+                    lineas.append((str(extra), AMARILLO))
             if not lineas:
                 return
             font_size = max(14, w // 80)

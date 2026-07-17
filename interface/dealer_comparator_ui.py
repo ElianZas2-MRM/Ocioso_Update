@@ -30,12 +30,14 @@ from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     StopRequested,
     _find_form_iframe,
+    banner_lines_for_result,
     capture_dropdown_evidence,
     capture_result_screenshot,
     compare_dealers,
     detect_duplicate_rows,
     detect_hidden_columns,
     detect_hidden_rows,
+    evidence_level_for_result,
     export_results_excel,
     filter_rows,
     find_extra_dealers,
@@ -1436,22 +1438,33 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         combo_name = "_".join(safe_parts)[:60]
                         filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
                         shot_landing = _landing_url if _url_mode == "landing_form" else ""
+                        banner_extra = banner_lines_for_result(
+                            result, has_region=has_region_var.get(),
+                            has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+                        )
 
-                        if expect_absent and has_dealer_var.get():
-                            # Evidencia de exclusión: clona TODAS las opciones visibles del
-                            # dropdown de dealer (el <select> nativo no es fotografiable) y
-                            # resalta si el buscado aparece o no — prueba concreta de ausencia.
-                            titulo = f"Dropdown Dealer — {result.get('region','')} / {result.get('city','')}".strip(" /")
+                        if expect_absent:
+                            # Evidencia de exclusión: se despliega el PRIMER nivel de la cadena
+                            # región→ciudad→dealer que no se encontró (si la región no está,
+                            # tampoco pueden estar su ciudad ni su dealer). El <select> nativo
+                            # no es fotografiable, así que se clona la lista completa de
+                            # opciones arriba del form, resaltando el buscado si aparece.
+                            nivel, sel_key, buscado, found = evidence_level_for_result(
+                                result, has_region=has_region_var.get(),
+                                has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+                            )
                             capture_dropdown_evidence(
-                                driver, DEFAULT_SELECT_IDS["dealer"], _pair_dir, filename,
-                                title=titulo, searched_text=result.get("dealer", ""),
-                                found=(result["status"] == "FAIL"),
+                                driver, DEFAULT_SELECT_IDS[sel_key], _pair_dir, filename,
+                                title=f"Dropdown {nivel} desplegado", searched_text=buscado,
+                                found=found,
                                 form_url=_form_url, landing_url=shot_landing,
+                                extra_lines=banner_extra,
                             )
                         else:
                             capture_result_screenshot(
                                 driver, _pair_dir, filename,
                                 form_url=_form_url, landing_url=shot_landing,
+                                extra_lines=banner_extra,
                             )
 
                     def _capture_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
