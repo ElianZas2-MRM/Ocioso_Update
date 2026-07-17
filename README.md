@@ -162,7 +162,7 @@ Mientras corre el envío, la app abre una ventana "Ejecución de Test" que es tu
 Qué muestra, de arriba abajo:
 
 - **Ejecutando… / N de M mercado(s) completados**: el avance general de la corrida.
-- **Detener**: corta todo. No mata el proceso de golpe: le avisa a las sesiones que frenen, así que puede tardar unos segundos en cerrar los navegadores que estén a mitad de un lead.
+- **Detener**: corta todo. Al apretarlo (igual que la ✕ de cerrar) **pide confirmación** antes de frenar. No mata el proceso de golpe: le avisa a las sesiones que frenen, así que puede tardar unos segundos en cerrar los navegadores que estén a mitad de un lead.
 - **Las tres pastillas** (*Mercados: Secuencial · Excels: Secuencial · N mercado(s)*): un recordatorio de con qué configuración arrancó **esta** corrida. Sirve para no confundirte si después cambiás los selectores de atrás.
 - **Una barra por mercado + dispositivo** (`Bolivia — Chrome`, `Brasil — Chrome`, …): cada una avanza sola. A la derecha ves el estado: mientras corre dice cuántos leads van (`0/1 lead(s) listos`) y al terminar cambia al resultado (`✓ 1 OK · 0 error(es)`). La barra queda **verde** cuando el mercado terminó y **naranja** mientras está en curso.
 
@@ -290,52 +290,62 @@ Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo,
 
 ## Pestaña: Comparar Dealers vs Form
 
-Chequea que los concesionarios (dealers) de una marca estén correctamente cargados en un formulario real, comparando contra un Excel de dealers esperados — reemplaza el bookmarklet manual que antes se pegaba en la consola del navegador.
+Chequea que los concesionarios (dealers) de una marca estén correctamente cargados en un formulario real, comparando contra un Excel de dealers esperados — reemplaza el bookmarklet manual que antes se pegaba en la consola del navegador. Todo se valida **en conjunto** (Región → Ciudad → Dealer), nunca un dealer suelto: un mismo nombre en otra provincia no genera falsos positivos.
 
-![Comparar Dealers vs Form](Asset/screenshots/05_comparador_dealers.png)
+La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra de EJECUTAR. Se ve en dos partes:
 
-La pestaña está organizada en bloques con una **mini-guía numerada (①→⑤)** en cada uno, todo arriba de la barra de EJECUTAR. Un bloque de 3 columnas (**Navegador · Excel de URLs · Modelos**) y otro de 2 columnas (**Excel de dealers · Columnas del Excel**).
+![Comparar Dealers — parte superior](Asset/screenshots/30_dealers_tab_top.png)
 
 **Paso a paso:**
 
-1. **① MERCADO A CHEQUEAR**: tarjeta del país. Cada país guarda su propia configuración (columnas, Excels, etc.) automáticamente al cambiar de mercado — no hace falta guardar nada a mano para no perder lo que cargaste en ese país.
-2. **② NAVEGADOR**: elegí Chrome/Firefox/Edge (las opciones **Mac LT / Android LT** figuran como *próximamente*). La visibilidad del navegador se configura de manera global usando el botón **⚙ Configurar** en el extremo derecho de las pestañas (se aplica a toda la aplicación).
-3. **③ EXCEL DE URLs**: en vez de pegar URLs a mano, cargás un Excel (el mismo tipo que usa "Envío de Leads") con columnas **`URL`** (landing) y **`Formulario`** (form). Podés reemplazar un archivo seleccionando otro directamente desde este botón. Muestra un aviso en vivo con la cantidad de forms detectados, o si las URLs parecen de otro país que el mercado elegido.
-4. **④ EXCEL DE DEALERS A CHEQUEAR**: botón **"Seleccionar Excel"** (cualquier .xlsx/.xls), **"Fila encabezados"** (número de fila donde arrancan los títulos — el Excel real no siempre arranca en la fila 1), y el toggle **"Tiene columna de filtro"** / **"No tiene filtro (usar todas las filas)"**. Con filtro activo definís **Columna filtro**, **Valor filtro** y la **Condición**:
-   - **Incluir**: los dealers de las filas que matchean el filtro (ej. `POSVENTA = si`) **deben estar** en el form.
-   - **Excluir**: los dealers de las filas que matchean (ej. `POSVENTA = no`) **NO deben estar** en el form (se verifica su ausencia: si aparecen, es FAIL).
-   - Si el Excel viene **pre-filtrado con filas ocultas**, se procesan igual pero se muestra un **disclaimer** en el log con cuáles estaban ocultas.
-   - La búsqueda de **EXTRA / DUPLICADOS** (opciones en el form que no están en el Excel) se realiza de forma **jerárquica en conjunto**, adaptándose a los niveles que estén activos. Si tenés habilitados Región, Ciudad y Dealer:
-     1. **Región**: Chequea si hay regiones extra en el formulario no declaradas en el Excel.
-     2. **Ciudad (en conjunto)**: Selecciona cada región válida del Excel y valida que las ciudades mostradas en el formulario pertenezcan a esa región según el Excel (detecta si una ciudad está cargada bajo una región incorrecta).
-     3. **Dealer (en conjunto)**: Selecciona cada combinación válida de `(Región, Ciudad)` del Excel y valida que los dealers correspondan a esa combinación (evita falsos extras por nombres de dealers duplicados entre distintas ciudades).
-     Si desactivás un nivel (ej. `dealer`), la app se adapta y realiza la validación jerárquica hasta el nivel más bajo activo (ej. buscando ciudades extras en conjunto con su región).
-5. **⑤ COLUMNAS DEL EXCEL**: pills **region / city / dealer** (los ids reales de los selects del HTML del formulario, ej. `region` / `city` / `dealer`). 
-   - El nivel `dealer` ya no es obligatorio: podés desmarcarlo para realizar la validación de solo región y ciudad. Definís qué columna de tu Excel corresponde a cada nivel activo.
-   - Podés configurar **columnas adicionales a comprobar** (ej. "CEP" → id `customer-cep`). Al agregarlas y escribir el ID en el form, **estas columnas se añaden automáticamente como píldoras-checkbox** junto a `region`/`city`/`dealer`. Podés activarlas o desactivarlas de forma interactiva antes de correr la prueba.
-   - Todas estas píldoras y sus estados (habilitada/deshabilitada) se guardan y cargan de forma persistente con tus configuraciones del país.
-6. **Modelos** (opcional, 3ra columna del primer bloque): tildá **"Tiene selector de Modelo"** si aplica — **solo funciona con formularios T1** (el id estándar `models`); T2/T3 con selector distinto todavía no están soportados. Elegís **"Todos los modelos"** o **"Modelo(s) específico(s)"** (separados por coma). Cuando hay modelo, **primero se selecciona el modelo y después se revisan los dealers** (la lista de dealers puede depender del modelo).
-7. **Modo de salida**: "Solo Excel" o "Excel + Capturas (ZIP)".
-8. **Configuraciones guardadas**: guardá el mapeo completo con un nombre (ej. "GMUY Livianos") con **💾 Guardar**, recuperalo con **📂 Cargar** o borralo con **🗑 Eliminar**.
-9. **EJECUTAR**: se habilita cuando tenés cargados el Excel de URLs, el Excel de dealers, y mapeadas las columnas de los niveles activos.
-   - Durante la corrida, el botón principal se deshabilita mostrando `" EJECUCIÓN EN CURSO"`. El botón de parar queda centralizado de forma segura en el modal de progreso.
-   - **Flujo en 2 Fases**:
-     - **Fase 1 (Comparación Rápida):** Compara los dealers y campos de inmediato sin tomar capturas. Al finalizar esta fase, **genera y guarda el Excel de resultados en el disco** de inmediato, permitiéndote abrirlo y revisarlo sin demoras.
-     - **Fase 2 (Generación de Capturas):** Si seleccionaste la opción de capturas, la aplicación realiza una segunda pasada rápida para capturar cada pantalla y empaquetar el archivo ZIP de resultados.
-10. Los reportes (Excel con colores por estado, y el ZIP de capturas si corresponde) quedan en `Dealerscheck_resultados/`.
+1. **① MERCADO A CHEQUEAR** — tarjeta del país. Cada país guarda su propia configuración (columnas, Excels, filtro) automáticamente al cambiar de mercado.
+2. **② NAVEGADOR** — Chrome / Firefox / Edge. Mac LT / Android LT figuran como *próximamente* (el Comparador solo usa navegadores locales). Que el navegador se vea o no se controla globalmente con **⚙ Configurar**.
+3. **③ EXCEL DE URLs** — cargás un Excel (mismo formato que Envío de Leads) con columnas **`URL`** (landing) y **`Formulario`** (form). Por fila: si `URL` tiene valor → abre landing + form; si está vacía → solo form. Solo se toman filas cuyo `Formulario` es una URL real (así, si elegís otro Excel por error, no genera reportes basura). **Cada form del Excel genera su propia carpeta de reporte.**
+4. **④ EXCEL DE DEALERS A CHEQUEAR** — **"Seleccionar Excel"** (.xlsx/.xls), **"Fila encabezados"** (número de fila donde arrancan los títulos; el Excel real no siempre arranca en la 1), y el modo del Excel:
+   - **Tiene columna de filtro**: definís **Columna filtro** (nombre o letra, ej. `K`), **Valor filtro** (ej. `No`) y la **Condición**:
+     - **Incluir** → esos dealers **deben estar** en el form.
+     - **Excluir** → esos dealers **NO deben estar** (se verifica la ausencia; si aparecen, es FAIL).
+   - **No tiene filtro (usar todas las filas)**: compara todo el Excel contra el form, con la misma lógica de conjunto. Sirve para validar el mapeo Región/Ciudad/Dealer sin depender de una columna de filtro.
+
+![Comparar Dealers — filtro, columnas, salida, email y presets](Asset/screenshots/31_dealers_tab_mid.png)
+
+5. **⑤ COLUMNAS DEL EXCEL** — las píldoras **region / city / dealer** son los **ids reales del `<select>` en el HTML** del form (no cambian de país a país, aunque el texto visible sí: "Provincia" en AR sigue siendo `region`). Desmarcá el nivel que tu form no tenga (ej. sin `dealer`, valida solo región+ciudad). Debajo mapeás qué **columna de tu Excel** es cada nivel (Región=`PROVINCIA`, Ciudad=`CIUDAD`, Dealer=`NOMBRE`, etc.).
+   - **Verificar BAC**: opcional (muchos forms no exponen `data-bac`).
+   - **Columnas adicionales a comprobar**: agregás cualquier campo extra (columna del Excel → id del form, ej. `CEP` → `customer-cep`); quedan como píldoras-checkbox activables. Todo se guarda por país.
+6. **Modelos** (opcional) — tildá **"Tiene selector de Modelo"** si el form lo tiene (solo T1 con id `models`). Elegís "Todos los modelos" o "Modelo(s) específico(s)". Primero se elige el modelo y después se revisan los dealers (la lista puede depender del modelo).
+7. **📦 MODO DE SALIDA** — **"Solo Excel"** o **"Excel + Capturas"**. Con capturas, quedan como PNG sueltos **junto al Excel dentro de la misma carpeta** del form (sin ZIP; lo comprimís vos si querés).
+8. **✉ ENVIAR RESULTADOS POR EMAIL** *(nuevo)* — tildá **"Enviar mail al terminar"** y poné el destinatario (comparte el mismo campo global que Envío de Leads). Al terminar **cada form** manda un mail con su reporte: adjunta la **carpeta completa (Excel + capturas) en un ZIP** si elegiste "Excel + Capturas", o **solo el Excel** si elegiste "Solo Excel". El cuerpo trae el resumen PASS/FAIL/EXTRA/DUPLICADO/OCULTO/NOTA. Respeta el flag global de envío, igual que el resto de la app.
+9. **💾 CONFIGURACIONES GUARDADAS** — guardá el mapeo completo con un nombre y reusalo:
+   - **💾 Guardar configuración**: crea una nueva (pregunta antes de sobrescribir si el nombre ya existe).
+   - **📂 Cargar**: aplica el preset elegido y copia su nombre al campo Nombre, listo para editar.
+   - **✏ Editar**: reescribe el preset seleccionado con los valores actuales; si cambiaste el texto del campo Nombre, lo renombra.
+   - **🗑 Eliminar**: borra el preset (con confirmación).
+10. **EJECUTAR** — se habilita con el Excel de URLs, el de dealers y las columnas mapeadas. Corre en **2 fases** por cada form: **Fase 1** compara y **guarda el Excel de resultados enseguida**; **Fase 2** (si elegiste capturas) toma las capturas. Cada form deja su **carpeta propia** nombrada `país_form_columna(o sinfiltro)_incluidos|excluidos_timestamp` dentro de `Dealerscheck_resultados/`.
+
+**Estados del reporte** (colores en el Excel):
+
+| Estado | Color | Qué significa |
+|---|---|---|
+| **PASS** | verde | El dealer/combinación está como debe (o correctamente ausente en modo Excluir). |
+| **FAIL** | rojo | No está cuando debía (Incluir) o está cuando no debía (Excluir). |
+| **EXTRA** | amarillo | Aparece en el form pero **no está declarado en el Excel** (por su combinación región/ciudad). |
+| **DUPLICADO** | naranja claro | Aparece **más de una vez** en el mismo dropdown del form. |
+| **OCULTO** | naranja | Está en el form pero declarado **solo en filas ocultas** del Excel — todo lo relacionado con filas/columnas ocultas se marca en naranja. |
+| **NOTA** | celeste | Mismo dealer, el nombre difiere solo en **detalles menores** (mayúsculas, apóstrofes/comillas, guiones, paréntesis, sufijos tipo `(1000km)`). Cuenta como OK, con el disclaimer en la columna **"Nota Nombre"**. |
+
+> **Nombres con caracteres especiales.** El matching tolera diferencias de puntuación y espaciado: `DANTE D'AMICO S.A. - MATADEROS` matchea con `DANTE D AMICO S.A. – MATADEROS`, y `HCH S.A. - RPM` con `HCH S.A. (RPM)`. Cuentan como PASS con **NOTA**. Lo que **sí** da error es contenido de más o de menos (ej. "Pepito" vs "Pepito Hernández").
+
+**Evidencia de exclusión (modo Excluir + capturas).** Para probar que un dealer NO está, la app **despliega el dropdown correspondiente dentro del form** (convierte el `<select>` en lista abierta, ya que el popup nativo no es fotografiable) y saca la captura. Se abre el **primer nivel de la cadena que falta**: si la región no está → dropdown de Regiones; si la región está pero la ciudad no → dropdown de Ciudades; si ambas están y el dealer no → dropdown de Dealers. Si el dealer está cuando no debía, aparece **resaltado en amarillo**. Cada captura lleva arriba un banner conciso: URL landing, URL form, **Revisado:** Región · Ciudad · Dealer, y **Estado:** PASS/FAIL con el motivo.
 
 ### El modal del Comparador
 
-Igual que en Envío de Leads, la comparación corre dentro de un modal que bloquea la ventana de atrás:
+La comparación corre dentro de un modal que bloquea la ventana de atrás:
 
-![Modal del Comparador](Asset/screenshots/18_modal_comparador.png)
-
-- **Comparando dealers… / país**: arriba te recuerda sobre qué mercado está corriendo.
-- **La barra de progreso** avanza sobre el total de dealers del Excel.
-- **La línea de estado** de abajo es la más útil: te dice exactamente en qué está, con este formato → `2/3 — [Fase 1 - Form 1/5] Buscando extras 2/3 (región/ciudad): Montevideo / Montevideo`. Ahí leés la fase (1 = comparación, 2 = capturas), qué formulario de la lista está procesando (`Form 1/5`), y qué dealer o combinación región/ciudad está mirando en ese momento.
-- **Detener** corta la corrida. Como el Excel de resultados se guarda al terminar la Fase 1, si frenás durante la Fase 2 (capturas) igual te queda el reporte.
-
-![Modal del Comparador sobre la app](Asset/screenshots/19_modal_comparador_sobre_app.png)
+- **Comparando dealers… / país**: sobre qué mercado corre.
+- **Barra de progreso** sobre el total.
+- **Línea de estado**: la combinación exacta en curso → `Región: CABA · Ciudad: MATADEROS · Dealer: DANTE D'AMICO S.A.` (los niveles activos, form por form).
+- **Resumen final**: PASS/FAIL bien grande, más EXTRA/DUPLICADO/OCULTO/NOTA si los hay, el total chequeado y un veredicto (`✓ Todo OK` o `⚠ N con problemas`).
+- **Detener**: pide **confirmación** antes de cortar (igual que la ✕ de cerrar). Como el Excel se guarda al terminar la Fase 1 de cada form, si frenás en la Fase 2 (capturas) el reporte igual queda.
 
 ---
 
