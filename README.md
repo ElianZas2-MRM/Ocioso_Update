@@ -312,7 +312,7 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
 5. **⑤ COLUMNAS DEL EXCEL** — las píldoras **region / city / dealer** son los **ids reales del `<select>` en el HTML** del form (no cambian de país a país, aunque el texto visible sí: "Provincia" en AR sigue siendo `region`). Desmarcá el nivel que tu form no tenga (ej. sin `dealer`, valida solo región+ciudad). Debajo mapeás qué **columna de tu Excel** es cada nivel (Región=`PROVINCIA`, Ciudad=`CIUDAD`, Dealer=`NOMBRE`, etc.).
    - **Verificar BAC**: opcional (muchos forms no exponen `data-bac`).
    - **Columnas adicionales a comprobar**: agregás cualquier campo extra (columna del Excel → id del form, ej. `CEP` → `customer-cep`); quedan como píldoras-checkbox activables. Todo se guarda por país.
-6. **Modelos** (opcional) — tildá **"Tiene selector de Modelo"** si el form lo tiene (solo T1 con id `models`). Elegís "Todos los modelos" o "Modelo(s) específico(s)". Primero se elige el modelo y después se revisan los dealers (la lista puede depender del modelo).
+6. **Modelos** (opcional) — tildá **"Tiene selector de Modelo"** **solo si la lista de dealers cambia según el modelo** (solo T1 con id `models`). Elegís "Todos los modelos" o "Modelo(s) específico(s)": el comparador repite la revisión de dealers **para cada modelo**. Si los dealers son los mismos sin importar el modelo, **dejalo destildado** — al avanzar el form, si hay un dropdown de modelo, el comparador elige la primera opción válida solo para pasar de paso (si ya viene uno preseleccionado, lo respeta).
 7. **📦 MODO DE SALIDA** — **"Solo Excel"** o **"Excel + Capturas"**. Con capturas, quedan como PNG sueltos **junto al Excel dentro de la misma carpeta** del form (sin ZIP; lo comprimís vos si querés).
 8. **✉ ENVIAR RESULTADOS POR EMAIL** *(nuevo)* — tildá **"Enviar mail al terminar"** y poné el destinatario (comparte el mismo campo global que Envío de Leads). Al terminar **cada form** manda un mail con su reporte: adjunta la **carpeta completa (Excel + capturas) en un ZIP** si elegiste "Excel + Capturas", o **solo el Excel** si elegiste "Solo Excel". El cuerpo trae el resumen PASS/FAIL/EXTRA/DUPLICADO/OCULTO/NOTA. Respeta el flag global de envío, igual que el resto de la app.
 9. **💾 CONFIGURACIONES GUARDADAS** — guardá el mapeo completo con un nombre y reusalo:
@@ -322,6 +322,10 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
    - **🗑 Eliminar**: borra el preset (con confirmación).
 10. **EJECUTAR** — se habilita con el Excel de URLs, el de dealers y las columnas mapeadas. Corre en **2 fases** por cada form: **Fase 1** compara y **guarda el Excel de resultados enseguida**; **Fase 2** (si elegiste capturas) toma las capturas. Cada form deja su **carpeta propia** nombrada `país_form_columna(o sinfiltro)_incluidos|excluidos_timestamp` dentro de `Dealerscheck_resultados/`.
 
+> **Funciona con formularios de 1, 2 o 3 pasos.** Si los dropdowns `region/city/dealer` están en el primer paso, los usa al instante. Si el form es **multi-paso** (los dropdowns aparecen más adelante), el comparador **avanza los pasos** igual que Envío de Leads: completa los campos requeridos de cada paso con valores sintéticos (selects: primera opción válida; textos: dato dummy; checkboxes/radios: los marca) **sin tocar** region/city/dealer, aprieta *Siguiente/Next*, y **recién empieza a comparar cuando aparece el nivel más alto que elegiste** (region si la activaste, si no city, si no dealer). Nunca envía el formulario. Si el form se traba (un campo requerido que no reconoce), lo detecta y corta en vez de quedar en loop.
+>
+> Importante: activá **solo los niveles que el form realmente tiene**. Si un form tiene `city + dealer` pero no `region`, dejá **region apagado** — si no, cada fila fallará buscando una región inexistente.
+
 **Estados del reporte** (colores en el Excel):
 
 | Estado | Color | Qué significa |
@@ -330,10 +334,16 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
 | **FAIL** | rojo | No está cuando debía (Incluir) o está cuando no debía (Excluir). |
 | **EXTRA** | amarillo | Aparece en el form pero **no está declarado en el Excel** (por su combinación región/ciudad). |
 | **DUPLICADO** | naranja claro | Aparece **más de una vez** en el mismo dropdown del form. |
-| **OCULTO** | naranja | Está en el form pero declarado **solo en filas ocultas** del Excel — todo lo relacionado con filas/columnas ocultas se marca en naranja. |
+| **OCULTO** | naranja | Está en el form pero declarado **solo en filas que no se ven** del Excel (ocultas o filtradas) — todo lo relacionado con filas/columnas no visibles se marca en naranja. |
 | **NOTA** | celeste | Mismo dealer, el nombre difiere solo en **detalles menores** (mayúsculas, apóstrofes/comillas, guiones, paréntesis, sufijos tipo `(1000km)`). Cuenta como OK, con el disclaimer en la columna **"Nota Nombre"**. |
 
 > **Nombres con caracteres especiales.** El matching tolera diferencias de puntuación y espaciado: `DANTE D'AMICO S.A. - MATADEROS` matchea con `DANTE D AMICO S.A. – MATADEROS`, y `HCH S.A. - RPM` con `HCH S.A. (RPM)`. Cuentan como PASS con **NOTA**. Lo que **sí** da error es contenido de más o de menos (ej. "Pepito" vs "Pepito Hernández").
+
+> **Filas que no se ven: ocultas vs filtradas.** El Excel a veces viene con filas que no se ven. La app distingue las dos causas y lo aclara en el reporte:
+> - **🔎 Filtradas** — escondidas por un **AutoFilter activo** (guardaste el Excel con un filtro aplicado); reaparecen si sacás el filtro.
+> - **🙈 Ocultas** — escondidas **a mano** (fila oculta manualmente), sin filtro de por medio.
+>
+> En la hoja **Resumen** del reporte van en secciones separadas con sus números de fila, y en modo Excluir cada fila afectada dice si está *FILTRADA (AutoFilter)* u *OCULTA (a mano)*. (Los filtros de Excel esconden filas, no columnas; por eso las columnas que no se ven siempre son "ocultas".)
 
 **Evidencia de exclusión (modo Excluir + capturas).** Para probar que un dealer NO está, la app **despliega el dropdown correspondiente dentro del form** (convierte el `<select>` en lista abierta, ya que el popup nativo no es fotografiable) y saca la captura. Se abre el **primer nivel de la cadena que falta**: si la región no está → dropdown de Regiones; si la región está pero la ciudad no → dropdown de Ciudades; si ambas están y el dealer no → dropdown de Dealers. Si el dealer está cuando no debía, aparece **resaltado en amarillo**. Cada captura lleva arriba un banner conciso: URL landing, URL form, **Revisado:** Región · Ciudad · Dealer, y **Estado:** PASS/FAIL con el motivo.
 
