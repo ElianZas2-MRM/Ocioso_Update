@@ -400,12 +400,21 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             return []
         landing_key = resolve_column(headers, "URL") or "_c0"
         form_key = resolve_column(headers, "Formulario") or "_c1"
+
+        def _es_url(txt):
+            return txt.lower().startswith(("http://", "https://"))
+
         pairs = []
         for r in rows:
             form_url = (r.get(form_key, "") or "").strip()
             landing_url = (r.get(landing_key, "") or "").strip()
-            if form_url:
-                pairs.append((landing_url, form_url))  # landing "" si la columna viene vacía
+            # Sólo filas con URLs reales: si el usuario elige por error otro Excel (ej. el
+            # de dealers), sus celdas de texto no deben tratarse como formularios.
+            if not _es_url(form_url):
+                continue
+            if landing_url and not _es_url(landing_url):
+                landing_url = ""
+            pairs.append((landing_url, form_url))  # landing "" si la columna viene vacía
         return pairs
 
     def _refresh_url_excel_preview(*_a):
@@ -1237,7 +1246,19 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         if has_city_var.get() and not column_map["city"]:
             raise ValueError(f"No se encontró la columna de ciudad '{col_city_var.get()}' en el Excel.")
 
-        url_pairs = [(landing, form_url) for landing, form_url in _parse_urls_text() if form_url]
+        # Pares (landing, form) del Excel de URLs, ya filtrados a URLs reales por
+        # _read_url_pairs_from_excel; acá se descartan duplicados exactos para no generar
+        # dos carpetas de reporte idénticas.
+        url_pairs = []
+        _vistos = set()
+        for landing, form_url in _parse_urls_text():
+            if not form_url:
+                continue
+            clave = (landing.strip().lower(), form_url.strip().lower())
+            if clave in _vistos:
+                continue
+            _vistos.add(clave)
+            url_pairs.append((landing, form_url))
         if not url_pairs:
             raise ValueError("Ingresá al menos una URL de form en el bloque de URLs.")
 
