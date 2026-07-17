@@ -572,6 +572,248 @@ def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeou
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Avance de pasos en formularios multi-paso (igual criterio que Envío de Leads):
+# clickea Siguiente/Next hasta que aparezcan los dropdowns region/city/dealer.
+# ──────────────────────────────────────────────────────────────────────────────
+_NEXT_KEYWORDS = (
+    "siguiente", "seguinte", "continuar", "continuacao", "continue",
+    "proximo", "next", "avanzar", "avancar", "seguir",
+)
+_NEXT_SELECTORS = [
+    "button.btn-steps-submit",
+    ".button.next.pulsate.stat-button-link",
+    "button[class*='next']",
+    "button[data-dtm*='next']",
+    "a[class*='next']",
+    ".next-button",
+    "button[type='button']",
+    "button[type='submit']",
+    "input[type='submit']",
+    "input[type='button']",
+]
+
+
+def _looks_like_next(el):
+    try:
+        if not el.is_displayed() or not el.is_enabled():
+            return False
+        parts = [
+            el.text or "",
+            el.get_attribute("data-dtm") or "",
+            el.get_attribute("class") or "",
+            el.get_attribute("aria-label") or "",
+            el.get_attribute("title") or "",
+            el.get_attribute("value") or "",
+        ]
+        blob = normalize_text(" ".join(p for p in parts if p))
+        return any(normalize_text(k) in blob for k in _NEXT_KEYWORDS)
+    except Exception:
+        return False
+
+
+def _find_next_button(driver):
+    """Primer botón/enlace visible que parezca avanzar de paso (Siguiente/Next/Continuar)."""
+    for sel in _NEXT_SELECTORS:
+        try:
+            for btn in driver.find_elements(By.CSS_SELECTOR, sel):
+                if _looks_like_next(btn):
+                    return btn
+        except Exception:
+            continue
+    return None
+
+
+def _any_level_select_present(driver, level_ids, has_region, has_city, has_dealer):
+    """True si alguno de los <select> activos (region/city/dealer) está VISIBLE en el DOM.
+    (Muchos forms multi-paso tienen esos selects en el DOM pero ocultos hasta su paso.)"""
+    ids = []
+    if has_region:
+        ids.append(level_ids.get("region"))
+    if has_city:
+        ids.append(level_ids.get("city"))
+    if has_dealer:
+        ids.append(level_ids.get("dealer"))
+    for eid in ids:
+        if not eid:
+            continue
+        try:
+            for el in driver.find_elements(By.ID, eid):
+                if (el.tag_name or "").lower() == "select" and el.is_displayed():
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def _step_signature(driver):
+    """Firma del paso actual: ids/names de los campos visibles. Sirve para detectar si el
+    formulario realmente avanzó tras apretar Siguiente (si no cambia, el paso está gateado)."""
+    sig = []
+    try:
+        for el in driver.find_elements(By.CSS_SELECTOR, "input, select, textarea"):
+            try:
+                if not el.is_displayed():
+                    continue
+                if (el.get_attribute("type") or "") == "hidden":
+                    continue
+                sig.append((el.get_attribute("id") or el.get_attribute("name") or "", el.tag_name))
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return tuple(sorted(sig))
+
+
+def _dummy_for_input(el):
+    """Valor sintético razonable para un input de texto, según su tipo/name/placeholder."""
+    kind = " ".join([
+        (el.get_attribute("type") or ""), (el.get_attribute("name") or ""),
+        (el.get_attribute("id") or ""), (el.get_attribute("placeholder") or ""),
+        (el.get_attribute("inputmode") or ""),
+    ]).lower()
+    if "mail" in kind or (el.get_attribute("type") or "").lower() == "email":
+        return "prueba.qa@mrm.com"
+    if any(k in kind for k in ("tel", "phone", "celular", "telefono", "telefone", "movil")):
+        return "1122334455"
+    if any(k in kind for k in ("dni", "documento", "cpf", "cuit", "rut", "cedula", "number", "numeric", "cep", "cod")):
+        return "30111222"
+    if any(k in kind for k in ("date", "fecha", "data")):
+        return ""  # las fechas suelen ser selects/datepicker; no forzamos texto
+    return "Prueba"
+
+
+def _fill_step_for_advance(driver, level_ids, log=None):
+    """Completa los campos VISIBLES del paso actual con valores sintéticos (sin tocar los
+    selects region/city/dealer que queremos alcanzar), para poder pasar de paso en forms
+    gateados por campos requeridos — mismo espíritu que Envío de Leads pero acotado a lo
+    mínimo para navegar hasta los dropdowns de dealer. No envía el formulario."""
+    log = log or (lambda *_a, **_k: None)
+    protegidos = {level_ids.get("region"), level_ids.get("city"), level_ids.get("dealer")}
+    # 1) Selects visibles (no protegidos, sin selección válida): primera opción válida
+    try:
+        for sel in driver.find_elements(By.TAG_NAME, "select"):
+            try:
+                if not sel.is_displayed() or not sel.is_enabled():
+                    continue
+                if (sel.get_attribute("id") or sel.get_attribute("name")) in protegidos:
+                    continue
+                if sel.get_attribute("multiple") is not None:
+                    continue
+                # ¿ya tiene una opción real elegida?
+                cur = ""
+                try:
+                    cur = (Select(sel).first_selected_option.text or "").strip()
+                except Exception:
+                    cur = ""
+                if cur and not _is_placeholder(cur):
+                    continue
+                opcion = next((o for o in _valid_options(sel)
+                               if o.text.strip() and not _is_placeholder(o.text)), None)
+                if opcion is not None:
+                    _select_option(driver, sel, opcion)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    # 2) Inputs de texto y textareas visibles y vacíos
+    try:
+        for el in driver.find_elements(By.CSS_SELECTOR, "input, textarea"):
+            try:
+                if not el.is_displayed() or not el.is_enabled():
+                    continue
+                tag = (el.tag_name or "").lower()
+                itype = (el.get_attribute("type") or "text").lower() if tag == "input" else "textarea"
+                if itype in ("hidden", "submit", "button", "reset", "file", "image", "range", "color"):
+                    continue
+                if itype in ("checkbox", "radio"):
+                    continue
+                if (el.get_attribute("value") or "").strip():
+                    continue
+                val = _dummy_for_input(el) if itype != "textarea" else "Prueba"
+                if not val:
+                    continue
+                driver.execute_script(
+                    "arguments[0].focus();"
+                    "var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')||"
+                    "Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value');"
+                    "try{s.set.call(arguments[0], arguments[1]);}catch(e){arguments[0].value=arguments[1];}"
+                    "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));"
+                    "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));"
+                    "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
+                    el, val,
+                )
+            except Exception:
+                continue
+    except Exception:
+        pass
+    # 3) Checkboxes/radios visibles sin marcar (términos, etc.)
+    try:
+        for el in driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox'], input[type='radio']"):
+            try:
+                if not el.is_displayed() or not el.is_enabled() or el.is_selected():
+                    continue
+                try:
+                    el.click()
+                except Exception:
+                    driver.execute_script("arguments[0].click();", el)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+def advance_to_selects(driver, level_ids=None, has_region=True, has_city=True, has_dealer=True,
+                        log_cb=None, stop_flag=None, max_steps=12):
+    """Avanza los pasos del formulario hasta que alguno de los dropdowns activos
+    (region/city/dealer) esté visible. En forms de 1 paso los encuentra al toque; en
+    multi-paso completa los campos requeridos de cada paso (sin tocar region/city/dealer)
+    y aprieta Siguiente, igual que Envío de Leads. Detecta si el form no avanza (paso
+    gateado) para no quedarse en loop. Devuelve True si llegó a los dropdowns."""
+    level_ids = level_ids or DEFAULT_SELECT_IDS
+    log = log_cb or (lambda *_a, **_k: None)
+    sin_progreso = 0
+    for step in range(max_steps + 1):
+        _check_stop(stop_flag)
+        if _any_level_select_present(driver, level_ids, has_region, has_city, has_dealer):
+            if step:
+                log(f"  Dropdowns de dealer encontrados tras avanzar {step} paso(s).", "ok")
+            return True
+        sig_antes = _step_signature(driver)
+        # Completar el paso actual para destrabar el botón Siguiente
+        _fill_step_for_advance(driver, level_ids, log=log)
+        time.sleep(0.4)
+        btn = _find_next_button(driver)
+        if not btn:
+            log("  No se ven los dropdowns region/city/dealer y no hay botón 'Siguiente'.", "warn")
+            return False
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+            time.sleep(0.2)
+            try:
+                btn.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", btn)
+            log(f"  Formulario multi-paso: paso {step + 1} completado, avanzando...", "info")
+            _wait_document_ready(driver, 15)
+            time.sleep(1.2)
+        except StopRequested:
+            raise
+        except Exception as e:  # noqa: BLE001
+            log(f"  No se pudo avanzar de paso: {e}", "warn")
+            return False
+        # ¿avanzó? (cambió el conjunto de campos visibles)
+        if _step_signature(driver) == sig_antes:
+            sin_progreso += 1
+            if sin_progreso >= 2:
+                log("  El formulario no avanza (posible campo requerido no reconocido). Se corta el avance.", "warn")
+                return _any_level_select_present(driver, level_ids, has_region, has_city, has_dealer)
+        else:
+            sin_progreso = 0
+    log(f"  No aparecieron los dropdowns tras {max_steps} pasos.", "warn")
+    return False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Comparación principal: recorre las filas esperadas del Excel contra el form real
 # ──────────────────────────────────────────────────────────────────────────────
 def compare_dealers(
