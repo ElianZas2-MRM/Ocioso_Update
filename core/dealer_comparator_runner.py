@@ -89,21 +89,25 @@ def _is_placeholder(text):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Matcheo tolerante de nombres de dealer (apóstrofes/comillas, sufijos "(1000km)")
+# Matcheo tolerante de nombres de dealer: apóstrofes/comillas (D'hola vs Dhola o
+# "D AMICO"), guiones y guiones largos, paréntesis ("- RPM" vs "(RPM)"), sufijo
+# parentético numérico ("(1000km)") y diferencias de espaciado.
 # ──────────────────────────────────────────────────────────────────────────────
 _TRAILING_PAREN_RE = re.compile(r"\(\s*[^()]*\d[^()]*\)\s*$")  # "(1000KM)" al final
-_PUNCT_STRIP_RE = re.compile(r"[\'’‘´`\.\,\-]+")
+_PUNCT_STRIP_RE = re.compile(r"[\'’‘´`\.\,\-–—()\"]+")
 
 
 def _canonical_dealer_name(text):
-    """Nombre normalizado y sin apóstrofes/comillas ni sufijo parentético numérico final
-    (ej. '(1000km)'), para el matcheo tolerante de nombres de dealer. Dos nombres que
-    coinciden solo tras esta limpieza se consideran 'el mismo dealer con diferencias
-    menores' — cualquier otra diferencia (contenido de más o de menos) NO matchea."""
+    """Forma canónica para el matcheo tolerante: normaliza mayúsculas/acentos, saca el
+    sufijo parentético numérico final (ej. '(1000km)'), toda la puntuación (apóstrofes,
+    comillas, puntos, comas, guiones, guiones largos, paréntesis) y TODOS los espacios.
+    Dos nombres que coinciden solo tras esta limpieza son 'el mismo dealer con
+    diferencias menores' (ej. D'AMICO vs D AMICO, '- RPM' vs '(RPM)') — cualquier
+    diferencia de CONTENIDO (letras/números de más o de menos) NO matchea."""
     t = normalize_text(text)
     t = _TRAILING_PAREN_RE.sub("", t).strip()
     t = _PUNCT_STRIP_RE.sub("", t)
-    return re.sub(r"\s+", " ", t).strip()
+    return re.sub(r"\s+", "", t)
 
 
 def match_dealer_names(excel_name, form_name):
