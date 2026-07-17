@@ -34,7 +34,6 @@ from core.dealer_comparator_runner import (
     capture_dropdown_evidence,
     capture_result_screenshot,
     compare_dealers,
-    detect_duplicate_rows,
     detect_hidden_columns,
     detect_hidden_rows,
     evidence_level_for_result,
@@ -898,13 +897,20 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             excel_filter_mode_var.get() != "no_filter" and condition_mode_var.get() == "Excluir"
         )
 
-        # Disclaimer de filas OCULTAS: el Excel a veces viene pre-filtrado (filas escondidas).
-        # Se procesan igual (nada se saltea en silencio), pero se avisa cuáles estaban ocultas.
+        # Filas OCULTAS del Excel: NO cuentan como esperadas. En Incluir se apartan del set
+        # a comparar y pasan a find_extra_dealers para que, si algo del form solo está
+        # declarado en una fila oculta, se reporte como OCULTO (naranja). En Excluir se
+        # procesan igual pero sus resultados se marcan en naranja.
+        state["hidden_filtered"] = []
         try:
             hidden = detect_hidden_rows(excel_path, header_row=header_row)
-            hidden_in_filter = [r for r in filtered if r.get("__row__") in hidden]
             state["hidden_rows"] = hidden
+            hidden_in_filter = [r for r in filtered if r.get("__row__") in hidden]
             if hidden_in_filter:
+                state["hidden_filtered"] = hidden_in_filter
+                if not state["expect_absent"]:
+                    filtered = [r for r in filtered if r.get("__row__") not in hidden]
+                    state["filtered_rows"] = filtered
                 dealer_key = resolve_column(headers, col_dealer_var.get()) if has_dealer_var.get() else None
                 nombres = ", ".join(
                     f"fila {r.get('__row__')}: {r.get(dealer_key, '') or '?'}" if dealer_key else f"fila {r.get('__row__')}"
@@ -912,12 +918,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 )
                 mas = "…" if len(hidden_in_filter) > 15 else ""
                 ui_log(
-                    f"⚠ DISCLAIMER: {len(hidden_in_filter)} de las {len(filtered)} filas a comparar están "
-                    f"OCULTAS en el Excel (viene pre-filtrado). Se procesan igual. → {nombres}{mas}",
+                    f"⚠ {len(hidden_in_filter)} fila(s) del filtro están OCULTAS en el Excel → {nombres}{mas}. "
+                    + ("No cuentan como esperadas: si algo de eso aparece en el form se reporta como OCULTO (naranja)."
+                       if not state["expect_absent"] else "Se verifican igual y sus resultados van en naranja."),
                     "warn",
                 )
         except Exception:
-            pass
+            state["hidden_rows"] = set()
 
         # Disclaimer de columnas OCULTAS en el Excel de dealers.
         try:
@@ -930,27 +937,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 ui_log(f"⚠ DISCLAIMER: el Excel tiene columna(s) OCULTAS: {cols_txt}. Se procesan igual.", "warn")
         except Exception:
             state["hidden_columns"] = []
-
-        # Duplicados dentro del conjunto ya filtrado (mismo dealer/región/ciudad) — problema
-        # de calidad de datos del Excel de ORIGEN, distinto de los EXTRA/DUPLICADO del form.
-        try:
-            column_map_for_dups = _column_map()
-            dup_rows = detect_duplicate_rows(
-                filtered, column_map_for_dups,
-                has_region=has_region_var.get(), has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
-            )
-            state["duplicate_rows"] = dup_rows
-            if dup_rows:
-                ejemplos = "; ".join(
-                    f"{d['dealer']} ({d['region']}/{d['city']}) x{len(d['filas'])}" for d in dup_rows[:8]
-                )
-                mas = "…" if len(dup_rows) > 8 else ""
-                ui_log(
-                    f"⚠ DISCLAIMER: {len(dup_rows)} dealer(es) aparecen MÁS DE UNA VEZ en el Excel "
-                    f"(mismo dealer/región/ciudad) → {ejemplos}{mas}", "warn",
-                )
-        except Exception:
-            state["duplicate_rows"] = []
 
         return headers, filtered
 
@@ -1377,9 +1363,14 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     screenshot_cb=None,
                     expect_absent=expect_absent,
                 )
+                _hidden_filas = state.get("hidden_rows") or set()
                 for r in pair_results:
                     r["url_form"] = form_url
                     r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
+                    # Resultados de filas OCULTAS del Excel (modo Excluir): naranja en el reporte
+                    if r.get("fila") in _hidden_filas:
+                        r["hidden_in_excel"] = True
+                        r.setdefault("fails", []).append("⚠ La fila del Excel está OCULTA")
 
                 if _should_find_extras() and not expect_absent:
                     ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
@@ -1388,6 +1379,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
                         log_cb=ui_log, progress_cb=_extras_progress_cb, stop_flag=state["stop_event"],
                         has_dealer=has_dealer_var.get(),
+                        hidden_rows_data=state.get("hidden_filtered") or [],
                     )
                     for r in extras:
                         r["url_form"] = form_url
@@ -1413,7 +1405,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 export_path = export_results_excel(
                     pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
                     hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
-                    duplicate_rows=state.get("duplicate_rows"),
                 )
                 report_paths.append(export_path)
                 ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
