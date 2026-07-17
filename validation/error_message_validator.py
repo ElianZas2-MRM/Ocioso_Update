@@ -440,7 +440,7 @@ def read_error_near_element(driver, element):
 
 
 def _read_visible_error_text_near_input(driver, input_element):
-        script = """
+        script = r"""
         const input = arguments[0];
         if (!input) return "";
 
