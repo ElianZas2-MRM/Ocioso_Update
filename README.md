@@ -106,7 +106,20 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 
 **Checkboxes con SI/NO** — para un checkbox opcional (ej. `test-drive`, newsletter), cargá su ID con valor **SI** o **NO** (los mismos valores que acepta el Excel: si/no, yes/1/0, marcar/desmarcar…). La app lo marca o lo deja sin marcar en cada envío. Si le cargás SI **y** NO como dos valores, sortea entre marcar y no marcar por fila. La columna del Excel, si existe, tiene prioridad sobre esto.
 
-**Solapa "IDs Excel"** — el mapping fijo por país (los campos que se llenan desde columnas del Excel). Permite ver, agregar, editar o borrar entradas y ajustar el `data_index` → te muestra en vivo a qué columna del Excel corresponde.
+**Solapa "IDs Excel"** — a diferencia de IDs únicos (valores fijos que no vienen del Excel), acá vive el mapeo entre **columnas del Excel de datos** y **campos del formulario real**: le decís a la app "la columna X del Excel va en el campo con id=Y del HTML". Es lo que usa el robot para saber, fila por fila, qué escribir en cada campo al enviar un lead.
+
+![IDs Dinámicos — IDs Excel](Asset/screenshots/22_ids_dinamicos_ids_excel.png)
+
+- **País**: para qué país es esta fila del mapping (cada país tiene el suyo).
+- **Tipo**: `Rellenable` (input/textarea de texto libre) o `Dropdown` (`<select>`).
+- **ID**: el id/name real del campo en el HTML del formulario (ej. `city`, `email`, `dealer`).
+- **Descripción**: el nombre de columna que vas a ver en el Excel de datos (pestañas "Generar Excels con Datos" y "Datos por país") — ej. poné `Ciudad` y esa va a ser la columna del Excel.
+- **Data index**: la posición del dato, contando desde 0. Las columnas A y B del Excel están siempre reservadas a URL y Formulario; desde la C arranca el dato 0. Por eso `data_index: 0` → columna **C**, `data_index: 7` → columna **J**, etc. — el label amarillo "Columna Excel: …" te lo muestra en vivo apenas escribís el número.
+- **Mapping actual**: la lista de abajo, ej. *"J (index 7) | ID: city | Ciudad | Dropdown | requerido"* — se lee: "la columna J del Excel, que se llama Ciudad, va al `<select id="city">` del form, y es un campo obligatorio".
+
+**Ejemplo concreto**: querés que el robot cargue el modelo del auto desde una columna nueva del Excel. En IDs Excel elegís el país, tipo `Dropdown`, ID `model` (el id real del `<select>` en el HTML), descripción `Modelo`, y el próximo `data_index` libre. Guardás, y automáticamente:
+1. Se agrega una columna nueva llamada "Modelo" al Excel de datos de ese país (la ves en "Generar Excels con Datos" / "Datos por país").
+2. En cada envío, el robot toma lo que haya en esa columna de la fila y lo selecciona en el `<select id="model">` del formulario real.
 
 **Solapa "Dependencias"** — registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden.
 
