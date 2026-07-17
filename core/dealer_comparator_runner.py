@@ -698,6 +698,7 @@ def compare_dealers(
             bac_ok = None
             extra_results = {}
             name_disclaimer = None
+            detalle_info = ""
 
             try:
                 # Orden SIEMPRE: región → ciudad → dealer (si no hay región, arranca en ciudad).
@@ -752,12 +753,22 @@ def compare_dealers(
                 if expect_absent:
                     # Modo EXCLUIR: este dealer NO debería estar en el form. Sólo importa
                     # su presencia — se descartan los fails de región/ciudad (si no están,
-                    # el dealer tampoco puede estar → correctamente ausente).
+                    # el dealer tampoco puede estar → correctamente ausente). detalle_info
+                    # explica en QUÉ nivel se confirmó la ausencia (misma lógica que usa
+                    # la captura de evidencia para elegir qué dropdown desplegar).
                     fails = []
                     if dealer_found:
                         fails.append(f"Dealer '{dealer_text}' ESTÁ en el form pero NO debería (excluido)")
                         log(f"  ✗ '{dealer_text}' presente cuando debería estar ausente", "warn")
                     else:
+                        if has_region and region_text and not region_found:
+                            detalle_info = (f"Correctamente ausente: la región '{region_text}' no está en el "
+                                            f"form, por lo tanto el dealer tampoco puede aparecer")
+                        elif has_city and city_text and not city_found:
+                            detalle_info = (f"Correctamente ausente: la ciudad '{city_text}' no está en el "
+                                            f"form, por lo tanto el dealer tampoco puede aparecer")
+                        else:
+                            detalle_info = f"Correctamente ausente: '{dealer_text}' no aparece en el dropdown de dealers"
                         log(f"  ✓ '{dealer_text}' correctamente ausente del form", "ok")
                 elif dealer_found:
                     if chk_bac and bac_key and bac_excel:
@@ -809,6 +820,12 @@ def compare_dealers(
                 "fails": fails,
                 "fila": row.get("__row__"),
                 "name_disclaimer": name_disclaimer if (dealer_found and not expect_absent) else None,
+                "detalle_info": detalle_info,
+                # En qué nivel cortó (o no) la navegación — lo usa la captura de evidencia
+                # de exclusión para desplegar el dropdown correcto (región/ciudad/dealer).
+                "region_found": bool(region_found),
+                "city_found": bool(city_found),
+                "dealer_found": bool(dealer_found),
             }
 
             if screenshot_cb is not None:
@@ -1127,9 +1144,38 @@ def _ensure_window_covers_content(driver):
         pass
 
 
-def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", landing_url=""):
+def banner_lines_for_result(result, has_region=True, has_city=True, has_dealer=True):
+    """Arma las líneas extra del banner para una captura del Comparador: qué combinación
+    se revisó (región/ciudad/dealer según niveles activos) y el estado PASS/FAIL."""
+    partes = []
+    if has_region and result.get("region"):
+        partes.append(f"Región: {result['region']}")
+    if has_city and result.get("city"):
+        partes.append(f"Ciudad: {result['city']}")
+    if has_dealer and result.get("dealer"):
+        partes.append(f"Dealer: {result['dealer']}")
+    if result.get("modelo"):
+        partes.append(f"Modelo: {result['modelo']}")
+    lines = []
+    if partes:
+        lines.append((f"Revisado:        {' · '.join(partes)}", (220, 220, 100)))
+    status = result.get("status", "")
+    color = (80, 200, 80) if status == "PASS" else (220, 80, 80)
+    if result.get("fails"):
+        detalle = " — " + " | ".join(result.get("fails", []))
+    elif result.get("detalle_info"):
+        detalle = " — " + result["detalle_info"]
+    else:
+        detalle = ""
+    lines.append((f"Estado:          {status}{detalle}"[:220], color))
+    return lines
+
+
+def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", landing_url="",
+                              extra_lines=None):
     """Toma una captura de página completa con las URLs del form y landing pegadas en un banner
-    superior (reusa ScreenshotManager, que ya soporta esto)."""
+    superior (reusa ScreenshotManager). extra_lines: líneas extra del banner, ej. las de
+    banner_lines_for_result (revisado + estado PASS/FAIL)."""
     os.makedirs(screenshot_dir, exist_ok=True)
     _ensure_window_covers_content(driver)
     manager = ScreenshotManager(driver, screenshot_dir)
@@ -1137,6 +1183,7 @@ def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", lan
     if landing_url:
         manager.url_landing = landing_url
     manager.url_form_esperado = form_url
+    manager.extra_lines = list(extra_lines or [])
     manager.take_full_page_screenshot(filename)
     manager._add_url_banner(os.path.join(screenshot_dir, filename))
     return os.path.join(screenshot_dir, filename)
@@ -1157,36 +1204,29 @@ if (old) old.remove();
 var div = document.createElement('div');
 div.id = OVERLAY_ID;
 div.style.cssText = "position:relative;z-index:2147483647;background:#1e1330;color:#ffffff;"
-    + "font-family:'Segoe UI',Arial,sans-serif;padding:20px 24px;box-sizing:border-box;width:100%;"
-    + "border-bottom:4px solid #7D4E9F;";
-var h = document.createElement('h2');
-h.textContent = title;
-h.style.cssText = 'margin:0 0 10px 0;font-size:20px;color:#ffffff;font-weight:bold;';
-div.appendChild(h);
-if (searched) {
-    var estado = (found === true) ? 'PRESENTE en el dropdown' : (found === false ? 'AUSENTE del dropdown' : '');
-    var p = document.createElement('p');
-    p.textContent = 'Buscado: "' + searched + '"  ->  ' + estado;
-    p.style.cssText = 'font-size:16px;font-weight:bold;margin:0 0 14px 0;color:' + (found ? '#ff8a8a' : '#8fe0a0') + ';';
-    div.appendChild(p);
-}
-var p2 = document.createElement('p');
-p2.textContent = 'Total de opciones visibles: ' + options.length;
-p2.style.cssText = 'font-size:13px;color:#c9b3de;margin:0 0 10px 0;';
-div.appendChild(p2);
+    + "font-family:'Segoe UI',Arial,sans-serif;padding:10px 16px;box-sizing:border-box;width:100%;"
+    + "border-bottom:3px solid #7D4E9F;";
+// Encabezado compacto: una sola línea con el dropdown desplegado + qué se buscó + resultado
+var p = document.createElement('p');
+var estado = (found === true) ? '  ->  PRESENTE' : (found === false ? '  ->  AUSENTE' : '');
+p.textContent = title + (searched ? '  ·  Buscado: "' + searched + '"' + estado : '')
+    + '  ·  ' + options.length + ' opciones';
+p.style.cssText = 'font-size:13px;font-weight:bold;margin:0 0 6px 0;color:'
+    + (found === true ? '#ff8a8a' : (found === false ? '#8fe0a0' : '#ffffff')) + ';';
+div.appendChild(p);
 var ol = document.createElement('ol');
 // Sin max-height/scroll: la lista completa queda en el flujo normal de la página para que
 // el mecanismo de captura por partes (scroll+merge) la capture ENTERA, sin recortar nada
 // aunque tenga muchas opciones (ej. un dropdown de ciudad con 50+ opciones).
-ol.style.cssText = 'margin:0;padding:10px 10px 10px 34px;font-size:14px;line-height:1.8;'
-    + 'background:#150c22;border-radius:6px;';
+ol.style.cssText = 'margin:0;padding:6px 8px 6px 30px;font-size:12px;line-height:1.5;'
+    + 'background:#150c22;border-radius:5px;columns:2;column-gap:28px;';
 var searchedLower = (searched || '').trim().toLowerCase();
 options.forEach(function(t){
     var li = document.createElement('li');
     li.textContent = t;
     li.style.color = '#ffffff';
     if (searchedLower && t.trim().toLowerCase() === searchedLower) {
-        li.style.cssText += 'background:#3a1d52;color:#ffd873;font-weight:bold;padding:2px 6px;border-radius:3px;';
+        li.style.cssText += 'background:#3a1d52;color:#ffd873;font-weight:bold;padding:1px 5px;border-radius:3px;';
     }
     ol.appendChild(li);
 });
@@ -1200,8 +1240,26 @@ if (div) div.remove();
 """
 
 
+def evidence_level_for_result(result, has_region=True, has_city=True, has_dealer=True):
+    """Decide en QUÉ dropdown desplegar la evidencia de exclusión: el primer nivel de la
+    cadena región→ciudad→dealer que NO se encontró en el form (si la región no está, la
+    ciudad y el dealer tampoco pueden estar — la evidencia es el dropdown de regiones).
+    Si todo se encontró (dealer presente = FAIL de exclusión), la evidencia es el dropdown
+    de dealer con el buscado resaltado. Sólo considera los niveles activos.
+    Devuelve (nivel_label, select_key, texto_buscado, found_bool)."""
+    if has_region and result.get("region") and not result.get("region_found"):
+        return "Región", "region", result.get("region", ""), False
+    if has_city and result.get("city") and not result.get("city_found"):
+        return "Ciudad", "city", result.get("city", ""), False
+    if has_dealer:
+        return "Dealer", "dealer", result.get("dealer", ""), bool(result.get("dealer_found"))
+    if has_city:
+        return "Ciudad", "city", result.get("city", ""), bool(result.get("city_found"))
+    return "Región", "region", result.get("region", ""), bool(result.get("region_found"))
+
+
 def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title="", searched_text="",
-                               found=None, form_url="", landing_url=""):
+                               found=None, form_url="", landing_url="", extra_lines=None):
     """Genera una captura de evidencia con TODAS las opciones visibles de un <select> en
     este momento. Necesario porque el dropdown nativo es UI del sistema operativo — Selenium
     no puede fotografiar ese popup abierto directamente. Clona la lista de textos (los mismos
@@ -1209,6 +1267,9 @@ def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title
     la página, y lo fotografía con el mismo mecanismo de página completa del resto de la app
     (funciona sin importar cuán larga sea la lista, con scroll+merge si hace falta)."""
     option_texts = _read_valid_option_texts(driver, select_id, wait_nonempty=False)
+    # El overlay se dibuja en el documento PRINCIPAL (para que la captura muestre la página
+    # entera), pero el form puede vivir en un iframe: hay que salir para dibujar/capturar y
+    # VOLVER al iframe al final — si no, las filas siguientes no encuentran los selects.
     try:
         driver.switch_to.default_content()
     except Exception:
@@ -1224,11 +1285,19 @@ def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title
         if landing_url:
             manager.url_landing = landing_url
         manager.url_form_esperado = form_url
+        manager.extra_lines = list(extra_lines or [])
         manager.take_full_page_screenshot(filename)
         manager._add_url_banner(os.path.join(screenshot_dir, filename))
     finally:
         try:
             driver.execute_script(_DROPDOWN_EVIDENCE_RESTORE_JS)
+        except Exception:
+            pass
+        # Restaurar el contexto del iframe del form (si lo hay) para la próxima fila
+        try:
+            iframe = _find_form_iframe(driver, form_url)
+            if iframe is not None:
+                driver.switch_to.frame(iframe)
         except Exception:
             pass
     return os.path.join(screenshot_dir, filename)
@@ -1301,7 +1370,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
             r.get("dealer", ""),
             r.get("bac_excel", ""),
             {True: "OK", False: "MISMATCH", None: ""}.get(r.get("bac_ok")),
-            " | ".join(r.get("fails", [])) if r.get("fails") else "",
+            " | ".join(r.get("fails", [])) if r.get("fails") else (r.get("detalle_info") or ""),
             r.get("name_disclaimer", "") or "",
             r.get("fila", ""),
         ])
