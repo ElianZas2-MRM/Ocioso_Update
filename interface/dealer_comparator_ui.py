@@ -984,6 +984,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         # procesan igual pero sus resultados se marcan en naranja.
         state["hidden_filtered"] = []
         try:
+            # dict {nº fila: 'filtrada' | 'oculta'}
             hidden = detect_hidden_rows(excel_path, header_row=header_row)
             state["hidden_rows"] = hidden
             hidden_in_filter = [r for r in filtered if r.get("__row__") in hidden]
@@ -993,19 +994,28 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     filtered = [r for r in filtered if r.get("__row__") not in hidden]
                     state["filtered_rows"] = filtered
                 dealer_key = resolve_column(headers, col_dealer_var.get()) if has_dealer_var.get() else None
+                n_filt = sum(1 for r in hidden_in_filter if hidden.get(r.get("__row__")) == "filtrada")
+                n_ocul = len(hidden_in_filter) - n_filt
                 nombres = ", ".join(
-                    f"fila {r.get('__row__')}: {r.get(dealer_key, '') or '?'}" if dealer_key else f"fila {r.get('__row__')}"
+                    (f"fila {r.get('__row__')} [{hidden.get(r.get('__row__'), 'oculta')}]"
+                     + (f": {r.get(dealer_key, '') or '?'}" if dealer_key else ""))
                     for r in hidden_in_filter[:15]
                 )
                 mas = "…" if len(hidden_in_filter) > 15 else ""
+                detalle_tipo = []
+                if n_filt:
+                    detalle_tipo.append(f"{n_filt} filtrada(s) por un AutoFilter")
+                if n_ocul:
+                    detalle_tipo.append(f"{n_ocul} oculta(s) a mano")
                 ui_log(
-                    f"⚠ {len(hidden_in_filter)} fila(s) del filtro están OCULTAS en el Excel → {nombres}{mas}. "
+                    f"⚠ {len(hidden_in_filter)} fila(s) del filtro no se ven en el Excel "
+                    f"({' y '.join(detalle_tipo)}) → {nombres}{mas}. "
                     + ("No cuentan como esperadas: si algo de eso aparece en el form se reporta como OCULTO (naranja)."
                        if not state["expect_absent"] else "Se verifican igual y sus resultados van en naranja."),
                     "warn",
                 )
         except Exception:
-            state["hidden_rows"] = set()
+            state["hidden_rows"] = {}
 
         # Disclaimer de columnas OCULTAS en el Excel de dealers.
         try:
@@ -1480,14 +1490,19 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     screenshot_cb=None,
                     expect_absent=expect_absent,
                 )
-                _hidden_filas = state.get("hidden_rows") or set()
+                _hidden_filas = state.get("hidden_rows") or {}
                 for r in pair_results:
                     r["url_form"] = form_url
                     r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
-                    # Resultados de filas OCULTAS del Excel (modo Excluir): naranja en el reporte
+                    # Resultados de filas no visibles del Excel (modo Excluir): naranja en el
+                    # reporte, distinguiendo filtrada (AutoFilter) vs oculta (a mano).
                     if r.get("fila") in _hidden_filas:
                         r["hidden_in_excel"] = True
-                        r.setdefault("fails", []).append("⚠ La fila del Excel está OCULTA")
+                        _tipo = _hidden_filas.get(r.get("fila"), "oculta")
+                        r["hidden_kind"] = _tipo
+                        r.setdefault("fails", []).append(
+                            f"⚠ La fila del Excel está {'FILTRADA (AutoFilter)' if _tipo == 'filtrada' else 'OCULTA (a mano)'}"
+                        )
 
                 if _should_find_extras() and not expect_absent:
                     ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
