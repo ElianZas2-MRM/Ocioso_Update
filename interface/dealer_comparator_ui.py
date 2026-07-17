@@ -775,7 +775,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         _apply_settings_dict(cfg)
         # Dejar el nombre en el campo Nombre para poder editarlo/renombrarlo y actualizar.
         preset_name_var.set(name)
-        ui_log(f"Configuración '{name}' cargada. Modificá lo que quieras y usá 'Actualizar'.", "ok")
+        ui_log(f"Configuración '{name}' cargada. Modificá lo que quieras y usá 'Editar'.", "ok")
 
     def _update_preset():
         """Edita el preset seleccionado en el combo: reescribe sus valores con los actuales.
@@ -819,7 +819,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     Button(presets_row2, text="📂 Cargar", font=("Segoe UI", 8, "bold"),
            bg=BTN_ACTIVE, fg="white", relief="flat", bd=0, cursor="hand2",
            command=_load_preset).pack(side="left", padx=4)
-    Button(presets_row2, text="✏ Actualizar", font=("Segoe UI", 8, "bold"),
+    Button(presets_row2, text="✏ Editar", font=("Segoe UI", 8, "bold"),
            bg=BTN_ACTIVE, fg="white", relief="flat", bd=0, cursor="hand2",
            command=_update_preset).pack(side="left", padx=4)
     Button(presets_row2, text="🗑 Eliminar", font=("Segoe UI", 8, "bold"),
