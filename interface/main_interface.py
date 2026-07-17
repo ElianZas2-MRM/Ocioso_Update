@@ -3040,10 +3040,14 @@ def iniciar_interfaz():
         subtitle_lbl.pack(anchor="w")
         rotate_icon()
         
-        # Botón Detener: pide parada; el lead en curso termina y luego se cierra
+        # Botón Detener: mismo comportamiento que la X de cerrar — pide confirmación antes
+        # de cortar. on_close_modal ya maneja el popup de confirmación mientras se ejecuta.
         def on_detener():
             stop_event.set()
             btn_detener.config(state="disabled", text=" Deteniendo...")
+
+        def on_detener_click():
+            on_close_modal()
             try:
                 run_note.config(text="Deteniendo… (termina el lead en curso)", fg="#F8C471")
             except Exception:
@@ -3053,7 +3057,7 @@ def iniciar_interfaz():
         btn_detener = tk.Button(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
                                 font=("Segoe UI", 9, "bold"),
                                 bg="#3D1220", fg="#F1948A", relief="flat", bd=0, highlightthickness=1,
-                                highlightbackground="#F1948A", cursor="hand2", command=on_detener, padx=12, pady=4)
+                                highlightbackground="#F1948A", cursor="hand2", command=on_detener_click, padx=12, pady=4)
         btn_detener.pack(side="right")
         btn_detener.bind("<Enter>", lambda e: btn_detener.config(bg="#5E1D31") if btn_detener["state"] == "normal" else None)
         btn_detener.bind("<Leave>", lambda e: btn_detener.config(bg="#3D1220") if btn_detener["state"] == "normal" else None)
