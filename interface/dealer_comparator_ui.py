@@ -234,8 +234,11 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         col = Frame(parent_frame, bg=CARD_BG)
         col.pack(side="left", padx=6, pady=3)
         Label(col, text=label_text, font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(anchor="w")
-        Entry(col, textvariable=var, width=width, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
-              insertbackground="white", relief="flat").pack(ipady=4, fill="x")
+        ent = Entry(col, textvariable=var, width=width, bg=ENTRY_BG, fg="white", font=("Segoe UI", 10),
+                    insertbackground="white", relief="flat",
+                    disabledbackground="#2E2140", disabledforeground="#8A7E9E")
+        ent.pack(ipady=4, fill="x")
+        return ent
 
     def make_single_select(parent, options, var, default=None, on_select=None):
         """options: lista de (valor, etiqueta). Pills de selección única (estilo Excel/Leads)."""
@@ -528,10 +531,34 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     col_city_var = StringVar(value="CIUDAD")
     col_dealer_var = StringVar(value="NOMBRE")
     col_bac_var = StringVar(value="BAC")
-    labeled_entry(cols_row, "Columna Región", col_region_var)
-    labeled_entry(cols_row, "Columna Ciudad", col_city_var)
-    labeled_entry(cols_row, "Columna Dealer", col_dealer_var)
-    labeled_entry(cols_row, "Columna BAC", col_bac_var)
+    _e_region = labeled_entry(cols_row, "Columna Región", col_region_var)
+    _e_city = labeled_entry(cols_row, "Columna Ciudad", col_city_var)
+    _e_dealer = labeled_entry(cols_row, "Columna Dealer", col_dealer_var)
+    _e_bac = labeled_entry(cols_row, "Columna BAC", col_bac_var)
+
+    # Cuando un nivel se DESELECCIONA, su "Columna X" se bloquea y muestra "No aplica"
+    # (así no se pide ni valida esa columna). Al reactivarlo, se restaura el valor real.
+    _NO_APLICA = "No aplica"
+    _col_shadow = {}  # nivel -> último valor real escrito por el usuario
+
+    def _sync_col_entry(nivel, var, entry, activo):
+        if activo:
+            entry.config(state="normal")
+            if var.get() == _NO_APLICA:
+                var.set(_col_shadow.get(nivel, ""))
+        else:
+            if var.get() != _NO_APLICA:
+                _col_shadow[nivel] = var.get()
+            var.set(_NO_APLICA)
+            entry.config(state="disabled")
+
+    has_region_var.trace_add("write", lambda *_a: _sync_col_entry("region", col_region_var, _e_region, has_region_var.get()))
+    has_city_var.trace_add("write", lambda *_a: _sync_col_entry("city", col_city_var, _e_city, has_city_var.get()))
+    has_dealer_var.trace_add("write", lambda *_a: _sync_col_entry("dealer", col_dealer_var, _e_dealer, has_dealer_var.get()))
+    # Estado inicial según las píldoras actuales
+    _sync_col_entry("region", col_region_var, _e_region, has_region_var.get())
+    _sync_col_entry("city", col_city_var, _e_city, has_city_var.get())
+    _sync_col_entry("dealer", col_dealer_var, _e_dealer, has_dealer_var.get())
 
     opts_row = Frame(columns_card, bg=CARD_BG)
     opts_row.pack(fill="x", padx=15, pady=(0, 4))
@@ -539,6 +566,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     Checkbutton(opts_row, text="Verificar BAC (opcional — muchos forms no exponen data-bac en el HTML)",
                 variable=chk_bac_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
                 activebackground=CARD_BG, wraplength=340, justify="left").pack(anchor="w")
+    # La "Columna BAC" se bloquea a "No aplica" mientras "Verificar BAC" esté destildado.
+    chk_bac_var.trace_add("write", lambda *_a: _sync_col_entry("bac", col_bac_var, _e_bac, chk_bac_var.get()))
+    _sync_col_entry("bac", col_bac_var, _e_bac, chk_bac_var.get())
     # Extras y duplicados se buscan SIEMPRE (integrado en el flujo normal)
     find_extras_var = BooleanVar(value=True)
 
@@ -843,13 +873,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         if norm_condition not in CONDITION_LABELS:
             norm_condition = "Incluir"
         condition_mode_var.set(norm_condition)
-        has_region_var.set(bool(cfg.get("has_region", True)))
-        has_city_var.set(bool(cfg.get("has_city", True)))
-        has_dealer_var.set(bool(cfg.get("has_dealer", True)))
+        # Primero las columnas (valores reales) y DESPUÉS las píldoras: así el sync corre al
+        # final y deja "No aplica" (bloqueado) en los niveles que queden deseleccionados,
+        # guardando el valor real en el shadow por si se reactivan.
         col_region_var.set(cfg.get("col_region", "REGION"))
         col_city_var.set(cfg.get("col_city", "CIUDAD"))
         col_dealer_var.set(cfg.get("col_dealer", "NOMBRE"))
         col_bac_var.set(cfg.get("col_bac", "BAC"))
+        _col_shadow.update({"region": col_region_var.get(), "city": col_city_var.get(),
+                            "dealer": col_dealer_var.get(), "bac": col_bac_var.get()})
+        has_region_var.set(bool(cfg.get("has_region", True)))
+        has_city_var.set(bool(cfg.get("has_city", True)))
+        has_dealer_var.set(bool(cfg.get("has_dealer", True)))
         chk_bac_var.set(bool(cfg.get("chk_bac", False)))
         find_extras_var.set(True)  # Siempre True (extras se buscan siempre)
         has_models_var.set(bool(cfg.get("has_models", False)))
@@ -876,6 +911,11 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         cfg = all_settings["paises"].get(pais) or _default_country_settings(pais)
         _apply_settings_dict(cfg)
 
+    def _col_real(nivel, var, activo):
+        """Valor real de la columna: si el nivel está deseleccionado la var dice 'No aplica',
+        así que se guarda el valor del shadow (lo último que escribió el usuario)."""
+        return var.get() if activo else _col_shadow.get(nivel, "")
+
     def _collect_current_settings():
         return {
             "excel_path": excel_path_var.get(),
@@ -887,10 +927,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "has_region": has_region_var.get(),
             "has_city": has_city_var.get(),
             "has_dealer": has_dealer_var.get(),
-            "col_region": col_region_var.get(),
-            "col_city": col_city_var.get(),
-            "col_dealer": col_dealer_var.get(),
-            "col_bac": col_bac_var.get(),
+            "col_region": _col_real("region", col_region_var, has_region_var.get()),
+            "col_city": _col_real("city", col_city_var, has_city_var.get()),
+            "col_dealer": _col_real("dealer", col_dealer_var, has_dealer_var.get()),
+            "col_bac": _col_real("bac", col_bac_var, chk_bac_var.get()),
             "chk_bac": chk_bac_var.get(),
             "find_extras": find_extras_var.get(),
             "has_models": has_models_var.get(),
