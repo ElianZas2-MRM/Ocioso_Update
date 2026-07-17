@@ -4,8 +4,8 @@ dealer_comparator_runner.py — Lógica de negocio de la pestaña "Comparador De
 Lee un Excel de dealers esperados (fila de encabezado y columnas configurables porque
 el Excel que mandan varía de país a país), navega región→ciudad→dealer en un formulario
 real via Selenium (reusando BrowserManager), compara contra el Excel filtrado y arma un
-reporte PASS/FAIL/EXTRA/MISSING con export a Excel (openpyxl) y capturas opcionales
-(ScreenshotManager, con banner de URL) empaquetadas en un ZIP.
+reporte PASS/FAIL/EXTRA/DUPLICADO/NOTA con export a Excel (openpyxl) y capturas opcionales
+(ScreenshotManager, con banner de URL) — una carpeta propia por formulario, sin ZIP.
 """
 import os
 import re
@@ -40,6 +40,7 @@ _FAIL_FILL = PatternFill(fill_type="solid", fgColor="00FFC7CE")
 _EXTRA_FILL = PatternFill(fill_type="solid", fgColor="00FFEB9C")
 _MISSING_FILL = PatternFill(fill_type="solid", fgColor="00D9D2E9")
 _DUPLICATE_FILL = PatternFill(fill_type="solid", fgColor="00FFCC99")
+_NOTA_FILL = PatternFill(fill_type="solid", fgColor="00BDD7EE")
 _HEADER_FILL = PatternFill(fill_type="solid", fgColor="007D4E9F")
 _HEADER_FONT = Font(color="00FFFFFF", bold=True)
 
@@ -84,6 +85,49 @@ def _is_placeholder(text):
     if not normalized:
         return True
     return any(k in normalized for k in _PLACEHOLDER_KEYWORDS)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Matcheo tolerante de nombres de dealer (apóstrofes/comillas, sufijos "(1000km)")
+# ──────────────────────────────────────────────────────────────────────────────
+_TRAILING_PAREN_RE = re.compile(r"\(\s*[^()]*\d[^()]*\)\s*$")  # "(1000KM)" al final
+_PUNCT_STRIP_RE = re.compile(r"[\'’‘´`\.\,\-]+")
+
+
+def _canonical_dealer_name(text):
+    """Nombre normalizado y sin apóstrofes/comillas ni sufijo parentético numérico final
+    (ej. '(1000km)'), para el matcheo tolerante de nombres de dealer. Dos nombres que
+    coinciden solo tras esta limpieza se consideran 'el mismo dealer con diferencias
+    menores' — cualquier otra diferencia (contenido de más o de menos) NO matchea."""
+    t = normalize_text(text)
+    t = _TRAILING_PAREN_RE.sub("", t).strip()
+    t = _PUNCT_STRIP_RE.sub("", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def match_dealer_names(excel_name, form_name):
+    """Compara el nombre del Excel contra el texto real del form.
+    Devuelve (match: bool, disclaimer: str|None):
+      - Coincidencia exacta (normalize_text) → (True, None)
+      - Coincidencia solo tras sacar apóstrofes/comillas o un sufijo parentético numérico
+        final → (True, "disclaimer explicando la diferencia menor")
+      - Cualquier otra diferencia (más o menos contenido) → (False, None)
+    """
+    excel_norm = normalize_text(excel_name)
+    form_norm = normalize_text(form_name)
+    if not excel_norm or not form_norm:
+        return False, None
+    if excel_norm == form_norm:
+        return True, None
+    excel_canon = _canonical_dealer_name(excel_name)
+    form_canon = _canonical_dealer_name(form_name)
+    if excel_canon and excel_canon == form_canon:
+        disclaimer = (
+            f"Nombre difiere en detalles menores (mayúsculas/caracteres especiales/sufijo) "
+            f"— Excel: '{str(excel_name).strip()}' | Form: '{str(form_name).strip()}'"
+        )
+        return True, disclaimer
+    return False, None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -145,6 +189,66 @@ def detect_hidden_rows(file_path, header_row=1, sheet_name=None):
     except Exception:
         pass
     return hidden
+
+
+def detect_hidden_columns(file_path, header_row=1, sheet_name=None):
+    """Devuelve [{'column': 'K', 'header': 'VENTA 0KM'}, ...] de columnas OCULTAS en el
+    Excel — igual criterio que detect_hidden_rows pero para columnas. Solo informativo:
+    no cambia qué se compara, pero avisa porque una columna oculta puede pasar
+    desapercibida para quien preparó el Excel."""
+    hidden = []
+    try:
+        wb = load_workbook(file_path, data_only=True, read_only=False)
+        try:
+            sheet = wb[sheet_name] if sheet_name else wb.worksheets[0]
+            header_cells = list(sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True))
+            header_vals = header_cells[0] if header_cells else []
+            for col_letter, dim in sheet.column_dimensions.items():
+                if not getattr(dim, "hidden", False):
+                    continue
+                try:
+                    idx = column_index_from_string(col_letter) - 1
+                    header_name = str(header_vals[idx]).strip() if (0 <= idx < len(header_vals) and header_vals[idx]) else ""
+                except Exception:
+                    header_name = ""
+                hidden.append({"column": col_letter, "header": header_name})
+        finally:
+            wb.close()
+    except Exception:
+        pass
+    return sorted(hidden, key=lambda h: h["column"])
+
+
+def detect_duplicate_rows(rows, column_map, has_region=True, has_city=True, has_dealer=True):
+    """Detecta filas duplicadas DENTRO del conjunto ya filtrado (mismo dealer/región/ciudad
+    según los niveles activos) — problema de calidad de datos del Excel en sí, distinto de
+    los 'EXTRA'/'DUPLICADO' que reporta find_extra_dealers sobre el <select> del form."""
+    region_key = column_map.get("region")
+    city_key = column_map.get("city")
+    dealer_key = column_map.get("dealer")
+
+    seen = {}
+    for row in rows:
+        key = (
+            normalize_text(row.get(dealer_key, "")) if (has_dealer and dealer_key) else "",
+            normalize_text(row.get(region_key, "")) if (has_region and region_key) else "",
+            normalize_text(row.get(city_key, "")) if (has_city and city_key) else "",
+        )
+        if not any(key):
+            continue
+        seen.setdefault(key, []).append(row)
+
+    duplicates = []
+    for (norm_dealer, norm_region, norm_city), matched_rows in seen.items():
+        if len(matched_rows) <= 1:
+            continue
+        duplicates.append({
+            "dealer": (matched_rows[0].get(dealer_key, "") if dealer_key else ""),
+            "region": (matched_rows[0].get(region_key, "") if region_key else ""),
+            "city": (matched_rows[0].get(city_key, "") if city_key else ""),
+            "filas": [r.get("__row__") for r in matched_rows],
+        })
+    return duplicates
 
 
 def resolve_column(headers, input_name):
@@ -214,19 +318,23 @@ def _valid_options(select_element):
 
 
 def _find_option_by_text(select_element, text):
-    """Busca la <option> cuyo texto matchea (exacto primero, luego parcial normalizado)."""
+    """Busca la <option> cuyo texto matchea: exacto primero, y si no, solo tolerando
+    diferencias menores (apóstrofes/comillas, sufijo numérico entre paréntesis) vía
+    match_dealer_names — NO hace substring genérico: un nombre con contenido de más o de
+    menos (ej. otro apellido agregado) NO debe considerarse el mismo dealer.
+    Devuelve (option, disclaimer_o_None) o (None, None) si no hay match."""
     target = normalize_text(text)
     if not target:
-        return None
+        return None, None
     options = _valid_options(select_element)
     for opt in options:
         if normalize_text(opt.text) == target:
-            return opt
+            return opt, None
     for opt in options:
-        opt_norm = normalize_text(opt.text)
-        if opt_norm and (target in opt_norm or opt_norm in target):
-            return opt
-    return None
+        match, disclaimer = match_dealer_names(text, opt.text)
+        if match:
+            return opt, disclaimer
+    return None, None
 
 
 def _select_option(driver, select_element, option_element):
@@ -248,7 +356,8 @@ def _select_by_text_robust(driver, select_id, target_text, wait_for_option=False
 
     wait_for_option=True: reintenta hasta `timeout` esperando a que la opción aparezca
     (el select dependiente todavía puede estar cargando las opciones de la nueva región).
-    Devuelve (found: bool, option_text: str|None).
+    Devuelve (found: bool, option_text: str|None, disclaimer: str|None) — disclaimer no-None
+    si matcheó tolerando una diferencia menor de nombre (ver match_dealer_names).
     """
     if timeout is None:
         # Selects dependientes (city/dealer) pueden poblar la opción buscada con retraso
@@ -260,7 +369,7 @@ def _select_by_text_robust(driver, select_id, target_text, wait_for_option=False
         try:
             el = _get_select(driver, select_id, timeout=0.5)
             if el is not None:
-                opt = _find_option_by_text(el, target_text)
+                opt, disclaimer = _find_option_by_text(el, target_text)
                 if opt is not None:
                     text = opt.text.strip()
                     try:
@@ -270,13 +379,13 @@ def _select_by_text_robust(driver, select_id, target_text, wait_for_option=False
                         # deshabilitada / no seleccionable: a los fines de la comparación
                         # (¿está el dealer en el form?) cuenta como encontrado.
                         if "disabled" in str(sel_err).lower():
-                            return True, text
+                            return True, text, disclaimer
                         raise
-                    return True, text
+                    return True, text, disclaimer
         except StaleElementReferenceException:
             pass
         if time.time() >= deadline:
-            return False, None
+            return False, None, None
         time.sleep(0.1)
 
 
@@ -390,7 +499,7 @@ def _select_model(driver, field_id, model_text):
     el = _get_select(driver, field_id)
     if el is None:
         return False
-    opt = _find_option_by_text(el, model_text)
+    opt, _disclaimer = _find_option_by_text(el, model_text)
     if opt is None:
         return False
     _select_option(driver, el, opt)
@@ -533,7 +642,14 @@ def compare_dealers(
     level_ids = level_ids or DEFAULT_SELECT_IDS
     extra_validations = extra_validations or []
     field_checks = field_checks or []
-    log = log_cb or (lambda *_a, **_k: None)
+    _log_raw = log_cb or (lambda *_a, **_k: None)
+    def log(msg, *a, **k):
+        # Nunca debe poder tirar una excepción: un log_cb que falla (ej. encoding de
+        # consola en un caracter especial) no puede convertir un resultado válido en FAIL.
+        try:
+            _log_raw(msg, *a, **k)
+        except Exception:
+            pass
 
     region_key = column_map.get("region")
     city_key = column_map.get("city")
@@ -581,6 +697,7 @@ def compare_dealers(
             dealer_found = False
             bac_ok = None
             extra_results = {}
+            name_disclaimer = None
 
             try:
                 # Orden SIEMPRE: región → ciudad → dealer (si no hay región, arranca en ciudad).
@@ -596,7 +713,7 @@ def compare_dealers(
                         cur_region = None
                         cur_city = None
                     else:
-                        region_found, _ = _select_by_text_robust(driver, level_ids["region"], region_text)
+                        region_found, _, _ = _select_by_text_robust(driver, level_ids["region"], region_text)
                         cur_city = None  # cambió la región → el select de ciudad se repuebla
                         if region_found:
                             cur_region = region_text
@@ -610,7 +727,7 @@ def compare_dealers(
                     if city_text == cur_city:
                         city_found = True  # ya seleccionada (misma región y ciudad que la fila previa)
                     else:
-                        city_found, _ = _select_by_text_robust(
+                        city_found, _, _ = _select_by_text_robust(
                             driver, level_ids["city"], city_text, wait_for_option=True)
                         if city_found:
                             cur_city = city_text
@@ -622,10 +739,11 @@ def compare_dealers(
 
                 ready_for_dealer = (region_found or not has_region) and (city_found or not has_city)
                 if has_dealer and dealer_text and ready_for_dealer:
-                    dealer_found, _ = _select_by_text_robust(
+                    dealer_found, _, name_disclaimer = _select_by_text_robust(
                         driver, level_ids["dealer"], dealer_text, wait_for_option=True)
                     if dealer_found:
-                        log(f"  Dealer: {dealer_text}", "ok")
+                        log(f"  Dealer: {dealer_text}"
+                            + (f"  ⚠ {name_disclaimer}" if name_disclaimer else ""), "ok")
                         time.sleep(0.2)
                     elif not expect_absent:
                         fails.append(f"Dealer '{dealer_text}' no encontrado")
@@ -690,6 +808,7 @@ def compare_dealers(
                 "extra_results": extra_results,
                 "fails": fails,
                 "fila": row.get("__row__"),
+                "name_disclaimer": name_disclaimer if (dealer_found and not expect_absent) else None,
             }
 
             if screenshot_cb is not None:
@@ -725,7 +844,14 @@ def find_extra_dealers(
     buscando en conjunto y reportando la combinación exacta de forma contextual.
     """
     level_ids = level_ids or DEFAULT_SELECT_IDS
-    log = log_cb or (lambda *_a, **_k: None)
+    _log_raw = log_cb or (lambda *_a, **_k: None)
+    def log(msg, *a, **k):
+        # Nunca debe poder tirar una excepción: un log_cb que falla (ej. encoding de
+        # consola en un caracter especial) no puede convertir un resultado válido en FAIL.
+        try:
+            _log_raw(msg, *a, **k)
+        except Exception:
+            pass
 
     region_key = column_map.get("region")
     city_key = column_map.get("city")
@@ -735,6 +861,7 @@ def find_extra_dealers(
     expected_regions = set()
     expected_cities_by_region = {}  # norm_region -> set(norm_cities)
     expected_dealers_by_region_city = {}  # (norm_region, norm_city) -> set(norm_dealers)
+    expected_dealer_canon_by_region_city = {}  # (norm_region, norm_city) -> {canon: original}
 
     # Mapeo de texto normalizado a original para reportar con el texto original del Excel
     orig_region_by_norm = {}
@@ -759,6 +886,30 @@ def find_extra_dealers(
             
         if has_dealer and dealer_val:
             expected_dealers_by_region_city.setdefault((norm_reg, norm_city), set()).add(norm_dealer)
+            expected_dealer_canon_by_region_city.setdefault((norm_reg, norm_city), {})[
+                _canonical_dealer_name(dealer_val)
+            ] = dealer_val
+
+    def _classify_dealer_options(option_texts, key):
+        """Separa las opciones vistas en el form en (duplicadas, extras, notas) contra lo
+        esperado para (norm_region, norm_city) — tolera diferencias menores de nombre
+        (ver match_dealer_names): esas van a 'notas', no a 'extras'."""
+        expected_norm = expected_dealers_by_region_city.get(key, set())
+        expected_canon = expected_dealer_canon_by_region_city.get(key, {})
+        seen_in_form = {}
+        extras, notas = [], []
+        for text in option_texts:
+            norm = normalize_text(text)
+            seen_in_form.setdefault(norm, []).append(text)
+            if norm in expected_norm:
+                continue
+            canon = _canonical_dealer_name(text)
+            if canon in expected_canon:
+                notas.append((text, expected_canon[canon]))
+            else:
+                extras.append(text)
+        duplicated = [(texts[0], len(texts)) for texts in seen_in_form.values() if len(texts) > 1]
+        return duplicated, extras, notas
 
     extra_results = []
     
@@ -880,6 +1031,28 @@ def find_extra_dealers(
     # --------------------------------------------------------------------------
     # FASE C: Chequeo de Dealer (sólo si has_dealer es True)
     # --------------------------------------------------------------------------
+    def _append_dealer_classification(option_texts, key, reg_orig_text, city_orig_text):
+        duplicated, extras, notas = _classify_dealer_options(option_texts, key)
+        for text in extras:
+            log(f"  EXTRA DEALER: {text} ({reg_orig_text} / {city_orig_text})", "warn")
+            extra_results.append({
+                "status": "EXTRA", "region": reg_orig_text, "city": city_orig_text, "dealer": text,
+                "fails": [f"Dealer extra para '{reg_orig_text} / {city_orig_text}'".strip(" /")],
+            })
+        for text, count in duplicated:
+            log(f"  DUPLICADO DEALER: {text} x{count} ({reg_orig_text} / {city_orig_text})", "warn")
+            extra_results.append({
+                "status": "DUPLICADO", "region": reg_orig_text, "city": city_orig_text, "dealer": text,
+                "fails": [f"Dealer aparece {count} veces en el dropdown de '{reg_orig_text} / {city_orig_text}'".strip(" /")],
+            })
+        for text, excel_orig in notas:
+            log(f"  NOTA DEALER: '{text}' matchea '{excel_orig}' con diferencias menores "
+                f"({reg_orig_text} / {city_orig_text})", "info")
+            extra_results.append({
+                "status": "NOTA", "region": reg_orig_text, "city": city_orig_text, "dealer": excel_orig,
+                "fails": [], "name_disclaimer": match_dealer_names(excel_orig, text)[1],
+            })
+
     if has_dealer:
         log("Chequeando EXTRAS y DUPLICADOS en Dealers...", "info")
         if has_region and has_city:
@@ -889,144 +1062,49 @@ def find_extra_dealers(
                 city_orig_text = orig_city_by_norm[norm_city]
                 if progress_cb:
                     progress_cb(1, 1, f"{reg_orig_text} / {city_orig_text}")
-                
-                # Seleccionar región y luego ciudad
-                ok, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
+
+                ok, _, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
                 if not ok:
                     continue
-                ok, _ = _select_by_text_robust(driver, level_ids["city"], city_orig_text, wait_for_option=True)
+                ok, _, _ = _select_by_text_robust(driver, level_ids["city"], city_orig_text, wait_for_option=True)
                 if not ok:
                     continue
                 time.sleep(0.6)  # Pausa estable para repoblar dealers
-                
+
                 option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
-                expected_dealers = expected_dealers_by_region_city.get((norm_reg, norm_city), set())
-                seen_in_form = {}
-                for text in option_texts:
-                    norm = normalize_text(text)
-                    seen_in_form.setdefault(norm, []).append(text)
-                    if norm not in expected_dealers:
-                        log(f"  EXTRA DEALER: {text} ({reg_orig_text} / {city_orig_text})", "warn")
-                        extra_results.append({
-                            "status": "EXTRA",
-                            "region": reg_orig_text,
-                            "city": city_orig_text,
-                            "dealer": text,
-                            "fails": [f"Dealer extra para la combinación '{reg_orig_text} / {city_orig_text}'"],
-                        })
-                for norm, texts in seen_in_form.items():
-                    if len(texts) > 1:
-                        log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)} ({reg_orig_text} / {city_orig_text})", "warn")
-                        extra_results.append({
-                            "status": "DUPLICADO",
-                            "region": reg_orig_text,
-                            "city": city_orig_text,
-                            "dealer": texts[0],
-                            "fails": [f"Dealer aparece {len(texts)} veces en el dropdown de '{reg_orig_text} / {city_orig_text}'"],
-                        })
+                _append_dealer_classification(option_texts, (norm_reg, norm_city), reg_orig_text, city_orig_text)
         elif not has_region and has_city:
             for _, norm_city in cities_to_check:
                 _check_stop(stop_flag)
                 city_orig_text = orig_city_by_norm[norm_city]
                 if progress_cb:
                     progress_cb(1, 1, f"Ciudad: {city_orig_text}")
-                
-                ok, _ = _select_by_text_robust(driver, level_ids["city"], city_orig_text)
+
+                ok, _, _ = _select_by_text_robust(driver, level_ids["city"], city_orig_text)
                 if not ok:
                     continue
                 time.sleep(0.6)
-                
+
                 option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
-                expected_dealers = expected_dealers_by_region_city.get(("", norm_city), set())
-                seen_in_form = {}
-                for text in option_texts:
-                    norm = normalize_text(text)
-                    seen_in_form.setdefault(norm, []).append(text)
-                    if norm not in expected_dealers:
-                        log(f"  EXTRA DEALER: {text} ({city_orig_text})", "warn")
-                        extra_results.append({
-                            "status": "EXTRA",
-                            "region": "",
-                            "city": city_orig_text,
-                            "dealer": text,
-                            "fails": [f"Dealer extra para la ciudad '{city_orig_text}'"],
-                        })
-                for norm, texts in seen_in_form.items():
-                    if len(texts) > 1:
-                        log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)} ({city_orig_text})", "warn")
-                        extra_results.append({
-                            "status": "DUPLICADO",
-                            "region": "",
-                            "city": city_orig_text,
-                            "dealer": texts[0],
-                            "fails": [f"Dealer aparece {len(texts)} veces en el dropdown de '{city_orig_text}'"],
-                        })
+                _append_dealer_classification(option_texts, ("", norm_city), "", city_orig_text)
         elif has_region and not has_city:
             for norm_reg in regions_to_check:
                 _check_stop(stop_flag)
                 reg_orig_text = orig_region_by_norm[norm_reg]
                 if progress_cb:
                     progress_cb(1, 1, f"Región: {reg_orig_text}")
-                
-                ok, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
+
+                ok, _, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
                 if not ok:
                     continue
                 time.sleep(0.6)
-                
+
                 option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
-                expected_dealers = expected_dealers_by_region_city.get((norm_reg, ""), set())
-                seen_in_form = {}
-                for text in option_texts:
-                    norm = normalize_text(text)
-                    seen_in_form.setdefault(norm, []).append(text)
-                    if norm not in expected_dealers:
-                        log(f"  EXTRA DEALER: {text} (Región: {reg_orig_text})", "warn")
-                        extra_results.append({
-                            "status": "EXTRA",
-                            "region": reg_orig_text,
-                            "city": "",
-                            "dealer": text,
-                            "fails": [f"Dealer extra para la región '{reg_orig_text}'"],
-                        })
-                for norm, texts in seen_in_form.items():
-                    if len(texts) > 1:
-                        log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)} (Región: {reg_orig_text})", "warn")
-                        extra_results.append({
-                            "status": "DUPLICADO",
-                            "region": reg_orig_text,
-                            "city": "",
-                            "dealer": texts[0],
-                            "fails": [f"Dealer aparece {len(texts)} veces en el dropdown de la región '{reg_orig_text}'"],
-                        })
+                _append_dealer_classification(option_texts, (norm_reg, ""), reg_orig_text, "")
         else:
             # Sin región ni ciudad, dealers globales
             option_texts = _read_valid_option_texts(driver, level_ids["dealer"])
-            expected_dealers = expected_dealers_by_region_city.get(("", ""), set())
-            seen_in_form = {}
-            for text in option_texts:
-                norm = normalize_text(text)
-                seen_in_form.setdefault(norm, []).append(text)
-                if norm not in expected_dealers:
-                    log(f"  EXTRA DEALER: {text}", "warn")
-                    extra_results.append({
-                        "status": "EXTRA",
-                        "region": "",
-                        "city": "",
-                        "dealer": text,
-                        "fails": ["Dealer extra (no declarado en el Excel)"],
-                    })
-            for norm, texts in seen_in_form.items():
-                if len(texts) > 1:
-                    log(f"  DUPLICADO DEALER: {texts[0]} x{len(texts)}", "warn")
-                    extra_results.append({
-                        "status": "DUPLICADO",
-                        "region": "",
-                        "city": "",
-                        "dealer": texts[0],
-                        "fails": [f"Dealer aparece {len(texts)} veces en el dropdown"],
-                    })
-
-    return extra_results
+            _append_dealer_classification(option_texts, ("", ""), "", "")
 
     return extra_results
 
@@ -1034,10 +1112,26 @@ def find_extra_dealers(
 # ──────────────────────────────────────────────────────────────────────────────
 # Captura de pantalla con banner de URL + ZIP
 # ──────────────────────────────────────────────────────────────────────────────
+def _ensure_window_covers_content(driver):
+    """Asegura que la ventana del navegador sea al menos tan ancha como el contenido
+    renderizado (document.body.scrollWidth). Evita que un formulario de varias columnas
+    quede recortado a la derecha en la captura por diferencias de escala de pantalla."""
+    try:
+        doc_w = driver.execute_script(
+            "return Math.max(document.body.scrollWidth || 0, document.documentElement.scrollWidth || 0);"
+        )
+        size = driver.get_window_size()
+        if doc_w and size and doc_w > size.get("width", 0) - 20:
+            driver.set_window_size(int(doc_w) + 60, size.get("height", 1080))
+    except Exception:
+        pass
+
+
 def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", landing_url=""):
     """Toma una captura de página completa con las URLs del form y landing pegadas en un banner
     superior (reusa ScreenshotManager, que ya soporta esto)."""
     os.makedirs(screenshot_dir, exist_ok=True)
+    _ensure_window_covers_content(driver)
     manager = ScreenshotManager(driver, screenshot_dir)
     # Pasar ambas URLs para que el banner muestre las dos (si aplica)
     if landing_url:
@@ -1045,6 +1139,98 @@ def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", lan
     manager.url_form_esperado = form_url
     manager.take_full_page_screenshot(filename)
     manager._add_url_banner(os.path.join(screenshot_dir, filename))
+    return os.path.join(screenshot_dir, filename)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Evidencia de dropdown completo (para verificar exclusión) — el <select> nativo es UI
+# del sistema operativo y Selenium no puede fotografiar ese popup directamente, así que
+# se clona la lista de opciones en un panel que se AGREGA arriba de la página (sin ocultar
+# nada): la captura final muestra la lista completa de opciones Y el formulario real debajo,
+# en la misma imagen, junto con el banner de URLs.
+# ──────────────────────────────────────────────────────────────────────────────
+_DROPDOWN_EVIDENCE_BUILD_JS = """
+var title = arguments[0], searched = arguments[1], found = arguments[2], options = arguments[3];
+var OVERLAY_ID = '__ocioso_dropdown_evidence__';
+var old = document.getElementById(OVERLAY_ID);
+if (old) old.remove();
+var div = document.createElement('div');
+div.id = OVERLAY_ID;
+div.style.cssText = "position:relative;z-index:2147483647;background:#1e1330;color:#ffffff;"
+    + "font-family:'Segoe UI',Arial,sans-serif;padding:20px 24px;box-sizing:border-box;width:100%;"
+    + "border-bottom:4px solid #7D4E9F;";
+var h = document.createElement('h2');
+h.textContent = title;
+h.style.cssText = 'margin:0 0 10px 0;font-size:20px;color:#ffffff;font-weight:bold;';
+div.appendChild(h);
+if (searched) {
+    var estado = (found === true) ? 'PRESENTE en el dropdown' : (found === false ? 'AUSENTE del dropdown' : '');
+    var p = document.createElement('p');
+    p.textContent = 'Buscado: "' + searched + '"  ->  ' + estado;
+    p.style.cssText = 'font-size:16px;font-weight:bold;margin:0 0 14px 0;color:' + (found ? '#ff8a8a' : '#8fe0a0') + ';';
+    div.appendChild(p);
+}
+var p2 = document.createElement('p');
+p2.textContent = 'Total de opciones visibles: ' + options.length;
+p2.style.cssText = 'font-size:13px;color:#c9b3de;margin:0 0 10px 0;';
+div.appendChild(p2);
+var ol = document.createElement('ol');
+// Sin max-height/scroll: la lista completa queda en el flujo normal de la página para que
+// el mecanismo de captura por partes (scroll+merge) la capture ENTERA, sin recortar nada
+// aunque tenga muchas opciones (ej. un dropdown de ciudad con 50+ opciones).
+ol.style.cssText = 'margin:0;padding:10px 10px 10px 34px;font-size:14px;line-height:1.8;'
+    + 'background:#150c22;border-radius:6px;';
+var searchedLower = (searched || '').trim().toLowerCase();
+options.forEach(function(t){
+    var li = document.createElement('li');
+    li.textContent = t;
+    li.style.color = '#ffffff';
+    if (searchedLower && t.trim().toLowerCase() === searchedLower) {
+        li.style.cssText += 'background:#3a1d52;color:#ffd873;font-weight:bold;padding:2px 6px;border-radius:3px;';
+    }
+    ol.appendChild(li);
+});
+div.appendChild(ol);
+document.body.insertBefore(div, document.body.firstChild);
+"""
+
+_DROPDOWN_EVIDENCE_RESTORE_JS = """
+var div = document.getElementById('__ocioso_dropdown_evidence__');
+if (div) div.remove();
+"""
+
+
+def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title="", searched_text="",
+                               found=None, form_url="", landing_url=""):
+    """Genera una captura de evidencia con TODAS las opciones visibles de un <select> en
+    este momento. Necesario porque el dropdown nativo es UI del sistema operativo — Selenium
+    no puede fotografiar ese popup abierto directamente. Clona la lista de textos (los mismos
+    que ve el usuario) en un panel a pantalla completa que reemplaza temporalmente el resto de
+    la página, y lo fotografía con el mismo mecanismo de página completa del resto de la app
+    (funciona sin importar cuán larga sea la lista, con scroll+merge si hace falta)."""
+    option_texts = _read_valid_option_texts(driver, select_id, wait_nonempty=False)
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    os.makedirs(screenshot_dir, exist_ok=True)
+    try:
+        driver.execute_script(
+            _DROPDOWN_EVIDENCE_BUILD_JS,
+            title or f"Dropdown completo: {select_id}", searched_text or "", found, option_texts,
+        )
+        _ensure_window_covers_content(driver)
+        manager = ScreenshotManager(driver, screenshot_dir)
+        if landing_url:
+            manager.url_landing = landing_url
+        manager.url_form_esperado = form_url
+        manager.take_full_page_screenshot(filename)
+        manager._add_url_banner(os.path.join(screenshot_dir, filename))
+    finally:
+        try:
+            driver.execute_script(_DROPDOWN_EVIDENCE_RESTORE_JS)
+        except Exception:
+            pass
     return os.path.join(screenshot_dir, filename)
 
 
@@ -1060,7 +1246,11 @@ def zip_screenshots(screenshot_paths, output_zip_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Export a Excel (PASS verde / FAIL rojo / EXTRA amarillo / MISSING violeta)
 # ──────────────────────────────────────────────────────────────────────────────
-def export_results_excel(results, output_path=None, pais=""):
+def export_results_excel(results, output_path=None, pais="", hidden_rows=None, hidden_columns=None,
+                          duplicate_rows=None):
+    """hidden_rows / hidden_columns / duplicate_rows: avisos de calidad de datos del Excel
+    de dealers de ORIGEN (detect_hidden_rows / detect_hidden_columns / detect_duplicate_rows),
+    para dejar constancia en el propio reporte de salida — no afectan qué se comparó."""
     if output_path is None:
         results_dir = os.path.join(RESULTS_DIR, "dealer_comparator")
         os.makedirs(results_dir, exist_ok=True)
@@ -1087,7 +1277,7 @@ def export_results_excel(results, output_path=None, pais=""):
     ws.title = "Resultados"
 
     headers = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Dealer",
-               "BAC Excel", "BAC OK", "Detalle", "Fila Excel"]
+               "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
     ws.append(headers)
     for cell in ws[1]:
         cell.fill = _HEADER_FILL
@@ -1097,7 +1287,7 @@ def export_results_excel(results, output_path=None, pais=""):
 
     fill_by_status = {
         "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
-        "MISSING": _MISSING_FILL, "DUPLICADO": _DUPLICATE_FILL,
+        "MISSING": _MISSING_FILL, "DUPLICADO": _DUPLICATE_FILL, "NOTA": _NOTA_FILL,
     }
 
     for r in results:
@@ -1112,6 +1302,7 @@ def export_results_excel(results, output_path=None, pais=""):
             r.get("bac_excel", ""),
             {True: "OK", False: "MISMATCH", None: ""}.get(r.get("bac_ok")),
             " | ".join(r.get("fails", [])) if r.get("fails") else "",
+            r.get("name_disclaimer", "") or "",
             r.get("fila", ""),
         ])
         row_idx = ws.max_row
@@ -1121,9 +1312,13 @@ def export_results_excel(results, output_path=None, pais=""):
             cell.alignment = Alignment(vertical="center", wrap_text=True)
             if fill:
                 cell.fill = fill
+        # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
+        # confundir con FAIL, ya que el dealer sí se encontró.
+        if r.get("name_disclaimer") and r.get("status") == "PASS":
+            ws.cell(row=row_idx, column=11).fill = _NOTA_FILL
 
     # Auto-fit column widths (basado en contenido, con mínimos y máximos razonables)
-    col_widths = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 14, 9: 10, 10: 60, 11: 10}
+    col_widths = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 14, 9: 10, 10: 50, 11: 55, 12: 10}
     for col_idx, width in col_widths.items():
         col_letter = ws.cell(row=1, column=col_idx).column_letter
         ws.column_dimensions[col_letter].width = width
@@ -1136,9 +1331,10 @@ def export_results_excel(results, output_path=None, pais=""):
 
     # ── Hoja Resumen ──
     total = len(results)
-    counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "MISSING": 0, "DUPLICADO": 0}
+    counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "MISSING": 0, "DUPLICADO": 0, "NOTA": 0}
     for r in results:
         counts[r.get("status", "FAIL")] = counts.get(r.get("status", "FAIL"), 0) + 1
+    disclaimer_count = sum(1 for r in results if r.get("name_disclaimer"))
 
     summary_ws = wb.create_sheet("Resumen")
     summary_data = [
@@ -1152,6 +1348,8 @@ def export_results_excel(results, output_path=None, pais=""):
         ["🟡 EXTRA", counts.get("EXTRA", 0)],
         ["🔵 DUPLICADO", counts.get("DUPLICADO", 0)],
         ["🟣 MISSING", counts.get("MISSING", 0)],
+        ["🔷 NOTA (dealer del form no está en el Excel, solo difiere en nombre)", counts.get("NOTA", 0)],
+        ["⚠ PASS con nombre distinto en detalles menores", disclaimer_count],
     ]
 
     # Agregar URLs únicas usadas
@@ -1164,6 +1362,21 @@ def export_results_excel(results, output_path=None, pais=""):
             summary_data.append(["  Landing", url])
         for url in urls_form:
             summary_data.append(["  Form", url])
+
+    # Avisos de calidad de datos del Excel de dealers (no afectan la comparación en sí)
+    if hidden_rows:
+        summary_data.append(["", ""])
+        summary_data.append(["⚠ Filas OCULTAS en el Excel de dealers", len(hidden_rows)])
+        summary_data.append(["  Número de fila(s)", ", ".join(str(r) for r in sorted(hidden_rows))])
+    if hidden_columns:
+        summary_data.append(["", ""])
+        summary_data.append(["⚠ Columnas OCULTAS en el Excel de dealers", len(hidden_columns)])
+        for hc in hidden_columns:
+            label = f"  Columna {hc['column']}" + (f" ({hc['header']})" if hc.get("header") else "")
+            summary_data.append([label, ""])
+    if duplicate_rows:
+        summary_data.append(["", ""])
+        summary_data.append(["⚠ Dealers duplicados en el Excel (mismo dealer/región/ciudad)", len(duplicate_rows)])
 
     for row_data in summary_data:
         summary_ws.append(row_data)
@@ -1179,6 +1392,32 @@ def export_results_excel(results, output_path=None, pais=""):
     for cell in [summary_ws.cell(1, 1), summary_ws.cell(1, 2),
                  summary_ws.cell(4, 1), summary_ws.cell(4, 2)]:
         cell.font = Font(bold=True)
+
+    # ── Hoja Duplicados en Excel (si hay) ──
+    if duplicate_rows:
+        dup_ws = wb.create_sheet("Duplicados en Excel")
+        dup_headers = ["Dealer", "Región", "Ciudad", "Filas del Excel"]
+        dup_ws.append(dup_headers)
+        for cell in dup_ws[1]:
+            cell.fill = _HEADER_FILL
+            cell.font = _HEADER_FONT
+            cell.border = header_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for d in duplicate_rows:
+            dup_ws.append([
+                d.get("dealer", ""), d.get("region", ""), d.get("city", ""),
+                ", ".join(str(f) for f in d.get("filas", [])),
+            ])
+            row_idx = dup_ws.max_row
+            for cell in dup_ws[row_idx]:
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+                cell.fill = _DUPLICATE_FILL
+        dup_ws.column_dimensions["A"].width = 40
+        dup_ws.column_dimensions["B"].width = 22
+        dup_ws.column_dimensions["C"].width = 22
+        dup_ws.column_dimensions["D"].width = 30
+        dup_ws.freeze_panes = "A2"
 
     wb.save(output_path)
     return output_path
