@@ -644,25 +644,46 @@ def _find_next_button(driver):
     return None
 
 
-def _any_level_select_present(driver, level_ids, has_region, has_city, has_dealer):
-    """True si alguno de los <select> activos (region/city/dealer) está VISIBLE en el DOM.
-    (Muchos forms multi-paso tienen esos selects en el DOM pero ocultos hasta su paso.)"""
-    ids = []
+def _select_visible(driver, element_id):
+    if not element_id:
+        return False
+    try:
+        for el in driver.find_elements(By.ID, element_id):
+            if (el.tag_name or "").lower() == "select" and el.is_displayed():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _anchor_level_id(level_ids, has_region, has_city, has_dealer):
+    """Nivel 'ancla' = el más alto que el usuario seleccionó (region → city → dealer). Es el
+    punto donde arranca la cascada de comparación, así que el avance de pasos apunta a ÉL."""
     if has_region:
-        ids.append(level_ids.get("region"))
+        return level_ids.get("region")
     if has_city:
-        ids.append(level_ids.get("city"))
+        return level_ids.get("city")
     if has_dealer:
-        ids.append(level_ids.get("dealer"))
-    for eid in ids:
-        if not eid:
-            continue
-        try:
-            for el in driver.find_elements(By.ID, eid):
-                if (el.tag_name or "").lower() == "select" and el.is_displayed():
-                    return True
-        except Exception:
-            continue
+        return level_ids.get("dealer")
+    return None
+
+
+def _any_level_select_present(driver, level_ids, has_region, has_city, has_dealer):
+    """True cuando el <select> del nivel ANCLA (el más alto seleccionado) está VISIBLE — ahí
+    empieza la comparación. Se apunta al ancla, no a 'cualquiera', para no frenar en un paso
+    donde, por ejemplo, ya se ve 'dealer' pero todavía no 'region' que el usuario también pidió.
+    Fallback: si el ancla no está pero sí otro nivel activo, también sirve (forms atípicos)."""
+    anchor = _anchor_level_id(level_ids, has_region, has_city, has_dealer)
+    if _select_visible(driver, anchor):
+        return True
+    # Fallback tolerante: cualquier nivel activo visible (forms que no siguen el orden típico)
+    for eid, activo in (
+        (level_ids.get("region"), has_region),
+        (level_ids.get("city"), has_city),
+        (level_ids.get("dealer"), has_dealer),
+    ):
+        if activo and eid != anchor and _select_visible(driver, eid):
+            return True
     return False
 
 
