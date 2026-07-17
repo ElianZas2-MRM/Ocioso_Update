@@ -41,6 +41,7 @@ _EXTRA_FILL = PatternFill(fill_type="solid", fgColor="00FFEB9C")
 _MISSING_FILL = PatternFill(fill_type="solid", fgColor="00D9D2E9")
 _DUPLICATE_FILL = PatternFill(fill_type="solid", fgColor="00FFCC99")
 _NOTA_FILL = PatternFill(fill_type="solid", fgColor="00BDD7EE")
+_OCULTO_FILL = PatternFill(fill_type="solid", fgColor="00FFB84D")  # naranja: relación con filas OCULTAS del Excel
 _HEADER_FILL = PatternFill(fill_type="solid", fgColor="007D4E9F")
 _HEADER_FONT = Font(color="00FFFFFF", bold=True)
 
@@ -217,38 +218,6 @@ def detect_hidden_columns(file_path, header_row=1, sheet_name=None):
     except Exception:
         pass
     return sorted(hidden, key=lambda h: h["column"])
-
-
-def detect_duplicate_rows(rows, column_map, has_region=True, has_city=True, has_dealer=True):
-    """Detecta filas duplicadas DENTRO del conjunto ya filtrado (mismo dealer/región/ciudad
-    según los niveles activos) — problema de calidad de datos del Excel en sí, distinto de
-    los 'EXTRA'/'DUPLICADO' que reporta find_extra_dealers sobre el <select> del form."""
-    region_key = column_map.get("region")
-    city_key = column_map.get("city")
-    dealer_key = column_map.get("dealer")
-
-    seen = {}
-    for row in rows:
-        key = (
-            normalize_text(row.get(dealer_key, "")) if (has_dealer and dealer_key) else "",
-            normalize_text(row.get(region_key, "")) if (has_region and region_key) else "",
-            normalize_text(row.get(city_key, "")) if (has_city and city_key) else "",
-        )
-        if not any(key):
-            continue
-        seen.setdefault(key, []).append(row)
-
-    duplicates = []
-    for (norm_dealer, norm_region, norm_city), matched_rows in seen.items():
-        if len(matched_rows) <= 1:
-            continue
-        duplicates.append({
-            "dealer": (matched_rows[0].get(dealer_key, "") if dealer_key else ""),
-            "region": (matched_rows[0].get(region_key, "") if region_key else ""),
-            "city": (matched_rows[0].get(city_key, "") if city_key else ""),
-            "filas": [r.get("__row__") for r in matched_rows],
-        })
-    return duplicates
 
 
 def resolve_column(headers, input_name):
@@ -852,11 +821,14 @@ def find_extra_dealers(
     progress_cb=None,
     stop_flag=None,
     has_dealer=True,
+    hidden_rows_data=None,
 ):
     """
     Recorre las combinaciones del nivel superior presentes en el Excel y reporta:
     - EXTRA: opciones que aparecen en el form pero no están en la lista esperada del Excel.
     - DUPLICADO: opciones que aparecen más de una vez como <option> en el form.
+    - OCULTO: opciones del form que SÓLO están declaradas en filas OCULTAS del Excel
+      (hidden_rows_data) — están mal porque la fila está oculta; van en naranja.
     Este chequeo se realiza de forma jerárquica (Región -> Ciudad -> Dealer) según los niveles activos,
     buscando en conjunto y reportando la combinación exacta de forma contextual.
     """
@@ -874,51 +846,63 @@ def find_extra_dealers(
     city_key = column_map.get("city")
     dealer_key = column_map.get("dealer")
 
-    # Estructuras esperadas indexadas por valores normalizados
-    expected_regions = set()
-    expected_cities_by_region = {}  # norm_region -> set(norm_cities)
-    expected_dealers_by_region_city = {}  # (norm_region, norm_city) -> set(norm_dealers)
-    expected_dealer_canon_by_region_city = {}  # (norm_region, norm_city) -> {canon: original}
+    def _build_expected_maps(source_rows):
+        """Indexa (regiones, ciudades_por_región, dealers_por_región_ciudad, canon_dealers,
+        orig_region, orig_city) a partir de un set de filas del Excel."""
+        regions = set()
+        cities_by_region = {}
+        dealers_by_rc = {}
+        dealer_canon_by_rc = {}
+        orig_reg = {}
+        orig_city = {}
+        for row in source_rows or []:
+            reg_val = str(row.get(region_key, "")).strip() if (has_region and region_key) else ""
+            city_val = str(row.get(city_key, "")).strip() if (has_city and city_key) else ""
+            dealer_val = str(row.get(dealer_key, "")).strip() if (has_dealer and dealer_key) else ""
 
-    # Mapeo de texto normalizado a original para reportar con el texto original del Excel
-    orig_region_by_norm = {}
-    orig_city_by_norm = {}  # norm_city -> original city
+            norm_reg = normalize_text(reg_val)
+            norm_city = normalize_text(city_val)
 
-    for row in rows:
-        reg_val = str(row.get(region_key, "")).strip() if (has_region and region_key) else ""
-        city_val = str(row.get(city_key, "")).strip() if (has_city and city_key) else ""
-        dealer_val = str(row.get(dealer_key, "")).strip() if (has_dealer and dealer_key) else ""
+            if has_region and reg_val:
+                regions.add(norm_reg)
+                orig_reg[norm_reg] = reg_val
+            if has_city and city_val:
+                cities_by_region.setdefault(norm_reg, set()).add(norm_city)
+                orig_city[norm_city] = city_val
+            if has_dealer and dealer_val:
+                dealers_by_rc.setdefault((norm_reg, norm_city), set()).add(normalize_text(dealer_val))
+                dealer_canon_by_rc.setdefault((norm_reg, norm_city), {})[
+                    _canonical_dealer_name(dealer_val)
+                ] = dealer_val
+        return regions, cities_by_region, dealers_by_rc, dealer_canon_by_rc, orig_reg, orig_city
 
-        norm_reg = normalize_text(reg_val)
-        norm_city = normalize_text(city_val)
-        norm_dealer = normalize_text(dealer_val)
-
-        if has_region and reg_val:
-            expected_regions.add(norm_reg)
-            orig_region_by_norm[norm_reg] = reg_val
-        
-        if has_city and city_val:
-            expected_cities_by_region.setdefault(norm_reg, set()).add(norm_city)
-            orig_city_by_norm[norm_city] = city_val
-            
-        if has_dealer and dealer_val:
-            expected_dealers_by_region_city.setdefault((norm_reg, norm_city), set()).add(norm_dealer)
-            expected_dealer_canon_by_region_city.setdefault((norm_reg, norm_city), {})[
-                _canonical_dealer_name(dealer_val)
-            ] = dealer_val
+    # Filas visibles (lo esperado real) vs filas OCULTAS del Excel (lo que NO debería contar
+    # pero, si aparece en el form, hay que señalarlo en naranja como OCULTO)
+    (expected_regions, expected_cities_by_region, expected_dealers_by_region_city,
+     expected_dealer_canon_by_region_city, orig_region_by_norm, orig_city_by_norm) = _build_expected_maps(rows)
+    (hidden_regions, hidden_cities_by_region, hidden_dealers_by_region_city,
+     _hidden_canon, hidden_orig_reg, hidden_orig_city) = _build_expected_maps(hidden_rows_data)
+    # Para poder navegar también las combinaciones que sólo existen en filas ocultas
+    orig_region_by_norm = {**hidden_orig_reg, **orig_region_by_norm}
+    orig_city_by_norm = {**hidden_orig_city, **orig_city_by_norm}
 
     def _classify_dealer_options(option_texts, key):
-        """Separa las opciones vistas en el form en (duplicadas, extras, notas) contra lo
-        esperado para (norm_region, norm_city) — tolera diferencias menores de nombre
-        (ver match_dealer_names): esas van a 'notas', no a 'extras'."""
+        """Separa las opciones vistas en el form en (duplicadas, extras, notas, ocultos)
+        contra lo esperado para (norm_region, norm_city). Tolera diferencias menores de
+        nombre (ver match_dealer_names) → 'notas'. Lo declarado sólo en filas OCULTAS del
+        Excel → 'ocultos' (mal: la fila está oculta), no 'extras'."""
         expected_norm = expected_dealers_by_region_city.get(key, set())
         expected_canon = expected_dealer_canon_by_region_city.get(key, {})
+        hidden_norm = hidden_dealers_by_region_city.get(key, set())
         seen_in_form = {}
-        extras, notas = [], []
+        extras, notas, ocultos = [], [], []
         for text in option_texts:
             norm = normalize_text(text)
             seen_in_form.setdefault(norm, []).append(text)
             if norm in expected_norm:
+                continue
+            if norm in hidden_norm:
+                ocultos.append(text)
                 continue
             canon = _canonical_dealer_name(text)
             if canon in expected_canon:
@@ -926,10 +910,10 @@ def find_extra_dealers(
             else:
                 extras.append(text)
         duplicated = [(texts[0], len(texts)) for texts in seen_in_form.values() if len(texts) > 1]
-        return duplicated, extras, notas
+        return duplicated, extras, notas, ocultos
 
     extra_results = []
-    
+
     # --------------------------------------------------------------------------
     # FASE A: Chequeo de Región (sólo si has_region es True)
     # --------------------------------------------------------------------------
@@ -941,7 +925,18 @@ def find_extra_dealers(
         for text in option_texts:
             norm = normalize_text(text)
             seen_in_form.setdefault(norm, []).append(text)
-            if norm not in expected_regions:
+            if norm in expected_regions:
+                pass
+            elif norm in hidden_regions:
+                log(f"  OCULTO REGION: {text} (declarada solo en fila oculta del Excel)", "warn")
+                extra_results.append({
+                    "status": "OCULTO",
+                    "region": text,
+                    "city": "",
+                    "dealer": "",
+                    "fails": ["Región presente en el form pero declarada SOLO en fila(s) OCULTA(s) del Excel"],
+                })
+            else:
                 log(f"  EXTRA REGION: {text}", "warn")
                 extra_results.append({
                     "status": "EXTRA",
@@ -960,9 +955,10 @@ def find_extra_dealers(
                     "dealer": "",
                     "fails": [f"Región aparece {len(texts)} veces en el dropdown"],
                 })
-        
-        # Filtramos para quedarnos sólo con las regiones que están en el Excel y existen en el form
-        regions_to_check = [norm for norm in expected_regions if norm in seen_in_form]
+
+        # Regiones a recorrer: las declaradas (visibles u ocultas) que existen en el form —
+        # las ocultas también se navegan para poder clasificar sus ciudades/dealers.
+        regions_to_check = [norm for norm in (expected_regions | hidden_regions) if norm in seen_in_form]
 
     # --------------------------------------------------------------------------
     # FASE B: Chequeo de Ciudad (sólo si has_city es True)
@@ -977,20 +973,32 @@ def find_extra_dealers(
                 reg_orig_text = orig_region_by_norm[norm_reg]
                 if progress_cb:
                     progress_cb(1, 1, f"Región: {reg_orig_text}")
-                
+
                 # Seleccionar la región para ver sus ciudades
-                ok, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
+                ok, _, _ = _select_by_text_robust(driver, level_ids["region"], reg_orig_text)
                 if not ok:
                     continue
                 time.sleep(0.6)  # Pausa estable para repoblar ciudades
-                
+
                 option_texts = _read_valid_option_texts(driver, level_ids["city"])
                 expected_cities = expected_cities_by_region.get(norm_reg, set())
+                hidden_cities = hidden_cities_by_region.get(norm_reg, set())
                 seen_in_form = {}
                 for text in option_texts:
                     norm = normalize_text(text)
                     seen_in_form.setdefault(norm, []).append(text)
-                    if norm not in expected_cities:
+                    if norm in expected_cities:
+                        pass
+                    elif norm in hidden_cities:
+                        log(f"  OCULTO CIUDAD: {text} en {reg_orig_text} (solo en fila oculta del Excel)", "warn")
+                        extra_results.append({
+                            "status": "OCULTO",
+                            "region": reg_orig_text,
+                            "city": text,
+                            "dealer": "",
+                            "fails": [f"Ciudad presente en el form para '{reg_orig_text}' pero declarada SOLO en fila(s) OCULTA(s) del Excel"],
+                        })
+                    else:
                         log(f"  EXTRA CIUDAD: {text} (en Región: {reg_orig_text})", "warn")
                         extra_results.append({
                             "status": "EXTRA",
@@ -1009,8 +1017,8 @@ def find_extra_dealers(
                             "dealer": "",
                             "fails": [f"Ciudad aparece {len(texts)} veces en el dropdown de la región '{reg_orig_text}'"],
                         })
-                
-                for norm_city in expected_cities:
+
+                for norm_city in (expected_cities | hidden_cities):
                     if norm_city in seen_in_form:
                         cities_to_check.append((norm_reg, norm_city))
         else:
@@ -1018,11 +1026,23 @@ def find_extra_dealers(
             log("Chequeando EXTRAS y DUPLICADOS en Ciudades...", "info")
             option_texts = _read_valid_option_texts(driver, level_ids["city"])
             expected_cities = expected_cities_by_region.get("", set())
+            hidden_cities = hidden_cities_by_region.get("", set())
             seen_in_form = {}
             for text in option_texts:
                 norm = normalize_text(text)
                 seen_in_form.setdefault(norm, []).append(text)
-                if norm not in expected_cities:
+                if norm in expected_cities:
+                    pass
+                elif norm in hidden_cities:
+                    log(f"  OCULTO CIUDAD: {text} (solo en fila oculta del Excel)", "warn")
+                    extra_results.append({
+                        "status": "OCULTO",
+                        "region": "",
+                        "city": text,
+                        "dealer": "",
+                        "fails": ["Ciudad presente en el form pero declarada SOLO en fila(s) OCULTA(s) del Excel"],
+                    })
+                else:
                     log(f"  EXTRA CIUDAD: {text}", "warn")
                     extra_results.append({
                         "status": "EXTRA",
@@ -1041,7 +1061,7 @@ def find_extra_dealers(
                         "dealer": "",
                         "fails": [f"Ciudad aparece {len(texts)} veces en el dropdown"],
                     })
-            for norm_city in expected_cities:
+            for norm_city in (expected_cities | hidden_cities):
                 if norm_city in seen_in_form:
                     cities_to_check.append(("", norm_city))
 
@@ -1049,12 +1069,18 @@ def find_extra_dealers(
     # FASE C: Chequeo de Dealer (sólo si has_dealer es True)
     # --------------------------------------------------------------------------
     def _append_dealer_classification(option_texts, key, reg_orig_text, city_orig_text):
-        duplicated, extras, notas = _classify_dealer_options(option_texts, key)
+        duplicated, extras, notas, ocultos = _classify_dealer_options(option_texts, key)
         for text in extras:
             log(f"  EXTRA DEALER: {text} ({reg_orig_text} / {city_orig_text})", "warn")
             extra_results.append({
                 "status": "EXTRA", "region": reg_orig_text, "city": city_orig_text, "dealer": text,
                 "fails": [f"Dealer extra para '{reg_orig_text} / {city_orig_text}'".strip(" /")],
+            })
+        for text in ocultos:
+            log(f"  OCULTO DEALER: {text} ({reg_orig_text} / {city_orig_text}) — solo en fila oculta del Excel", "warn")
+            extra_results.append({
+                "status": "OCULTO", "region": reg_orig_text, "city": city_orig_text, "dealer": text,
+                "fails": [f"Dealer presente en el form para '{reg_orig_text} / {city_orig_text}' pero declarado SOLO en fila(s) OCULTA(s) del Excel".strip(" /")],
             })
         for text, count in duplicated:
             log(f"  DUPLICADO DEALER: {text} x{count} ({reg_orig_text} / {city_orig_text})", "warn")
@@ -1379,11 +1405,10 @@ def zip_screenshots(screenshot_paths, output_zip_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Export a Excel (PASS verde / FAIL rojo / EXTRA amarillo / MISSING violeta)
 # ──────────────────────────────────────────────────────────────────────────────
-def export_results_excel(results, output_path=None, pais="", hidden_rows=None, hidden_columns=None,
-                          duplicate_rows=None):
-    """hidden_rows / hidden_columns / duplicate_rows: avisos de calidad de datos del Excel
-    de dealers de ORIGEN (detect_hidden_rows / detect_hidden_columns / detect_duplicate_rows),
-    para dejar constancia en el propio reporte de salida — no afectan qué se comparó."""
+def export_results_excel(results, output_path=None, pais="", hidden_rows=None, hidden_columns=None):
+    """hidden_rows / hidden_columns: filas y columnas OCULTAS del Excel de dealers de ORIGEN
+    (detect_hidden_rows / detect_hidden_columns). Se listan en el Resumen, y todo resultado
+    relacionado con filas ocultas se pinta de NARANJA (estado OCULTO o flag hidden_in_excel)."""
     if output_path is None:
         results_dir = os.path.join(RESULTS_DIR, "dealer_comparator")
         os.makedirs(results_dir, exist_ok=True)
@@ -1421,6 +1446,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
     fill_by_status = {
         "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
         "MISSING": _MISSING_FILL, "DUPLICADO": _DUPLICATE_FILL, "NOTA": _NOTA_FILL,
+        "OCULTO": _OCULTO_FILL,
     }
 
     for r in results:
@@ -1440,6 +1466,9 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         ])
         row_idx = ws.max_row
         fill = fill_by_status.get(r.get("status"))
+        # Todo lo relacionado con filas OCULTAS del Excel va en naranja, pise lo que pise
+        if r.get("hidden_in_excel"):
+            fill = _OCULTO_FILL
         for cell in ws[row_idx]:
             cell.border = thin_border
             cell.alignment = Alignment(vertical="center", wrap_text=True)
@@ -1447,7 +1476,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
                 cell.fill = fill
         # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
         # confundir con FAIL, ya que el dealer sí se encontró.
-        if r.get("name_disclaimer") and r.get("status") == "PASS":
+        if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel"):
             ws.cell(row=row_idx, column=11).fill = _NOTA_FILL
 
     # Auto-fit column widths (basado en contenido, con mínimos y máximos razonables)
@@ -1464,7 +1493,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
 
     # ── Hoja Resumen ──
     total = len(results)
-    counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "MISSING": 0, "DUPLICADO": 0, "NOTA": 0}
+    counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "MISSING": 0, "DUPLICADO": 0, "NOTA": 0, "OCULTO": 0}
     for r in results:
         counts[r.get("status", "FAIL")] = counts.get(r.get("status", "FAIL"), 0) + 1
     disclaimer_count = sum(1 for r in results if r.get("name_disclaimer"))
@@ -1478,8 +1507,9 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         ["", ""],
         ["🟢 PASS", counts.get("PASS", 0)],
         ["🔴 FAIL", counts.get("FAIL", 0)],
-        ["🟡 EXTRA", counts.get("EXTRA", 0)],
-        ["🔵 DUPLICADO", counts.get("DUPLICADO", 0)],
+        ["🟡 EXTRA (en el form, no declarado en el Excel)", counts.get("EXTRA", 0)],
+        ["🔵 DUPLICADO (repetido en el dropdown del form)", counts.get("DUPLICADO", 0)],
+        ["🟠 OCULTO (en el form, pero declarado solo en filas OCULTAS del Excel)", counts.get("OCULTO", 0)],
         ["🟣 MISSING", counts.get("MISSING", 0)],
         ["🔷 NOTA (dealer del form no está en el Excel, solo difiere en nombre)", counts.get("NOTA", 0)],
         ["⚠ PASS con nombre distinto en detalles menores", disclaimer_count],
@@ -1507,9 +1537,6 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         for hc in hidden_columns:
             label = f"  Columna {hc['column']}" + (f" ({hc['header']})" if hc.get("header") else "")
             summary_data.append([label, ""])
-    if duplicate_rows:
-        summary_data.append(["", ""])
-        summary_data.append(["⚠ Dealers duplicados en el Excel (mismo dealer/región/ciudad)", len(duplicate_rows)])
 
     for row_data in summary_data:
         summary_ws.append(row_data)
@@ -1525,32 +1552,6 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
     for cell in [summary_ws.cell(1, 1), summary_ws.cell(1, 2),
                  summary_ws.cell(4, 1), summary_ws.cell(4, 2)]:
         cell.font = Font(bold=True)
-
-    # ── Hoja Duplicados en Excel (si hay) ──
-    if duplicate_rows:
-        dup_ws = wb.create_sheet("Duplicados en Excel")
-        dup_headers = ["Dealer", "Región", "Ciudad", "Filas del Excel"]
-        dup_ws.append(dup_headers)
-        for cell in dup_ws[1]:
-            cell.fill = _HEADER_FILL
-            cell.font = _HEADER_FONT
-            cell.border = header_border
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-        for d in duplicate_rows:
-            dup_ws.append([
-                d.get("dealer", ""), d.get("region", ""), d.get("city", ""),
-                ", ".join(str(f) for f in d.get("filas", [])),
-            ])
-            row_idx = dup_ws.max_row
-            for cell in dup_ws[row_idx]:
-                cell.border = thin_border
-                cell.alignment = Alignment(vertical="center", wrap_text=True)
-                cell.fill = _DUPLICATE_FILL
-        dup_ws.column_dimensions["A"].width = 40
-        dup_ws.column_dimensions["B"].width = 22
-        dup_ws.column_dimensions["C"].width = 22
-        dup_ws.column_dimensions["D"].width = 30
-        dup_ws.freeze_panes = "A2"
 
     wb.save(output_path)
     return output_path
