@@ -1406,6 +1406,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     f"DUPLICADO={sum(1 for r in pair_results if r['status']=='DUPLICADO')}", "ok",
                 )
 
+                # --- Exportar el reporte de ESTE form ANTES de las capturas (la comparación
+                # rápida ya terminó; así el Excel queda disponible aunque las capturas tarden
+                # o se detengan a mitad de camino) ---
+                excel_filename = os.path.basename(pair_dir) + ".xlsx"
+                export_path = export_results_excel(
+                    pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
+                    hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
+                    duplicate_rows=state.get("duplicate_rows"),
+                )
+                report_paths.append(export_path)
+                ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
+
                 # --- FASE 2 (opcional): capturas — mismo form, misma carpeta que el Excel ---
                 if output_mode == "caps" and not state["stop_event"].is_set():
                     ui_log(f"Generando capturas para Form {pair_idx}/{total_pairs}...", "info")
@@ -1481,16 +1493,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         screenshot_cb=_shot,
                         expect_absent=expect_absent,
                     )
-
-                # --- Exportar el reporte de ESTE form, en su propia carpeta ---
-                excel_filename = os.path.basename(pair_dir) + ".xlsx"
-                export_path = export_results_excel(
-                    pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
-                    hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
-                    duplicate_rows=state.get("duplicate_rows"),
-                )
-                report_paths.append(export_path)
-                ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
 
             ui_log(
                 f"\nTodos los forms procesados. Reportes generados: {len(report_paths)}\n" +

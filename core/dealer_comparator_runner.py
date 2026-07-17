@@ -1130,16 +1130,23 @@ def find_extra_dealers(
 # Captura de pantalla con banner de URL + ZIP
 # ──────────────────────────────────────────────────────────────────────────────
 def _ensure_window_covers_content(driver):
-    """Asegura que la ventana del navegador sea al menos tan ancha como el contenido
-    renderizado (document.body.scrollWidth). Evita que un formulario de varias columnas
-    quede recortado a la derecha en la captura por diferencias de escala de pantalla."""
+    """Agranda la ventana SOLO si hay overflow horizontal real (el contenido es más ancho
+    que el viewport y quedaría recortado en la captura). Compara contra el viewport interior
+    (clientWidth) y no contra el ancho de la ventana: un layout fluido siempre llena el 100%
+    del viewport y NO debe disparar el agrandado (antes esto hacía crecer la ventana +60px
+    en cada captura, en loop). Tope 2200px."""
     try:
-        doc_w = driver.execute_script(
-            "return Math.max(document.body.scrollWidth || 0, document.documentElement.scrollWidth || 0);"
+        doc_w, client_w = driver.execute_script(
+            "return [Math.max(document.body.scrollWidth || 0, document.documentElement.scrollWidth || 0),"
+            " document.documentElement.clientWidth || 0];"
         )
+        if not doc_w or not client_w or doc_w <= client_w + 5:
+            return  # sin overflow horizontal: no tocar la ventana
         size = driver.get_window_size()
-        if doc_w and size and doc_w > size.get("width", 0) - 20:
-            driver.set_window_size(int(doc_w) + 60, size.get("height", 1080))
+        extra = int(doc_w) - int(client_w)
+        new_w = min(size.get("width", 1366) + extra + 20, 2200)
+        if new_w > size.get("width", 0):
+            driver.set_window_size(new_w, size.get("height", 1080))
     except Exception:
         pass
 
@@ -1190,53 +1197,60 @@ def capture_result_screenshot(driver, screenshot_dir, filename, form_url="", lan
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Evidencia de dropdown completo (para verificar exclusión) — el <select> nativo es UI
-# del sistema operativo y Selenium no puede fotografiar ese popup directamente, así que
-# se clona la lista de opciones en un panel que se AGREGA arriba de la página (sin ocultar
-# nada): la captura final muestra la lista completa de opciones Y el formulario real debajo,
-# en la misma imagen, junto con el banner de URLs.
+# Evidencia de dropdown desplegado DENTRO del form (para verificar exclusión).
+# El popup nativo del <select> es UI del sistema operativo y Selenium no puede
+# fotografiarlo, pero sí se puede convertir temporalmente el <select> en una lista
+# abierta (atributo size = cantidad de opciones): el dropdown queda desplegado en su
+# lugar real dentro del formulario mostrando TODAS las opciones, se captura, y se
+# restaura. Si el buscado aparece, se resalta en amarillo.
 # ──────────────────────────────────────────────────────────────────────────────
-_DROPDOWN_EVIDENCE_BUILD_JS = """
-var title = arguments[0], searched = arguments[1], found = arguments[2], options = arguments[3];
-var OVERLAY_ID = '__ocioso_dropdown_evidence__';
-var old = document.getElementById(OVERLAY_ID);
-if (old) old.remove();
-var div = document.createElement('div');
-div.id = OVERLAY_ID;
-div.style.cssText = "position:relative;z-index:2147483647;background:#1e1330;color:#ffffff;"
-    + "font-family:'Segoe UI',Arial,sans-serif;padding:10px 16px;box-sizing:border-box;width:100%;"
-    + "border-bottom:3px solid #7D4E9F;";
-// Encabezado compacto: una sola línea con el dropdown desplegado + qué se buscó + resultado
-var p = document.createElement('p');
-var estado = (found === true) ? '  ->  PRESENTE' : (found === false ? '  ->  AUSENTE' : '');
-p.textContent = title + (searched ? '  ·  Buscado: "' + searched + '"' + estado : '')
-    + '  ·  ' + options.length + ' opciones';
-p.style.cssText = 'font-size:13px;font-weight:bold;margin:0 0 6px 0;color:'
-    + (found === true ? '#ff8a8a' : (found === false ? '#8fe0a0' : '#ffffff')) + ';';
-div.appendChild(p);
-var ol = document.createElement('ol');
-// Sin max-height/scroll: la lista completa queda en el flujo normal de la página para que
-// el mecanismo de captura por partes (scroll+merge) la capture ENTERA, sin recortar nada
-// aunque tenga muchas opciones (ej. un dropdown de ciudad con 50+ opciones).
-ol.style.cssText = 'margin:0;padding:6px 8px 6px 30px;font-size:12px;line-height:1.5;'
-    + 'background:#150c22;border-radius:5px;columns:2;column-gap:28px;';
-var searchedLower = (searched || '').trim().toLowerCase();
-options.forEach(function(t){
-    var li = document.createElement('li');
-    li.textContent = t;
-    li.style.color = '#ffffff';
-    if (searchedLower && t.trim().toLowerCase() === searchedLower) {
-        li.style.cssText += 'background:#3a1d52;color:#ffd873;font-weight:bold;padding:1px 5px;border-radius:3px;';
+_EXPAND_SELECT_JS = """
+var id = arguments[0], searched = (arguments[1] || '').trim().toLowerCase();
+var el = document.getElementById(id);
+if (!el || !el.options) return -1;
+el.setAttribute('data-ocioso-size-prev', el.getAttribute('size') || '');
+el.size = Math.max(2, el.options.length);
+el.style.height = 'auto';
+el.style.maxHeight = 'none';
+el.style.overflow = 'visible';
+el.style.zIndex = '999999';
+el.style.position = 'relative';
+// Que ningún contenedor recorte la lista desplegada
+var p = el.parentElement, hops = 0;
+while (p && p !== document.body && hops < 6) {
+    if (getComputedStyle(p).overflow !== 'visible') p.style.overflow = 'visible';
+    p.style.maxHeight = 'none';
+    p = p.parentElement; hops++;
+}
+for (var i = 0; i < el.options.length; i++) {
+    var o = el.options[i];
+    if (searched && (o.text || '').trim().toLowerCase() === searched) {
+        o.style.background = '#ffd873';
+        o.style.color = '#000000';
+        o.style.fontWeight = 'bold';
+        o.setAttribute('data-ocioso-marked', '1');
     }
-    ol.appendChild(li);
-});
-div.appendChild(ol);
-document.body.insertBefore(div, document.body.firstChild);
+}
+try { el.scrollIntoView({block: 'center'}); } catch (e) {}
+return el.options.length;
 """
 
-_DROPDOWN_EVIDENCE_RESTORE_JS = """
-var div = document.getElementById('__ocioso_dropdown_evidence__');
-if (div) div.remove();
+_RESTORE_SELECT_JS = """
+var id = arguments[0];
+var el = document.getElementById(id);
+if (!el) return;
+var prev = el.getAttribute('data-ocioso-size-prev');
+if (prev) el.setAttribute('size', prev); else el.removeAttribute('size');
+el.removeAttribute('data-ocioso-size-prev');
+el.style.height = ''; el.style.maxHeight = ''; el.style.overflow = '';
+el.style.zIndex = ''; el.style.position = '';
+for (var i = 0; i < el.options.length; i++) {
+    var o = el.options[i];
+    if (o.getAttribute('data-ocioso-marked')) {
+        o.style.background = ''; o.style.color = ''; o.style.fontWeight = '';
+        o.removeAttribute('data-ocioso-marked');
+    }
+}
 """
 
 
@@ -1258,28 +1272,71 @@ def evidence_level_for_result(result, has_region=True, has_city=True, has_dealer
     return "Región", "region", result.get("region", ""), bool(result.get("region_found"))
 
 
+_RESIZE_IFRAME_JS = """
+var iframe = arguments[0], newHeight = arguments[1];
+iframe.setAttribute('data-ocioso-h-prev', iframe.style.height || '');
+iframe.style.height = newHeight + 'px';
+iframe.style.maxHeight = 'none';
+iframe.setAttribute('scrolling', 'no');
+"""
+
+_RESTORE_IFRAME_JS = """
+var iframe = arguments[0];
+iframe.style.height = iframe.getAttribute('data-ocioso-h-prev') || '';
+iframe.style.maxHeight = '';
+iframe.removeAttribute('data-ocioso-h-prev');
+iframe.removeAttribute('scrolling');
+"""
+
+
 def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title="", searched_text="",
                                found=None, form_url="", landing_url="", extra_lines=None):
-    """Genera una captura de evidencia con TODAS las opciones visibles de un <select> en
-    este momento. Necesario porque el dropdown nativo es UI del sistema operativo — Selenium
-    no puede fotografiar ese popup abierto directamente. Clona la lista de textos (los mismos
-    que ve el usuario) en un panel a pantalla completa que reemplaza temporalmente el resto de
-    la página, y lo fotografía con el mismo mecanismo de página completa del resto de la app
-    (funciona sin importar cuán larga sea la lista, con scroll+merge si hace falta)."""
-    option_texts = _read_valid_option_texts(driver, select_id, wait_nonempty=False)
-    # El overlay se dibuja en el documento PRINCIPAL (para que la captura muestre la página
-    # entera), pero el form puede vivir en un iframe: hay que salir para dibujar/capturar y
-    # VOLVER al iframe al final — si no, las filas siguientes no encuentran los selects.
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
+    """Captura el formulario con el <select> indicado DESPLEGADO en su lugar: convierte
+    temporalmente el dropdown en lista abierta (atributo size) para que se vean TODAS sus
+    opciones dentro del form real — el popup nativo del <select> no es fotografiable. Si el
+    texto buscado aparece entre las opciones queda resaltado. Como el form suele vivir en un
+    iframe de altura fija que recortaría la lista desplegada, también se agranda el iframe
+    desde la página padre a la altura del contenido expandido, se captura la página completa
+    desde el documento principal, y se restaura todo (select, iframe y contexto)."""
     os.makedirs(screenshot_dir, exist_ok=True)
+    expanded = False
+    iframe_resized = None
     try:
-        driver.execute_script(
-            _DROPDOWN_EVIDENCE_BUILD_JS,
-            title or f"Dropdown completo: {select_id}", searched_text or "", found, option_texts,
-        )
+        try:
+            n = driver.execute_script(_EXPAND_SELECT_JS, select_id, searched_text or "")
+            expanded = isinstance(n, (int, float)) and n >= 0
+        except Exception:
+            expanded = False
+        time.sleep(0.3)  # dejar que el layout se acomode con la lista abierta
+
+        # Altura real del documento del form con la lista abierta (contexto actual = form)
+        try:
+            inner_height = driver.execute_script(
+                "return Math.max(document.documentElement.scrollHeight || 0,"
+                " document.body ? document.body.scrollHeight : 0);"
+            ) or 0
+            driver.execute_script("window.scrollTo(0, 0);")
+        except Exception:
+            inner_height = 0
+
+        # Si el form está embebido en un iframe, agrandarlo desde la página padre para que
+        # la lista desplegada no quede recortada por la altura fija del iframe.
+        try:
+            driver.switch_to.default_content()
+            iframe = _find_form_iframe(driver, form_url)
+        except Exception:
+            iframe = None
+        if iframe is not None and inner_height:
+            try:
+                driver.execute_script(_RESIZE_IFRAME_JS, iframe, int(inner_height) + 30)
+                iframe_resized = iframe
+                time.sleep(0.3)
+            except Exception:
+                iframe_resized = None
+        elif iframe is None:
+            # No hay iframe reconocible: el form está en la página principal, seguimos ahí.
+            pass
+
         _ensure_window_covers_content(driver)
         manager = ScreenshotManager(driver, screenshot_dir)
         if landing_url:
@@ -1289,17 +1346,24 @@ def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title
         manager.take_full_page_screenshot(filename)
         manager._add_url_banner(os.path.join(screenshot_dir, filename))
     finally:
-        try:
-            driver.execute_script(_DROPDOWN_EVIDENCE_RESTORE_JS)
-        except Exception:
-            pass
-        # Restaurar el contexto del iframe del form (si lo hay) para la próxima fila
+        # Restaurar iframe (estamos en el documento principal desde el resize)
+        if iframe_resized is not None:
+            try:
+                driver.execute_script(_RESTORE_IFRAME_JS, iframe_resized)
+            except Exception:
+                pass
+        # Volver al contexto del form para restaurar el select y que la próxima fila navegue
         try:
             iframe = _find_form_iframe(driver, form_url)
             if iframe is not None:
                 driver.switch_to.frame(iframe)
         except Exception:
             pass
+        if expanded:
+            try:
+                driver.execute_script(_RESTORE_SELECT_JS, select_id)
+            except Exception:
+                pass
     return os.path.join(screenshot_dir, filename)
 
 
