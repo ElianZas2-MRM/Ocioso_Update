@@ -693,6 +693,36 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     for val, txt in (("excel", "Solo Excel"), ("caps", "Excel + Capturas")):
         ttk.Radiobutton(output_row, text=txt, value=val, variable=output_mode_var).pack(side="left", padx=8)
 
+    # ── 5b. Envío por email (mismo criterio que Envío de Leads) ────────────────
+    from .helpers_interface import cargar_config_global as _cfg_g, guardar_config_global as _cfg_s
+    _cfg_ini = _cfg_g()
+    email_card = card("✉ ENVIAR RESULTADOS POR EMAIL",
+                      "Al terminar cada form manda un mail con el reporte. Usa el mismo destinatario "
+                      "que Envío de Leads. Adjunta la carpeta (Excel + capturas) si elegiste "
+                      "'Excel + Capturas', o solo el Excel si elegiste 'Solo Excel'.")
+    enviar_mail_var = BooleanVar(value=bool(_cfg_ini.get("enviar_mail", False)))
+    email_dest_var = StringVar(value=str(_cfg_ini.get("email_destinatario", "") or ""))
+
+    email_row = Frame(email_card, bg=CARD_BG)
+    email_row.pack(fill="x", padx=15, pady=(0, 8))
+    Checkbutton(email_row, text="Enviar mail al terminar", variable=enviar_mail_var,
+                bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG, activebackground=CARD_BG,
+                font=("Segoe UI", 9)).pack(side="left")
+    Label(email_row, text="Destinatario(s):", font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(side="left", padx=(12, 4))
+    Entry(email_row, textvariable=email_dest_var, width=32, bg=ENTRY_BG, fg="white",
+          insertbackground="white", relief="flat").pack(side="left")
+    Label(email_card, text="(varios separados por coma)", font=("Segoe UI", 8, "italic"),
+          bg=CARD_BG, fg="#8A7E9E").pack(anchor="w", padx=15, pady=(0, 6))
+
+    def _persistir_email_cfg(*_a):
+        cfg = _cfg_g()
+        cfg["enviar_mail"] = bool(enviar_mail_var.get())
+        cfg["email_destinatario"] = (email_dest_var.get() or "").strip()
+        _cfg_s(cfg)
+
+    enviar_mail_var.trace_add("write", _persistir_email_cfg)
+    email_dest_var.trace_add("write", _persistir_email_cfg)
+
     # ── 6. Configuraciones guardadas ─────────────────────────────────────────
     presets_card = card("💾 CONFIGURACIONES GUARDADAS",
                          "Guardá el mapeo de columnas con el nombre que quieras para reusarlo después.")
@@ -1160,8 +1190,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         _rotate_icon()
 
         def _on_detener():
-            state["stop_event"].set()
-            btn_detener.config(state="disabled", text=" Deteniendo...")
+            # Mismo comportamiento que la X de cerrar: si hay una comparación en curso,
+            # pide confirmación antes de cortar. on_close_modal ya maneja el confirm.
+            on_close_modal()
 
         btn_detener = Button(header, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
                               font=("Segoe UI", 9, "bold"), bg="#3D1220", fg="#F1948A", relief="flat", bd=0,
@@ -1224,10 +1255,25 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     pb_canvas.coords(pb_fill, 0, 0, w, 8)
                     pb_canvas.itemconfig(pb_fill, fill="#F1948A" if (counts.get("FAIL") or error_msg or detenido)
                                           else "#82E0AA")
-                    summary_lbl.config(
-                        text=f"🟢 {counts.get('PASS', 0)} PASS   🔴 {counts.get('FAIL', 0)} FAIL   "
-                             f"🟡 {counts.get('EXTRA', 0)} EXTRA   🔵 {counts.get('DUPLICADO', 0)} DUPLICADO"
-                    )
+                    _total = sum(counts.get(k, 0) for k in ("PASS", "FAIL", "EXTRA", "DUPLICADO", "OCULTO", "NOTA"))
+                    # Línea 1: PASS/FAIL bien grande. Línea 2: el resto de estados solo si hay.
+                    resumen = f"🟢 {counts.get('PASS', 0)} PASS      🔴 {counts.get('FAIL', 0)} FAIL"
+                    extras_line = []
+                    if counts.get("EXTRA"):
+                        extras_line.append(f"🟡 {counts['EXTRA']} EXTRA")
+                    if counts.get("DUPLICADO"):
+                        extras_line.append(f"🔵 {counts['DUPLICADO']} DUPLICADO")
+                    if counts.get("OCULTO"):
+                        extras_line.append(f"🟠 {counts['OCULTO']} OCULTO")
+                    if counts.get("NOTA"):
+                        extras_line.append(f"🔷 {counts['NOTA']} NOTA")
+                    if extras_line:
+                        resumen += "\n" + "   ".join(extras_line)
+                    resumen += f"\nTotal chequeado: {_total}"
+                    if not detenido and not error_msg:
+                        resumen += ("   —   ✓ Todo OK" if not counts.get("FAIL")
+                                    else f"   —   ⚠ {counts.get('FAIL', 0)} con problemas, revisá el Excel")
+                    summary_lbl.config(text=resumen, justify="left")
                 except Exception as ui_err:  # noqa: BLE001
                     LOGGER.warning("Error actualizando modal de resultados: %s", ui_err)
                 finally:
@@ -1334,7 +1380,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     def _worker_run(filtered_rows, column_map, url_pairs):
         driver = None
-        counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "DUPLICADO": 0}
+        counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "DUPLICADO": 0, "OCULTO": 0, "NOTA": 0}
         error_msg = None
 
         # Cargar config de visible_browser y pausar_autenticacion
@@ -1546,6 +1592,23 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         screenshot_cb=_shot,
                         expect_absent=expect_absent,
                     )
+
+                # --- Email por form (mismo criterio que Envío de Leads) ---
+                if enviar_mail_var.get():
+                    try:
+                        from .helpers_interface import enviar_email_comparador_dealers
+                        _pair_counts = {}
+                        for r in pair_results:
+                            _pair_counts[r["status"]] = _pair_counts.get(r["status"], 0) + 1
+                        enviado = enviar_email_comparador_dealers(
+                            state["pais"], pair_dir, export_path, _pair_counts,
+                            form_url=form_url, landing_url=landing_url,
+                            incluir_capturas=(output_mode == "caps"),
+                        )
+                        ui_log(f"Email {'encolado' if enviado else 'NO enviado'} para Form {pair_idx}/{total_pairs}.",
+                               "ok" if enviado else "warn")
+                    except Exception as _mail_err:  # noqa: BLE001
+                        ui_log(f"No se pudo enviar el email del Form {pair_idx}: {_mail_err}", "err")
 
             ui_log(
                 f"\nTodos los forms procesados. Reportes generados: {len(report_paths)}\n" +
