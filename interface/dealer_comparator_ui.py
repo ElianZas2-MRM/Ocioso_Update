@@ -710,6 +710,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         if not name:
             messagebox.showwarning("Comparador Dealers", "Ingresá un nombre para la configuración.")
             return
+        if name in all_settings["presets"]:
+            if not messagebox.askyesno(
+                "Comparador Dealers",
+                f"Ya existe una configuración llamada '{name}'.\n\n¿Querés sobrescribirla con los valores actuales?",
+            ):
+                return
         all_settings["presets"][name] = _collect_current_settings()
         _save_all_settings(all_settings)
         _refresh_preset_combo()
@@ -737,20 +743,55 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             messagebox.showwarning("Comparador Dealers", "Seleccioná una configuración guardada.")
             return
         _apply_settings_dict(cfg)
-        ui_log(f"Configuración '{name}' cargada.", "ok")
+        # Dejar el nombre en el campo Nombre para poder editarlo/renombrarlo y actualizar.
+        preset_name_var.set(name)
+        ui_log(f"Configuración '{name}' cargada. Modificá lo que quieras y usá 'Actualizar'.", "ok")
+
+    def _update_preset():
+        """Edita el preset seleccionado en el combo: reescribe sus valores con los actuales.
+        Si el campo Nombre tiene otro texto, lo renombra (borra la clave vieja)."""
+        original = preset_selected_var.get().strip()
+        if not original or original not in all_settings["presets"]:
+            messagebox.showwarning("Comparador Dealers",
+                                   "Elegí en 'Cargar' la configuración que querés editar.")
+            return
+        nuevo_nombre = preset_name_var.get().strip() or original
+        if nuevo_nombre != original and nuevo_nombre in all_settings["presets"]:
+            if not messagebox.askyesno(
+                "Comparador Dealers",
+                f"Ya existe otra configuración llamada '{nuevo_nombre}'.\n\n¿Sobrescribirla?",
+            ):
+                return
+        if nuevo_nombre != original:
+            del all_settings["presets"][original]
+        all_settings["presets"][nuevo_nombre] = _collect_current_settings()
+        _save_all_settings(all_settings)
+        _refresh_preset_combo()
+        preset_selected_var.set(nuevo_nombre)
+        if nuevo_nombre != original:
+            ui_log(f"Configuración '{original}' actualizada y renombrada a '{nuevo_nombre}'.", "ok")
+        else:
+            ui_log(f"Configuración '{original}' actualizada.", "ok")
 
     def _delete_preset():
         name = preset_selected_var.get().strip()
-        if name and name in all_settings["presets"]:
-            del all_settings["presets"][name]
-            _save_all_settings(all_settings)
-            _refresh_preset_combo()
-            preset_selected_var.set("")
-            ui_log(f"Configuración '{name}' eliminada.", "warn")
+        if not name or name not in all_settings["presets"]:
+            messagebox.showwarning("Comparador Dealers", "Seleccioná una configuración guardada.")
+            return
+        if not messagebox.askyesno("Comparador Dealers", f"¿Eliminar la configuración '{name}'?"):
+            return
+        del all_settings["presets"][name]
+        _save_all_settings(all_settings)
+        _refresh_preset_combo()
+        preset_selected_var.set("")
+        ui_log(f"Configuración '{name}' eliminada.", "warn")
 
     Button(presets_row2, text="📂 Cargar", font=("Segoe UI", 8, "bold"),
            bg=BTN_ACTIVE, fg="white", relief="flat", bd=0, cursor="hand2",
            command=_load_preset).pack(side="left", padx=4)
+    Button(presets_row2, text="✏ Actualizar", font=("Segoe UI", 8, "bold"),
+           bg=BTN_ACTIVE, fg="white", relief="flat", bd=0, cursor="hand2",
+           command=_update_preset).pack(side="left", padx=4)
     Button(presets_row2, text="🗑 Eliminar", font=("Segoe UI", 8, "bold"),
            bg="#3d1414", fg="#f85149", relief="flat", bd=0, cursor="hand2",
            command=_delete_preset).pack(side="left", padx=4)
