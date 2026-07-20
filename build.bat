@@ -145,16 +145,15 @@ if not exist "%PORTABLE_DIR%\lambdatest_credentials.txt" (
     echo Plantilla lambdatest_credentials.txt creada en portable.
 )
 
-echo Generando ZIP...
+REM Solo se entrega la carpeta portable: se borra el .exe suelto de dist\ (ya fue
+REM copiado adentro del portable) y no se arma ZIP, para acortar el build.
+if exist "dist\%APP_NAME%.exe" del /f /q "dist\%APP_NAME%.exe"
 if exist "dist\%APP_NAME%_portable.zip" del /f /q "dist\%APP_NAME%_portable.zip"
-powershell -NoProfile -Command "Compress-Archive -Path '%PORTABLE_DIR%' -DestinationPath 'dist\%APP_NAME%_portable.zip'"
-if errorlevel 1 echo AVISO: No se pudo generar el ZIP (no es critico).
 
 echo.
 echo Build completado correctamente.
-echo   EXE:      dist\%APP_NAME%.exe
 echo   Portable: %PORTABLE_DIR%\
-echo   ZIP:      dist\%APP_NAME%_portable.zip
+echo   (Abrir con: %PORTABLE_DIR%\Abrir_Osocio_Form_Automation.bat)
 pause
 exit /b 0
 
