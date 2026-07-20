@@ -274,6 +274,10 @@ def generar_documento(pais):
         return generar_cpf_brasil()
     if pais == "Uruguay":
         return str(random.randint(10_000_000, 99_999_999))
+    if pais == "Paraguay":
+        # La CI paraguaya en los forms actuales acepta exactamente 7 dígitos
+        # (minlength = maxlength = 7): con 8 el form recorta el último.
+        return str(random.randint(1_000_000, 9_999_999))
     return str(random.randint(1_000_000, 99_999_999))
 
 
