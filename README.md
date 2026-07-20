@@ -153,6 +153,17 @@ Detalles:
 
 > **Solo aplica a checkboxes.** Para campos de texto o selects el Excel funciona distinto: la columna se mapea al campo por el **nombre del campo** o por el **`id` del HTML**, pero el campo tiene que estar declarado en el `field_mapping` del país (`json/fixed_field_mappings.json`). Si querés que un campo se llene siempre con un valor fijo sin tocar el Excel, usá `json/ids_dinamicos.json` (ver la sección *Qué hay adentro de `json/`*).
 
+### Dropdowns (Modelo, Fecha estimada, Región…): primero el Excel, si no aleatorio
+
+Para los campos `<select>` mapeados (Modelo, Fecha estimada, Región, Ciudad, Concesionario, etc.) la app respeta **siempre primero lo que pusiste en el Excel**:
+
+1. **Si la celda tiene valor** → busca esa opción en el dropdown y la selecciona. El match es por texto: primero exacto, y si no, tolerante ("contiene"), así `Onix` matchea con `Chevrolet Onix`.
+2. **Si la celda está vacía** → recién ahí elige una opción al azar (Modelo, Fecha) o la primera válida.
+
+Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), LambdaTest y los formularios **AEM / T3 2.0**. Por defecto los Excels generados dejan **Modelo y Fecha estimada vacíos a propósito** (para que roten al azar); si querés fijar uno, escribilo en su columna.
+
+**El modelo elegido queda en el Excel de resultados** (columna Modelo), sea el que pusiste vos o el aleatorio. Y si el formulario **no tiene dropdown de modelo** (el modelo viene fijado en la URL), la app toma el valor de `?model=` de la URL del form y lo escribe igual en esa columna — así siempre sabés con qué modelo se envió el lead.
+
 ### El modal de ejecución
 
 Mientras corre el envío, la app abre una ventana "Ejecución de Test" que es tu único tablero de control: te dice qué está pasando y es lo que usás para frenar.
