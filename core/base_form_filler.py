@@ -305,6 +305,32 @@ class BaseFormFiller:
         key = f"Paso{step}::{normalized_id}"
         self.current_row_field_values[key] = text_value
 
+    def _record_model_from_url_if_missing(self):
+        """Si ningún select de Modelo quedó registrado en la fila, usar el ?model= de la URL."""
+        for key in self.current_row_field_values:
+            raw_id = key.split("::", 1)[1] if "::" in key else key
+            if raw_id in ("models", "model"):
+                return  # ya se registró un modelo (del Excel o aleatorio)
+        try:
+            from urllib.parse import urlsplit, parse_qs, unquote
+            url = self.driver.current_url or ""
+            raw = parse_qs(urlsplit(url).query).get("model", [""])[0]
+            url_model = unquote(raw).replace("+", " ").strip()
+        except Exception:
+            url_model = ""
+        if not url_model:
+            return
+        model_id = "model"
+        for fc in (self.field_mapping or []):
+            if isinstance(fc, dict):
+                fid = fc.get("id")
+                fid = fid[0] if isinstance(fid, list) else fid
+                if fid in ("models", "model"):
+                    model_id = fid
+                    break
+        self._record_field_value(model_id, url_model)
+        print(f"🚗 Modelo (de la URL ?model=) = {url_model}")
+
     def _get_selected_text_for_select(self, select_element):
         """Obtiene el texto seleccionado actual de un select simple."""
         try:
@@ -1571,6 +1597,7 @@ class BaseFormFiller:
                 self._fill_aem_by_semantic_id(form_data)
             else:
                 self._fill_visible_fields_from_mapping(form_data, dependencies)
+                self._record_model_from_url_if_missing()
 
             if not self._has_next_button():
                 break
@@ -1907,18 +1934,47 @@ class BaseFormFiller:
                     print(f" {field_name} - No hay opciones válidas para auto-selección")
                     raise ValueError(f"No se encontraron opciones en el dropdown '{field_name}'")
 
-            # SI HAY VALOR EN EXCEL: coincidencia exacta
+            # SI HAY VALOR EN EXCEL: match controlado (NO usar select_by_visible_text,
+            # que ante un fallo exacto hace un fallback difuso propio de Selenium y agarra
+            # otra option — ej. "1 mes" terminaba eligiendo "2 meses" porque contiene "mes").
             try:
-                select.select_by_visible_text(option_text.strip())
-                print(f" {field_name} seleccionado: {option_text}")
-                selected_text = self._get_selected_text_for_select(select_element) or option_text
-                self._record_field_value(select_id, selected_text)
-                return True
-            except Exception as e:
-                print(f"❌ [DEBUG-FILL] No se encontró opción exacta para {field_name}: '{option_text}'. Detalle: {e}")
-                options_now = []
+                norm_desired = self._normalize_text(option_text)
+                desired_plain = option_text.strip()
+                opts = list(select.options)
+                chosen_idx = None
+                # 1) exacto tal cual (texto visible idéntico)
+                for i, o in enumerate(opts):
+                    if not self._is_placeholder_text(o.text) and (o.text or "").strip() == desired_plain:
+                        chosen_idx = i
+                        break
+                # 2) exacto normalizado (ignora nbsp/acentos/espacios)
+                if chosen_idx is None and norm_desired:
+                    for i, o in enumerate(opts):
+                        if not self._is_placeholder_text(o.text) and self._normalize_text(o.text) == norm_desired:
+                            chosen_idx = i
+                            break
+                # 3) contiene normalizado (último recurso tolerante)
+                if chosen_idx is None and norm_desired:
+                    for i, o in enumerate(opts):
+                        if not self._is_placeholder_text(o.text) and norm_desired in self._normalize_text(o.text):
+                            chosen_idx = i
+                            break
+
+                if chosen_idx is not None:
+                    select.select_by_index(chosen_idx)
+                    self.driver.execute_script(
+                        "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));"
+                        "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+                        select_element
+                    )
+                    selected_text = (opts[chosen_idx].text or option_text).strip()
+                    print(f" {field_name} seleccionado: {selected_text}")
+                    self._record_field_value(select_id, selected_text)
+                    return True
+
+                print(f"❌ [DEBUG-FILL] No se encontró opción para {field_name}: '{option_text}'.")
+                options_now = self._get_valid_select_options(select_element)
                 try:
-                    options_now = self._get_valid_select_options(select_element)
                     options = [o.text.strip() for o in select.options if o.text.strip()]
                     print(f"   💡 Opciones disponibles en dropdown '{field_name}': {options}")
                 except Exception:
@@ -1928,6 +1984,11 @@ class BaseFormFiller:
                 if not hasattr(self, "_campos_dropdown_no_encontrados"):
                     self._campos_dropdown_no_encontrados = []
                 self._campos_dropdown_no_encontrados.append(f"{field_name}: '{option_text}'")
+                return False
+            except ValueError:
+                raise
+            except Exception as e:
+                print(f" Error resolviendo opción de {field_name}: {e}")
                 return False
                 
         except Exception as e:
@@ -1958,20 +2019,39 @@ class BaseFormFiller:
             target_radio = None
 
             if normalized_value:
-                for radio in radios:
-                    candidates = [
-                        (radio.get_attribute("value") or "").strip().lower(),
-                        (radio.get_attribute("title") or "").strip().lower(),
+                # Normalizar (sin acentos, sin espacios/nbsp) para que "1 mes" del Excel
+                # matchee un label "1&nbsp;mes" del form. Match exacto primero, luego contiene.
+                norm_desired = self._normalize_text(desired_value)
+
+                def _radio_candidates(radio):
+                    texts = [
+                        radio.get_attribute("value"),
+                        radio.get_attribute("title"),
+                        radio.get_attribute("aria-label"),
                     ]
+                    rid = radio.get_attribute("id")
+                    if rid:
+                        try:
+                            texts.append(self.driver.find_element(
+                                By.CSS_SELECTOR, f"label[for='{rid}']").text)
+                        except Exception:
+                            pass
                     try:
-                        label = radio.find_element(By.XPATH, "./ancestor::label[1]")
-                        candidates.append(label.text.strip().lower())
+                        texts.append(radio.find_element(By.XPATH, "./ancestor::label[1]").text)
                     except Exception:
                         pass
+                    return [self._normalize_text(t) for t in texts if t]
 
-                    if any(normalized_value in text for text in candidates if text):
+                radios_norm = [(radio, _radio_candidates(radio)) for radio in radios]
+                for radio, cands in radios_norm:  # 1) match exacto normalizado
+                    if norm_desired and any(c == norm_desired for c in cands):
                         target_radio = radio
                         break
+                if not target_radio:  # 2) fallback: contiene
+                    for radio, cands in radios_norm:
+                        if norm_desired and any(norm_desired in c for c in cands):
+                            target_radio = radio
+                            break
 
                 if target_radio:
                     print(f" Fecha estimada (radio) seleccionada: {desired_value}")
@@ -3430,6 +3510,14 @@ class BaseFormFiller:
     def _auto_fill_unmapped_dropdowns(self, field_mapping=None):
         """Completa campos no mapeados: selects aleatorios y valores fijos para IDs dinámicos."""
         mapped_ids = self._get_mapped_select_ids(field_mapping)
+        # Ids ya llenados/registrados por el mapping en ESTA fila. Cubre el caso en que el
+        # id real del form difiere del de la config (ej. 'estimated-day' vs
+        # 'estimated-date-purchase'): sin esto, el select ya llenado con el valor del Excel
+        # se re-selecciona acá con la 1ª opción y se pisa el dato.
+        already_filled_ids = set()
+        for _k in getattr(self, "current_row_field_values", {}) or {}:
+            raw = _k.split("::", 1)[1] if "::" in _k else _k
+            already_filled_ids.add(raw)
         ids_dinamicos = self._cargar_ids_dinamicos()
         try:
             select_elements = self.driver.find_elements(By.XPATH, "//select")
@@ -3447,6 +3535,9 @@ class BaseFormFiller:
                 # Solo saltear si tiene id Y ese id ya está en el mapping (campos por name nunca están en mapped_ids)
                 elem_real_id = select_element.get_attribute("id")
                 if elem_real_id and elem_real_id in mapped_ids:
+                    continue
+                # Saltear si el mapping ya llenó este select en esta fila (id real ≠ id de config)
+                if (elem_real_id and elem_real_id in already_filled_ids) or (select_id in already_filled_ids):
                     continue
                 if not select_element.is_enabled():
                     continue
