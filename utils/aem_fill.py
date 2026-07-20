@@ -11,6 +11,7 @@ se localiza cada campo por el texto del label, no por ID fijo.
 import random
 import time
 import unicodedata
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -319,17 +320,89 @@ def _fill_persona_select(driver, form_data, log):
     return 0
 
 
-def _fill_other_selects(driver, form_data, log):
+# Claves de __by_id que corresponden a <select> mapeados en el Excel (Modelo, Fecha
+# estimada, Región, Ciudad, Concesionario). Se usan para respetar el valor del Excel.
+_SELECT_EXCEL_KEYS = (
+    "models", "model", "estimated-date-purchase", "estimated-day",
+    "region", "city", "dealer",
+)
+
+
+# Claves de __by_id (id del campo mapeado) que sí representan al Modelo.
+_MODEL_KEYS = ("models", "model")
+
+
+def _desired_select_values(form_data):
+    """Pares (key, value) de select tipeados en el Excel (desde __by_id), no vacíos."""
+    by_id = form_data.get("__by_id", {}) if isinstance(form_data, dict) else {}
+    if not isinstance(by_id, dict):
+        return []
+    out = []
+    for k in _SELECT_EXCEL_KEYS:
+        raw = str(by_id.get(k, "") or "").strip()
+        if raw.endswith(".0"):
+            raw = raw[:-2]
+        if raw:
+            out.append((k, raw))
+    return out
+
+
+def _match_option_to_excel(valid, desired):
+    """Opción de este select que coincide con algún valor del Excel.
+
+    Devuelve (option_value, excel_key) o (None, None). Prioridad: match exacto
+    normalizado, luego 'contiene' (tolerante, como LambdaTest).
     """
-    El resto de los <select> (Modelo, etc.), primera opción válida. Se llama DESPUÉS
-    del llenado de texto (Nome/Sobrenome primero) para respetar el orden visual —
-    antes se llenaba todo junto con _fill_persona_select y Modelo (un select) siempre
-    quedaba primero aunque estuviera más abajo en la página.
+    if not desired:
+        return None, None
+    norm_opts = [(v, normalize_text(t)) for v, t in valid]
+    for key, d in desired:
+        nd = normalize_text(d)
+        if not nd:
+            continue
+        for v, nt in norm_opts:
+            if nt == nd:
+                return v, key
+    for key, d in desired:
+        nd = normalize_text(d)
+        if not nd:
+            continue
+        for v, nt in norm_opts:
+            if nd in nt or nt in nd:
+                return v, key
+    return None, None
+
+
+def _model_from_url(driver):
+    """Modelo parametrizado en la URL del form (?model=...). '' si no está."""
+    try:
+        url = driver.current_url or ""
+    except Exception:
+        return ""
+    try:
+        query = urlsplit(url).query
+        raw = parse_qs(query).get("model", [""])[0]
+        return unquote(raw).replace("+", " ").strip()
+    except Exception:
+        return ""
+
+
+def _fill_other_selects(driver, form_data, log, record=None):
+    """
+    El resto de los <select> (Modelo, Fecha estimada, etc.). Respeta PRIMERO el valor
+    del Excel (match por texto de opción, ya que el id del widget AEM es genérico) y solo
+    usa la 1ª opción válida cuando el Excel no trae ese valor o no coincide. Se llama
+    DESPUÉS del llenado de texto (Nome/Sobrenome primero) para respetar el orden visual.
+
+    Registra (record) cada select mapeado que llena, para que el Excel de resultado
+    muestre el valor elegido (Modelo, Fecha estimada, etc.).
     """
     try:
         selects = driver.find_elements(By.CSS_SELECTOR, "select[id*='widget']")
     except Exception:
         return 0
+    desired = _desired_select_values(form_data)
+    model_recorded = False
     done = 0
     for sel in selects:
         try:
@@ -343,13 +416,37 @@ def _fill_other_selects(driver, form_data, log):
             current = (sel.get_attribute("value") or "").strip()
             if current:
                 continue  # ya tiene un valor (ej. re-selección tras reload)
-            chosen = valid[0][0]
+            # Excel primero: si alguna opción coincide con un valor tipeado, usarla.
+            chosen, matched_key = _match_option_to_excel(valid, desired)
+            if chosen is None:
+                chosen = valid[0][0]  # sin valor en Excel → 1ª opción válida
+            chosen_text = next((t for v, t in valid if v == chosen), chosen)
             _select_option_js(driver, sel, chosen)
             done += 1
+            # Registrar el campo mapeado que coincidió (Modelo/Fecha/Región/etc.).
+            if matched_key and record:
+                try:
+                    record(matched_key, chosen_text)
+                except Exception:
+                    pass
+                if matched_key in _MODEL_KEYS:
+                    model_recorded = True
+                    log(f"🚗 AEM Modelo (del Excel) = {chosen_text}")
         except StaleElementReferenceException:
             continue
         except Exception as e:
             log(f" AEM select: {e}")
+    # Si el Excel no traía Modelo, reportar el modelo parametrizado en la URL (?model=).
+    if not model_recorded:
+        url_model = _model_from_url(driver)
+        if url_model and record:
+            by_id = form_data.get("__by_id", {}) if isinstance(form_data, dict) else {}
+            model_key = next((k for k in _MODEL_KEYS if k in by_id), "model")
+            try:
+                record(model_key, url_model)
+            except Exception:
+                pass
+            log(f"🚗 AEM Modelo (de la URL ?model=) = {url_model}")
     return done
 
 
@@ -466,7 +563,7 @@ def fill_aem_form(driver, form_data, is_brasil, gen_doc, log=print, record=None,
 
     # Resto de selects (Modelo, etc.) al final — respeta el orden visual: texto
     # (Nome/Sobrenome/CPF/Celular/Email arriba) primero, Modelo después.
-    _fill_other_selects(driver, form_data, log)
+    _fill_other_selects(driver, form_data, log, record)
 
     return filled
 

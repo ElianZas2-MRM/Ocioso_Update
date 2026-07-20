@@ -2290,10 +2290,36 @@ def _get_inferred_value(inferred_key: str, lead) -> str:
     return str(lead_lower.get(inferred_key, ""))
 
 
+def _record_model_from_url_if_missing_lt(driver, field_mapping: List[Dict],
+                                          tracked: Dict[str, str],
+                                          log: Callable = print) -> None:
+    """Si ningún select de Modelo quedó registrado, usar el ?model= de la URL."""
+    if any(k in ("models", "model") for k in tracked):
+        return
+    try:
+        from urllib.parse import urlsplit, parse_qs, unquote
+        raw = parse_qs(urlsplit(driver.current_url or "").query).get("model", [""])[0]
+        url_model = unquote(raw).replace("+", " ").strip()
+    except Exception:
+        url_model = ""
+    if not url_model:
+        return
+    model_id = "model"
+    for fc in (field_mapping or []):
+        fid = fc.get("id")
+        fid = fid[0] if isinstance(fid, list) else fid
+        if fid in ("models", "model"):
+            model_id = fid
+            break
+    tracked[model_id] = url_model
+    log(f"🚗 Modelo (de la URL ?model=) = {url_model}")
+
+
 def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
                                       ids_dinamicos: Dict[str, str],
                                       lead=None,
-                                      log: Callable = print) -> bool:
+                                      log: Callable = print,
+                                      tracked: Dict[str, str] = None) -> bool:
     """
     Completa selects e inputs visibles que no están en el field_mapping.
     Réplica de base_form_filler._auto_fill_unmapped_dropdowns para Safari LambdaTest.
@@ -2305,6 +2331,10 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
         for fid in fids:
             if fid:
                 mapped_ids.add(str(fid))
+
+    # Ids ya llenados por el mapping en esta fila (id real del form ≠ id de config,
+    # ej. 'estimated-day' vs 'estimated-date-purchase') → no re-seleccionar y pisar.
+    already_filled_ids = set(tracked.keys()) if isinstance(tracked, dict) else set()
 
     filled_any = False
 
@@ -2323,6 +2353,8 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
                 continue
             real_id = sel_el.get_attribute("id") or ""
             if real_id and real_id in mapped_ids:
+                continue
+            if (real_id and real_id in already_filled_ids) or (sel_id in already_filled_ids):
                 continue
             if not sel_el.is_displayed() or not sel_el.is_enabled():
                 continue
@@ -3404,7 +3436,8 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     brasil_doc_type=brasil_doc_type,
                     cross_processed=_xp,
                 )
-                _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
+                _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log, tracked=step_tracked)
+                _record_model_from_url_if_missing_lt(driver, field_mapping, step_tracked, log=log)
                 # Requeridos sin dato (Rua/Número/Data de Nascimento, etc.) → sintético random
                 _fill_required_synthetic_lt(driver, log=log)
             paso_num = iteration + 1
@@ -3722,7 +3755,8 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                             brasil_doc_type=brasil_doc_type,
                             cross_processed=_xp_r,
                         )
-                        _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
+                        _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log, tracked=_iter_tracked)
+                        _record_model_from_url_if_missing_lt(driver, field_mapping, _iter_tracked, log=log)
                     _paso_r = _iter + 1
                     for _k, _v in _iter_tracked.items():
                         _step_tracked[f"Reintento{_paso_r}::{_k}"] = _v
