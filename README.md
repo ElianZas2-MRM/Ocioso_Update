@@ -67,8 +67,6 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
 5. **PAÍSES A EJECUTAR**: hacé click en las tarjetas de los mercados que querés correr (AR/BO/BR/CL/CO/EC/PY/PE/UY) — se pueden elegir varios a la vez, cada tarjeta clickeada queda resaltada y el contador de arriba a la derecha suma. Los links **Todos** / **Ninguno** seleccionan o deseleccionan todos de un click. Recién ahí se habilita (se pone verde) el botón **EJECUTAR ENVÍO**; con 0 países elegidos queda gris y sin click.
 
-   ![Selección de países](Asset/screenshots/10_seleccion_paises.png)
-
 6. **DATOS POR PAÍS**: una tabla de previsualización y edición rápida del Excel que se va a usar. Elegís el país con las solapas (Argentina, Bolivia, …) y, si ese país tiene más de un Excel (por distintos dispositivos), el combo **"Excel a revisar"** de la derecha te deja elegir cuál mirar. Botones sobre la tabla:
    - **+ Agregar**: agrega una fila vacía al final.
    - **🗑 Eliminar**: borra la(s) fila(s) seleccionada(s).
@@ -78,7 +76,9 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
    - **📂 Abrir Excel**: abre el archivo con Excel/la app asociada, por si preferís editarlo ahí directamente.
    - Podés editar cualquier celda con **doble click** encima (aparece un cuadro de texto editable in-line).
 
-   ![Datos por país](Asset/screenshots/09_datos_por_pais.png)
+   Así se ve la parte de abajo de la pestaña, con la selección de países arriba y la tabla de datos debajo:
+
+   ![Países a ejecutar y Datos por país](Asset/screenshots/09_datos_por_pais.png)
 
 7. **EJECUTAR ENVÍO**: se habilita apenas elegís al menos un país. Antes de arrancar, la app **valida que exista un Excel con al menos un lead** para cada combinación país + dispositivo elegida; si alguno falta o está vacío, no ejecuta nada y te lo dice con el detalle (ej. *"Colombia · Chrome: … (vacío / sin leads)"*). Si está todo bien, abre el **modal de ejecución** (ver abajo).
 8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para LambdaTest, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda como una columna **"Video LT"** dentro del Excel de resultados — abrilo desde ahí y hacé click en el link.
@@ -121,7 +121,9 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 1. Se agrega una columna nueva llamada "Modelo" al Excel de datos de ese país (la ves en "Generar Excels con Datos" / "Datos por país").
 2. En cada envío, el robot toma lo que haya en esa columna de la fila y lo selecciona en el `<select id="model">` del formulario real.
 
-**Solapa "Dependencias"** — registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden.
+**Solapa "Dependencias"** — registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden (ej. `city` depende de `region`: hasta que no se elige la región, el dropdown de ciudad no trae opciones). Elegís el país, el **ID padre** y el **ID hijo**, y quedan listadas abajo para editar o borrar:
+
+![IDs Dinámicos — Dependencias](Asset/screenshots/23_ids_dinamicos_dependencias.png)
 
 > **Si un campo queda sin valor al enviar, la app te avisa.** Cuando una corrida no puede completar campos porque no tienen valor asignado:
 > - **Campos requeridos sin completar** → la fila cuenta como **FAIL** en el Excel de resultados (columna Resultado: *"Campos sin completar (sin valor asignado): …"*) y aparece como error en el mail.
@@ -232,7 +234,9 @@ Programa la ejecución automática y recurrente de "Envío de Leads" (por ejempl
 
    ![Calendario de horarios](Asset/screenshots/08_calendario_horarios.png)
 
-   - **PAÍSES A TESTEAR**: tildá los países que se van a correr en cada disparo programado (link **"Seleccionar todos"** para marcarlos todos juntos).
+   - **PAÍSES A TESTEAR**: tildá los países que se van a correr en cada disparo programado (link **"Seleccionar todos"** para marcarlos todos juntos). Abajo de todo, **Guardar configuración**:
+
+     ![Programación — países a testear](Asset/screenshots/45_programacion_paises.png)
    - **Guardar configuración**: guarda el calendario armado. Antes de guardar, la app valida que ya existan los Excel necesarios en `data/` para cada combinación país + dispositivo elegida (si falta alguno, avisa "Archivos Excel Faltantes").
 3. Una vez guardada, en la pestaña principal aparece la tarjeta **"Programado en background"** con un resumen del próximo disparo (día, hora, modo, mercados).
 4. **Programar test automático**: activa la programación. El botón cambia a **Iniciar ahora** (para disparar ya, sin esperar el horario) + **Desactivar**.
@@ -275,6 +279,8 @@ Chequea que las reglas de validación (regex, largo, campo obligatorio, etc.) de
    - **Agregar regla / Editar regla**: guarda el formulario de arriba como una regla nueva, o actualiza la seleccionada (el botón cambia de nombre solo según si hay una fila elegida en la tabla).
    - **Eliminar regla**: borra la regla seleccionada de la tabla.
    - **Tabla de reglas**: lista todo lo cargado (ID, Dropdown, Descripción, Dependencias, Regex full, Regex char, Texto de prueba, Países, Teclado mobile) — click en una fila para traerla al formulario de edición.
+
+     ![Validación — tabla de reglas](Asset/screenshots/42_validacion_reglas.png)
 3. **Ejecutar validación**: corre la validación real contra el/los formularios configurados.
 4. **Resultados**: abre la carpeta con el detalle de la validación.
 
@@ -296,6 +302,10 @@ Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo,
    - **REGENERAR DATOS**: recrea los datos manteniendo las URLs ya cargadas.
    - **Borrar URLs**: limpia el cuadro de texto.
 5. Los archivos quedan en `data/`, con el patrón `Lead_information_Formulario_<País>_<Dispositivo>.xlsx` (o `_T3.xlsx`).
+
+La parte de abajo de la pestaña, con el cuadro de URLs y la barra de acciones:
+
+![Generar Excels — parte inferior](Asset/screenshots/41_generar_excels_abajo.png)
 
 ---
 
@@ -325,12 +335,18 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
    - **Columnas adicionales a comprobar**: agregás cualquier campo extra (columna del Excel → id del form, ej. `CEP` → `customer-cep`); quedan como píldoras-checkbox activables. Todo se guarda por país.
 6. **Modelos** (opcional) — tildá **"Tiene selector de Modelo"** **solo si la lista de dealers cambia según el modelo** (solo T1 con id `models`). Elegís "Todos los modelos" o "Modelo(s) específico(s)": el comparador repite la revisión de dealers **para cada modelo**. Si los dealers son los mismos sin importar el modelo, **dejalo destildado** — al avanzar el form, si hay un dropdown de modelo, el comparador elige la primera opción válida solo para pasar de paso (si ya viene uno preseleccionado, lo respeta).
 7. **📦 MODO DE SALIDA** — **"Solo Excel"** o **"Excel + Capturas"**. Con capturas, quedan como PNG sueltos **junto al Excel dentro de la misma carpeta** del form (sin ZIP; lo comprimís vos si querés).
-8. **✉ ENVIAR RESULTADOS POR EMAIL** *(nuevo)* — tildá **"Enviar mail al terminar"** y poné el destinatario (comparte el mismo campo global que Envío de Leads). Al terminar **cada form** manda un mail con su reporte: adjunta la **carpeta completa (Excel + capturas) en un ZIP** si elegiste "Excel + Capturas", o **solo el Excel** si elegiste "Solo Excel". El cuerpo trae el resumen PASS/FAIL/EXTRA/DUPLICADO/OCULTO/NOTA. Respeta el flag global de envío, igual que el resto de la app.
+8. **Envío por email** — no hay configuración de mail dentro de esta pestaña: se controla **solo desde la barra superior de la app** (campo **Email destinatario** + checkbox **Enviar mail**), igual que para el resto de las pestañas. Si al ejecutar el Comparador tenés "Enviar mail" tildado, al terminar **cada form** se manda un mail con su reporte: adjunta la **carpeta completa (Excel + capturas) en un ZIP** si elegiste "Excel + Capturas", o **solo el Excel** si elegiste "Solo Excel". El cuerpo trae el resumen PASS/FAIL/EXTRA/DUPLICADO/OCULTO/NOTA.
+
+   > Antes esta pestaña tenía su propio bloque "✉ ENVIAR RESULTADOS POR EMAIL" abajo de todo. Se quitó porque escribía en la **misma** configuración global que la barra de arriba: eran dos lugares para lo mismo. Ahora el flag de arriba aplica a la pestaña que estés ejecutando.
 9. **💾 CONFIGURACIONES GUARDADAS** — guardá el mapeo completo con un nombre y reusalo:
    - **💾 Guardar configuración**: crea una nueva (pregunta antes de sobrescribir si el nombre ya existe).
    - **📂 Cargar**: aplica el preset elegido y copia su nombre al campo Nombre, listo para editar.
    - **✏ Editar**: reescribe el preset seleccionado con los valores actuales; si cambiaste el texto del campo Nombre, lo renombra.
    - **🗑 Eliminar**: borra el preset (con confirmación).
+La parte de abajo de la pestaña, con los presets guardados y la barra de EJECUTAR:
+
+![Comparar Dealers — parte inferior](Asset/screenshots/44_dealers_abajo.png)
+
 10. **EJECUTAR** — se habilita con el Excel de URLs, el de dealers y las columnas mapeadas. Corre en **2 fases** por cada form: **Fase 1** compara y **guarda el Excel de resultados enseguida**; **Fase 2** (si elegiste capturas) toma las capturas. Cada form deja su **carpeta propia** nombrada `país_form_columna(o sinfiltro)_incluidos|excluidos_timestamp` dentro de `Dealerscheck_resultados/`.
 
 > **Funciona con formularios de 1, 2 o 3 pasos.** Si los dropdowns `region/city/dealer` están en el primer paso, los usa al instante. Si el form es **multi-paso** (los dropdowns aparecen más adelante), el comparador **avanza los pasos** igual que Envío de Leads: completa los campos requeridos de cada paso con valores sintéticos (selects: primera opción válida; textos: dato dummy; checkboxes/radios: los marca) **sin tocar** region/city/dealer, aprieta *Siguiente/Next*, y **recién empieza a comparar cuando aparece el nivel más alto que elegiste** (region si la activaste, si no city, si no dealer). Nunca envía el formulario. Si el form se traba (un campo requerido que no reconoce), lo detecta y corta en vez de quedar en loop.
@@ -362,11 +378,17 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
 
 La comparación corre dentro de un modal que bloquea la ventana de atrás:
 
+![Modal del Comparador](Asset/screenshots/18_modal_comparador.png)
+
 - **Comparando dealers… / país**: sobre qué mercado corre.
 - **Barra de progreso** sobre el total.
 - **Línea de estado**: la combinación exacta en curso → `Región: CABA · Ciudad: MATADEROS · Dealer: DANTE D'AMICO S.A.` (los niveles activos, form por form).
 - **Resumen final**: PASS/FAIL bien grande, más EXTRA/DUPLICADO/OCULTO/NOTA si los hay, el total chequeado y un veredicto (`✓ Todo OK` o `⚠ N con problemas`).
 - **Detener**: pide **confirmación** antes de cortar (igual que la ✕ de cerrar). Como el Excel se guarda al terminar la Fase 1 de cada form, si frenás en la Fase 2 (capturas) el reporte igual queda.
+
+Mientras corre, la ventana de atrás queda bloqueada (igual que en Envío de Leads):
+
+![Modal del Comparador sobre la app](Asset/screenshots/19_modal_comparador_sobre_app.png)
 
 ---
 
@@ -418,10 +440,13 @@ La app usa exclusivamente drivers locales desde `drivers/` (junto al proyecto, o
 .\build.bat
 ```
 
-Genera:
-- `dist/OsocioFormAutomation.exe`
-- `dist/OsocioFormAutomation_portable/` (con `data/`, `drivers/`, `json/`, `resultados/`, `temporales/`, `Dealerscheck_resultados/`, `resultados_lambdatestmac/` y `resultados_lambdatest_android/`)
-- `dist/OsocioFormAutomation_portable.zip`
+Genera **solo la carpeta portable**:
+
+- `dist/OsocioFormAutomation_portable/` — con el `.exe` adentro más `data/`, `drivers/`, `json/`, `resultados/`, `temporales/`, `Dealerscheck_resultados/`, `resultados_lambdatestmac/` y `resultados_lambdatest_android/`. Se abre con `Abrir_Osocio_Form_Automation.bat`.
+
+> El build **ya no deja** el `.exe` suelto en `dist/` ni arma el `.zip`: son pasos que sumaban tiempo y el portable ya trae todo. Si necesitás mandarle la app a alguien, comprimí vos la carpeta `dist/OsocioFormAutomation_portable/`.
+
+> **Ojo:** el `.exe` del portable se compila desde el código fuente **en el momento del build**. Si cambiás código, tenés que volver a correr `build.bat` para que el portable lo tome — abrir el `.exe` viejo sigue ejecutando la versión anterior. Para probar cambios al toque, corré `python run.py` desde la carpeta del proyecto.
 
 `lambdatest_mac/` y `lambdatest_android/` van empaquetados **dentro** del `.exe` (vía PyInstaller), no como carpetas sueltas al lado — no hace falta copiarlos a mano.
 

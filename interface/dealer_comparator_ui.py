@@ -724,35 +724,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     for val, txt in (("excel", "Solo Excel"), ("caps", "Excel + Capturas")):
         ttk.Radiobutton(output_row, text=txt, value=val, variable=output_mode_var).pack(side="left", padx=8)
 
-    # ── 5b. Envío por email (mismo criterio que Envío de Leads) ────────────────
-    from .helpers_interface import cargar_config_global as _cfg_g, guardar_config_global as _cfg_s
-    _cfg_ini = _cfg_g()
-    email_card = card("✉ ENVIAR RESULTADOS POR EMAIL",
-                      "Al terminar cada form manda un mail con el reporte. Usa el mismo destinatario "
-                      "que Envío de Leads. Adjunta la carpeta (Excel + capturas) si elegiste "
-                      "'Excel + Capturas', o solo el Excel si elegiste 'Solo Excel'.")
-    enviar_mail_var = BooleanVar(value=bool(_cfg_ini.get("enviar_mail", False)))
-    email_dest_var = StringVar(value=str(_cfg_ini.get("email_destinatario", "") or ""))
-
-    email_row = Frame(email_card, bg=CARD_BG)
-    email_row.pack(fill="x", padx=15, pady=(0, 8))
-    Checkbutton(email_row, text="Enviar mail al terminar", variable=enviar_mail_var,
-                bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG, activebackground=CARD_BG,
-                font=("Segoe UI", 9)).pack(side="left")
-    Label(email_row, text="Destinatario(s):", font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(side="left", padx=(12, 4))
-    Entry(email_row, textvariable=email_dest_var, width=32, bg=ENTRY_BG, fg="white",
-          insertbackground="white", relief="flat").pack(side="left")
-    Label(email_card, text="(varios separados por coma)", font=("Segoe UI", 8, "italic"),
-          bg=CARD_BG, fg="#8A7E9E").pack(anchor="w", padx=15, pady=(0, 6))
-
-    def _persistir_email_cfg(*_a):
-        cfg = _cfg_g()
-        cfg["enviar_mail"] = bool(enviar_mail_var.get())
-        cfg["email_destinatario"] = (email_dest_var.get() or "").strip()
-        _cfg_s(cfg)
-
-    enviar_mail_var.trace_add("write", _persistir_email_cfg)
-    email_dest_var.trace_add("write", _persistir_email_cfg)
+    # El envío por email se controla SOLO desde la barra superior de la app
+    # ("Email destinatario" + "Enviar mail"), común a todas las pestañas. Antes había
+    # acá un card duplicado que escribía en esa misma config global; se quitó para no
+    # tener dos lugares donde configurar lo mismo. El valor se lee al ejecutar.
 
     # ── 6. Configuraciones guardadas ─────────────────────────────────────────
     presets_card = card("💾 CONFIGURACIONES GUARDADAS",
@@ -1665,8 +1640,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         expect_absent=expect_absent,
                     )
 
-                # --- Email por form (mismo criterio que Envío de Leads) ---
-                if enviar_mail_var.get():
+                # --- Email por form: usa el flag global de la barra superior ---
+                from .helpers_interface import cargar_config_global as _cfg_g
+                if bool(_cfg_g().get("enviar_mail", False)):
                     try:
                         from .helpers_interface import enviar_email_comparador_dealers
                         _pair_counts = {}
