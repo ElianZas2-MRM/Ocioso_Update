@@ -49,3 +49,6 @@ json/ejecutor_autonomo.log
 resultados_lambdatest*/
 cta_evidence/
 Ocioso_Update - COPIA_SEGURIDAD-VERSIONUNO/
+
+# Salida local del diagnostico de LambdaTest (contiene usuario)
+Diagnostico_LambdaTest_resultado.txt
