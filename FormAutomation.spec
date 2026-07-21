@@ -45,6 +45,7 @@ a = Analysis(
         'validation.validation_exporter',
         'pytz',
         'openpyxl',
+        'truststore',
         # Icono de la bandeja (SysTrayIcon en interface/main_interface.py)
         'win32gui',
         'win32con',

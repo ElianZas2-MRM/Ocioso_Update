@@ -525,6 +525,72 @@ def _find_form_iframe(driver, expected_form_url):
     return None
 
 
+def _pre_scroll_for_dynamic_content(driver):
+    """Dispara eventos de scroll para activar IntersectionObserver/lazy-loading de iframes
+    embebidos en la landing (mismo criterio que 'Envío de Leads')."""
+    try:
+        total_height = driver.execute_script("return document.body.parentNode.scrollHeight") or 0
+        viewport_height = driver.execute_script("return window.innerHeight") or 800
+    except Exception:
+        return
+    scroll_step = max(viewport_height * 0.8, 800)
+    _scroll_js = (
+        "window.scrollTo(0, arguments[0]);"
+        "window.dispatchEvent(new Event('scroll', {bubbles:true,cancelable:false}));"
+        "document.dispatchEvent(new Event('scroll', {bubbles:true}));"
+    )
+    current_position = 0
+    while current_position < total_height:
+        try:
+            driver.execute_script(_scroll_js, current_position)
+        except Exception:
+            break
+        time.sleep(0.15)
+        current_position += scroll_step
+    try:
+        driver.execute_script(_scroll_js, 999999)
+        time.sleep(0.3)
+        driver.execute_script(_scroll_js, 0)
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+
+def _locate_form_iframe(driver, form_url, wait_seconds=0):
+    """Encuentra el iframe del form DENTRO de la landing (mismo criterio que 'Envío de Leads'):
+    primero busca el que matchea la URL esperada (con espera activa si wait_seconds>0, para
+    lazy-loading justo tras navegar); si no lo encuentra, cae a 'cualquier iframe visible'
+    (el form pudo redirigir a otro dominio/URL). Nunca navega directo a form_url."""
+    form_url = (form_url or "").strip()
+    iframe = None
+    if form_url:
+        if wait_seconds > 0:
+            try:
+                iframe = WebDriverWait(driver, wait_seconds).until(
+                    lambda d: next(
+                        (f for f in d.find_elements(By.TAG_NAME, "iframe")
+                         if form_url in (f.get_attribute("src") or "")),
+                        None
+                    )
+                )
+            except Exception:
+                iframe = None
+        else:
+            iframe = _find_form_iframe(driver, form_url)
+    if iframe is None:
+        try:
+            for f in driver.find_elements(By.TAG_NAME, "iframe"):
+                try:
+                    if f.is_displayed():
+                        iframe = f
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    return iframe
+
+
 def handle_cookie_popups(driver):
     """Cierra popups de cookies/legales (mismo criterio que BaseFormFiller.handle_cookie_popups,
     incluye el caso puntual de GM/Chevrolet vía <gb-legal-notification>)."""
@@ -564,9 +630,13 @@ def handle_cookie_popups(driver):
 
 def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeout=30):
     """Abre el form real, igual criterio que 'Envío de Leads':
-    - url_mode='landing_form': abre la landing, cierra cookies y, si el form está embebido en un
-      iframe, cambia de contexto a ese iframe. Si no hay iframe reconocible, navega directo al form_url.
-    - url_mode='solo_forms': abre form_url directamente (sin landing).
+    - url_mode='landing_form': abre la landing y hace el chequeo DENTRO de ella — espera
+      activamente a que aparezca el iframe del form (con reintento + pre-scroll para
+      lazy-loading) y cambia de contexto a ese iframe. Si no hay iframe reconocible, el form
+      vive directo en la landing (sin iframe) y se sigue trabajando ahí. Nunca se navega
+      directo a form_url: sería saltarse la landing, que es justo lo que se quiere chequear.
+    - url_mode='solo_forms': abre form_url directamente (sin landing) — para cuando la URL
+      configurada es la del formulario suelto (secure/stage/revise).
     En ambos casos cierra popups de cookies antes y después de entrar al form.
     Devuelve True si terminó sobre el contexto del form (o su iframe)."""
     if url_mode == "solo_forms" or not landing_url:
@@ -579,16 +649,18 @@ def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeou
     _wait_document_ready(driver, page_ready_timeout)
     handle_cookie_popups(driver)
 
-    iframe = _find_form_iframe(driver, form_url)
+    iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
+    if iframe is None:
+        # Iframe embebido con lazy-loading: activar con scroll y reintentar una vez más
+        # antes de asumir que el form no vive en un iframe.
+        _pre_scroll_for_dynamic_content(driver)
+        handle_cookie_popups(driver)
+        iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
+
     if iframe is not None:
         driver.switch_to.frame(iframe)
         handle_cookie_popups(driver)
-        return True
 
-    if form_url:
-        driver.get(form_url)
-        _wait_document_ready(driver, page_ready_timeout)
-        handle_cookie_popups(driver)
     return True
 
 
@@ -1648,7 +1720,7 @@ def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title
         # la lista desplegada no quede recortada por la altura fija del iframe.
         try:
             driver.switch_to.default_content()
-            iframe = _find_form_iframe(driver, form_url)
+            iframe = _locate_form_iframe(driver, form_url)
         except Exception:
             iframe = None
         if iframe is not None and inner_height:
@@ -1679,7 +1751,7 @@ def capture_dropdown_evidence(driver, select_id, screenshot_dir, filename, title
                 pass
         # Volver al contexto del form para restaurar el select y que la próxima fila navegue
         try:
-            iframe = _find_form_iframe(driver, form_url)
+            iframe = _locate_form_iframe(driver, form_url)
             if iframe is not None:
                 driver.switch_to.frame(iframe)
         except Exception:
