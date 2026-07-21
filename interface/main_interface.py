@@ -3345,9 +3345,14 @@ def iniciar_interfaz():
                     sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_mac"))
                     import lt_controller  # type: ignore
                     b_name = f"Osocio Automatizado LT MAC - {pais}" if scheduled else f"Osocio LT Mac - Envío Manual - {pais}"
-                    summary = lt_controller.run(pais=pais, build_name=b_name, excel_path=excel) or {}
+                    summary = lt_controller.run(pais=pais, build_name=b_name, excel_path=excel, log_fn=log_message) or {}
                     _collect_lt_email(pais, "lambdatest_mac", "mac", summary)
-                    _bump(pais, _sid, ok=int(summary.get("ok", 0)), fail=int(summary.get("failed", 0)))
+                    _err = summary.get("error")
+                    _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
+                    if _err and _ok == 0 and _fail == 0:
+                        _bump(pais, _sid, fail=1, err=str(_err)[:200])
+                    else:
+                        _bump(pais, _sid, ok=_ok, fail=_fail)
                 elif dtype == "android":
                     sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_android"))
                     import lt_android_controller  # type: ignore
@@ -3355,9 +3360,14 @@ def iniciar_interfaz():
                         if stop_event.is_set():
                             return
                         b_name = f"Osocio Automatizado LT ANDROID - {pais}" if scheduled else f"Osocio LT Android - Envío Manual - {pais}"
-                        summary = lt_android_controller.run(pais=pais, build_name=b_name, excel_path=excel) or {}
+                        summary = lt_android_controller.run(pais=pais, build_name=b_name, excel_path=excel, log_fn=log_message) or {}
                     _collect_lt_email(pais, "lambdatest_android", "android", summary)
-                    _bump(pais, _sid, ok=int(summary.get("ok", 0)), fail=int(summary.get("failed", 0)))
+                    _err = summary.get("error")
+                    _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
+                    if _err and _ok == 0 and _fail == 0:
+                        _bump(pais, _sid, fail=1, err=str(_err)[:200])
+                    else:
+                        _bump(pais, _sid, ok=_ok, fail=_fail)
             except Exception as e:
                 log_message(f"[ERROR] {pais}/{device}: {e}")
                 _bump(pais, _sid, fail=1, err=str(e)[:200])
