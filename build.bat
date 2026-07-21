@@ -65,14 +65,19 @@ for %%V in (314 313 312 311 310 39) do (
     )
 )
 
-REM Buscar en PATH ignorando WindowsApps
+REM Buscar en PATH: probar cada "python" encontrado y quedarse con el primero que
+REM realmente funcione (--version imprime "Python 3..."). Un Python instalado desde
+REM la Microsoft Store tambien vive bajo WindowsApps y es valido, a diferencia del
+REM stub vacio que solo abre la Store (ese no imprime version real).
 for /f "delims=" %%i in ('where python 2^>nul') do (
-    echo %%i | findstr /i "WindowsApps" >nul
-    if errorlevel 1 (
-        set "PY=%%i"
-        goto :create_venv
+    if not defined PY (
+        for /f "delims=" %%v in ('"%%i" --version 2^>^&1') do (
+            echo %%v | findstr /b /c:"Python 3" >nul
+            if not errorlevel 1 set "PY=%%i"
+        )
     )
 )
+if defined PY goto :create_venv
 
 echo ERROR: No se encontro Python instalado correctamente.
 echo Instala Python desde https://www.python.org/downloads/

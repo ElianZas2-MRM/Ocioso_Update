@@ -9,6 +9,18 @@ import importlib.util
 import os
 import sys
 
+# Fix de conexión LambdaTest en redes de oficina con proxy (Netskope, Zscaler, etc.):
+# Windows ya confía en el certificado que pone ese proxy, pero Python trae su propia lista
+# de certificados (certifi) que NO lo conoce, y rechaza la conexión con LambdaTest.
+# truststore hace que Python use la MISMA lista de confianza que ya usa Windows (no
+# desactiva ninguna verificación, solo iguala a Python con Windows). Tiene que ir acá,
+# antes de cualquier otro import, para que aplique desde la primera conexión de red.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 from interface.main_interface import iniciar_interfaz
 from utils.paths import BASE_DIR, FORMS_DIR
 
