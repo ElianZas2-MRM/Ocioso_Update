@@ -52,6 +52,7 @@ if _src_root not in sys.path:
 # Importar toda la lógica reutilizable desde lambdatest_mac
 from lt_runner import (  # type: ignore[import]
     load_credentials,
+    _safe_log,
     mark_lt_status,
     LT_HUB,
     _fetch_lt_video_url,
@@ -170,6 +171,7 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
     Misma lógica que run_lt_batch de lambdatest_mac pero con driver Android
     y resultados en resultados_lambdatest_android/.
     """
+    log = _safe_log(log)
     summary = {
         "pais": opts.pais, "results_excel": None,
         "session_id": None, "total": 0, "ok": 0, "failed": 0,

@@ -206,6 +206,28 @@ def create_lt_driver(username: str, access_key: str,
     return driver
 
 
+def _safe_log(log: Callable) -> Callable:
+    """
+    Blinda el log de la corrida. Los mensajes usan Unicode (✓ ✗ ⚠ 🎲 ⛔ →) y el destino
+    no siempre lo soporta: una consola Windows cp1252 tira UnicodeEncodeError, y el .exe
+    compilado con console=False deja sys.stdout en None. Sin esto, el primer log mata la
+    corrida ANTES de crear el driver (la sesión nunca llega a LambdaTest).
+    Reintenta en ASCII y, si aun así falla, descarta el mensaje: loguear nunca puede
+    cortar la ejecución.
+    """
+    def _l(msg=""):
+        try:
+            log(msg)
+        except UnicodeEncodeError:
+            try:
+                log(str(msg).encode("ascii", "replace").decode("ascii"))
+            except Exception:
+                pass
+        except Exception:
+            pass
+    return _l
+
+
 def mark_lt_status(driver, passed: bool = True):
     try:
         driver.execute_script(f"lambda-status={'passed' if passed else 'failed'}")
@@ -3813,6 +3835,7 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
     Guarda resultados en lambdatest_mac/resultados/ con la misma
     estructura que Osocio.
     """
+    log = _safe_log(log)
     summary = {
         "pais": opts.pais, "results_excel": None,
         "session_id": None, "total": 0, "ok": 0, "failed": 0,
