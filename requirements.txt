@@ -5,3 +5,4 @@ pillow
 pytz
 pywin32
 requests
+truststore

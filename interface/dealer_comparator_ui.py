@@ -29,7 +29,7 @@ from core.browser_manager import BrowserManager
 from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     StopRequested,
-    _find_form_iframe,
+    _locate_form_iframe,
     advance_to_selects,
     banner_lines_for_result,
     capture_dropdown_evidence,
@@ -1463,7 +1463,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
                     ui_log("Resumiendo comparación. Buscando contexto del formulario...", "info")
                     driver.switch_to.default_content()
-                    iframe = _find_form_iframe(driver, form_url)
+                    iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
                     if iframe is not None:
                         driver.switch_to.frame(iframe)
                         ui_log("Contexto cambiado al iframe del formulario.", "info")
@@ -1562,7 +1562,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     open_target(driver, current_url_mode, landing_url, form_url)
                     if pair_idx == 1 and _pausar_auth:
                         driver.switch_to.default_content()
-                        iframe = _find_form_iframe(driver, form_url)
+                        iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
                         if iframe is not None:
                             driver.switch_to.frame(iframe)
 
