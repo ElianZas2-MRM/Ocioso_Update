@@ -5049,6 +5049,15 @@ class BaseFormFiller:
                         if not res:
                             raise InterruptedError("Ejecución cancelada por el usuario durante la pausa de autenticación.")
                         self._log("[INFO] Resumiendo ejecución...")
+                        # Ya autenticado: por defecto mandar el navegador fuera de pantalla para que
+                        # el resto del llenado corra en segundo plano y no le robe el foco al usuario.
+                        # Si el usuario activó "Preview: ver navegador durante todo el envío", se deja
+                        # visible el navegador el resto de la corrida.
+                        if not self.config.get('preview_visible_browser', False):
+                            try:
+                                self.driver.set_window_position(10000, 0)
+                            except Exception:
+                                pass
                         try:
                             self.driver.switch_to.default_content()
                         except Exception:

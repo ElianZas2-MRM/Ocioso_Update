@@ -14,7 +14,7 @@ class GenericCountryBase(BaseFormFiller):
     Reemplaza los 9 archivos Formulario_*_Base.py individuales.
     """
 
-    def __init__(self, country_name: str, browser="chrome", viewport="fullscreen", headless=False, background=True, is_scheduled=False, pausar_autenticacion=False):
+    def __init__(self, country_name: str, browser="chrome", viewport="fullscreen", headless=False, background=True, is_scheduled=False, pausar_autenticacion=False, preview_visible_browser=False):
         base_config = get_country_config(country_name)
         config = copy.deepcopy(base_config)
         config['browser'] = browser
@@ -23,6 +23,7 @@ class GenericCountryBase(BaseFormFiller):
         config['background'] = background
         config['is_scheduled'] = is_scheduled
         config['pausar_autenticacion'] = pausar_autenticacion
+        config['preview_visible_browser'] = preview_visible_browser
 
         # Determinar el nombre del excel basado en el navegador/dispositivo
         dev_name = "Chrome"
