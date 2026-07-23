@@ -1462,6 +1462,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación.")
 
                     ui_log("Resumiendo comparación. Buscando contexto del formulario...", "info")
+                    # Ya autenticado: mandar el navegador fuera de pantalla para que la
+                    # comparación siga en segundo plano y no le robe el foco al usuario.
+                    try:
+                        driver.set_window_position(10000, 0)
+                    except Exception:
+                        pass
                     driver.switch_to.default_content()
                     iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
                     if iframe is not None:

@@ -1050,10 +1050,16 @@ def iniciar_interfaz():
     # Si el usuario lo tilda, la X minimiza a la bandeja (persistente).
     var_minimizar_a_bandeja = tk.BooleanVar(value=bool(_ui_prefs.get("minimizar_a_bandeja", False)))
     var_pausar_autenticacion = tk.BooleanVar(value=bool(_ui_prefs.get("pausar_autenticacion", False)))
+    # Preview: mantener el navegador visible durante TODO el envío de leads, también
+    # después de autenticar (por defecto, tras el login el navegador pasa a segundo plano).
+    var_preview_navegador = tk.BooleanVar(value=bool(_ui_prefs.get("preview_visible_browser", False)))
 
     def _on_pause_change(*_):
         if var_pausar_autenticacion.get():
             var_ver_navegador.set(True)
+        else:
+            # El preview sólo tiene sentido con la pausa de login activa.
+            var_preview_navegador.set(False)
 
     def _on_visible_change(*_):
         if not var_ver_navegador.get() and var_pausar_autenticacion.get():
@@ -1462,6 +1468,7 @@ def iniciar_interfaz():
             cfg["ui_prefs"]["visible_browser"] = bool(var_ver_navegador.get())
             cfg["ui_prefs"]["minimizar_a_bandeja"] = bool(var_minimizar_a_bandeja.get())
             cfg["ui_prefs"]["pausar_autenticacion"] = bool(var_pausar_autenticacion.get())
+            cfg["ui_prefs"]["preview_visible_browser"] = bool(var_preview_navegador.get())
             cfg["ui_prefs"]["selected_disp"] = selected_disp
             if 'mercados_mode' in globals() or 'mercados_mode' in locals():
                 cfg["ui_prefs"]["mercados_mode"] = mercados_mode[0]
@@ -1498,6 +1505,7 @@ def iniciar_interfaz():
 
     var_ver_navegador.trace_add("write", _save_ui_prefs)
     var_pausar_autenticacion.trace_add("write", _save_ui_prefs)
+    var_preview_navegador.trace_add("write", _save_ui_prefs)
     var_minimizar_a_bandeja.trace_add("write", _save_ui_prefs)
 
     # Enviar en paralelo POR URL: una sesión (navegador) por URL, todas en simultáneo
@@ -1681,6 +1689,10 @@ def iniciar_interfaz():
                        anchor="w").pack(anchor="w", pady=2)
         tk.Checkbutton(beh_frame, text="Pausar para login manual en primer formulario (Envío de Leads / Comparador)",
                        variable=var_pausar_autenticacion, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
+                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
+                       anchor="w").pack(anchor="w", pady=2)
+        tk.Checkbutton(beh_frame, text="Preview: ver navegador durante todo el envío (aun después de autenticar; solo con la pausa activa)",
+                       variable=var_preview_navegador, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
                        selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
                        anchor="w").pack(anchor="w", pady=2)
 
@@ -3319,9 +3331,11 @@ def iniciar_interfaz():
                 if dtype == "desktop":
                     from core.generic_country_base import GenericCountryBase
                     _pausar = var_pausar_autenticacion.get()
+                    _preview = bool(var_preview_navegador.get())
                     form = GenericCountryBase(pais, browser=browser, viewport="fullscreen",
                                               headless=False, background=background, is_scheduled=scheduled,
-                                              pausar_autenticacion=_pausar)
+                                              pausar_autenticacion=_pausar,
+                                              preview_visible_browser=_preview)
                     if excel:
                         form.EXCEL_PATH = excel  # ← una sesión por Excel generado
                     def _pcb(done, total):
