@@ -1558,7 +1558,11 @@ class BaseFormFiller:
             paso = iteration + 1
             # Clic preliminar para forzar validación y activar mensajes de error de este paso
             try:
-                # Buscar el botón Siguiente o Enviar visible en este paso
+                # Buscar el botón Siguiente o Enviar visible en este paso.
+                # Si el CTA "Siguiente" YA está visible, se clickea en vacío para arrojar los
+                # mensajes de error antes de llenar. Si NO está visible (CTA gated tras un campo
+                # obligatorio, ej. Chevrolet Exonerados: sin modelo no hay botón), boton_accion
+                # queda None → se llena primero, el botón aparece y se avanza más abajo.
                 boton_accion = self._find_next_button()
                 es_submit = False
                 if not boton_accion:
@@ -5132,6 +5136,12 @@ class BaseFormFiller:
                     if not _is_libro_reclamaciones:
                         try:
                             _btn_empty, _ = self._resolve_submit_button(wait_seconds=2)
+                            # Solo se clickea en vacío un ENVIAR real. Un CTA tipo "Siguiente"
+                            # (ej. btn-steps-submit) matchea class*='submit' pero NO debe
+                            # clickearse vacío: puede estar ausente hasta elegir un campo
+                            # obligatorio o avanzar de paso indebidamente. Se llena primero.
+                            if _btn_empty and self._is_next_button_element(_btn_empty):
+                                _btn_empty = None
                             if _btn_empty:
                                 self._scroll_element_into_view(_btn_empty)
                                 time.sleep(0.3)
