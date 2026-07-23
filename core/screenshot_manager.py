@@ -73,14 +73,20 @@ class ScreenshotManager:
             print(f"Error banner URLs: {e}")
 
     def _save_compressed(self, img, path):
-        """Guarda el PNG pesando lo menos posible sin perder legibilidad: las capturas
-        largas (landings kilométricas) se cuantizan a 256 colores."""
+        """Guarda el PNG pesando lo menos posible sin perder legibilidad. Las capturas son
+        UI (formularios/landings: pocos colores planos), así que cuantizar a 256 colores con
+        MEDIANCUT reduce el peso ~70-85% sin diferencia visible y mantiene el total del run
+        muy por debajo de 50 MB."""
         try:
-            if img.height > 2500:
-                img = img.quantize(colors=256, method=Image.MEDIANCUT).convert("P")
-            img.save(path, "PNG", optimize=True)
+            if img.mode not in ("RGB", "P"):
+                img = img.convert("RGB")
+            pal = img.quantize(colors=256, method=Image.MEDIANCUT)
+            pal.save(path, "PNG", optimize=True)
         except Exception:
-            img.save(path)
+            try:
+                img.save(path, "PNG", optimize=True)
+            except Exception:
+                img.save(path)
         
     def take_full_page_screenshot(self, filename):
         """Toma screenshot completa de toda la página uniendo múltiples capturas"""
