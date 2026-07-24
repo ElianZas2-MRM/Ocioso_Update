@@ -19,12 +19,22 @@ class ScreenshotManager:
         self.url_landing        = ""
         self.url_form_esperado  = ""
         self.url_form_encontrado = ""
+        # Slug derivado de la landing/form para que el nombre de cada captura diga a qué form
+        # pertenece (ej. form_flotas-pesados_paso1_completado_1_chrome.png). Lo setea el runner.
+        self.form_slug = ""
         # Líneas extra para el banner: lista de (texto, (r,g,b)) — ej. el Comparador
         # Dealers agrega "Revisado: ..." y "Estado: PASS/FAIL".
         self.extra_lines = []
         # Firefox no puede tomar screenshots en contexto iframe; guardamos el iframe activo
         # para salir a default_content antes del screenshot y volver después.
         self.current_frame = None
+
+    def fname(self, kind, stage, ss_number):
+        """Nombre estándar de una captura, con el slug del form si está seteado:
+        p.ej. form_flotas-pesados_paso1_completado_3_chrome.png. `kind` = 'form' | 'landing'."""
+        slug = (self.form_slug or "").strip()
+        slug_part = f"{slug}_" if slug else ""
+        return f"{kind}_{slug_part}{stage}_{ss_number}_{self.browser_name}.png"
 
     def _add_url_banner(self, path: str):
         """Agrega un banner oscuro en la parte superior con las URLs de la sesión."""
@@ -88,6 +98,50 @@ class ScreenshotManager:
             except Exception:
                 img.save(path)
         
+    def _neutralize_fixed_elements(self):
+        """Neutraliza position:fixed/sticky (nav, chat, cookie bars) durante una captura por
+        secciones: si no, esos elementos quedan pegados al viewport y aparecen REPETIDOS /
+        'arrastrados' en la imagen final. Se restauran con _restore_fixed_elements()."""
+        try:
+            self.driver.execute_script("""
+                (function(){
+                  var changed=[];
+                  var all=document.querySelectorAll('body *');
+                  for (var i=0;i<all.length;i++){
+                    try{
+                      var cs=window.getComputedStyle(all[i]);
+                      if(cs && (cs.position==='fixed' || cs.position==='sticky')){
+                        changed.push([all[i], all[i].style.position,
+                                      all[i].style.getPropertyPriority('position')]);
+                        all[i].style.setProperty('position','static','important');
+                      }
+                    }catch(e){}
+                  }
+                  window.__osocio_fixed=changed;
+                  return changed.length;
+                })();
+            """)
+        except Exception:
+            pass
+
+    def _restore_fixed_elements(self):
+        """Restaura el position original de los elementos neutralizados."""
+        try:
+            self.driver.execute_script("""
+                (function(){
+                  var c=window.__osocio_fixed||[];
+                  for(var i=0;i<c.length;i++){
+                    try{
+                      if(c[i][1]) c[i][0].style.setProperty('position', c[i][1], c[i][2]||'');
+                      else c[i][0].style.removeProperty('position');
+                    }catch(e){}
+                  }
+                  window.__osocio_fixed=null;
+                })();
+            """)
+        except Exception:
+            pass
+
     def take_full_page_screenshot(self, filename):
         """Toma screenshot completa de toda la página uniendo múltiples capturas"""
         screenshot_path = os.path.join(self.screenshot_dir, filename)
@@ -136,6 +190,9 @@ class ScreenshotManager:
                 scroll_y = self.driver.execute_script("return window.pageYOffset;") or 0
             except Exception:
                 scroll_y = 0
+
+            # Neutralizar nav/chat/cookie fijos ANTES de medir, para que no se arrastren.
+            self._neutralize_fixed_elements()
 
             total_width = self.driver.execute_script("return document.body.scrollWidth")
             total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
@@ -210,6 +267,7 @@ class ScreenshotManager:
                 print(f"Error crítico al tomar screenshot")
                 return False
         finally:
+            self._restore_fixed_elements()
             try:
                 self.driver.execute_script(f"window.scrollTo(0, {int(scroll_y)});")
             except Exception:
@@ -245,7 +303,7 @@ class ScreenshotManager:
     
     def take_landing_screenshot(self, ss_number, stage):
         """Toma screenshot de la landing page completa"""
-        filename = f"landing_{stage}_{ss_number}_{self.browser_name}.png"
+        filename = self.fname("landing", stage, ss_number)
         result = self.take_full_page_screenshot(filename)
         self._add_url_banner(os.path.join(self.screenshot_dir, filename))
         return result
@@ -396,6 +454,14 @@ class ScreenshotManager:
         scroll_y = 0
         temp_files = []
         try:
+            # Neutralizar nav/chat fijos del documento padre para que no tapen el form al
+            # scrollear por secciones.
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+            self._neutralize_fixed_elements()
+
             el = self._find_form_region_element()
             if el is None:
                 return False
@@ -479,6 +545,12 @@ class ScreenshotManager:
                     os.remove(t)
                 except Exception:
                     pass
+            # Restaurar los fijos (el neutralizado se hizo sobre el documento padre).
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+            self._restore_fixed_elements()
             try:
                 self.driver.execute_script(f"window.scrollTo(0, {int(scroll_y)});")
             except Exception:
@@ -493,7 +565,7 @@ class ScreenshotManager:
         """Toma screenshot del formulario dentro del iframe.
         full_page=True → captura del área completa del formulario (por partes si es largo),
         sin arrastrar toda la landing cuando ésta es kilométrica."""
-        filename = f"form_{stage}_{ss_number}_{self.browser_name}.png"
+        filename = self.fname("form", stage, ss_number)
         if full_page:
             try:
                 if self.take_form_area_screenshot(filename):
@@ -526,3 +598,54 @@ class ScreenshotManager:
         except Exception as e:
             print(f"Error capturando formulario: {e}")
             return False
+
+def enforce_screenshot_budget(screenshot_dir, max_mb=48, log=print):
+    """Garantiza que TODAS las capturas de la carpeta pesen en total menos de `max_mb` MB,
+    perdiendo la MENOR calidad posible: solo actúa si se pasa del presupuesto, y ahí recomprime
+    (y como último recurso reescala) las imágenes MÁS pesadas primero. Las capturas chicas
+    (área del form) casi nunca se tocan; el peso está en las landings completas kilométricas."""
+    max_bytes = int(max_mb * 1024 * 1024)
+    try:
+        files = [os.path.join(screenshot_dir, f) for f in os.listdir(screenshot_dir)
+                 if f.lower().endswith(".png")]
+    except Exception:
+        return
+
+    def _total():
+        return sum(os.path.getsize(f) for f in files if os.path.exists(f))
+
+    total0 = _total()
+    if total0 <= max_bytes:
+        return  # ya entra: no se toca nada (calidad intacta)
+
+    log(f"Capturas: {total0/1e6:.1f} MB > {max_mb} MB — recomprimiendo las más pesadas...")
+
+    # Hasta N pasadas: cada una ataca el archivo más pesado. Primero recomprime (cuantiza a
+    # menos colores, casi sin pérdida visible en UI); si ya está muy cuantizado, lo reescala.
+    for _ in range(60):
+        if _total() <= max_bytes:
+            break
+        try:
+            f = max((p for p in files if os.path.exists(p)), key=os.path.getsize)
+        except ValueError:
+            break
+        try:
+            img = Image.open(f)
+            w, h = img.size
+            mode = img.mode
+            # 1) Si todavía es RGB (no cuantizada) o muy alta → cuantizar a 128 colores.
+            if mode != "P":
+                out = img.convert("RGB").quantize(colors=128, method=Image.MEDIANCUT)
+            elif h > 4000 or w > 1100:
+                # 2) Ya cuantizada y grande → reescalar 82% (sigue legible) y recuantizar.
+                nw, nh = max(1, int(w * 0.82)), max(1, int(h * 0.82))
+                out = img.convert("RGB").resize((nw, nh), Image.LANCZOS).quantize(colors=128, method=Image.MEDIANCUT)
+            else:
+                # 3) Chica y ya cuantizada → bajar a 64 colores.
+                out = img.convert("RGB").quantize(colors=64, method=Image.MEDIANCUT)
+            out.save(f, "PNG", optimize=True)
+        except Exception:
+            # Si una imagen falla, sacarla de la lista para no ciclar en ella.
+            files = [p for p in files if p != f]
+
+    log(f"Capturas: total final {_total()/1e6:.1f} MB")

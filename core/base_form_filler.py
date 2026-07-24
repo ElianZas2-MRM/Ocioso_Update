@@ -84,6 +84,62 @@ class BaseFormFiller:
         "lo siento, ocurrió",
     )
 
+    # Marcadores de URL de los formularios GM hechos por DEV (NO los AEM): el iframe del
+    # formulario SIEMPRE tiene un src que contiene uno de estos fragmentos. Cuando una landing
+    # tiene varios iframes hay que priorizar SIEMPRE el que matchee estos marcadores, y recién
+    # como último recurso caer a cualquier iframe visible.
+    GM_FORM_URL_MARKERS = ("gm_forms", "gm_front", "gm_admin")
+
+    @staticmethod
+    def _iframe_src_of(iframe):
+        """src del iframe, tolerante a stale/errores (devuelve "")."""
+        try:
+            return (iframe.get_attribute("src") or "")
+        except Exception:
+            return ""
+
+    def _is_gm_form_src(self, src):
+        s = (src or "").lower()
+        return any(m in s for m in self.GM_FORM_URL_MARKERS)
+
+    def _pick_gm_iframe(self, iframes, expected_url=None):
+        """
+        Elige el iframe correcto entre varios candidatos.
+        Prioridad:
+          1. iframe GM (src contiene gm_forms/gm_front/gm_admin) que además matchee expected_url.
+          2. cualquier iframe GM visible.
+          3. cualquier iframe GM (aunque no esté 'displayed' todavía — lazy).
+          4. último recurso: primer iframe visible (marca mismatch aguas arriba).
+        Devuelve (iframe|None, es_gm: bool).
+        """
+        exp = (expected_url or "").strip().lower()
+        gm_visible, gm_any, first_visible = [], [], None
+        for f in (iframes or []):
+            src = self._iframe_src_of(f)
+            try:
+                disp = f.is_displayed()
+            except Exception:
+                disp = False
+            if disp and first_visible is None:
+                first_visible = f
+            if self._is_gm_form_src(src):
+                gm_any.append((f, src))
+                if disp:
+                    gm_visible.append((f, src))
+        # 1. GM que matchea expected
+        if exp:
+            for bucket in (gm_visible, gm_any):
+                for f, src in bucket:
+                    if exp in src.lower():
+                        return f, True
+        # 2/3. cualquier GM (visible primero)
+        if gm_visible:
+            return gm_visible[0][0], True
+        if gm_any:
+            return gm_any[0][0], True
+        # 4. último recurso
+        return first_visible, False
+
     # Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
     # Si el ID del mapping no se encuentra en el DOM, se prueba el alias visid.
     # Agregar aquí si en la migración aparecen nuevos IDs que difieren del estándar actual.
@@ -153,6 +209,8 @@ class BaseFormFiller:
         self.SCREENSHOT_DIR = None
         self.RESULTADOS_PATH = None
         self.RUN_NUMBER = None
+        # Resumen por formulario de la última corrida (lo consume la UI para el modal detallado).
+        self.run_summary = {"ok": 0, "fail": 0, "total": 0, "fail_rows": []}
         self.driver = None
         self.screenshot_manager = None
         
@@ -305,19 +363,82 @@ class BaseFormFiller:
         key = f"Paso{step}::{normalized_id}"
         self.current_row_field_values[key] = text_value
 
+    # Valores de ?model= que NO son modelos (son servicios/secciones): no deben registrarse
+    # como "modelo elegido". Si el form igual tiene un dropdown de modelos, ese valor gana.
+    _NON_MODEL_URL_TOKENS = (
+        "posventa", "postventa", "pos venta", "onstar", "servicio", "service",
+        "agendamiento", "seminuevos", "seminovos", "revision", "revisao",
+        "testdrive", "test drive", "cotizacion", "cotizar", "contacto", "contato",
+        "oferta", "raq", "suscripcion", "renovacion", "financiamiento", "repuestos",
+        "accesorios", "acessorios", "acessilab", "garantia", "posventa gral", "gral",
+    )
+
+    def _model_from_form_url(self):
+        """Extrae el ?model= de la URL del FORM (iframe), no de la landing. Devuelve '' si el
+        valor es un servicio/sección (no un modelo real)."""
+        from urllib.parse import urlsplit, parse_qs, unquote
+        for url in (getattr(self, "expected_form_url", "") or "",
+                    getattr(self, "_url_form_encontrado", "") or "",
+                    self.driver.current_url if self.driver else ""):
+            try:
+                raw = parse_qs(urlsplit(url).query).get("model", [""])[0]
+                val = unquote(raw).replace("+", " ").strip()
+            except Exception:
+                val = ""
+            if not val:
+                continue
+            norm = self._normalize_text(val)
+            if any(tok in norm for tok in (self._normalize_text(t) for t in self._NON_MODEL_URL_TOKENS)):
+                continue  # es un servicio, no un modelo
+            return val
+        return ""
+
+    def _tracked_model_value(self):
+        """Modelo elegido en un dropdown del form (si se registró en esta fila)."""
+        val = ""
+        for key, v in (self.current_row_field_values or {}).items():
+            raw_id = key.split("::", 1)[1] if "::" in key else key
+            if raw_id in ("models", "model") and str(v).strip():
+                val = str(v).strip()
+        return val
+
+    def _effective_model_value(self):
+        """Modelo efectivo para la columna 'Modelo' de resultados:
+        1) el elegido en el dropdown de modelos del form (si hay), o
+        2) el ?model= de la URL del form (si es un modelo real, no un servicio)."""
+        return self._tracked_model_value() or self._model_from_form_url()
+
+    @staticmethod
+    def _short_fail_reason(result_text):
+        """Motivo corto del fallo para el resumen rápido (modal/email). p.ej. 'form ausente'."""
+        t = (result_text or "").lower()
+        if "formulario ausente" in t:
+            return "form ausente"
+        if "formulario incorrecto" in t or "distinto al esperado" in t:
+            return "form incorrecto"
+        if "link issue typ" in t:
+            return "link issue TYP"
+        if "error landing" in t or "404" in t:
+            return "landing 404"
+        if "ty page" in t or "confirmación ty" in t or "confirmacion ty" in t or "sin confirmaci" in t:
+            return "sin TYP"
+        if "event_id" in t:
+            return "event_id"
+        if "dropdown no encontrado" in t:
+            return "dropdown no encontrado"
+        if "campos sin completar" in t:
+            return "campos sin completar"
+        if "error completando" in t or "error general" in t:
+            return "error al completar"
+        return "error"
+
     def _record_model_from_url_if_missing(self):
-        """Si ningún select de Modelo quedó registrado en la fila, usar el ?model= de la URL."""
+        """Si ningún select de Modelo quedó registrado en la fila, usar el ?model= del FORM."""
         for key in self.current_row_field_values:
             raw_id = key.split("::", 1)[1] if "::" in key else key
             if raw_id in ("models", "model"):
                 return  # ya se registró un modelo (del Excel o aleatorio)
-        try:
-            from urllib.parse import urlsplit, parse_qs, unquote
-            url = self.driver.current_url or ""
-            raw = parse_qs(urlsplit(url).query).get("model", [""])[0]
-            url_model = unquote(raw).replace("+", " ").strip()
-        except Exception:
-            url_model = ""
+        url_model = self._model_from_form_url()
         if not url_model:
             return
         model_id = "model"
@@ -1118,6 +1239,15 @@ class BaseFormFiller:
                         return btn
             except Exception:
                 continue
+
+        # Barrido genérico final: cualquier button/a/role=button visible cuyo texto/atributos
+        # indiquen "Siguiente/Seguinte/Continuar/Próximo/Next" (cubre markups fuera de la lista).
+        try:
+            for btn in self.driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']"):
+                if self._is_next_button_element(btn):
+                    return btn
+        except Exception:
+            pass
         return None
 
     def _has_next_button(self):
@@ -1556,6 +1686,15 @@ class BaseFormFiller:
 
         for iteration in range(max_iter):
             paso = iteration + 1
+            # Captura del paso VACÍO (para pasos posteriores; el paso 1 ya lo capturó el flujo
+            # principal como form_vacio antes del clic vacío).
+            if iteration > 0 and self.screenshot_manager:
+                try:
+                    self.screenshot_manager.take_form_screenshot(
+                        current_ss_number, f"vacio_paso{paso}", full_page=True)
+                    print(f"Captura form_vacio_paso{paso} tomada")
+                except Exception:
+                    pass
             # Clic preliminar para forzar validación y activar mensajes de error de este paso
             try:
                 # Buscar el botón Siguiente o Enviar visible en este paso.
@@ -1649,9 +1788,14 @@ class BaseFormFiller:
         self._revalidar_campos_llenos()
 
         self.reposition_to_form(self.expected_form_url)
-        form_completado_name = f"form_completado_{current_ss_number}.png"
-        self.screenshot_manager.take_form_screenshot(current_ss_number, "completado", full_page=True)
-        print("Captura 2/3: Formulario completado")
+        # Si el form fue multipaso, el 'completado' final es el ÚLTIMO paso: nombrarlo con su
+        # número (completado_paso3) para que sea consistente con completado_paso1/paso2 y no
+        # quede ambiguo. Para forms de 1 paso queda 'completado' a secas.
+        _last_step = int(getattr(self, "_current_step", 1) or 1)
+        _stage_fin = f"completado_paso{_last_step}" if _last_step > 1 else "completado"
+        form_completado_name = self.screenshot_manager.fname("form", _stage_fin, current_ss_number)
+        self.screenshot_manager.take_form_screenshot(current_ss_number, _stage_fin, full_page=True)
+        print(f"Captura 2/3: Formulario completado ({_stage_fin})")
         return form_completado_name
 
     def fill_form_fields(self, form_data):
@@ -2204,20 +2348,29 @@ class BaseFormFiller:
         if not expected_form_url:
             return None
 
-        _url = expected_form_url  # capturar para usar en lambda
+        _url = expected_form_url
+
+        def _find_gm_now(d):
+            """Devuelve el iframe GM (o el que matchea expected) si YA está en el DOM, si no None."""
+            try:
+                iframes = d.find_elements(By.TAG_NAME, "iframe")
+            except Exception:
+                return None
+            cand, _es_gm = self._pick_gm_iframe(iframes, expected_url=_url)
+            # Solo aceptar en la espera si es GM o matchea el esperado; el fallback "primer
+            # iframe visible" se resuelve más tarde en el loop principal (marca mismatch).
+            if cand is not None and (_es_gm or (_url and _url.lower() in self._iframe_src_of(cand).lower())):
+                return cand
+            return None
 
         max_attempts = 2
         for attempt in range(max_attempts):
             try:
-                # Esperar específicamente el iframe del formulario (no cualquier iframe)
+                # Esperar el iframe GM del formulario (no cualquier iframe). Espera corta el
+                # primer intento para ser rápido; si no aparece, pre-scroll (footer) y reintento.
+                _wait_s = 6 if attempt == 0 else 8
                 try:
-                    target_iframe = WebDriverWait(self.driver, 8).until(
-                        lambda d: next(
-                            (f for f in d.find_elements(By.TAG_NAME, "iframe")
-                             if _url in (f.get_attribute("src") or "")),
-                            None
-                        )
-                    )
+                    target_iframe = WebDriverWait(self.driver, _wait_s).until(_find_gm_now)
                 except TimeoutException:
                     target_iframe = None
 
@@ -2282,28 +2435,20 @@ class BaseFormFiller:
                 return True
 
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-            target_iframe = None
-            
-            for iframe in iframes:
-                try:
-                    src = iframe.get_attribute("src")
-                    if src and expected_form_url in src:
-                        target_iframe = iframe
-                        break
-                except:
-                    continue
-            
-            if target_iframe:
+            # Priorizar SIEMPRE el iframe GM (gm_forms/gm_front/gm_admin) que matchee el esperado.
+            target_iframe, _es_gm = self._pick_gm_iframe(iframes, expected_url=expected_form_url)
+
+            if target_iframe is not None:
                 self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", target_iframe)
                 time.sleep(1)
                 self.driver.switch_to.frame(target_iframe)
                 if self.screenshot_manager:
                     self.screenshot_manager.current_frame = target_iframe
-                return True
+                return _es_gm or (expected_form_url.lower() in self._iframe_src_of(target_iframe).lower())
             else:
                 self.driver.switch_to.frame(self.driver.find_elements(By.TAG_NAME, "iframe")[0])
                 return False
-                
+
         except Exception as e:
             print(f"Error al reposicionar: {e}")
             try:
@@ -2311,7 +2456,48 @@ class BaseFormFiller:
             except:
                 pass
             return False
-    
+
+    def _reload_form_iframe(self, expected_form_url):
+        """Recarga SOLO el iframe del formulario (no toda la landing) y deja el driver
+        posicionado y con el contexto cambiado adentro del iframe recargado.
+        Evita tener que scrollear toda la landing de nuevo en cada reintento.
+        Devuelve True si logró recargar y reposicionar sobre un iframe GM."""
+        try:
+            self.driver.switch_to.default_content()
+        except Exception:
+            pass
+        try:
+            iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+            target_iframe, es_gm = self._pick_gm_iframe(iframes, expected_url=expected_form_url)
+            if target_iframe is None:
+                return False
+            # Recargar el documento del iframe. Preferimos re-setear el src (fuerza recarga
+            # limpia); si no hay src usable, entramos y hacemos location.reload().
+            src = self._iframe_src_of(target_iframe)
+            self.driver.execute_script(
+                "arguments[0].scrollIntoView({block:'center'});", target_iframe)
+            time.sleep(0.3)
+            if src and src.startswith("http"):
+                self.driver.execute_script(
+                    "arguments[0].src = arguments[0].src;", target_iframe)
+            else:
+                self.driver.switch_to.frame(target_iframe)
+                self.driver.execute_script("location.reload();")
+                self.driver.switch_to.default_content()
+            print("↻ Recargado solo el iframe del formulario (sin recargar la landing)")
+            time.sleep(2)
+            # Reposicionar sobre el iframe (puede ser un elemento nuevo tras la recarga).
+            ok = self.reposition_to_form(expected_form_url)
+            self.wait_for_form_ready_in_iframe()
+            return bool(ok or es_gm)
+        except Exception as e:
+            print(f"No se pudo recargar solo el iframe: {e}")
+            try:
+                self.driver.switch_to.default_content()
+            except Exception:
+                pass
+            return False
+
     def pre_scroll_for_dynamic_content(self):
         """Realiza pre-scroll disparando eventos de scroll para activar IntersectionObserver y lazy-loading."""
         total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
@@ -2366,6 +2552,55 @@ class BaseFormFiller:
         except Exception as _e:
             print(f"#contact-by-form no encontrado: {_e}")
 
+    def _slug_for(self, landing_url, form_url):
+        """Slug corto y legible para nombrar las capturas de un form (siempre el mismo para el
+        mismo form). Toma el último segmento significativo de la URL del form (o de la landing),
+        p.ej. '.../gm_front/form/flotas-pesados?model=...' → 'flotas-pesados'."""
+        from urllib.parse import urlsplit
+        for url in (form_url or "", landing_url or ""):
+            try:
+                path = urlsplit(str(url)).path
+            except Exception:
+                path = ""
+            segs = [s for s in path.split("/") if s and s.lower() not in ("form", "forms", "gm_front", "gm_forms", "gm_admin")]
+            if segs:
+                slug = segs[-1]
+                # Limpiar a algo apto para nombre de archivo.
+                slug = "".join(c if (c.isalnum() or c in "-_") else "-" for c in slug).strip("-_")
+                slug = slug.lower()[:30].strip("-_")
+                if slug:
+                    return slug
+        return ""
+
+    def _detect_landing_error(self, landing_url):
+        """Detecta si la landing devolvió 404 / página no encontrada. Heurística por título y
+        encabezados visibles (Selenium no expone el status HTTP directamente). Devuelve un
+        texto con el motivo, o '' si la landing cargó bien."""
+        patterns = (
+            "404", "not found", "page not found",
+            "no encontrada", "no encontrado", "no existe",
+            "não encontrada", "nao encontrada", "não encontrado", "nao encontrado",
+        )
+        try:
+            title_raw = self.driver.title or ""
+        except Exception:
+            title_raw = ""
+        title = title_raw.lower()
+        for p in patterns:
+            if p in title:
+                return f"Landing 404 / no encontrada (título: {title_raw[:80]!r})"
+        try:
+            heads = self.driver.execute_script(
+                "return Array.prototype.slice.call(document.querySelectorAll('h1,h2'),0,6)"
+                ".map(function(e){return (e.innerText||'');}).join(' | ').toLowerCase();"
+            ) or ""
+        except Exception:
+            heads = ""
+        for p in patterns:
+            if p in heads:
+                return f"Landing 404 / no encontrada (encabezado contiene '{p}')"
+        return ""
+
     def process_landing_page(self, landing_url, ss_counter, take_screenshot=True):
         """Procesa la página de destino inicial"""
         try:
@@ -2374,6 +2609,22 @@ class BaseFormFiller:
             pass
         landing_url = self._sanitize_url(landing_url)
         self.driver.get(landing_url)
+
+        # Detección de landing rota (404 / página no encontrada): se marca para el Excel.
+        try:
+            _issue = self._detect_landing_error(landing_url)
+            if _issue:
+                self._landing_issue = _issue
+                print(f"⚠ Landing con problema: {_issue}")
+        except Exception:
+            pass
+
+        # Tras navegar, el sitio suele re-activar la ventana → re-aplicar 'sin foco' (background).
+        try:
+            from browser_manager import reapply_background_no_activate
+            reapply_background_no_activate(self.driver)
+        except Exception:
+            pass
 
         self.handle_cookie_popups()
 
@@ -2419,7 +2670,7 @@ class BaseFormFiller:
             except Exception as e:
                 print(f"Chevrolet BR: no se encontró #contact-by-form — {e}")
 
-        form_inserto_name = f"landing_inicial_{ss_counter}.png"
+        form_inserto_name = self.screenshot_manager.fname("landing", "inicial", ss_counter) if self.screenshot_manager else f"landing_inicial_{ss_counter}.png"
         if take_screenshot:
             self.screenshot_manager.url_landing = landing_url
             self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
@@ -2556,20 +2807,64 @@ class BaseFormFiller:
         except Exception:
             pass
 
-        # 2. XPath fallbacks — todos en un único wait via |
+        # 2. XPath por texto (ES/PT) — cubre botones sin clase 'submit' pero con texto de envío.
+        #    Se hace en minúsculas via translate() para no depender de mayúsculas/acentos.
+        _low = ("translate(normalize-space(.),"
+                "'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÃÕÂÊÔÇ','abcdefghijklmnopqrstuvwxyzaeiouaoaeoc')")
+        _send_words = ("enviar", "submit", "solicitar", "finalizar", "confirmar",
+                       "quero", "cadastrar", "registrar", "receber")
+        _txt_cond = " or ".join(f"contains({_low}, '{w}')" for w in _send_words)
         xpath_combined = (
-            "//button[contains(@class,'submit')]"
-            "[.//span[contains(normalize-space(.),'Enviar')] or contains(normalize-space(.),'Enviar')]"
-            " | //button[contains(text(),'Enviar') or contains(text(),'Submit')]"
-            " | //button[contains(@class,'submit') and not(contains(@class,'next'))]"
+            "//button[contains(@class,'submit') and not(contains(@class,'next'))]"
+            f" | //button[({_txt_cond}) and not(contains(@class,'next')) and not(contains(@class,'cookie'))]"
+            f" | //button[@type='submit']"
+            f" | //input[@type='submit']"
+            f" | //*[@role='button'][{_txt_cond}]"
+            f" | //a[contains(@class,'submit')][{_txt_cond}]"
         )
         try:
             btn = WebDriverWait(self.driver, wait_seconds).until(
                 EC.element_to_be_clickable((By.XPATH, xpath_combined))
             )
-            return btn, "xpath:combined"
+            return btn, "xpath:texto"
         except Exception:
-            return None, None
+            pass
+
+        # 3. Fallback genérico: barrer TODOS los botones/inputs submit visibles dentro de un <form>
+        #    y quedarse con el que no sea 'Siguiente' ni cierre/cookie. Esto ataca el bug de
+        #    "no encuentra el botón que sí está" cuando el markup no matchea los selectores fijos.
+        try:
+            candidatos = self.driver.find_elements(
+                By.CSS_SELECTOR,
+                "form button, form input[type='submit'], form [role='button']")
+            if not candidatos:
+                candidatos = self.driver.find_elements(
+                    By.CSS_SELECTOR, "button, input[type='submit'], [role='button']")
+            for el in candidatos:
+                try:
+                    if not (el.is_displayed() and el.is_enabled()):
+                        continue
+                    if self._is_next_button_element(el):
+                        continue
+                    blob = self._normalize_text(
+                        " ".join(filter(None, [
+                            el.text or "",
+                            el.get_attribute("class") or "",
+                            el.get_attribute("aria-label") or "",
+                            el.get_attribute("id") or "",
+                            el.get_attribute("type") or "",
+                        ])))
+                    if any(bad in blob for bad in ("cookie", "cerrar", "close", "aceptar cookies", "fechar")):
+                        continue
+                    # Es un submit real si type=submit, o su texto/atributos sugieren envío.
+                    _is_type_submit = (el.get_attribute("type") or "").lower() == "submit"
+                    if _is_type_submit or any(w in blob for w in _send_words):
+                        return el, "scan:form"
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return None, None
 
     def fill_fields_present(self, form_data, field_mapping=None):
         """
@@ -4904,13 +5199,14 @@ class BaseFormFiller:
             except Exception as _cta_e:
                 print(f"Error investigando CTA en TY: {_cta_e}")
 
-            # TY div detectado — capturar TY Page
+            # TY div detectado — capturar la TY ACOTADA al área del form (muestra "Solicitud
+            # enviada"), NO toda la landing (para eso están landing_inicial y landing_final).
             self.driver.switch_to.default_content()
             print("Salido del contexto iframe")
             self.reposition_to_form(expected_form_url)
-            ty_page_name = f"landing_typage_{current_ss_number}.png"
-            self.screenshot_manager.take_landing_screenshot(current_ss_number, "typage")
-            print("Captura 3/3: TY Page (página completa)")
+            ty_page_name = self.screenshot_manager.fname("form", "typage", current_ss_number)
+            self.screenshot_manager.take_form_screenshot(current_ss_number, "typage", full_page=True)
+            print("Captura 3/3: TY Page (área del formulario)")
             return result_text, ty_page_name
 
         except Exception as e:
@@ -4973,6 +5269,8 @@ class BaseFormFiller:
             ss_counter = 1
             _total_leads = max(0, sheet.max_row - 1)
             _done_leads = 0
+            # Resumen autoritativo por formulario (lo lee la UI para el modal / email).
+            self.run_summary = {"ok": 0, "fail": 0, "total": _total_leads, "fail_rows": []}
 
             # Encabezados SIN filtrar los vacíos: los índices tienen que alinear con la fila
             raw_headers = [cell.value for cell in sheet[1]]
@@ -5020,10 +5318,13 @@ class BaseFormFiller:
                 ty_page_name = ""
                 self._url_form_encontrado = ""
                 self._errores_ss_taken = False
+                self._landing_issue = ""   # 404 / error de carga de la landing (se llena en process_landing_page)
                 # Resetear URLs y frame en screenshot_manager al inicio de cada fila
                 if self.screenshot_manager:
                     self.screenshot_manager.url_form_esperado   = expected_form_url
                     self.screenshot_manager.url_form_encontrado = ""
+                    # Slug del form para los nombres de captura (siempre el mismo dentro de la fila).
+                    self.screenshot_manager.form_slug = self._slug_for(landing_url, expected_form_url)
                     self.screenshot_manager.current_frame       = None
 
                 print(f"\n Procesando fila {i}: {landing_url}")
@@ -5072,18 +5373,21 @@ class BaseFormFiller:
                     if use_iframe:
                         target_iframe = self.find_and_position_to_form(expected_form_url)
                         if not target_iframe:
-                            form_url_mismatch = True
-                            print("Formulario esperado no encontrado, buscando cualquier iframe disponible...")
+                            print("Formulario esperado no encontrado, buscando iframe GM disponible...")
                             try:
-                                for _iframe in self.driver.find_elements(By.TAG_NAME, "iframe"):
-                                    try:
-                                        if _iframe.is_displayed():
-                                            target_iframe = _iframe
-                                            break
-                                    except Exception:
-                                        continue
+                                _cand, _es_gm = self._pick_gm_iframe(
+                                    self.driver.find_elements(By.TAG_NAME, "iframe"),
+                                    expected_url=expected_form_url)
                             except Exception:
-                                pass
+                                _cand, _es_gm = None, False
+                            if _cand is not None:
+                                target_iframe = _cand
+                                # Si es un iframe GM (aunque su src no matchee 1:1 el Excel) no lo
+                                # tratamos como mismatch duro: es el form correcto de todos modos.
+                                if not _es_gm:
+                                    form_url_mismatch = True
+                            else:
+                                form_url_mismatch = True
                         if target_iframe:
                             if form_url_mismatch:
                                 print("Usando iframe disponible (URL de formulario no coincide con Excel)")
@@ -5136,6 +5440,14 @@ class BaseFormFiller:
 
                     # 3. Esperar a que el formulario esté listo
                     self.wait_for_form_ready_in_iframe()
+
+                    # 3a. Captura del FORMULARIO VACÍO (área del form, antes de tocar nada).
+                    if self.screenshot_manager:
+                        try:
+                            self.screenshot_manager.take_form_screenshot(ss_counter, "vacio", full_page=True)
+                            print("Captura form_vacio tomada (formulario vacío inicial)")
+                        except Exception as _e:
+                            print(f"  ⚠ Captura form_vacio: {_e}")
 
                     # Detección T3/AEM temprana: los forms 2.0 son más largos → capturas full-page
                     self._is_aem = self._is_aem_adaptive_form()
@@ -5218,7 +5530,7 @@ class BaseFormFiller:
                                     try:
                                         self.driver.switch_to.default_content()
                                         self.reposition_to_form(expected_form_url)
-                                        ty_page_name = f"landing_typage_{ss_counter}.png"
+                                        ty_page_name = self.screenshot_manager.fname("landing", "typage", ss_counter)
                                         self.screenshot_manager.take_landing_screenshot(ss_counter, "typage")
                                     except Exception as _cap_e:
                                         print(f"Error capturando evidencia event_id: {_cap_e}")
@@ -5229,7 +5541,21 @@ class BaseFormFiller:
                                 print(f"  Error en retry event_id: {_ev_e}")
                                 result_text = f"Error event_id: fallo en reintento — {_ev_e}"
 
-                        # 5c. Retry genérico: cualquier fallo que NO sea event_id → recargar landing + rellenar + reenviar
+                        # 5c-1. Retry rápido: recargar SOLO el iframe del formulario (no toda la
+                        #       landing), rellenar de nuevo y reenviar, quedando posicionado en el form.
+                        if ty_page_name is None and not _event_id_retry_done and use_iframe:
+                            print(f"  ↺ Intento 2/2 (rápido): recargando solo el iframe (motivo: {result_text!r})...")
+                            try:
+                                if self._reload_form_iframe(expected_form_url):
+                                    if _is_libro_reclamaciones:
+                                        form_completado_name = self._fill_libro_reclamaciones_direct(form_data)
+                                    else:
+                                        form_completado_name = self.fill_form_fields(form_data)
+                                    result_text, ty_page_name = self.submit_and_verify_form(ss_counter, expected_form_url)
+                            except Exception as _rl_e:
+                                print(f"  Retry por recarga de iframe falló, se recargará la landing: {_rl_e}")
+
+                        # 5c-2. Retry genérico (2º fallback): recargar toda la landing + rellenar + reenviar
                         if ty_page_name is None and not _event_id_retry_done:
                             print(f"  ↺ Intento 2/2: recargando landing y rellenando de nuevo (motivo: {result_text!r})...")
                             try:
@@ -5241,15 +5567,11 @@ class BaseFormFiller:
                                 _retry_iframe = self.find_and_position_to_form(expected_form_url)
                                 if not _retry_iframe and form_url_mismatch:
                                     try:
-                                        for _f in self.driver.find_elements(By.TAG_NAME, "iframe"):
-                                            try:
-                                                if _f.is_displayed():
-                                                    _retry_iframe = _f
-                                                    break
-                                            except Exception:
-                                                continue
+                                        _retry_iframe, _ = self._pick_gm_iframe(
+                                            self.driver.find_elements(By.TAG_NAME, "iframe"),
+                                            expected_url=expected_form_url)
                                     except Exception:
-                                        pass
+                                        _retry_iframe = None
                                 if _retry_iframe:
                                     self.driver.switch_to.frame(_retry_iframe)
                                 else:
@@ -5291,7 +5613,16 @@ class BaseFormFiller:
                     # 6. Volver al contexto principal
                     self.driver.switch_to.default_content()
                     print("Vuelto al contexto principal")
-                    
+
+                    # 6b. Captura de LANDING COMPLETA post-envío (aparezca o no la thank-you page).
+                    if self.screenshot_manager:
+                        try:
+                            self.screenshot_manager.current_frame = None
+                            self.screenshot_manager.take_landing_screenshot(ss_counter, "final")
+                            print("Captura landing_final tomada (post-envío)")
+                        except Exception as _e:
+                            print(f"  ⚠ Captura landing_final: {_e}")
+
                 except Exception as e:
                     result_text = f" Error general: {e}"
                     print(result_text)
@@ -5308,6 +5639,15 @@ class BaseFormFiller:
                 # Determinar si el lead se envió OK antes de agregar prefijos
                 _lead_ok = (result_text == "Lead enviado correctamente")
 
+                # Landing rota (404): cualquier problema de la landing es fallo del form.
+                _landing_issue = getattr(self, "_landing_issue", "")
+                if _landing_issue:
+                    _prev = (result_text or "").strip()
+                    result_text = f"[Error Landing] {_landing_issue}"
+                    if _prev and not _prev.lower().startswith("lead enviado"):
+                        result_text += f" || {_prev}"
+                    _lead_ok = False
+
                 if form_url_mismatch:
                     _found_for_msg = getattr(self, "_url_form_encontrado", "") or ""
                     _lead_str = "lead enviado igualmente" if _lead_ok else "lead no enviado"
@@ -5317,13 +5657,14 @@ class BaseFormFiller:
                         # SÍ hay un formulario inserto (iframe con src), pero es distinto al esperado.
                         # "Formulario no inserto" se reserva para cuando NO hay ningún form.
                         _mismatch_msg = (
-                            f"[Error Form] Formulario distinto al esperado — "
+                            f"[Error Form] Formulario incorrecto (distinto al esperado) — "
                             f"URL esperada: {expected_form_url or '?'} | "
                             f"URL encontrada: {_found_for_msg} | {_lead_str}"
                         )
                     else:
+                        # No hay NINGÚN form GM en la landing (iframe sin src / inexistente).
                         _mismatch_msg = (
-                            f"[Error Form] Formulario no inserto — "
+                            f"[Error Form] FORMULARIO AUSENTE (no hay form en la landing) — "
                             f"URL esperada: {expected_form_url or '?'} | "
                             f"URL encontrada: ninguno | {_lead_str}"
                         )
@@ -5350,7 +5691,17 @@ class BaseFormFiller:
                 _no_encontrados = getattr(self, "_campos_dropdown_no_encontrados", [])
                 if _no_encontrados:
                     result_text = (result_text or "") + f" | Dropdown no encontrado: {'; '.join(_no_encontrados)}"
+                    # Un dropdown que no se pudo completar es un fallo de campo → NO es PASS.
+                    _lead_ok = False
+                # Issue en el CTA/link de la TY page → columna LINK ISSUE en rojo y el lead falla.
+                if getattr(self, "_link_issue_present", False):
+                    _li = getattr(self, "_link_issue", "") or ""
+                    result_text = (result_text or "") + f" | LINK ISSUE TYP: {_li}".rstrip()
+                    _lead_ok = False
                 sheet.cell(row=i, column=result_col).value = result_text
+                # OJO: NO se tocan las columnas de entrada (Modelo/Nombre/etc. las setea el
+                # usuario). El modelo realmente elegido queda en las columnas de tracking
+                # (PasoN::models / PasoN::model), para poder comparar pedido vs completado.
                 sheet.cell(row=i, column=form_inserto_col).value = form_inserto_name
                 sheet.cell(row=i, column=form_completado_col).value = form_completado_name if form_completado_name else "-"
                 sheet.cell(row=i, column=ty_page_col).value = ty_page_name if ty_page_name else "-"
@@ -5386,6 +5737,17 @@ class BaseFormFiller:
                     _cell.font = Font(color="FFFFFF", bold=True)
 
                 self.safe_save_workbook(wb, self.RESULTADOS_PATH)
+                # Acumular resumen por formulario (autoritativo, mismo criterio que el color).
+                try:
+                    if _lead_ok:
+                        self.run_summary["ok"] += 1
+                    else:
+                        self.run_summary["fail"] += 1
+                        # fila + motivo corto (para el resumen rápido del modal / email).
+                        self.run_summary["fail_rows"].append(
+                            {"row": i, "reason": self._short_fail_reason(result_text)})
+                except Exception:
+                    pass
                 _done_leads += 1
                 if progress_callback:
                     try:
@@ -5398,7 +5760,25 @@ class BaseFormFiller:
             print(f"Screenshots guardados en: {self.SCREENSHOT_DIR}")
             print(f"Resultados guardados en: {self.RESULTADOS_PATH}")
             print(f"Se capturaron {ss_counter-1} sets completos de screenshots")
-            
+
+            # Limpiar temporales de captura que hayan quedado sueltos (no deben viajar al email).
+            try:
+                import glob as _g
+                for _t in _g.glob(os.path.join(self.SCREENSHOT_DIR, "temp_*.png")):
+                    try:
+                        os.remove(_t)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # Garantizar que TODAS las capturas pesen < 50 MB (recomprime solo si se pasa).
+            try:
+                from screenshot_manager import enforce_screenshot_budget
+                enforce_screenshot_budget(self.SCREENSHOT_DIR, max_mb=48)
+            except Exception as _eb:
+                print(f"Aviso: no se pudo aplicar el presupuesto de capturas: {_eb}")
+
         except Exception as e:
             print(f"Error crítico: {e}")
         finally:
