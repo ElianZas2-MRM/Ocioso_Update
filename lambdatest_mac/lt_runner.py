@@ -2849,6 +2849,42 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
         except Exception:
             pass
 
+    # Fallback genérico: barrer TODOS los botones/inputs submit visibles dentro de un <form>
+    # y clickear el que no sea 'Siguiente' ni cierre/cookie. Ataca el caso de "no encuentra el
+    # botón que sí está" cuando el markup no matchea ninguno de los selectores fijos.
+    _send_words = ("enviar", "submit", "solicitar", "finalizar", "confirmar",
+                   "quero", "cadastrar", "registrar", "receber")
+    try:
+        _cands = driver.find_elements(
+            By.CSS_SELECTOR, "form button, form input[type='submit'], form [role='button']")
+        if not _cands:
+            _cands = driver.find_elements(
+                By.CSS_SELECTOR, "button, input[type='submit'], [role='button']")
+        for el in _cands:
+            try:
+                if not (el.is_displayed() and el.is_enabled()):
+                    continue
+                if _is_next_button_element(driver, el):
+                    continue
+                blob = _normalize_btn_text(" ".join(filter(None, [
+                    el.text or "", el.get_attribute("class") or "",
+                    el.get_attribute("aria-label") or "", el.get_attribute("id") or "",
+                    el.get_attribute("type") or "",
+                ])))
+                if any(bad in blob for bad in ("cookie", "cerrar", "close", "fechar")):
+                    continue
+                _is_type_submit = (el.get_attribute("type") or "").lower() == "submit"
+                if _is_type_submit or any(w in blob for w in _send_words):
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+                    time.sleep(0.3)
+                    _click_and_verify(driver, el, log)
+                    log("  ✓ Enviar clickeado (scan genérico del form)")
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+
     log("  ✗ No se encontró botón de envío")
     return False
 
@@ -2937,7 +2973,10 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
                       dashboard_url: str = "",
                       ty_cta: str = "",
                       link_issue: str = "", link_issue_present: bool = False):
-    """Escribe resultado con las mismas columnas que el desktop."""
+    """Escribe resultado con las mismas columnas que el desktop.
+    OJO: NO se tocan las columnas de entrada (Modelo/Nombre/etc. las setea el usuario). El
+    modelo elegido queda en las columnas de tracking (PasoN::models), para comparar pedido vs
+    completado."""
     resultado_cell = ws.cell(row=row_num, column=col_idx.get("Resultado", 1))
     resultado_cell.value = result_text
     if submitted:
@@ -3166,11 +3205,22 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
 
         if use_iframe:
             def _buscar_iframe():
-                for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
+                # Dos pasadas para no agarrar "el primero que aparezca": primero el iframe que
+                # matchea EXACTO la URL esperada del Excel; si no, cualquier iframe GM
+                # (gm_forms/gm_admin/gm_front). Evita tomar un iframe GM que no es el correcto
+                # cuando la landing tiene más de uno.
+                _exp = (lead.secure_url or "").strip()
+                _iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                if _exp:
+                    for iframe in _iframes:
+                        try:
+                            if _exp in (iframe.get_attribute("src") or ""):
+                                return iframe
+                        except Exception:
+                            continue
+                for iframe in _iframes:
                     try:
                         src = iframe.get_attribute("src") or ""
-                        if lead.secure_url and lead.secure_url.strip() in src:
-                            return iframe
                         if "gm_forms" in src or "gm_admin" in src or "gm_front" in src:
                             return iframe
                     except Exception:
@@ -3812,13 +3862,30 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             pass
 
     if result.get("form_url_mismatch"):
-        _found_str = result.get("iframe_url_found") or "ninguno"
+        _found_str = (result.get("iframe_url_found") or "").strip()
         _lead_str = "lead enviado igualmente" if result.get("submitted") else "lead no enviado"
-        result["result_text"] = (
-            f"[Error Form] Formulario no inserto — "
-            f"URL esperada: {lead.secure_url or '?'} | "
-            f"URL encontrada: {_found_str} | {_lead_str}"
-        )
+        if _found_str:
+            # SÍ se encontró/insertó un form (p.ej. gm_front en Mac/Safari en vez del gm_forms
+            # del Excel): es un form INCORRECTO/distinto al esperado, NO "no inserto".
+            result["result_text"] = (
+                f"[Error Form] Formulario incorrecto (distinto al esperado) — "
+                f"URL esperada: {lead.secure_url or '?'} | "
+                f"URL encontrada: {_found_str} | {_lead_str}"
+            )
+        else:
+            # No se encontró ningún form GM en la landing (iframe sin src / inexistente).
+            result["result_text"] = (
+                f"[Error Form] FORMULARIO AUSENTE (no hay form en la landing) — "
+                f"URL esperada: {lead.secure_url or '?'} | "
+                f"URL encontrada: ninguno | {_lead_str}"
+            )
+        result["submitted"] = False
+
+    # Issue en el CTA/link de la TY page → cuenta como fail (columna LINK ISSUE en rojo).
+    if result.get("link_issue_present") and not result.get("form_url_mismatch"):
+        _li = result.get("link_issue", "") or ""
+        _sent = "lead enviado igualmente" if result.get("submitted") else "lead no enviado"
+        result["result_text"] = f"[Error Form] LINK ISSUE TYP: {_li} | {_sent}"
         result["submitted"] = False
 
     return result
