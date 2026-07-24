@@ -80,6 +80,11 @@ def _abrev_paises(lista):
     return " ".join(_PAIS_ABREV.get(p, p[:2].upper()) for p in lista)
 
 
+# Firma del email. Va SIEMPRE al final (después de la tabla de URLs), no en el medio del cuerpo.
+_FIRMA_HTML = ('<div style="margin-top:18px;color:#222;">'
+               'Saludos,<br>Automación de Formularios</div>')
+
+
 def _cuerpo_a_html(texto, html_extra=""):
     """Convierte cuerpo de texto plano a HTML con fuente Segoe UI Emoji para Outlook clásico."""
     import html as _html
@@ -1242,8 +1247,7 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             for _sv in _sin_valor:
                 cuerpo += f"  • Línea {_sv['linea']} — {_url_short(_sv.get('url',''))}: {_sv.get('campos','')}\n"
 
-        cuerpo += "\nSaludos,\nAutomación de Formularios"
-
+        # La firma va DESPUÉS de la tabla de URLs (ver _encolar_email más abajo), no acá.
         _ok_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
         _err_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
         _url_table_html = _build_url_table_html(_ok_items + _err_items)
@@ -1277,7 +1281,7 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         destinatario = obtener_email_destinatario()
 
         try:
-            _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=_url_table_html)
+            _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=_url_table_html + _FIRMA_HTML)
         except Exception as e:
             print(f"❌ Error encolando email: {e}")
             return False
@@ -1431,8 +1435,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
                 for _sv in _items:
                     cuerpo += f"  • {_p} ({_nav}/{_vp}) — Línea {_sv['linea']}: {_sv.get('campos','')}\n"
 
-        cuerpo += "\nSaludos,\nAutomacion de Formularios"
-
+        # La firma va DESPUÉS de las tablas de URLs (ver _encolar_email más abajo), no acá.
         _consolidado_html = ""
         if detalles_url_pais:
             for _pais, _nav, _vp, _urls in detalles_url_pais:
@@ -1450,7 +1453,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             return False
 
         try:
-            _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=_consolidado_html)
+            _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=_consolidado_html + _FIRMA_HTML)
             return True
         except Exception as e_cola:
             print(f"❌ Error al encolar email: {e_cola}")

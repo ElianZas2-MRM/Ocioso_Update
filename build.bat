@@ -1,5 +1,19 @@
 @echo off
 REM -- Changelog -----------------------------------------------------------------
+REM Jul 2026: iframe GM: siempre priorizar src con gm_forms/gm_front/gm_admin (evita agarrar
+REM           el iframe equivocado cuando la landing tiene varios) — browsers y LambdaTest
+REM           CTA: mas selectores por texto ES/PT + barrido generico del <form> (fix "no
+REM           encuentra el boton que si esta"); retry recargando SOLO el iframe (no la landing)
+REM           Capturas: landing_inicial -> form_vacio -> form_errores -> form_completado -> TY
+REM           -> landing_final; sin capturas de landing completa en el medio; multipaso por paso
+REM           Foco: ventana real off-screen SIN robar foco via Win32 SW_SHOWNOACTIVATE (no headless)
+REM           Modal: progreso por FORMULARIOS (no sesiones) + mercados en ejecucion + filas con
+REM           error y motivo corto (form ausente / incorrecto / sin TYP / landing 404 / ...)
+REM           Errores: cualquier fallo del form = FAIL en Excel/UI/email (TYP no vista, form
+REM           incorrecto, landing 404, campo/dropdown sin completar). "FORMULARIO AUSENTE" si no
+REM           hay form; "Formulario incorrecto (distinto al esperado)" si es otro
+REM           Resultados: columna Modelo = modelo elegido en el dropdown o ?model= real del form
+REM           LambdaTest: NUNCA capturas (evidencia = video); mismo iframe GM / CTA / modelo
 REM Jul 2026: Nueva pestaña "Comparador Dealers": chequea region/ciudad/dealer/BAC/modelos
 REM           contra un Excel de dealers (fila de encabezado y columnas configurables,
 REM           múltiples forms por pasada, detección de duplicados y extras de forma jerárquica,

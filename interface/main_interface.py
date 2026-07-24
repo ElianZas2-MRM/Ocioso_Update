@@ -3048,7 +3048,7 @@ def iniciar_interfaz():
 
         title_lbl = tk.Label(title_info, text="Ejecutando...", font=("Segoe UI", 12, "bold"), bg=MODAL_BG, fg="white")
         title_lbl.pack(anchor="w")
-        subtitle_lbl = tk.Label(title_info, text=f"0/{total_sessions} mercado(s) completados", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
+        subtitle_lbl = tk.Label(title_info, text=f"Preparando… 0/{total_leads} forms", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
         subtitle_lbl.pack(anchor="w")
         rotate_icon()
         
@@ -3093,7 +3093,8 @@ def iniciar_interfaz():
         else:
             make_pill(badges_row, f" Mercados: {'Paralelo' if mercados_par else 'Secuencial'}", icon="link_lav.png")
             make_pill(badges_row, f" Excels: {'Paralelo' if excels_par else 'Secuencial'}", icon="gear_lav.png")
-        make_pill(badges_row, f" {total_sessions} mercado(s)", icon="monitor_lav.png")
+        _n_paises = len({_s["pais"] for _s in active_sessions_list})
+        make_pill(badges_row, f" {_n_paises} mercado(s) · {total_leads} forms", icon="monitor_lav.png")
 
         # Aviso durante la ejecución (se quita al completar)
         run_note = tk.Label(modal, text="⚠ No podés cerrar esta ventana mientras se ejecuta. Para correr otro test ahora, abrí otra ventana de la app.",
@@ -3109,11 +3110,13 @@ def iniciar_interfaz():
         # 3. Una barra de progreso por MERCADO (país). El nombre aparece una sola vez
         #    arriba de su barra; la barra se llena a medida que avanza.
         from collections import OrderedDict as _OrderedDict
-        _pais_totals = _OrderedDict()
+        _pais_totals = _OrderedDict()        # sesiones (dispositivos) por país
+        _pais_forms_total = {}               # formularios (leads) por país = suma de rows_count
         _pais_devices = {}
         for _s in active_sessions_list:
             _pais_totals[_s["pais"]] = _pais_totals.get(_s["pais"], 0) + 1
-            
+            _pais_forms_total[_s["pais"]] = _pais_forms_total.get(_s["pais"], 0) + int(_s.get("rows_count", 1) or 1)
+
             # Formatear el nombre del dispositivo para mostrar
             dev_name = _s.get("device") or ""
             if "·URL" in dev_name:
@@ -3168,35 +3171,47 @@ def iniciar_interfaz():
             devs_str = " — " + " / ".join(devs_list) if devs_list else ""
             display_name = f"{_p}{devs_str}"
             
+            _forms_tot = int(_pais_forms_total.get(_p, _tot) or _tot)
             tk.Label(_hdr, text=display_name, font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white").pack(side="left")
-            _stx = tk.Label(_hdr, text=f"0/{_tot} lead(s)", font=("Segoe UI", 8), bg=MODAL_BG, fg=TEXT_SECONDARY)
+            _stx = tk.Label(_hdr, text=f"0/{_forms_tot} forms", font=("Segoe UI", 8), bg=MODAL_BG, fg=TEXT_SECONDARY)
             _stx.pack(side="right")
             _cb = tk.Canvas(_row, height=8, bg="#35164D", highlightthickness=0)
             _cb.pack(fill="x", pady=(3, 0))
             _fl = _cb.create_rectangle(0, 0, 0, 8, fill="#F8C471", width=0)
+            # total     = sesiones (para saber cuándo el país terminó todas sus sesiones)
+            # forms_tot = formularios reales (lo que se muestra y lo que va al email)
             _pais_bars[_p] = {"canvas": _cb, "fill": _fl, "status": _stx,
-                              "total": _tot, "done": 0, "ok": 0, "fail": 0}
+                              "total": _tot, "done": 0,
+                              "forms_total": _forms_tot, "forms_ok": 0, "forms_fail": 0,
+                              "fail_rows": []}
 
-        # Fracción por sesión (para que la barra se llene también con el avance de leads)
-        _sess_frac = {}
+        # Progreso real por formulario: cada sesión reporta cuántos leads lleva hechos.
+        _sess_frac = {}          # fracción de la sesión (para animar la barra en vivo)
+        _sess_forms_done = {}    # nº de formularios completados por sesión (entero)
         _pais_of_sess = {_s["sess_id"]: _s["pais"] for _s in active_sessions_list}
+
+        def _forms_done_pais(pais):
+            ids = [sid for sid, pp in _pais_of_sess.items() if pp == pais]
+            return sum(int(_sess_forms_done.get(sid, 0)) for sid in ids)
 
         def _paint_pais(pais):
             b = _pais_bars.get(pais)
             if not b or not b["canvas"].winfo_exists():
                 return
             with _lock:
-                ids = [sid for sid, pp in _pais_of_sess.items() if pp == pais]
-                frac = sum(_sess_frac.get(sid, 0.0) for sid in ids) / max(1, b["total"])
-                done, tot, okc, failc = b["done"], b["total"], b["ok"], b["fail"]
+                ftot = max(1, b["forms_total"])
+                fdone = min(_forms_done_pais(pais), ftot)
+                frac = fdone / ftot
+                sdone, stot = b["done"], b["total"]
+                okc, failc = b["forms_ok"], b["forms_fail"]
             w = int(max(1, b["canvas"].winfo_width()) * max(0.0, min(1.0, frac)))
             b["canvas"].coords(b["fill"], 0, 0, w, 8)
-            if done >= tot:
+            if sdone >= stot:
                 col = "#F1948A" if failc else "#82E0AA"
                 b["canvas"].itemconfig(b["fill"], fill=col)
                 b["status"].config(text=f"✓ {okc} OK · {failc} error(es)", fg=col)
             else:
-                b["status"].config(text=f"{done}/{tot} lead(s) listos", fg=TEXT_SECONDARY)
+                b["status"].config(text=f"{fdone}/{b['forms_total']} forms", fg=TEXT_SECONDARY)
 
         _dev_label = {"desktop": None, "mac": "Mac LT (Safari)", "android": "Android LT"}
 
@@ -3222,15 +3237,43 @@ def iniciar_interfaz():
             except Exception:
                 pass
 
-            # Completar todas las barras por mercado
+            # Subtítulo final: total de formularios OK / con error.
+            try:
+                subtitle_lbl.config(text=f"{ok_total + fail_total}/{total_leads} forms  ·  "
+                                         f"{ok_total} OK · {fail_total} con error")
+            except Exception:
+                pass
+
+            # Completar todas las barras por mercado (contando FORMULARIOS)
+            _fail_detail_lines = []  # ("País", "fila 3, fila 7")
             for _p, b in _pais_bars.items():
                 if not b["canvas"].winfo_exists():
                     continue
-                _col = "#F1948A" if (b["fail"] or err_msg or detenido) else "#82E0AA"
+                _col = "#F1948A" if (b["forms_fail"] or err_msg or detenido) else "#82E0AA"
                 _wfull = max(1, b["canvas"].winfo_width())
                 b["canvas"].itemconfig(b["fill"], fill=_col)
                 b["canvas"].coords(b["fill"], 0, 0, _wfull, 8)
-                b["status"].config(text=f"✓ {b['ok']} OK · {b['fail']} error(es)", fg=_col)
+                b["status"].config(text=f"✓ {b['forms_ok']} OK · {b['forms_fail']} error(es)", fg=_col)
+                if b.get("fail_rows"):
+                    _parts = []
+                    for _fr in b["fail_rows"]:
+                        if isinstance(_fr, dict):
+                            _rn = _fr.get("row", "?")
+                            _rs = _fr.get("reason", "")
+                            _parts.append(f"fila {_rn} ({_rs})" if _rs else f"fila {_rn}")
+                        else:
+                            _parts.append(f"fila {_fr}")
+                    _fail_detail_lines.append((_p, ", ".join(_parts)))
+
+            # Detalle de filas con error (para ubicarlas rápido), por mercado.
+            if _fail_detail_lines:
+                _det = tk.Frame(modal, bg=MODAL_BG)
+                _det.pack(fill="x", padx=20, pady=(2, 0))
+                tk.Label(_det, text="Forms con error:", font=("Segoe UI", 8, "bold"),
+                         bg=MODAL_BG, fg="#F1948A").pack(anchor="w")
+                for _p, _rows_str in _fail_detail_lines:
+                    tk.Label(_det, text=f"   • {_p}: {_rows_str}", font=("Segoe UI", 8),
+                             bg=MODAL_BG, fg="#F1948A", wraplength=470, justify="left").pack(anchor="w")
 
             if err_msg:
                 tk.Label(modal, text=f"✕ {err_msg}", font=("Segoe UI", 8), bg=MODAL_BG, fg="#F1948A",
@@ -3267,15 +3310,26 @@ def iniciar_interfaz():
 
         # Estado compartido entre sesiones (thread-safe)
         _lock = threading.Lock()
+        # ok/fail acá cuentan FORMULARIOS (no sesiones); done cuenta sesiones terminadas.
         _st = {"ok": 0, "fail": 0, "done": 0, "err": ""}
+        _running_markets = set()   # mercados que están ejecutando ahora mismo
         _email_results = []  # entradas para el email consolidado / por país
         _email_lock = threading.Lock()
+
+        def _subtitle_text():
+            with _lock:
+                gdone = min(sum(int(v) for v in _sess_forms_done.values()), total_leads)
+                run = [p for p in _pais_totals if p in _running_markets]
+            run_str = ", ".join(run) if run else "—"
+            return f"Ejecutando: {run_str}  ·  {gdone}/{total_leads} forms"
         # LambdaTest Android suele permitir 1 sesión concurrente (device real): serializamos
         # SOLO las sesiones Android para que TODOS los países se ejecuten (en cola), sin que
         # una quede afuera. El resto (desktop / Mac) sigue en paralelo.
         _android_sem = threading.Semaphore(1)
 
-        def _bump(pais, sess_id=None, ok=0, fail=0, err=""):
+        def _bump(pais, sess_id=None, ok=0, fail=0, err="", fail_rows=None):
+            """Cierra una sesión. ok/fail son FORMULARIOS de esa sesión; fail_rows son los
+            números de fila (del Excel) que fallaron, para poder ubicarlos."""
             with _lock:
                 _st["ok"] += ok
                 _st["fail"] += fail
@@ -3284,15 +3338,19 @@ def iniciar_interfaz():
                     _st["err"] = err
                 if sess_id is not None:
                     _sess_frac[sess_id] = 1.0  # sesión terminada = barra de esa sesión llena
+                    _sess_forms_done[sess_id] = ok + fail  # forms procesados por esta sesión
                 b = _pais_bars.get(pais)
                 if b:
                     b["done"] += 1
-                    b["ok"] += ok
-                    b["fail"] += fail
-                done, total = _st["done"], total_sessions
+                    b["forms_ok"] += ok
+                    b["forms_fail"] += fail
+                    if fail_rows:
+                        b["fail_rows"].extend(fail_rows)
+                    if b["done"] >= b["total"]:
+                        _running_markets.discard(pais)
             def _u():
                 if modal.winfo_exists():
-                    subtitle_lbl.config(text=f"{done}/{total} mercado(s) completados")
+                    subtitle_lbl.config(text=_subtitle_text())
                     _paint_pais(pais)
             _ui(_u)
 
@@ -3322,9 +3380,13 @@ def iniciar_interfaz():
 
             _sid = sess["sess_id"]
 
+            with _lock:
+                _running_markets.add(pais)
+
             def _set_cur():
                 if modal.winfo_exists():
                     title_lbl.config(text="Ejecutando...")
+                    subtitle_lbl.config(text=_subtitle_text())
             _ui(_set_cur)
 
             try:
@@ -3341,7 +3403,12 @@ def iniciar_interfaz():
                     def _pcb(done, total):
                         with _lock:
                             _sess_frac[_sid] = (done / total) if total else 0.0
-                        _ui(lambda: _paint_pais(pais) if modal.winfo_exists() else None)
+                            _sess_forms_done[_sid] = int(done)   # forms reales completados
+                        def _u():
+                            if modal.winfo_exists():
+                                _paint_pais(pais)
+                                subtitle_lbl.config(text=_subtitle_text())
+                        _ui(_u)
                     form.run(progress_callback=_pcb)
                     if enviar_mail and not stop_event.is_set():
                         rp = getattr(form, "RESULTADOS_PATH", None)
@@ -3354,7 +3421,15 @@ def iniciar_interfaz():
                             if _email_modo == "por_pais":
                                 from interface.helpers_interface import enviar_email_resultados
                                 enviar_email_resultados(pais, rp, sd, browser=browser, viewport="fullscreen")
-                    _bump(pais, _sid, ok=1)
+                    # Resumen autoritativo por formulario (mismo criterio que colorea el Excel).
+                    _summ = getattr(form, "run_summary", None) or {}
+                    _ok = int(_summ.get("ok", 0))
+                    _fail = int(_summ.get("fail", 0))
+                    _frows = list(_summ.get("fail_rows", []) or [])
+                    if _ok == 0 and _fail == 0:
+                        # Excel sin filas procesadas: contar la sesión como 1 form OK para no romper totales.
+                        _ok = int(sess.get("rows_count", 1) or 1)
+                    _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_frows)
                 elif dtype == "mac":
                     sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_mac"))
                     import lt_controller  # type: ignore
@@ -3384,7 +3459,8 @@ def iniciar_interfaz():
                         _bump(pais, _sid, ok=_ok, fail=_fail)
             except Exception as e:
                 log_message(f"[ERROR] {pais}/{device}: {e}")
-                _bump(pais, _sid, fail=1, err=str(e)[:200])
+                # Crash de la sesión: contar como fallidos todos sus formularios.
+                _bump(pais, _sid, fail=int(sess.get("rows_count", 1) or 1), err=str(e)[:200])
 
         def _run_market(sessions):
             """Corre las sesiones de un mercado. Si mercados_par o excels_par están

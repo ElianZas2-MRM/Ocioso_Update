@@ -53,6 +53,163 @@ from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
 
+# ── Anti-robo-de-foco (Windows) ───────────────────────────────────────────────
+# En modo background NO usamos headless (los forms no se envían sin browser real), así que la
+# ventana existe de verdad. El problema: Chrome/Edge/Firefox al crearse — y al navegar — se
+# activan y roban el foco al usuario aunque estén fuera de pantalla. La solución robusta es,
+# vía Win32, mandar SW_SHOWNOACTIVATE + SetWindowPos(HWND_BOTTOM, SWP_NOACTIVATE) a TODAS las
+# ventanas del árbol de procesos del browser (hijas del driver), sin activarlas nunca.
+def _win_descendant_pids(root_pid):
+    """PIDs del proceso root + todos sus descendientes (el browser es hijo del driver)."""
+    if os.name != "nt":
+        return set()
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        TH32CS_SNAPPROCESS = 0x00000002
+
+        class PROCESSENTRY32(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", ctypes.c_char * 260),
+            ]
+
+        k32 = ctypes.windll.kernel32
+        snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if snap == -1:
+            return {root_pid}
+        parent_of = {}
+        try:
+            entry = PROCESSENTRY32()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+            if k32.Process32First(snap, ctypes.byref(entry)):
+                while True:
+                    parent_of[entry.th32ProcessID] = entry.th32ParentProcessID
+                    if not k32.Process32Next(snap, ctypes.byref(entry)):
+                        break
+        finally:
+            k32.CloseHandle(snap)
+
+        # BFS de descendientes
+        children = {}
+        for pid, ppid in parent_of.items():
+            children.setdefault(ppid, []).append(pid)
+        result = {root_pid}
+        stack = [root_pid]
+        while stack:
+            cur = stack.pop()
+            for ch in children.get(cur, []):
+                if ch not in result:
+                    result.add(ch)
+                    stack.append(ch)
+        return result
+    except Exception:
+        return {root_pid}
+
+
+def _win_defocus_pids(pids):
+    """Aplica SW_SHOWNOACTIVATE + SetWindowPos(HWND_BOTTOM, NOACTIVATE) a las ventanas
+    top-level pertenecientes a los PIDs dados. No-op silencioso si algo falla."""
+    if os.name != "nt" or not pids:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        SW_SHOWNOACTIVATE = 4
+        HWND_BOTTOM = 1
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+        SWP_NOACTIVATE = 0x0010
+
+        pid_set = set(pids)
+
+        EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def _cb(hwnd, _lparam):
+            try:
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                win_pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(win_pid))
+                if win_pid.value in pid_set:
+                    user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
+                    user32.SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                                        SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
+            except Exception:
+                pass
+            return True
+
+        user32.EnumWindows(EnumWindowsProc(_cb), 0)
+    except Exception:
+        pass
+
+
+def _start_no_activate_watchdog(service, seconds=8.0, interval=0.6):
+    """Durante la carga inicial el sitio puede re-activar la ventana varias veces; reaplicamos
+    el 'sin foco' en un thread daemon por unos segundos. Devuelve una función stop()."""
+    if os.name != "nt":
+        return lambda: None
+    try:
+        root_pid = service.process.pid
+    except Exception:
+        return lambda: None
+
+    stop_flag = {"stop": False}
+
+    def _loop():
+        import time as _t
+        pids = _win_descendant_pids(root_pid)
+        deadline = _t.time() + seconds
+        while not stop_flag["stop"] and _t.time() < deadline:
+            _win_defocus_pids(pids)
+            _t.sleep(interval)
+            # Refrescar el árbol de PIDs: el proceso de render del browser puede aparecer tarde.
+            pids = _win_descendant_pids(root_pid)
+
+    threading.Thread(target=_loop, daemon=True).start()
+    return lambda: stop_flag.__setitem__("stop", True)
+
+
+def _apply_background_no_activate(driver, service):
+    """Manda la ventana real del browser al fondo sin activarla (Windows). Se llama tras crear
+    el driver en modo background+no-headless. También arranca un watchdog corto."""
+    try:
+        pids = _win_descendant_pids(service.process.pid)
+        _win_defocus_pids(pids)
+    except Exception:
+        pass
+    stop = _start_no_activate_watchdog(service)
+    # Guardar el stop() por si se quiere cortar; y exponer un re-aplicador manual en el driver.
+    try:
+        driver._osocio_stop_no_activate = stop
+        driver._osocio_service = service
+    except Exception:
+        pass
+
+
+def reapply_background_no_activate(driver):
+    """Re-aplica el 'sin foco' bajo demanda (p. ej. tras la primera navegación). No-op si
+    el driver no fue creado en modo background+no-headless."""
+    try:
+        service = getattr(driver, "_osocio_service", None)
+        if service is None:
+            return
+        _win_defocus_pids(_win_descendant_pids(service.process.pid))
+    except Exception:
+        pass
+
+
 def _resolve_driver(local_name, drivers_dir):
     """Busca el driver en la carpeta local /drivers/. No descarga nada de internet."""
     local = os.path.join(drivers_dir, local_name)
@@ -247,6 +404,8 @@ class BrowserManager:
                 pass
             BrowserManager._fix_headless_user_agent(driver)
         _reg_pid(service)
+        if background and not headless:
+            _apply_background_no_activate(driver, service)
         return driver
 
     @staticmethod
@@ -306,6 +465,8 @@ class BrowserManager:
                 except Exception:
                     pass
 
+        if background and not headless:
+            _apply_background_no_activate(driver, service)
         return driver
 
     @staticmethod
@@ -344,4 +505,6 @@ class BrowserManager:
         if headless:
             BrowserManager._fix_headless_user_agent(driver)
         _reg_pid(service)
+        if background and not headless:
+            _apply_background_no_activate(driver, service)
         return driver
