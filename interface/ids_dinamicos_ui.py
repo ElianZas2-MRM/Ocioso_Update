@@ -1268,6 +1268,22 @@ def leer_campos_detectados(pais):
     return campos, str(data.get("ultima_deteccion") or "")
 
 
+def contar_campos_detectados(pais):
+    """Cantidad de campos nuevos detectados para un país (0 si no hay archivo)."""
+    campos, _ = leer_campos_detectados(pais)
+    return len(campos)
+
+
+def resumen_paises_con_detecciones(paises):
+    """Devuelve [(pais, cantidad), ...] solo para los países que tienen campos nuevos."""
+    resumen = []
+    for pais in paises:
+        cantidad = contar_campos_detectados(pais)
+        if cantidad:
+            resumen.append((pais, cantidad))
+    return resumen
+
+
 def quitar_campo_detectado(pais, field_id):
     """Saca un campo del reporte nuevos_campos_<pais>.json (ya fue configurado)."""
     ruta = os.path.join(JSON_DIR, f"nuevos_campos_{_pais_key(pais)}.json")
@@ -1461,6 +1477,30 @@ def _build_tab_campos_detectados(popup):
 
     Label(frame_top, textvariable=info_var, bg=APP_BG_COLOR, fg="#ffd38a", font=("Segoe UI", 9), anchor="w").pack(side=LEFT)
 
+    # Resumen de qué países tienen campos nuevos, para saber cuáles mirar sin ir uno por uno.
+    resumen_var = StringVar(value="")
+    lbl_resumen = Label(
+        popup,
+        textvariable=resumen_var,
+        bg=APP_BG_COLOR,
+        fg="#8fe3a3",
+        font=("Segoe UI", 9, "bold"),
+        anchor="w",
+        justify="left",
+        wraplength=760,
+    )
+    lbl_resumen.pack(fill="x", padx=20, pady=(6, 0), anchor="w")
+
+    def _actualizar_resumen():
+        resumen = resumen_paises_con_detecciones(paises_disponibles)
+        if not resumen:
+            lbl_resumen.config(fg="#aaa")
+            resumen_var.set("Sin campos nuevos pendientes en ningún país.")
+        else:
+            lbl_resumen.config(fg="#8fe3a3")
+            partes = [f"{pais} ({cantidad})" for pais, cantidad in resumen]
+            resumen_var.set("Países con campos nuevos: " + "   ".join(partes))
+
     ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=(10, 6))
 
     frame_lista_container = Frame(popup, bg=APP_BG_COLOR)
@@ -1495,6 +1535,8 @@ def _build_tab_campos_detectados(popup):
             except Exception:
                 pass
         filas.clear()
+
+        _actualizar_resumen()
 
         pais = pais_var.get().strip()
         campos, fecha = leer_campos_detectados(pais)
