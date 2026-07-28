@@ -31,6 +31,8 @@ a = Analysis(
         'utils.scheduling',
         'utils.aem_fill',
         'utils.ty_cta',
+        'utils.url_status',
+        'utils.excel_layout',
         'interface.main_interface',
         'interface.helpers_interface',
         'interface.weekly_scheduler',
