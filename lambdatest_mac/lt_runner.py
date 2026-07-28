@@ -45,6 +45,7 @@ except ImportError:
     _REQUESTS_OK = False
 
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
@@ -338,6 +339,23 @@ _PLACEHOLDER_KW = (
 )
 
 
+# Mapeo flexible de encabezados Excel → IDs HTML (compartido por el llenado y por la
+# comparación "pedido en el Excel" vs "lo que realmente quedó en el form")
+_HEADER_TO_IDS = {
+    "nombre":   ["firstname", "name"],
+    "nombres":  ["firstname", "name"],
+    "apellido": ["lastname"],
+    "apellidos":["lastname"],
+    "documento":["ci", "rut", "cpf", "document", "cnpj", "dni"],
+    "celular":  ["cellphone", "telephone", "telephone-mask", "phone"],
+    "teléfono": ["cellphone", "telephone", "telephone-mask", "phone"],
+    "telefono": ["cellphone", "telephone", "telephone-mask", "phone"],
+    "email":    ["email"],
+    "correo":   ["email"],
+    "modelo":   ["models", "model"],
+}
+
+
 def _is_placeholder(text: str) -> bool:
     t = (text or "").lower().strip()
     if not t or "--" in t:
@@ -462,13 +480,12 @@ def _fill_text_sendkeys(driver, element, value: str):
     puede mostrar el valor en el DOM sin que el estado interno de React lo registre
     ahí — send_keys pasa por el pipeline real de eventos de teclado y evita ese desync.
     """
-    try:
-        element.clear()
-    except Exception:
-        try:
-            driver.execute_script("arguments[0].value='';", element)
-        except Exception:
-            pass
+    # Si el campo no queda realmente vacío, send_keys concatena sobre lo que había
+    # ('ApellidoApellido', email duplicado) y el lead viaja corrupto → en ese caso se
+    # setea el valor por JS en vez de tipear.
+    if not _hard_clear_input(driver, element, log=lambda *_a, **_k: None):
+        _set_input_value_js(driver, element, str(value))
+        return
     try:
         driver.execute_script("arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element)
     except Exception:
@@ -541,13 +558,11 @@ def _fill_text_android(driver, element, value: str):
             driver.execute_script("arguments[0].click();", element)
         except Exception:
             pass
-    try:
-        element.clear()
-    except Exception:
-        try:
-            driver.execute_script("arguments[0].value='';", element)
-        except Exception:
-            pass
+    # En Android el clear() falla en silencio con campos enmascarados o de React: si no
+    # queda vacío, send_keys concatena y se envía el valor duplicado.
+    if not _hard_clear_input(driver, element, log=lambda *_a, **_k: None):
+        _set_input_value_js(driver, element, str(value))
+        return
     _send_keys_fast(element, value)
     try:
         driver.execute_script(
@@ -812,11 +827,11 @@ def _refill_brasil_doc_sendkeys(driver, field_mapping: list, pais: str,
                 if not els or not els[0].is_displayed():
                     continue
                 el = els[0]
-                # Limpiar y re-ingresar carácter a carácter
-                try:
-                    el.clear()
-                except Exception:
-                    driver.execute_script("arguments[0].value='';", el)
+                # Limpiar y re-ingresar carácter a carácter (si no queda vacío, el
+                # send_keys concatenaría y el documento viajaría duplicado)
+                if not _hard_clear_input(driver, el, log=log):
+                    log(f"  ⚠ No se pudo vaciar '{fid}' — se omite el re-ingreso")
+                    continue
                 driver.execute_script(
                     "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", el
                 )
@@ -1310,20 +1325,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
     child_to_parent = {v: k for k, v in dependencies.items()}
     lead_lower = {k.lower().strip(): v for k, v in lead.data.items()}
 
-    # Mapeo flexible de encabezados Excel → IDs HTML
-    HEADER_TO_IDS = {
-        "nombre":   ["firstname", "name"],
-        "nombres":  ["firstname", "name"],
-        "apellido": ["lastname"],
-        "apellidos":["lastname"],
-        "documento":["ci", "rut", "cpf", "document", "cnpj", "dni"],
-        "celular":  ["cellphone", "telephone", "telephone-mask", "phone"],
-        "teléfono": ["cellphone", "telephone", "telephone-mask", "phone"],
-        "telefono": ["cellphone", "telephone", "telephone-mask", "phone"],
-        "email":    ["email"],
-        "correo":   ["email"],
-        "modelo":   ["models", "model"],
-    }
+    HEADER_TO_IDS = _HEADER_TO_IDS
 
     def _get_value(field_name: str, field_id) -> str:
         ids = field_id if isinstance(field_id, list) else [field_id]
@@ -2190,6 +2192,100 @@ def _ensure_terms_marked_before_submit(driver, log: Callable = print,
         log(f"  Error verificando checkboxes pre-submit: {e}")
 
 
+def _motivo_corto(result_text: str) -> str:
+    """Motivo del fallo en pocas palabras, para la columna 'Motivo' del Excel.
+    Mismo criterio que base_form_filler._short_fail_reason."""
+    t = (result_text or "").lower()
+    if "no inserto" in t or "formulario ausente" in t:
+        return "form no inserto"
+    if "no coincide con el esperado" in t or "formulario incorrecto" in t:
+        return "form inserto no coincide"
+    if "iframe ausente" in t or "no encontrado" in t and "form" in t:
+        return "form no encontrado"
+    if "link issue" in t:
+        return "link issue TYP"
+    if "event_id" in t or "event id" in t:
+        return "error event_id del servidor"
+    if "error visual" in t:
+        # El detalle del campo que falló ya viene en result_text
+        _det = result_text.split("Error visual:", 1)[-1].strip()
+        _det = _det.split("(2 intentos)")[0].strip(" |")
+        return f"validación del form: {_det[:120]}" if _det else "validación del form"
+    if "sin confirmación ty" in t or "sin confirmacion ty" in t or "ty page" in t:
+        return "sin TY page (no se confirmó el envío)"
+    if "botón de envío" in t or "boton de envio" in t:
+        return "no se encontró el botón Enviar"
+    if "404" in t:
+        return "landing 404"
+    if "error" in t:
+        return "error al completar el form"
+    return "error"
+
+
+def _set_input_value_js(driver, el, value: str) -> None:
+    """Setea el value usando el setter nativo del prototipo (necesario en React/Angular:
+    asignar el.value directo no actualiza el estado interno del componente)."""
+    try:
+        driver.execute_script(
+            "var e=arguments[0], v=arguments[1];"
+            "var proto = e instanceof window.HTMLTextAreaElement"
+            "    ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;"
+            "var d = Object.getOwnPropertyDescriptor(proto, 'value');"
+            "if (d && d.set) { d.set.call(e, v); } else { e.value = v; }"
+            "e.dispatchEvent(new Event('input',{bubbles:true}));"
+            "e.dispatchEvent(new Event('change',{bubbles:true}));",
+            el, value,
+        )
+    except Exception:
+        pass
+
+
+def _hard_clear_input(driver, el, log: Callable = print) -> bool:
+    """Vacía un input de verdad, y confirma que quedó vacío.
+
+    `el.clear()` en Android/Chrome puede no vaciar nada y tampoco lanzar excepción
+    (campos con máscara, o manejados por React que reponen el valor). Cuando eso pasa,
+    el send_keys posterior CONCATENA y se termina enviando 'ApellidoApellido' o un email
+    duplicado — el lead viaja con datos corruptos y falla la validación del form.
+    Devuelve True sólo si el campo quedó realmente vacío.
+    """
+    def _current():
+        try:
+            return el.get_attribute("value") or ""
+        except Exception:
+            return ""
+
+    for intento in range(3):
+        if not _current():
+            return True
+        if intento == 0:
+            try:
+                el.clear()
+            except Exception:
+                pass
+        elif intento == 1:
+            _set_input_value_js(driver, el, "")
+        else:
+            # Último recurso: borrar con teclado, carácter por carácter desde el final
+            try:
+                el.click()
+            except Exception:
+                pass
+            for _ in range(len(_current()) + 2):
+                try:
+                    el.send_keys(Keys.END)
+                    el.send_keys(Keys.BACKSPACE)
+                except Exception:
+                    break
+        time.sleep(0.05)
+
+    quedo = _current()
+    if quedo:
+        log(f"  ⚠ No se pudo vaciar el campo (sigue con '{quedo}')")
+        return False
+    return True
+
+
 def _ensure_fields_filled_before_submit(driver, field_mapping: List[Dict], all_tracked: Dict[str, str],
                                          log: Callable = print,
                                          is_mobile: bool = False, is_android: bool = False):
@@ -2238,13 +2334,10 @@ def _ensure_fields_filled_before_submit(driver, field_mapping: List[Dict], all_t
                         break
                     _select_option(driver, fid, expected, fname, log=log)
                 else:
-                    try:
-                        el.clear()
-                    except Exception:
-                        driver.execute_script("arguments[0].value='';", el)
-                    driver.execute_script(
-                        "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", el
-                    )
+                    if not _hard_clear_input(driver, el, log=log):
+                        log(f"  ⚠ No se pudo vaciar '{fname}' ({fid}) — se omite el "
+                            f"re-ingreso para no duplicar el valor")
+                        break
                     time.sleep(0.05)
                     for char in str(expected):
                         el.send_keys(char)
@@ -2254,6 +2347,19 @@ def _ensure_fields_filled_before_submit(driver, field_mapping: List[Dict], all_t
                         "arguments[0].dispatchEvent(new Event('blur',{bubbles:true}));",
                         el,
                     )
+                    # El send_keys puede concatenar si el campo tiene máscara o si React
+                    # repuso el valor anterior: verificar y corregir por JS.
+                    try:
+                        _final = (el.get_attribute("value") or "")
+                    except Exception:
+                        _final = str(expected)
+                    if _norm_cmp(_final) != _norm_cmp(expected) and _final:
+                        _maxlen = _get_maxlength(el)
+                        _target = str(expected)[:_maxlen] if _maxlen else str(expected)
+                        if _norm_cmp(_final) != _norm_cmp(_target):
+                            log(f"  ⚠ '{fname}' ({fid}) quedó '{_final}' tras el re-ingreso "
+                                f"(se esperaba '{_target}') — corrigiendo por JS")
+                            _set_input_value_js(driver, el, _target)
                     log(f"  ↺ Re-ingresado '{fname}' ({fid}) via send_keys: '{expected}'")
             except Exception as e:
                 log(f"  ✗ Error re-ingresando '{fname}' ({fid}): {e}")
@@ -2312,28 +2418,330 @@ def _get_inferred_value(inferred_key: str, lead) -> str:
     return str(lead_lower.get(inferred_key, ""))
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SNAPSHOT REAL DEL FORM ANTES DE ENVIAR
+# El tracking normal guarda lo que se *intentó* escribir en cada paso. Si después el
+# form re-renderiza, un dropdown se resetea o el auto-relleno de campos no mapeados
+# vuelve a randomizar un select (models, fecha estimada de compra, ...), lo que viaja
+# en el lead deja de ser lo trackeado. Por eso, justo antes del click en Enviar se lee
+# el DOM real y se pisa el tracking con el valor efectivo: el Excel de resultados debe
+# reflejar SIEMPRE lo último que quedó en el form, que es lo que se compara contra la DB.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_SNAPSHOT_JS = r"""
+var out = [];
+var els = document.querySelectorAll("input, select, textarea");
+for (var i = 0; i < els.length; i++) {
+    var e = els[i];
+    var tag = e.tagName.toLowerCase();
+    var type = (e.type || "").toLowerCase();
+    if (tag === "input" && (type === "hidden" || type === "submit" ||
+                            type === "button" || type === "reset" || type === "file")) continue;
+    var id = e.id || e.getAttribute("name") || "";
+    if (!id) continue;
+    var value = "", text = "";
+    if (tag === "select") {
+        var sel = e.multiple
+            ? [].filter.call(e.options, function(o){return o.selected;})
+            : (e.selectedIndex >= 0 ? [e.options[e.selectedIndex]] : []);
+        value = sel.map(function(o){return o.value;}).join(" | ");
+        text  = sel.map(function(o){return (o.text||"").trim();}).join(" | ");
+    } else if (type === "checkbox" || type === "radio") {
+        if (!e.checked) continue;
+        value = e.value || "on";
+        text  = value;
+    } else {
+        value = e.value || "";
+        text  = value;
+    }
+    out.push({
+        id: id,
+        realId: e.id || "",
+        name: e.getAttribute("name") || "",
+        tag: tag,
+        type: type,
+        value: value,
+        text: text,
+        visible: !!(e.getClientRects().length && getComputedStyle(e).visibility !== "hidden")
+    });
+}
+return out;
+"""
+
+
+def _snapshot_form_state(driver, log: Callable = print) -> Dict[str, Dict]:
+    """Lee el estado REAL de todos los campos del form (un solo JS call).
+
+    Devuelve {id_o_name: {...}}. Incluye campos no visibles (pasos anteriores de un
+    wizard): siguen en el DOM y su value es lo que efectivamente se envía.
+    """
+    try:
+        raw = driver.execute_script(_SNAPSHOT_JS) or []
+    except Exception as e:
+        log(f"  ⚠ No se pudo leer el estado final del form: {e}")
+        return {}
+    snap: Dict[str, Dict] = {}
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        for key in (entry.get("realId"), entry.get("name"), entry.get("id")):
+            key = (key or "").strip()
+            if not key:
+                continue
+            prev = snap.get(key)
+            # Si hay duplicados de id/name, gana el que tenga valor (y entre esos, el visible)
+            if prev is None:
+                snap[key] = entry
+            elif not (prev.get("text") or "").strip() and (entry.get("text") or "").strip():
+                snap[key] = entry
+            elif entry.get("visible") and not prev.get("visible") and (entry.get("text") or "").strip():
+                snap[key] = entry
+    return snap
+
+
+def _final_value_of(entry: Dict) -> str:
+    """Valor legible de una entrada del snapshot (texto de la option para selects)."""
+    if not entry:
+        return ""
+    txt = (entry.get("text") or "").strip()
+    if txt:
+        return txt
+    return (entry.get("value") or "").strip()
+
+
+def _lead_value_for(lead, field_name: str, field_id) -> str:
+    """Valor pedido en el Excel para un campo del mapping (misma lógica que
+    fill_form_fields._get_value, expuesta a nivel de módulo para poder comparar
+    'lo pedido' contra 'lo que realmente quedó')."""
+    if lead is None:
+        return ""
+    lead_lower = {str(k).lower().strip(): v for k, v in (lead.data or {}).items()}
+    ids = field_id if isinstance(field_id, list) else [field_id]
+    val = lead_lower.get((field_name or "").lower().strip(), "")
+    if val and str(val).lower() not in ("", "none"):
+        return str(val)
+    for fid in ids:
+        val = lead_lower.get((fid or "").lower(), "")
+        if val and str(val).lower() not in ("", "none"):
+            return str(val)
+    for header, mapped_ids in _HEADER_TO_IDS.items():
+        if any(mid in ids for mid in mapped_ids):
+            val = lead_lower.get(header, "")
+            if val and str(val).lower() not in ("", "none"):
+                return str(val)
+    return ""
+
+
+def _norm_cmp(text) -> str:
+    """Normaliza para comparar valores (sin acentos/espacios/mayúsculas)."""
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(text or "").replace("\xa0", " ").lower().strip())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(s.split())
+
+
+def _sync_tracked_with_dom(driver, field_mapping: List[Dict], lead,
+                           all_tracked: Dict[str, str],
+                           log: Callable = print) -> Dict:
+    """Pisa el tracking con el estado REAL del form justo antes de enviar.
+
+    - Cada `PasoN::campo` pasa a valer lo que el campo tiene en el DOM en este momento
+      (si el campo sigue existiendo). Así, si un dropdown se re-eligió más tarde, queda
+      el ÚLTIMO valor — el que viaja en el lead.
+    - Los selects que nadie trackeó (no mapeados, elegidos al azar) se agregan como
+      `Final::<id>` para que el random elegido también quede registrado.
+    - Compara contra lo pedido en el Excel y devuelve las diferencias.
+
+    Devuelve {"tracked", "diffs", "excel_mismatch", "excel_mismatch_present"}.
+    """
+    snap = _snapshot_form_state(driver, log=log)
+    out = {
+        "tracked": dict(all_tracked or {}),
+        "diffs": [],
+        "excel_mismatch": "",
+        "excel_mismatch_present": False,
+    }
+    if not snap:
+        return out
+
+    # name del mapping → ids HTML posibles (+ alias visid)
+    name_to_ids: Dict[str, List[str]] = {}
+    id_to_name: Dict[str, str] = {}
+    mapped_ids: set = set()
+    for fc in field_mapping or []:
+        fid_raw = fc.get("id", "")
+        fname = fc.get("name", str(fid_raw))
+        ids = [f for f in (fid_raw if isinstance(fid_raw, list) else [fid_raw]) if f]
+        for f in list(ids):
+            alias = _VISID_ID_ALIASES.get(f)
+            if alias and alias not in ids:
+                ids.append(alias)
+        name_to_ids.setdefault(fname, []).extend(ids)
+        for f in ids:
+            mapped_ids.add(str(f))
+            id_to_name.setdefault(str(f), fname)
+
+    def _resolve_entry(names_or_ids: List[str]):
+        """Primer campo del snapshot que matchee alguno de los ids (exacto o por prefijo
+        'id-xxx', que es como los forms AEM/gm_front renombran los inputs)."""
+        for cand in names_or_ids:
+            cand = str(cand or "")
+            if not cand:
+                continue
+            entry = snap.get(cand)
+            if entry and _final_value_of(entry):
+                return entry
+        for cand in names_or_ids:
+            cand = str(cand or "")
+            if not cand:
+                continue
+            for key, entry in snap.items():
+                if key.startswith(cand + "-") and _final_value_of(entry):
+                    return entry
+        return None
+
+    covered_ids: set = set()
+    tracked_keys_seen: set = set()
+
+    for key in list(out["tracked"].keys()):
+        raw_name = key.split("::", 1)[1] if "::" in key else key
+        tracked_keys_seen.add(raw_name)
+        candidates = list(name_to_ids.get(raw_name, []))
+        # El tracking de AEM / model-from-url usa el id como clave, no el name
+        if raw_name not in name_to_ids:
+            candidates.append(raw_name)
+        entry = _resolve_entry(candidates)
+        if not entry:
+            continue
+        eid = entry.get("realId") or entry.get("name") or ""
+        if eid:
+            covered_ids.add(eid)
+        real_value = _final_value_of(entry)
+        if not real_value:
+            continue
+        old_value = str(out["tracked"].get(key, "")).strip()
+        if _norm_cmp(old_value) != _norm_cmp(real_value):
+            out["tracked"][key] = real_value
+            out["diffs"].append(f"{raw_name}: '{old_value}' → '{real_value}'")
+            log(f"  🔄 {raw_name}: el form quedó con '{real_value}' "
+                f"(trackeado era '{old_value}') — se registra el valor real")
+
+    # Campos con valor que nadie trackeó: selects randomizados por el auto-relleno de no
+    # mapeados, o campos del mapping que se completaron por fuera de fill_form_fields.
+    # Sin esto, lo que realmente viajó en el lead no queda en ningún lado.
+    for key, entry in snap.items():
+        eid = entry.get("realId") or entry.get("name") or ""
+        if not eid or eid != key:
+            continue
+        if eid in covered_ids:
+            continue
+        # Solo selects: un input de texto sin trackear suele ser ruido de la landing
+        # (buscador, newsletter), mientras que un select con valor es una elección real
+        # que viaja en el lead.
+        if entry.get("tag") != "select":
+            continue
+        value = _final_value_of(entry)
+        if not value or _is_placeholder(value):
+            continue
+        label = id_to_name.get(eid, eid)
+        if label in tracked_keys_seen:
+            continue
+        out["tracked"][f"Final::{label}"] = value
+        log(f"  📎 '{label}' ({eid}) quedó en '{value}' sin estar trackeado "
+            f"— registrado como Final::{label}")
+
+    # ── Comparación contra lo pedido en el Excel ─────────────────────────────
+    # Sólo campos de elección (selects): en los de texto el propio flujo transforma el
+    # dato a propósito (CPF/CNPJ/CEP regenerados en Brasil, documento saneado en Perú,
+    # recorte por maxlength) y compararlos daría avisos falsos todo el tiempo.
+    mismatches = []
+    for fc in field_mapping or []:
+        if fc.get("type", "text") != "select":
+            continue
+        fid_raw = fc.get("id", "")
+        fname = fc.get("name", str(fid_raw))
+        expected = _lead_value_for(lead, fname, fid_raw)
+        if not expected or _is_placeholder(expected):
+            continue
+        entry = _resolve_entry(name_to_ids.get(fname, []))
+        if not entry:
+            continue
+        real_value = _final_value_of(entry)
+        if not real_value:
+            mismatches.append(f"{fname}: pedido '{expected}' pero quedó vacío")
+            continue
+        exp_n, real_n = _norm_cmp(expected), _norm_cmp(real_value)
+        if exp_n == real_n or exp_n in real_n or real_n in exp_n:
+            continue
+        mismatches.append(f"{fname}: pedido '{expected}' → quedó '{real_value}'")
+
+    if mismatches:
+        out["excel_mismatch"] = " ; ".join(mismatches)
+        out["excel_mismatch_present"] = True
+        log(f"  ⚠ Datos distintos a los pedidos en el Excel: {out['excel_mismatch']}")
+    else:
+        out["excel_mismatch"] = "OK"
+
+    return out
+
+
+# Valores de ?model= que NO son modelos (son servicios/secciones): no deben registrarse
+# como "modelo elegido". Mismo criterio que base_form_filler._NON_MODEL_URL_TOKENS.
+_NON_MODEL_URL_TOKENS = (
+    "posventa", "postventa", "pos venta", "onstar", "servicio", "service",
+    "agendamiento", "seminuevos", "seminovos", "revision", "revisao",
+    "testdrive", "test drive", "cotizacion", "cotizar", "contacto", "contato",
+    "oferta", "raq", "suscripcion", "renovacion", "financiamiento", "repuestos",
+    "accesorios", "acessorios", "acessilab", "garantia", "posventa gral", "gral",
+)
+
+
 def _record_model_from_url_if_missing_lt(driver, field_mapping: List[Dict],
                                           tracked: Dict[str, str],
-                                          log: Callable = print) -> None:
-    """Si ningún select de Modelo quedó registrado, usar el ?model= de la URL."""
-    if any(k in ("models", "model") for k in tracked):
-        return
-    try:
-        from urllib.parse import urlsplit, parse_qs, unquote
-        raw = parse_qs(urlsplit(driver.current_url or "").query).get("model", [""])[0]
-        url_model = unquote(raw).replace("+", " ").strip()
-    except Exception:
-        url_model = ""
+                                          log: Callable = print,
+                                          expected_form_url: str = "") -> None:
+    """Si ningún select de Modelo quedó registrado, usar el ?model= de la URL del FORM.
+
+    OJO: estando dentro del iframe, `driver.current_url` devuelve la URL de la LANDING,
+    que no lleva ?model=. Por eso se mira primero la URL esperada del form (columna
+    'Formulario' del Excel), que es la que trae el modelo parametrizado. Sin esto, los
+    forms que reciben el modelo por URL (movs-visid, accesorios, ...) quedaban sin
+    ningún modelo registrado en el Excel de resultados.
+    """
+    # tracked está indexado por NOMBRE del mapping ('Modelo'), no por id HTML
+    _model_names = {"modelo", "model", "models"}
+    for k, v in (tracked or {}).items():
+        if str(k).strip().lower() in _model_names and str(v).strip():
+            return
+
+    from urllib.parse import urlsplit, parse_qs, unquote
+    url_model = ""
+    for _url in (expected_form_url or "", (driver.current_url or "")):
+        if not _url:
+            continue
+        try:
+            raw = parse_qs(urlsplit(_url).query).get("model", [""])[0]
+            candidate = unquote(raw).replace("+", " ").strip()
+        except Exception:
+            continue
+        if not candidate:
+            continue
+        norm = _norm_cmp(candidate)
+        if any(_norm_cmp(tok) in norm for tok in _NON_MODEL_URL_TOKENS):
+            continue  # es un servicio/sección, no un modelo
+        url_model = candidate
+        break
+
     if not url_model:
         return
-    model_id = "model"
+    model_name = "Modelo"
     for fc in (field_mapping or []):
         fid = fc.get("id")
         fid = fid[0] if isinstance(fid, list) else fid
         if fid in ("models", "model"):
-            model_id = fid
+            model_name = fc.get("name") or model_name
             break
-    tracked[model_id] = url_model
+    tracked[model_name] = url_model
     log(f"🚗 Modelo (de la URL ?model=) = {url_model}")
 
 
@@ -2341,10 +2749,16 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
                                       ids_dinamicos: Dict[str, str],
                                       lead=None,
                                       log: Callable = print,
-                                      tracked: Dict[str, str] = None) -> bool:
+                                      tracked: Dict[str, str] = None,
+                                      filled_ids: set = None) -> bool:
     """
     Completa selects e inputs visibles que no están en el field_mapping.
     Réplica de base_form_filler._auto_fill_unmapped_dropdowns para Safari LambdaTest.
+
+    filled_ids: IDs HTML reales que ya llenó fill_form_fields en esta fila. Es lo que
+    evita que un select ya resuelto (p. ej. 'estimated-day', cuyo id real no coincide con
+    el id del mapping 'estimated-date-purchase') se vuelva a randomizar y pise el valor
+    del Excel.
     """
     mapped_ids = set()
     for fc in field_mapping or []:
@@ -2356,7 +2770,12 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
 
     # Ids ya llenados por el mapping en esta fila (id real del form ≠ id de config,
     # ej. 'estimated-day' vs 'estimated-date-purchase') → no re-seleccionar y pisar.
+    # OJO: tracked está indexado por NOMBRE de campo del mapping, no por id HTML; por eso
+    # hace falta filled_ids (ids reales resueltos por fill_form_fields) para que el guard
+    # sirva de algo.
     already_filled_ids = set(tracked.keys()) if isinstance(tracked, dict) else set()
+    if filled_ids:
+        already_filled_ids |= {str(x) for x in filled_ids}
 
     filled_any = False
 
@@ -2415,6 +2834,10 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
             )
             time.sleep(0.1)
             log(f"  🎲 Select no mapeado '{sel_id}' → '{opt_text}'")
+            # Registrar el random elegido: si no queda trackeado, el Excel de resultados
+            # no muestra qué se envió realmente en ese campo.
+            if isinstance(tracked, dict):
+                tracked[real_id or sel_id] = opt_text
             filled_any = True
         except Exception as e:
             log(f"  Select no mapeado '{sel_id}' error: {e}")
@@ -2939,6 +3362,7 @@ def _setup_results_excel(pais: str, source_excel_path: str, platform: str, build
     required_cols = [
         "Resultado", "Formulario Inserto", "Formulario Completado",
         "TY Page", "TYP con CTA", "LINK ISSUE TYP", "Form URL esperada", "Form URL encontrada", "Form coincide",
+        "Datos vs Excel", "Motivo", "Estado URL landing", "Estado URL form",
         "Video LT", "Dashboard LT",
     ]
     headers = [cell.value for cell in ws[1] if cell.value]
@@ -2963,6 +3387,11 @@ def _mark_green(cell):
     cell.fill = PatternFill(patternType="solid", fgColor="00B050")
     cell.font = XLFont(color="FFFFFF", bold=True)
 
+def _mark_amber(cell):
+    """Enviado, pero con datos distintos a los pedidos en el Excel."""
+    cell.fill = PatternFill(patternType="solid", fgColor="FFC000")
+    cell.font = XLFont(color="000000", bold=True)
+
 def _write_row_result(ws, row_num: int, col_idx: Dict,
                       iframe_found: bool, submitted: bool,
                       result_text: str, tracked: Dict[str, str],
@@ -2972,24 +3401,83 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
                       video_url: str = "",
                       dashboard_url: str = "",
                       ty_cta: str = "",
-                      link_issue: str = "", link_issue_present: bool = False):
+                      link_issue: str = "", link_issue_present: bool = False,
+                      datos_vs_excel: str = "", datos_mismatch: bool = False,
+                      motivo: str = "", estado_url_landing: str = "-",
+                      estado_url_form: str = "-",
+                      form_inserto_estado: str = "", form_mismatch_enviado: bool = False):
     """Escribe resultado con las mismas columnas que el desktop.
     OJO: NO se tocan las columnas de entrada (Modelo/Nombre/etc. las setea el usuario). El
     modelo elegido queda en las columnas de tracking (PasoN::models), para comparar pedido vs
     completado."""
     resultado_cell = ws.cell(row=row_num, column=col_idx.get("Resultado", 1))
     resultado_cell.value = result_text
-    if submitted:
-        _mark_green(resultado_cell)
-    else:
+    if form_mismatch_enviado:
+        # El lead SÍ viajó, pero por un form distinto al esperado: ni verde ni rojo.
+        _mark_amber(resultado_cell)
+    elif not submitted:
         _mark_red(resultado_cell)
-
-    inserto_cell = ws.cell(row=row_num, column=col_idx.get("Formulario Inserto", 2))
-    inserto_cell.value = "✓ Form encontrado" if iframe_found else "✗ Form no encontrado"
-    if iframe_found:
-        _mark_green(inserto_cell)
+    elif datos_mismatch:
+        # Se envió, pero con datos distintos a los pedidos en el Excel → no es "todo OK"
+        _mark_amber(resultado_cell)
     else:
+        _mark_green(resultado_cell)
+
+    # Motivo del fallo: por qué no salió el lead, sin tener que leer el Resultado entero
+    if "Motivo" in col_idx:
+        _mot_cell = ws.cell(row=row_num, column=col_idx["Motivo"])
+        _mot_cell.value = motivo or "-"
+        if motivo and motivo != "-":
+            _mark_amber(_mot_cell) if form_mismatch_enviado else _mark_red(_mot_cell)
+
+    # Estado HTTP de las URLs: distingue "el form falló" de "la URL nunca cargó"
+    for _col, _val in (("Estado URL landing", estado_url_landing),
+                       ("Estado URL form", estado_url_form)):
+        if _col not in col_idx:
+            continue
+        _cell = ws.cell(row=row_num, column=col_idx[_col])
+        _cell.value = _val or "-"
+        _txt = (_val or "").upper()
+        if _txt.startswith("200"):
+            _mark_green(_cell)
+        elif "REDIRIGE" in _txt:
+            _mark_amber(_cell)
+        elif _txt not in ("-", ""):
+            _mark_red(_cell)
+
+    if "Datos vs Excel" in col_idx:
+        _dv_cell = ws.cell(row=row_num, column=col_idx["Datos vs Excel"])
+        _dv_cell.value = datos_vs_excel or "-"
+        if datos_mismatch:
+            _mark_amber(_dv_cell)
+        elif (datos_vs_excel or "").strip().upper() == "OK":
+            _mark_green(_dv_cell)
+
+    # Si la landing nunca cargó (404 / sin respuesta / redirige a otro lado), el form
+    # jamás se buscó: decir "no coincide con el esperado" sería engañoso. Se reporta la
+    # causa real, que es la URL.
+    _landing_txt = (estado_url_landing or "").upper()
+    _landing_falla = bool(
+        _landing_txt and _landing_txt not in ("-", "")
+        and (not _landing_txt.startswith("200") or "REDIRIGE" in _landing_txt)
+    )
+
+    # Formulario Inserto en TRES estados (no dos): inserto y correcto / inserto pero
+    # otro distinto al esperado / no inserto (iframe sin src o inexistente).
+    inserto_cell = ws.cell(row=row_num, column=col_idx.get("Formulario Inserto", 2))
+    if _landing_falla and form_inserto_estado != "inserto_ok":
+        inserto_cell.value = f"N/D — no se buscó el form: la landing no cargó ({estado_url_landing})"
         _mark_red(inserto_cell)
+    elif form_inserto_estado == "inserto_otro":
+        _sent = "se envió lead igualmente" if form_mismatch_enviado else "lead no enviado"
+        inserto_cell.value = f"⚠ Form inserto NO coincide con el esperado, {_sent}"
+        _mark_amber(inserto_cell)
+    elif form_inserto_estado == "no_inserto" or not iframe_found:
+        inserto_cell.value = "✗ Form NO inserto (iframe sin src / sin form en la landing)"
+        _mark_red(inserto_cell)
+    else:
+        inserto_cell.value = "✓ Form inserto"
+        _mark_green(inserto_cell)
 
     ws.cell(row=row_num, column=col_idx.get("Formulario Completado", 3)).value = (
         "✓ Completado" if (submitted or iframe_found) else "-"
@@ -3016,10 +3504,23 @@ def _write_row_result(ws, row_num: int, col_idx: Dict,
             return u.lower()
         coincide_ok = _norm(iframe_url_found) == _norm(iframe_url_expected)
         coincide_cell = ws.cell(row=row_num, column=col_idx["Form coincide"])
-        coincide_cell.value = "PASS" if coincide_ok else "FAIL"
-        if coincide_ok:
+        if not coincide_ok and _landing_falla:
+            # La landing no cargó: no hay comparación posible, el form nunca se buscó.
+            coincide_cell.value = f"N/D — la landing no cargó ({estado_url_landing})"
+            _mark_red(coincide_cell)
+        elif coincide_ok:
+            coincide_cell.value = "PASS"
             _mark_green(coincide_cell)
+        elif form_mismatch_enviado:
+            # El form no era el esperado pero el lead salió: naranja, no rojo — hay dato
+            # en la base, solo que entró por otro formulario.
+            coincide_cell.value = "FAIL — form inserto no coincide, se envió lead igualmente"
+            _mark_amber(coincide_cell)
+        elif form_inserto_estado == "no_inserto" or not iframe_found:
+            coincide_cell.value = "FAIL — form NO inserto (iframe sin src / sin form)"
+            _mark_red(coincide_cell)
         else:
+            coincide_cell.value = "FAIL — form inserto no coincide con el esperado"
             _mark_red(coincide_cell)
     if "Video LT" in col_idx and video_url:
         ws.cell(row=row_num, column=col_idx["Video LT"]).value = video_url
@@ -3132,7 +3633,87 @@ def _raq_brasil_gate(driver, lead: LeadRow, pais: str, log: Callable = print):
         log(f"  ⚠ No se encontró contact-by-form (RAQ Brasil): {e}")
 
 
+def _finalize_result(result: Dict, lead: LeadRow) -> Dict:
+    """Cierre común de una fila: estado del form inserto, motivo del fallo y estado HTTP.
+
+    Se aplica SIEMPRE, también a los cortes tempranos (iframe ausente, error general):
+    si un lead no salió, la fila del Excel tiene que decir por qué sin leer el log.
+    """
+    if result.get("form_url_mismatch"):
+        _found_str = (result.get("iframe_url_found") or "").strip()
+        # El lead viajó de verdad si se confirmó la TY, aunque el form fuera otro.
+        _enviado = bool(result.get("ty_confirmed") or result.get("submitted"))
+        result["form_mismatch_enviado"] = _enviado
+        _lead_str = "se envió lead igualmente" if _enviado else "lead no enviado"
+        if _found_str:
+            # SÍ se encontró/insertó un form (p.ej. gm_front en Mac/Safari en vez del gm_forms
+            # del Excel): es un form INCORRECTO/distinto al esperado, NO "no inserto".
+            result["result_text"] = (
+                f"[Error Form] Form inserto NO coincide con el esperado, {_lead_str} — "
+                f"URL esperada: {lead.secure_url or '?'} | "
+                f"URL encontrada: {_found_str}"
+            )
+            result["motivo"] = f"form inserto no coincide ({_lead_str})"
+        else:
+            # No se encontró ningún form GM en la landing (iframe sin src / inexistente).
+            result["result_text"] = (
+                f"[Error Form] FORM NO INSERTO (iframe sin src / sin form en la landing) — "
+                f"URL esperada: {lead.secure_url or '?'} | "
+                f"URL encontrada: ninguno | {_lead_str}"
+            )
+            result["motivo"] = "form no inserto"
+        result["submitted"] = False
+
+    # Issue en el CTA/link de la TY page → cuenta como fail (columna LINK ISSUE en rojo).
+    if result.get("link_issue_present") and not result.get("form_url_mismatch"):
+        _li = result.get("link_issue", "") or ""
+        _sent = "se envió lead igualmente" if result.get("submitted") else "lead no enviado"
+        result["result_text"] = f"[Error Form] LINK ISSUE TYP: {_li} | {_sent}"
+        result["motivo"] = "link issue TYP"
+        result["submitted"] = False
+
+    # Motivo del fallo, siempre explícito
+    if not result.get("submitted") and not result.get("motivo"):
+        result["motivo"] = _motivo_corto(result.get("result_text", ""))
+
+    # Si además hay un problema de estado HTTP, es la causa raíz más probable:
+    # se antepone al motivo (una landing 404 explica cualquier "form no encontrado").
+    _url_prob = result.get("url_status_problema") or ""
+    if _url_prob and not result.get("submitted"):
+        result["motivo"] = f"{_url_prob} | {result.get('motivo') or 'error'}"
+        if "Estado URL:" not in (result.get("result_text") or ""):
+            result["result_text"] = f"{result.get('result_text','')} | Estado URL: {_url_prob}"
+
+    if result.get("submitted") and not result.get("motivo"):
+        result["motivo"] = "-"
+
+    return result
+
+
 def _run_single_lead(driver, pais: str, lead: LeadRow,
+                     field_mapping: List[Dict],
+                     dependencies: Dict[str, str],
+                     ids_dinamicos: Dict[str, str],
+                     is_mobile: bool = False,
+                     is_android: bool = False,
+                     brasil_doc_type: str = "cpf",
+                     screenshot_manager=None,
+                     log: Callable = print):
+    """Wrapper: corre el lead y aplica SIEMPRE el cierre común (motivo/estado URL),
+    incluso si el cuerpo cortó temprano por un error."""
+    result = _run_single_lead_impl(
+        driver, pais, lead, field_mapping, dependencies, ids_dinamicos,
+        is_mobile=is_mobile, is_android=is_android,
+        brasil_doc_type=brasil_doc_type, screenshot_manager=screenshot_manager, log=log,
+    )
+    try:
+        return _finalize_result(result, lead)
+    except Exception as _fe:
+        log(f"  ⚠ Error armando el motivo del resultado: {_fe}")
+        return result
+
+
+def _run_single_lead_impl(driver, pais: str, lead: LeadRow,
                      field_mapping: List[Dict],
                      dependencies: Dict[str, str],
                      ids_dinamicos: Dict[str, str],
@@ -3157,11 +3738,32 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         "iframe_found": False, "submitted": False,
         "ty_confirmed": False, "iframe_url_found": "",
         "ty_cta": "", "link_issue": "", "link_issue_present": False,
+        "datos_vs_excel": "-", "datos_mismatch": False,
+        "estado_url_landing": "-", "estado_url_form": "-",
+        "url_status_problema": "", "motivo": "",
+        "form_inserto_estado": "no_inserto", "form_mismatch_enviado": False,
     }
 
     _cb_prefs = _checkbox_prefs(lead)
     if _cb_prefs:
         log(f"  ☑ Preferencias de checkbox (Excel): {_cb_prefs}")
+
+    # ── 0. Estado HTTP de las URLs ────────────────────────────────────────────
+    # Selenium no expone el status de la navegación: si la landing da 404 o el form
+    # está caído (503), el lead falla sin decir por qué. Se consulta aparte para que
+    # el Excel muestre la causa real.
+    try:
+        from utils.url_status import check_url_status, format_status_pair
+        _st_landing = check_url_status(lead.public_url)
+        _st_form = check_url_status(lead.secure_url) if lead.secure_url else {}
+        result["estado_url_landing"] = _st_landing.get("label", "-")
+        result["estado_url_form"] = _st_form.get("label", "-") if _st_form else "-"
+        result["url_status_problema"] = format_status_pair(_st_landing, _st_form)
+        log(f"  🌐 Estado URL landing: {result['estado_url_landing']}")
+        if lead.secure_url:
+            log(f"  🌐 Estado URL form:    {result['estado_url_form']}")
+    except Exception as _use:
+        log(f"  ⚠ No se pudo verificar el estado de las URLs: {_use}")
 
     try:
         # ── 1. Landing page ──────────────────────────────────────────────────
@@ -3340,6 +3942,19 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             iframe_el and _expected_url and _norm(result["iframe_url_found"]) != _norm(_expected_url)
         )
 
+        # Estado del form inserto, en tres niveles (no dos):
+        #   inserto_ok    → hay iframe con src y coincide con el esperado
+        #   inserto_otro  → hay form, pero es OTRO distinto al del Excel
+        #   no_inserto    → no hay iframe, o su src está vacío (nada que cargar)
+        if not iframe_el and use_iframe:
+            result["form_inserto_estado"] = "no_inserto"
+        elif use_iframe and not (_iframe_src or "").strip():
+            result["form_inserto_estado"] = "no_inserto"
+        elif result["form_url_mismatch"]:
+            result["form_inserto_estado"] = "inserto_otro"
+        else:
+            result["form_inserto_estado"] = "inserto_ok"
+
         # Posicionar scroll igual que Osocio
         if iframe_el:
             try:
@@ -3508,8 +4123,10 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                     brasil_doc_type=brasil_doc_type,
                     cross_processed=_xp,
                 )
-                _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log, tracked=step_tracked)
-                _record_model_from_url_if_missing_lt(driver, field_mapping, step_tracked, log=log)
+                _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log,
+                                                 tracked=step_tracked, filled_ids=_xp)
+                _record_model_from_url_if_missing_lt(driver, field_mapping, step_tracked, log=log,
+                                                     expected_form_url=lead.secure_url or "")
                 # Requeridos sin dato (Rua/Número/Data de Nascimento, etc.) → sintético random
                 _fill_required_synthetic_lt(driver, log=log)
             paso_num = iteration + 1
@@ -3600,6 +4217,15 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                 _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
                                                      is_mobile=is_mobile, is_android=is_android)
             _ensure_terms_marked_before_submit(driver, log, prefs=_cb_prefs)
+
+            # Foto del estado REAL del form justo antes de enviar: es lo que viaja en el
+            # lead y lo que hay que comparar contra la base de datos.
+            _sync = _sync_tracked_with_dom(driver, field_mapping, lead, all_tracked, log=log)
+            all_tracked = _sync["tracked"]
+            result["tracked"] = all_tracked
+            result["datos_vs_excel"] = _sync["excel_mismatch"]
+            result["datos_mismatch"] = _sync["excel_mismatch_present"]
+
             submitted_click = _click_submit(driver, log, is_android=is_android)
 
             if not submitted_click:
@@ -3707,12 +4333,19 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
             # (no en AEM: re-randomizaría el select Pessoa/Empresa y pisaría el CNPJ/CPF
             # ya cargado según el Excel — ver _is_aem_form)
             if _submit_attempt == 1 and not _is_aem_form:
-                _filled_post = _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log)
+                # (lo que elija acá queda registrado igual: el snapshot pre-submit relee el DOM)
+                _filled_post = _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log,
+                                                                filled_ids=_xp)
                 if _filled_post:
                     log("  ↺ Campos con error rellenados — reintentando submit sin reload...")
                     _ensure_fields_filled_before_submit(driver, field_mapping, all_tracked, log,
                                                          is_mobile=is_mobile, is_android=is_android)
                     _ensure_terms_marked_before_submit(driver, log, prefs=_cb_prefs)
+                    _sync = _sync_tracked_with_dom(driver, field_mapping, lead, all_tracked, log=log)
+                    all_tracked = _sync["tracked"]
+                    result["tracked"] = all_tracked
+                    result["datos_vs_excel"] = _sync["excel_mismatch"]
+                    result["datos_mismatch"] = _sync["excel_mismatch_present"]
                     if _click_submit(driver, log, is_android=is_android):
                         try:
                             WebDriverWait(driver, 15).until(_ty_visible)
@@ -3827,8 +4460,10 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
                             brasil_doc_type=brasil_doc_type,
                             cross_processed=_xp_r,
                         )
-                        _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log, tracked=_iter_tracked)
-                        _record_model_from_url_if_missing_lt(driver, field_mapping, _iter_tracked, log=log)
+                        _auto_fill_unmapped_dropdowns_lt(driver, field_mapping, ids_dinamicos, lead=lead, log=log,
+                                                         tracked=_iter_tracked, filled_ids=_xp_r)
+                        _record_model_from_url_if_missing_lt(driver, field_mapping, _iter_tracked, log=log,
+                                                             expected_form_url=lead.secure_url or "")
                     _paso_r = _iter + 1
                     for _k, _v in _iter_tracked.items():
                         _step_tracked[f"Reintento{_paso_r}::{_k}"] = _v
@@ -3861,33 +4496,8 @@ def _run_single_lead(driver, pais: str, lead: LeadRow,
         except Exception:
             pass
 
-    if result.get("form_url_mismatch"):
-        _found_str = (result.get("iframe_url_found") or "").strip()
-        _lead_str = "lead enviado igualmente" if result.get("submitted") else "lead no enviado"
-        if _found_str:
-            # SÍ se encontró/insertó un form (p.ej. gm_front en Mac/Safari en vez del gm_forms
-            # del Excel): es un form INCORRECTO/distinto al esperado, NO "no inserto".
-            result["result_text"] = (
-                f"[Error Form] Formulario incorrecto (distinto al esperado) — "
-                f"URL esperada: {lead.secure_url or '?'} | "
-                f"URL encontrada: {_found_str} | {_lead_str}"
-            )
-        else:
-            # No se encontró ningún form GM en la landing (iframe sin src / inexistente).
-            result["result_text"] = (
-                f"[Error Form] FORMULARIO AUSENTE (no hay form en la landing) — "
-                f"URL esperada: {lead.secure_url or '?'} | "
-                f"URL encontrada: ninguno | {_lead_str}"
-            )
-        result["submitted"] = False
-
-    # Issue en el CTA/link de la TY page → cuenta como fail (columna LINK ISSUE en rojo).
-    if result.get("link_issue_present") and not result.get("form_url_mismatch"):
-        _li = result.get("link_issue", "") or ""
-        _sent = "lead enviado igualmente" if result.get("submitted") else "lead no enviado"
-        result["result_text"] = f"[Error Form] LINK ISSUE TYP: {_li} | {_sent}"
-        result["submitted"] = False
-
+    # El cierre (form inserto / motivo / estado URL) lo aplica _finalize_result desde
+    # el wrapper _run_single_lead, para que también alcance a los cortes tempranos.
     return result
 
 
@@ -3994,6 +4604,13 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
                 ty_cta=result.get("ty_cta", ""),
                 link_issue=result.get("link_issue", ""),
                 link_issue_present=result.get("link_issue_present", False),
+                datos_vs_excel=result.get("datos_vs_excel", "-"),
+                datos_mismatch=result.get("datos_mismatch", False),
+                motivo=result.get("motivo", "-"),
+                estado_url_landing=result.get("estado_url_landing", "-"),
+                estado_url_form=result.get("estado_url_form", "-"),
+                form_inserto_estado=result.get("form_inserto_estado", ""),
+                form_mismatch_enviado=result.get("form_mismatch_enviado", False),
             )
             try:
                 wb.save(results_path)
@@ -4051,6 +4668,15 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
                         wb.save(results_path)
                     except Exception as e:
                         log(f"  ⚠ Error guardando Video/Dashboard LT en Excel: {e}")
+
+    # Layout final: columnas de RESULTADO primero, datos de entrada al final. Se hace
+    # recién acá porque durante la corrida los runners leen los datos del lead de la
+    # misma hoja (URL en A, Formulario en B) y reordenar antes desalinearía la lectura.
+    try:
+        from utils.excel_layout import reordenar_archivo
+        reordenar_archivo(results_path, log=log)
+    except Exception as _re:
+        log(f"  Aviso: no se pudo reordenar el Excel: {_re}")
 
     log(f"\n{'='*60}")
     log(f"RESUMEN: {summary['ok']}/{summary['total']} OK, {summary['failed']} con issues.")

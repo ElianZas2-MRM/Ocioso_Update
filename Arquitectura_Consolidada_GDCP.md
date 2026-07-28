@@ -258,6 +258,14 @@ Se listan solo las piezas que cambian realmente el comportamiento del sistema o 
 - Outputs: `True/False` indicando si completó algo.
 - Por qué es importante: le da resiliencia al sistema frente a cambios parciales del DOM o campos nuevos no mapeados aún.
 
+### `_sync_tracked_with_dom_before_submit`
+
+- Archivo: `core/base_form_filler.py` (equivalente en LambdaTest: `_sync_tracked_with_dom` en `lambdatest_mac/lt_runner.py`, que usan Mac y Android).
+- Qué hace: justo antes del click en Enviar relee el DOM completo en un solo `execute_script` y pisa el tracking con el valor efectivo de cada campo.
+- Inputs: `form_data` de la fila.
+- Outputs: actualiza `current_row_field_values` y setea `_datos_vs_excel` / `_datos_mismatch`.
+- Por qué es importante: el tracking por paso guarda lo que se *intentó* escribir. Si el form re-renderiza, un dropdown se resetea, o un reintento vuelve a sortear modelo/ciudad/concesionario, lo trackeado deja de ser lo que viaja en el lead y la comparación posterior contra la base de datos queda mal. Este paso garantiza que el Excel refleje siempre el último valor real. Además compara los dropdowns contra lo pedido en el Excel y avisa (columna `Datos vs Excel`, en ámbar) si quedó otra cosa.
+
 ### `submit_and_verify_form`
 
 - Archivo: `core/base_form_filler.py`
@@ -379,10 +387,13 @@ Este es el recorrido principal del código, en el orden en que un desarrollador 
 12. `core.base_form_filler._auto_fill_unmapped_dropdowns()`
     Absorbe campos no mapeados visibles para mejorar robustez.
 
-13. `core.base_form_filler.submit_and_verify_form()`
+13. `core.base_form_filler._sync_tracked_with_dom_before_submit()`
+    Relee el DOM antes de enviar y deja en el tracking el valor real de cada campo.
+
+14. `core.base_form_filler.submit_and_verify_form()`
     Envía el lead y determina si hubo éxito o error.
 
-14. `core.base_form_filler.write_tracked_fields_to_sheet()`
+15. `core.base_form_filler.write_tracked_fields_to_sheet()`
     Deja trazabilidad de valores efectivamente usados.
 
 15. `interface.helpers_interface.enviar_email_resultados()`
