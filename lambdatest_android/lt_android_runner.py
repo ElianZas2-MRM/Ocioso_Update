@@ -144,6 +144,7 @@ def _setup_android_results_excel(pais: str, source_excel_path: str, build_name: 
     required_cols = [
         "Resultado", "Formulario Inserto", "Formulario Completado",
         "TY Page", "TYP con CTA", "LINK ISSUE TYP", "Form URL esperada", "Form URL encontrada", "Form coincide",
+        "Datos vs Excel", "Motivo", "Estado URL landing", "Estado URL form",
         "Video LT", "Dashboard LT",
     ]
     headers = [cell.value for cell in ws[1] if cell.value]
@@ -273,6 +274,13 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
                 ty_cta=result.get("ty_cta", ""),
                 link_issue=result.get("link_issue", ""),
                 link_issue_present=result.get("link_issue_present", False),
+                datos_vs_excel=result.get("datos_vs_excel", "-"),
+                datos_mismatch=result.get("datos_mismatch", False),
+                motivo=result.get("motivo", "-"),
+                estado_url_landing=result.get("estado_url_landing", "-"),
+                estado_url_form=result.get("estado_url_form", "-"),
+                form_inserto_estado=result.get("form_inserto_estado", ""),
+                form_mismatch_enviado=result.get("form_mismatch_enviado", False),
             )
             try:
                 wb.save(results_path)
@@ -316,6 +324,15 @@ def run_lt_android_batch(opts: LTAndroidRunOptions, log: Callable = print,
                             pass
             except Exception:
                 pass
+
+    # Layout final: columnas de RESULTADO primero, datos de entrada al final. Se hace
+    # recién acá porque durante la corrida se leen los datos del lead de la misma hoja
+    # (URL en A, Formulario en B) y reordenar antes desalinearía la lectura.
+    try:
+        from utils.excel_layout import reordenar_archivo
+        reordenar_archivo(results_path, log=log)
+    except Exception as _re:
+        log(f"  Aviso: no se pudo reordenar el Excel: {_re}")
 
     log(f"\n{'='*60}")
     log(f"RESUMEN: {summary['ok']}/{summary['total']} OK, {summary['failed']} con issues.")
