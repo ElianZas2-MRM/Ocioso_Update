@@ -32,6 +32,7 @@ config_global.json
 # Excels de datos - se generan desde la app, no se versionan
 data/Lead_information_*.xls*
 data/Estado_Cidade_BR.xlsx
+data/GM Forms*.xls*
 
 # PyInstaller output — regenerable con build.bat
 build/
