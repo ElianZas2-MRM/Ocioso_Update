@@ -1102,7 +1102,15 @@ def _sanitize_peru_document(doc_type_value: str, raw_value: str) -> str:
         required_len, no_leading_zero = 8, True
     elif "ruc" in dt:
         required_len, no_leading_zero = 11, False
-    elif "carn" in dt or "extran" in dt or "pasaporte" in dt:
+    elif "pasaporte" in dt:
+        # El pasaporte es ALFANUMÉRICO: se conservan las letras del valor original y se
+        # completa con caracteres alfanuméricos, no con dígitos.
+        alnum = "".join(c for c in str(raw_value or "") if c.isalnum()).upper()
+        _pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        while len(alnum) < 12:
+            alnum += _random.choice(_pool)
+        return alnum[:12]
+    elif "carn" in dt or "extran" in dt:
         required_len, no_leading_zero = 12, False
     else:
         return raw_value
@@ -1461,8 +1469,10 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
                     if generated:
                         value = generated
 
-            # Perú: sanitizar número de documento según tipo seleccionado
-            if resolved == "ci" and pais.lower() in ("peru", "pe"):
+            # Perú: sanitizar número de documento según tipo seleccionado.
+            # En los forms visid / gm_front el 'ci' del mapping se resuelve al alias
+            # 'document', así que comparar sólo contra "ci" dejaba esos forms sin sanitizar.
+            if resolved in ("ci", "document") and pais.lower() in ("peru", "pe"):
                 try:
                     doc_el = driver.find_elements(By.ID, "document-type")
                     if doc_el:
@@ -3988,7 +3998,11 @@ def _run_single_lead_impl(driver, pais: str, lead: LeadRow,
             except Exception:
                 pass
 
-        log(f"  ✓ Iframe encontrado")
+        # Sólo hay iframe si el form está inserto en una landing. En los forms sueltos
+        # (gm_front standalone) este log salía igual y hacía creer que se había encontrado
+        # un iframe que nunca existió.
+        if iframe_el:
+            log("  ✓ Iframe encontrado")
         if screenshot_manager:
             screenshot_manager.captura_landing_inicial()
 

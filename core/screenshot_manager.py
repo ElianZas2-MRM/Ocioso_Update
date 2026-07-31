@@ -105,42 +105,81 @@ class ScreenshotManager:
         try:
             self.driver.execute_script("""
                 (function(){
-                  var changed=[];
-                  var all=document.querySelectorAll('body *');
-                  for (var i=0;i<all.length;i++){
-                    try{
-                      var cs=window.getComputedStyle(all[i]);
-                      if(cs && (cs.position==='fixed' || cs.position==='sticky')){
-                        changed.push([all[i], all[i].style.position,
-                                      all[i].style.getPropertyPriority('position')]);
-                        all[i].style.setProperty('position','static','important');
-                      }
-                    }catch(e){}
+                  var changed = [];
+                  
+                  // 1. Ocultar nav y header
+                  var navs = document.querySelectorAll('nav, header, [class*="nav-bar"], [class*="navbar"], [class*="header"]');
+                  for (var j=0; j<navs.length; j++){
+                    try {
+                      var curDisplay = navs[j].style.display;
+                      var priority = navs[j].style.getPropertyPriority('display');
+                      changed.push({
+                        element: navs[j],
+                        property: 'display',
+                        value: curDisplay,
+                        priority: priority
+                      });
+                      navs[j].style.setProperty('display', 'none', 'important');
+                    } catch(e){}
                   }
-                  window.__osocio_fixed=changed;
+                  
+                  // 2. Neutralizar otros elementos fixed/sticky
+                  var all = document.querySelectorAll('body *');
+                  for (var i=0; i<all.length; i++){
+                    try {
+                      var cs = window.getComputedStyle(all[i]);
+                      if (cs && (cs.position === 'fixed' || cs.position === 'sticky' || cs.position === '-webkit-sticky')) {
+                        // Skip if already hidden as nav/header
+                        var alreadyHidden = false;
+                        for (var k=0; k<changed.length; k++){
+                          if (changed[k].element === all[i] && changed[k].property === 'display') {
+                            alreadyHidden = true;
+                            break;
+                          }
+                        }
+                        if (alreadyHidden) continue;
+                        
+                        var curPos = all[i].style.position;
+                        var priority = all[i].style.getPropertyPriority('position');
+                        changed.push({
+                          element: all[i],
+                          property: 'position',
+                          value: curPos,
+                          priority: priority
+                        });
+                        all[i].style.setProperty('position', 'static', 'important');
+                      }
+                    } catch(e){}
+                  }
+                  
+                  window.__osocio_style_changes = changed;
                   return changed.length;
                 })();
             """)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error neutralizando elementos: {e}")
 
     def _restore_fixed_elements(self):
-        """Restaura el position original de los elementos neutralizados."""
+        """Restaura el estilo original de los elementos neutralizados."""
         try:
             self.driver.execute_script("""
                 (function(){
-                  var c=window.__osocio_fixed||[];
-                  for(var i=0;i<c.length;i++){
-                    try{
-                      if(c[i][1]) c[i][0].style.setProperty('position', c[i][1], c[i][2]||'');
-                      else c[i][0].style.removeProperty('position');
-                    }catch(e){}
+                  var changes = window.__osocio_style_changes || [];
+                  for (var i=0; i<changes.length; i++){
+                    try {
+                      var item = changes[i];
+                      if (item.value) {
+                        item.element.style.setProperty(item.property, item.value, item.priority || '');
+                      } else {
+                        item.element.style.removeProperty(item.property);
+                      }
+                    } catch(e){}
                   }
-                  window.__osocio_fixed=null;
+                  window.__osocio_style_changes = null;
                 })();
             """)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error restaurando elementos: {e}")
 
     def take_full_page_screenshot(self, filename):
         """Toma screenshot completa de toda la página uniendo múltiples capturas"""

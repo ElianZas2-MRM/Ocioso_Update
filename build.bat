@@ -156,8 +156,11 @@ if errorlevel 1 goto :error
 echo Armando carpeta portable...
 if exist "%PORTABLE_DIR%" rmdir /s /q "%PORTABLE_DIR%"
 mkdir "%PORTABLE_DIR%"
-copy /y "dist\%APP_NAME%.exe" "%PORTABLE_DIR%\%APP_NAME%.exe" >nul
-if errorlevel 1 goto :error
+REM Build onedir: PyInstaller deja una CARPETA dist\%APP_NAME%\ (el .exe + _internal\)
+REM en vez de un unico .exe, asi que se copia entera a la raiz del portable.
+robocopy "dist\%APP_NAME%" "%PORTABLE_DIR%" /E /NFL /NDL /NJH /NJS /NC /NS >nul
+if errorlevel 8 goto :error
+if not exist "%PORTABLE_DIR%\%APP_NAME%.exe" goto :error
 
 REM data/ se copia aparte: hay que dejar afuera los Excel reales de clientes
 REM (rankings/listados de dealers), que no deben viajar en el portable ni en el ZIP
@@ -201,8 +204,9 @@ if not exist "%PORTABLE_DIR%\lambdatest_credentials.txt" (
     echo Plantilla lambdatest_credentials.txt creada en portable.
 )
 
-REM Solo se entrega la carpeta portable: se borra el .exe suelto de dist\ (ya fue
-REM copiado adentro del portable) y no se arma ZIP, para acortar el build.
+REM Solo se entrega la carpeta portable: se borra la carpeta cruda de PyInstaller
+REM dist\%APP_NAME%\ (ya fue copiada adentro del portable) y no se arma ZIP.
+if exist "dist\%APP_NAME%" rmdir /s /q "dist\%APP_NAME%"
 if exist "dist\%APP_NAME%.exe" del /f /q "dist\%APP_NAME%.exe"
 if exist "dist\%APP_NAME%_portable.zip" del /f /q "dist\%APP_NAME%_portable.zip"
 

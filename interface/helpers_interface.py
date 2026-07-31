@@ -1538,3 +1538,212 @@ def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
     except Exception as e:
         print(f"❌ Error al enviar email del Comparador de Dealers: {e}")
         return False
+
+
+def analizar_resultados_masivos(excel_path):
+    """Analiza los resultados del chequeo masivo para construir el reporte por email."""
+    import openpyxl
+    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    failures = []
+    market_summaries = {}
+    
+    for sheet_name in wb.sheetnames:
+        sheet = wb[sheet_name]
+        
+        # Buscar la cabecera
+        header_row_idx = None
+        for r_idx in range(1, 15):
+            row_vals = [str(sheet.cell(row=r_idx, column=c).value or "").strip().upper() for c in range(1, sheet.max_column + 1)]
+            if "SEGMENTO" in row_vals and "ESTADO" in row_vals and "URL LIVE" in row_vals:
+                header_row_idx = r_idx
+                break
+                
+        if not header_row_idx:
+            continue
+            
+        header_row = [str(sheet.cell(row=header_row_idx, column=c).value or "").strip().upper() for c in range(1, sheet.max_column + 1)]
+        try:
+            col_seg = header_row.index("SEGMENTO") + 1
+            col_est = header_row.index("ESTADO") + 1
+            col_url = header_row.index("URL LIVE") + 1
+            col_res = header_row.index("EXCEL==INSERTED?") + 1
+            col_disp = header_row.index("DISPLAYED?") + 1
+            col_land = header_row.index("LANDINGSTATUS") + 1
+        except ValueError:
+            continue
+            
+        market_summaries[sheet_name] = {"total": 0, "pass": 0, "fail": 0}
+        
+        for r_idx in range(header_row_idx + 1, sheet.max_row + 1):
+            seg = str(sheet.cell(row=r_idx, column=col_seg).value or "").strip()
+            est = str(sheet.cell(row=r_idx, column=col_est).value or "").strip()
+            url = str(sheet.cell(row=r_idx, column=col_url).value or "").strip()
+            res_val = str(sheet.cell(row=r_idx, column=col_res).value or "").strip()
+            disp_val = str(sheet.cell(row=r_idx, column=col_disp).value or "").strip()
+            land_val = str(sheet.cell(row=r_idx, column=col_land).value or "").strip()
+            
+            if not url:
+                continue
+                
+            is_off = "OFF" in est.upper() or "❌" in est
+            if is_off:
+                continue
+                
+            is_ok = ("✅ PASS" in res_val) and ("✅ PASS" in disp_val) and ("✅ PASS" in land_val)
+            
+            market_summaries[sheet_name]["total"] += 1
+            if is_ok:
+                market_summaries[sheet_name]["pass"] += 1
+            else:
+                market_summaries[sheet_name]["fail"] += 1
+                
+                # Obtener detalles del error específico
+                err_detail = ""
+                if "❌ FAIL" in land_val or "🔀 FAIL" in land_val:
+                    err_detail = land_val
+                elif "❌ FAIL" in res_val or "Mismatch" in res_val:
+                    err_detail = res_val
+                elif "❌ FAIL" in disp_val:
+                    err_detail = "Formulario no visible / no mostrado en pantalla"
+                else:
+                    err_detail = "Fallo indeterminado en verificación"
+                
+                failures.append({
+                    "pais": sheet_name,
+                    "fila": r_idx,
+                    "segmento": seg,
+                    "url": url,
+                    "error": err_detail
+                })
+    return {"failures": failures, "market_summaries": market_summaries}
+
+
+def _build_masivo_table_html(failures, market_summaries):
+    """Construye las tablas HTML resumidas para el correo de revisión masiva."""
+    _TH = 'style="border:1px solid #ddd;padding:8px;text-align:left;background-color:#f2f2f2;font-size:12px;font-weight:bold;"'
+    _TD = 'style="border:1px solid #ddd;padding:8px;font-size:12px;"'
+    
+    # 1. Tabla de Resumen por Mercado
+    summary_rows = ""
+    for m_name, counts in market_summaries.items():
+        if counts["total"] == 0:
+            continue
+        summary_rows += "<tr>"
+        summary_rows += f"<td {_TD}><b>{m_name}</b></td>"
+        summary_rows += f"<td {_TD}>{counts['total']}</td>"
+        summary_rows += f"<td {_TD} style='color:#27ae60;font-weight:bold;'>{counts['pass']}</td>"
+        summary_rows += f"<td {_TD} style='color:#c0392b;font-weight:bold;'>{counts['fail']}</td>"
+        summary_rows += "</tr>"
+        
+    summary_table = (
+        "<h3>🌐 Resumen de Auditoría por Mercado</h3>"
+        "<table style='border-collapse:collapse;width:60%;font-family:sans-serif;margin-bottom:20px;'>"
+        "<thead><tr>"
+        f"<th {_TH}>MERCADO / HOJA</th>"
+        f"<th {_TH}>TOTAL AUDITADO</th>"
+        f"<th {_TH} style='color:#27ae60;'>PASS</th>"
+        f"<th {_TH} style='color:#c0392b;'>FAIL</th>"
+        "</tr></thead>"
+        f"<tbody>{summary_rows}</tbody>"
+        "</table>"
+    )
+    
+    # 2. Tabla de Fallos Detallados
+    if not failures:
+        fail_table = "<p style='color:green;font-weight:bold;'>🎉 ¡Todos los formularios activos pasaron la revisión masiva con éxito!</p>"
+    else:
+        fail_rows = ""
+        for f in failures:
+            fail_rows += "<tr>"
+            fail_rows += f"<td {_TD}>{f['pais']}</td>"
+            fail_rows += f"<td {_TD} style='font-weight:bold;'>Fila {f['fila']}</td>"
+            fail_rows += f"<td {_TD}>{f['segmento']}</td>"
+            fail_rows += f"<td {_TD}><a href='{f['url']}'>{f['url'][:50]}...</a></td>"
+            fail_rows += f"<td {_TD} style='color:#c0392b;font-weight:bold;'>{f['error']}</td>"
+            fail_rows += "</tr>"
+            
+        fail_table = (
+            f"<h3 style='color:#c0392b;'>⚠️ Detalle de URLs con Desviaciones / Errores ({len(failures)})</h3>"
+            "<table style='border-collapse:collapse;width:100%;font-family:sans-serif;'>"
+            "<thead><tr>"
+            f"<th {_TH}>MERCADO</th>"
+            f"<th {_TH}>EXCEL FILA</th>"
+            f"<th {_TH}>SEGMENTO</th>"
+            f"<th {_TH}>URL LIVE</th>"
+            f"<th {_TH}>DETALLE DEL ERROR</th>"
+            "</tr></thead>"
+            f"<tbody>{fail_rows}</tbody>"
+            "</table>"
+        )
+        
+    return summary_table + fail_table
+
+
+def enviar_email_revision_masiva(excel_path, counts, adjuntar_res=True, adjuntar_ss=True):
+    """Envía un email con los resultados consolidados de la revisión masiva de formularios."""
+    try:
+        import os
+        from datetime import datetime
+        
+        if not os.path.exists(excel_path):
+            print(f"❌ No se encontró el archivo Excel: {excel_path}")
+            return False
+
+        config = cargar_config_global()
+        enviar_mail = bool(config.get("enviar_mail", False))
+        if not enviar_mail:
+            print("📭 Envío de email deshabilitado por Configuración Global. Se omite el envío.")
+            return True
+
+        res_dict = analizar_resultados_masivos(excel_path)
+        failures = res_dict["failures"]
+        market_summaries = res_dict["market_summaries"]
+        
+        fecha_actual = datetime.now().strftime("%d/%m/%Y")
+        total_passed = sum(c["pass"] for c in market_summaries.values())
+        total_failed = len(failures)
+        resultado_global = "PASS" if total_failed == 0 else "FAILED"
+        
+        asunto = f"[{resultado_global}] Osocio — REVISIÓN MASIVA FORMS {fecha_actual} — {total_passed} OK / {total_failed} errores"
+        
+        cuerpo = f"📊 Reporte de Revisión Masiva de Formularios\n"
+        cuerpo += f"Fecha: {fecha_actual}\n"
+        cuerpo += f"Tiempo de ejecución: {counts.get('elapsed_time', 'N/A')}\n"
+        cuerpo += f"Resultado Global: {resultado_global}\n"
+        cuerpo += f"Formularios ON Procesados: {total_passed + total_failed} (Exitosos: {total_passed}, Con errores: {total_failed})\n"
+        cuerpo += f"Formularios OFF Omitidos: {counts.get('total_skipped', 0)}\n\n"
+        
+        html_table = _build_masivo_table_html(failures, market_summaries)
+        
+        adjuntos = []
+        if adjuntar_res:
+            # Adjuntar los Excel individuales de cada mercado en vez del archivo consolidado temporal
+            parent_dir = os.path.dirname(excel_path)
+            if os.path.exists(parent_dir):
+                market_folders = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if d.startswith("resultadoMasivo_") and os.path.isdir(os.path.join(parent_dir, d))]
+                for folder in market_folders:
+                    for f_name in os.listdir(folder):
+                        if f_name.endswith(".xlsx") and not f_name.startswith("~$"):
+                            xlsx_path = os.path.join(folder, f_name)
+                            if os.path.getsize(xlsx_path) < 24 * 1024 * 1024:
+                                adjuntos.append(xlsx_path)
+            
+        # Buscar carpetas individuales de cada mercado (resultadoMasivo_*) para adjuntar sus ZIPs si corresponde
+        if adjuntar_ss:
+            parent_dir = os.path.dirname(excel_path)
+            if os.path.exists(parent_dir):
+                market_folders = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if d.startswith("resultadoMasivo_") and os.path.isdir(os.path.join(parent_dir, d))]
+                for folder in market_folders:
+                    capturas_path = os.path.join(folder, "Capturas")
+                    # Solo zippeamos y adjuntamos el mercado si contiene capturas de pantalla creadas
+                    if os.path.exists(capturas_path) and os.listdir(capturas_path):
+                        zip_files = crear_zip_de_carpeta(folder)
+                        if zip_files:
+                            adjuntos.extend(zip_files)
+                
+        destinatario = obtener_email_destinatario()
+        _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=html_table + _FIRMA_HTML)
+        return True
+    except Exception as e:
+        print(f"❌ Error al enviar email de revisión masiva: {e}")
+        return False

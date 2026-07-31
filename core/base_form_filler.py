@@ -1614,10 +1614,13 @@ class BaseFormFiller:
             resolved_field_configs.append(resolved)
 
         processed_ids = set()
+        solo_verificar_visual = bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False))
 
         def fill_with_dependencies(field_config):
             field_id = field_config.get("__resolved_id") or field_config.get("id")
             if field_id in processed_ids:
+                return
+            if solo_verificar_visual and len(processed_ids) >= 2:
                 return
             # Si este campo es hijo en dependencias dinámicas, completar el padre primero
             parent_id = dyn_dependencies.get(field_id)
@@ -1700,8 +1703,12 @@ class BaseFormFiller:
                         if generated:
                             field_value = generated
 
-                # Perú: sanitizar número de documento según tipo seleccionado
-                if field_id == "ci" and str(self.config.get("pais", "")).lower() in ("peru", "pe"):
+                # Perú: sanitizar número de documento según tipo seleccionado.
+                # OJO con el id: en los forms visid / gm_front el 'ci' del mapping se resuelve
+                # al alias 'document' (_VISID_ID_ALIASES) ANTES de llegar acá, así que
+                # comparar sólo contra "ci" dejaba estos forms sin sanitizar y el lead se
+                # rechazaba por longitud cuando el tipo elegido no era DNI.
+                if field_id in ("ci", "document") and str(self.config.get("pais", "")).lower() in ("peru", "pe"):
                     try:
                         doc_type_el = self.safe_find_element(By.ID, "document-type")
                         if doc_type_el:
@@ -1758,8 +1765,12 @@ class BaseFormFiller:
             processed_ids.add(field_id)
 
         for field_config in resolved_field_configs:
+            if solo_verificar_visual and len(processed_ids) >= 2:
+                print("⚠️ [DEBUG-FILL] Llenado parcial activo: se detiene el llenado tras completar 2 campos.")
+                break
             fill_with_dependencies(field_config)
-        self._auto_fill_unmapped_dropdowns(self.field_mapping)
+        if not solo_verificar_visual:
+            self._auto_fill_unmapped_dropdowns(self.field_mapping)
 
     # === Adobe AEM Adaptive Form (formularios "2.0") =========================
     # Lógica compartida en utils/aem_fill.py (misma fuente para desktop y LambdaTest).
@@ -1777,8 +1788,16 @@ class BaseFormFiller:
         pais = str(self.config.get("pais", "")).lower()
         is_brasil = pais in ("brasil", "brazil", "br")
         fd = dict(form_data) if isinstance(form_data, dict) else {}
-        # Asegurar cpf/cnpj/cep desde __by_id (por si el normalizado no los trae)
-        by_id = fd.get("__by_id", {}) if isinstance(fd.get("__by_id"), dict) else {}
+        
+        # Modo rellenado parcial
+        if bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
+            fd = {
+                "firstname": fd.get("firstname") or "Test",
+                "lastname": fd.get("lastname") or "User"
+            }
+        else:
+            # Asegurar cpf/cnpj/cep desde __by_id (por si el normalizado no los trae)
+            by_id = fd.get("__by_id", {}) if isinstance(fd.get("__by_id"), dict) else {}
         for _src, _dst in (("cpf", "cpf"), ("cnpj", "cnpj"), ("cep", "cep"),
                            ("zip", "cep"), ("postal", "cep"),
                            ("vin", "vin"), ("vin-code", "vin"), ("chassis", "vin")):
@@ -1789,6 +1808,26 @@ class BaseFormFiller:
             gen_doc=self._generate_brazil_document,
             record=self._record_field_value,
         )
+
+    # Campos propios del Libro de Reclamaciones. Alcanza con estos dos para reconocerlo:
+    # su layout no coincide con el mapping del país (Documento cae en Teléfono, Celular en
+    # E-mail…) y necesita el fill directo por ID.
+    _LIBRO_RECLAMACIONES_IDS = ("cc_name", "cc_telephone")
+
+    def _is_libro_reclamaciones_form(self, landing_url):
+        """True si el form actual es un Libro de Reclamaciones.
+
+        Se detecta por DOM (ids cc_*) y no sólo por la URL: además de la landing clásica
+        chevrolet.com.pe/libro-reclamaciones-virtual, el mismo formulario se publica suelto
+        en gm_front (…/form/form-reclamos), donde el match por slug no daba y los datos
+        terminaban corridos de campo.
+        """
+        if "libro-reclamaciones" in (landing_url or "").lower():
+            return True
+        try:
+            return all(self._element_exists_by_id(fid) for fid in self._LIBRO_RECLAMACIONES_IDS)
+        except Exception:
+            return False
 
     def _fill_libro_reclamaciones_direct(self, form_data):
         """
@@ -1832,14 +1871,36 @@ class BaseFormFiller:
 
         _fill_by_id("cc_name", nombre)
         _fill_by_id("cc_telephone", phone)
+        
+        if bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
+            current_ss_number = getattr(self, 'ss_counter', 0)
+            if self.screenshot_manager:
+                self.screenshot_manager.take_form_screenshot(current_ss_number, "completado", full_page=True)
+            return f"form_completado_{current_ss_number}.png"
+
         _fill_by_id("cc_ci", document)
         _fill_by_id("cc_email", email)
+
+        # Resto de campos del reclamo: no están en el mapping del país y el form los valida
+        # por JS (en el DOM figuran como required=false), así que hay que llenarlos acá.
+        _fill_by_id("cc_address", "Av. Javier Prado Este 1234")
+        _fill_by_id("cc_amount", "1000")
+        _fill_by_id("cc_details", "Detalle de prueba automatizada del formulario.")
+        _fill_by_id("cc_details_claim", "Detalle de prueba automatizada del formulario.")
+        _fill_by_id("cc_order_claim", "Pedido de prueba automatizada.")
 
         # Ciudad aleatoria, luego esperar y seleccionar Concesionario aleatorio
         self.safe_select_option_if_visible("city", "", "Ciudad")
         time.sleep(0.5)
         if self._wait_for_dependent_dropdown_ready("dealer", parent_id="city"):
             self.safe_select_option_if_visible("dealer", "", "Concesionario")
+
+        # Radios obligatorios (mayor de edad / bien contratado / reclamo-queja) y el
+        # checkbox de términos del pie.
+        try:
+            self._handle_terms_checkboxes()
+        except Exception as _e:
+            print(f"  ⚠ libro-reclamaciones: radios/checkboxes — {_e}")
 
         current_ss_number = getattr(self, 'ss_counter', 0)
         if self.screenshot_manager:
@@ -1857,6 +1918,7 @@ class BaseFormFiller:
         luego modelo/kit final, términos y captura. Funciona en 1 paso o multipaso sin configuración extra.
         """
         current_ss_number = self.ss_counter
+        solo_verificar_visual = bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False))
 
         dependencies = {
             "models": "kits[]",
@@ -1916,6 +1978,8 @@ class BaseFormFiller:
                     pass
             # Clic preliminar para forzar validación y activar mensajes de error de este paso
             try:
+                if solo_verificar_visual:
+                    raise Exception("Modo 'No enviar lead' activo — omitiendo click preliminar.")
                 # Buscar el botón Siguiente o Enviar visible en este paso.
                 # Si el CTA "Siguiente" YA está visible, se clickea en vacío para arrojar los
                 # mensajes de error antes de llenar. Si NO está visible (CTA gated tras un campo
@@ -1961,6 +2025,10 @@ class BaseFormFiller:
                 self._fill_visible_fields_from_mapping(form_data, dependencies)
                 self._record_model_from_url_if_missing()
 
+            if solo_verificar_visual:
+                print("⚠️ [DEBUG] Llenado parcial activo: deteniendo tras primer paso.")
+                break
+
             if not self._has_next_button():
                 break
 
@@ -1993,6 +2061,15 @@ class BaseFormFiller:
                 raise RuntimeError(msg)
         else:
             raise RuntimeError(f"auto_step: se alcanzó el máximo de iteraciones ({max_iter})")
+
+        if solo_verificar_visual:
+            self.reposition_to_form(self.expected_form_url)
+            _last_step = int(getattr(self, "_current_step", 1) or 1)
+            _stage_fin = f"completado_paso{_last_step}" if _last_step > 1 else "completado"
+            form_completado_name = self.screenshot_manager.fname("form", _stage_fin, current_ss_number)
+            self.screenshot_manager.take_form_screenshot(current_ss_number, _stage_fin, full_page=True)
+            print(f"Captura 2/3: Formulario completado (Verificación visual - parcial)")
+            return form_completado_name
 
         self._finalize_model_kit_on_last_step(form_data)
         # Rellenar requeridos visibles sin dato (ej. Rua/Número/Data de Nascimento) con
@@ -3528,7 +3605,15 @@ class BaseFormFiller:
             required_len, no_leading_zero = 8, True
         elif "ruc" in dt:
             required_len, no_leading_zero = 11, False
-        elif "carn" in dt or "extran" in dt or "pasaporte" in dt:
+        elif "pasaporte" in dt:
+            # El pasaporte es ALFANUMÉRICO: se conservan las letras del valor original y se
+            # completa con caracteres alfanuméricos, no con dígitos.
+            alnum = "".join(c for c in str(raw_value or "") if c.isalnum()).upper()
+            _pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+            while len(alnum) < 12:
+                alnum += random.choice(_pool)
+            return alnum[:12]
+        elif "carn" in dt or "extran" in dt:
             required_len, no_leading_zero = 12, False
         else:
             return raw_value
@@ -4546,6 +4631,9 @@ class BaseFormFiller:
             "have_interest": ["renovar", "suscribir"],
             "have-chevrolet": ["si", "sí", "no"],
             "client": ["si", "sí"],
+            # Libro de Reclamaciones: elegir "menor de edad" abre un bloque extra obligatorio
+            # (responsable legal) que el lead no tiene cómo completar.
+            "cc-younger-status": ["soy mayor de edad"],
         }
 
         preferred_values = specific_priority.get(name_key, [])
@@ -5277,6 +5365,9 @@ class BaseFormFiller:
     def submit_and_verify_form(self, current_ss_number, expected_form_url):
         """Envía el formulario y verifica resultado"""
         expected_form_url = self._sanitize_url(expected_form_url)
+        if bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
+            print("🚫 [DEBUG] Modo 'No enviar lead' activo. Omitiendo envío final.")
+            return "PASS (Verificación visual)", "Verificación visual"
         try:
             boton_enviar, used_sel = self._resolve_submit_button(wait_seconds=3)
             if not boton_enviar:
@@ -5370,13 +5461,38 @@ class BaseFormFiller:
                     pass
                 return False
 
+            # El banner de error de event_id ("Lo siento, ocurrió un inconveniente…") es
+            # EFÍMERO: en algunos forms se borra a los ~5s. Si sólo se lo busca después de
+            # agotar los 15s de espera de la TY ya no está, y el envío fallido se reportaba
+            # como "Formulario sigue visible" en vez de como error de servidor. Por eso se
+            # chequea durante la espera y se corta apenas aparece.
+            _event_id_seen = [False]
+
+            def _ty_or_event_id_error(d):
+                if _ty_visible(d):
+                    return True
+                try:
+                    if self._detect_event_id_error():
+                        _event_id_seen[0] = True
+                        return True
+                except Exception:
+                    pass
+                return False
+
             try:
-                WebDriverWait(self.driver, 15).until(_ty_visible)
+                WebDriverWait(self.driver, 15).until(_ty_or_event_id_error)
+                if _event_id_seen[0]:
+                    raise TimeoutException("event_id error detectado durante la espera de TY")
                 result_text = "Lead enviado correctamente"
                 print("TY div detectado. Esperando carga completa...")
                 time.sleep(1)
 
             except TimeoutException:
+                if _event_id_seen[0]:
+                    result_text = "ERROR_EVENT_ID: Error de servidor al envío - formulario recargado automáticamente"
+                    print(f" Error event_id detectado en página: {result_text}")
+                    return result_text, None
+
                 # T3/AEM: capturar SIEMPRE el estado post-submit aunque no haya TY, para
                 # que se vea qué pasó (form más largo → full-page).
                 if getattr(self, "_is_aem", False) and self.screenshot_manager:
@@ -5706,7 +5822,7 @@ class BaseFormFiller:
                     self._is_aem = self._is_aem_adaptive_form()
 
                     # 3b. Click enviar vacío + captura errores (todos excepto libro-reclamaciones)
-                    _is_libro_reclamaciones = "libro-reclamaciones" in (landing_url or "").lower()
+                    _is_libro_reclamaciones = self._is_libro_reclamaciones_form(landing_url)
                     if not _is_libro_reclamaciones:
                         try:
                             _btn_empty, _ = self._resolve_submit_button(wait_seconds=2)

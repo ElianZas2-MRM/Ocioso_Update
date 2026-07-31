@@ -392,6 +392,47 @@ Mientras corre, la ventana de atrás queda bloqueada (igual que en Envío de Lea
 
 ---
 
+## Pestaña: Revisión Masiva (sin envío)
+
+> ⚠️ **Esta pestaña todavía debe testearse al 100% para verificar su correcto funcionamiento.**
+> Se validó el flujo principal sobre Perú (2 URLs, PASS), pero **falta cubrir el resto de los
+> mercados, el modo paralelo, "solo fails", la sincronización con la matriz y los reportes
+> consolidados**. Tratá sus resultados como orientativos hasta terminar esa validación.
+
+Recorre en masa el Excel maestro de forms (`GM Forms - <año>.xlsx`) y verifica, **sin enviar
+ningún lead**, que cada URL responda bien y que el formulario esperado esté realmente inserto
+en la landing. Rellena solo un par de campos para comprobar que el form es interactivo.
+
+**Paso a paso:**
+
+1. **MERCADOS**: tildá los países a revisar (las tarjetas con el código: AR, BR, PE…).
+2. **SELECCIONAR EXCEL DE FORMS**: por defecto toma `data/GM Forms - 2026.xlsx` si existe;
+   si no, buscalo con **Buscar archivo**.
+3. **CONFIGURACIÓN DE COLUMNAS**: los nombres de las columnas del Excel maestro. Por defecto
+   `SEGMENTO`, `ESTADO`, `URL LIVE`, `URL SECURE`.
+4. Opciones: **tomar capturas**, **borrar comentarios**, **solo fails** (reusa los PASS de la
+   corrida anterior) y **ejecución en paralelo** (un navegador por mercado).
+
+Las filas con `ESTADO` en **OFF** se saltean y quedan marcadas como `SKIPPED` en gris.
+
+**Qué devuelve** — en `resultados/resultado_urlsinsertas/`, un Excel consolidado más uno por
+mercado (`resultadoMasivo_<País>/`) con las columnas:
+
+| Columna | Qué informa |
+|---|---|
+| `currentUrl` | URL final tras redirecciones |
+| `LandingStatus` | HTTP de la landing (PASS / FAIL / redirect) |
+| `Secure_Inserted` | URL del form realmente encontrada en la landing |
+| `Excel==Inserted?` | Si el form inserto coincide con el del Excel |
+| `Displayed?` | Si el formulario se pudo rellenar (es interactivo) |
+| `statusInserted` | HTTP de la URL secure del Excel |
+| `formsCount` | Cuántos iframes de form GM hay en la página |
+
+> Esta pestaña trabaja **solo con el formato landing + form**. Las URLs sueltas (formulario
+> standalone, sin landing donde esté inserto) no aplican acá: para ésas usá Envío de Leads.
+
+---
+
 ## Estructura de carpetas
 
 - `core/`: lógica base de automatización y formularios por país, incluido `dealer_comparator_runner.py`.
@@ -446,9 +487,21 @@ Genera **solo la carpeta portable**:
 
 > El build **ya no deja** el `.exe` suelto en `dist/` ni arma el `.zip`: son pasos que sumaban tiempo y el portable ya trae todo. Si necesitás mandarle la app a alguien, comprimí vos la carpeta `dist/OsocioFormAutomation_portable/`.
 
+### Por qué el portable trae una carpeta `_internal/`
+
+El build se hace en modo **onedir**: el portable tiene el `OsocioFormAutomation.exe` (~14 MB)
+más una carpeta `_internal/` con las librerías. **Las dos cosas viajan juntas** — si copiás
+solo el `.exe` suelto, no abre.
+
+Antes se compilaba en modo *onefile* (un único `.exe` de ~56 MB). Se cambió porque en ese modo
+el ejecutable **descomprime todo el contenido a `%TEMP%\_MEIxxxxx` en cada arranque** y lo borra
+al cerrar, lo que hacía que la app tardara muchísimo en abrir. Con onedir la ventana aparece en
+unos **3 segundos**. No se pierde nada: el portable siempre fue una carpeta (con `data/`,
+`json/`, `drivers/` al lado), así que el "archivo único" nunca se estaba aprovechando.
+
 > **Ojo:** el `.exe` del portable se compila desde el código fuente **en el momento del build**. Si cambiás código, tenés que volver a correr `build.bat` para que el portable lo tome — abrir el `.exe` viejo sigue ejecutando la versión anterior. Para probar cambios al toque, corré `python run.py` desde la carpeta del proyecto.
 
-`lambdatest_mac/` y `lambdatest_android/` van empaquetados **dentro** del `.exe` (vía PyInstaller), no como carpetas sueltas al lado — no hace falta copiarlos a mano.
+`lambdatest_mac/` y `lambdatest_android/` van empaquetados por PyInstaller **dentro de `_internal/`**, no como carpetas sueltas al lado del `.exe` — no hace falta copiarlos a mano.
 
 El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email o la access key de LambdaTest de la PC donde se compiló). Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 

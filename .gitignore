@@ -53,3 +53,7 @@ Ocioso_Update - COPIA_SEGURIDAD-VERSIONUNO/
 
 # Salida local del diagnostico de LambdaTest (contiene usuario)
 Diagnostico_LambdaTest_resultado.txt
+
+# Excels de trabajo local (matriz de forms y datos de prueba) - no versionar
+data/GM Forms*.xls*
+data/FormsBolivia_TDP_test_data.xlsx
