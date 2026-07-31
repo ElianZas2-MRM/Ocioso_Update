@@ -279,10 +279,53 @@ def generar_documento(pais):
         # (minlength = maxlength = 7): con 8 el form recorta el último.
         return str(random.randint(1_000_000, 9_999_999))
     if pais == "Peru":
-        # DNI peruano: exactamente 8 dígitos (los forms validan "Ingresa al menos 8 dígitos").
-        # El rango genérico podía devolver 7 y el form lo rechazaba.
-        return str(random.randint(10_000_000, 99_999_999))
+        # Sin tipo de documento indicado se asume DNI (8 dígitos). Para generar el par
+        # tipo + número coherente usar generar_tipo_y_documento_peru().
+        return generar_documento_peru("DNI")
     return str(random.randint(1_000_000, 99_999_999))
+
+
+# Perú: cada tipo de documento tiene su propia regla en el form. Los valores salen de los
+# atributos reales del campo 'document' en los forms gm_front (maxlength + inputmode), que
+# es lo que después valida el mensaje "Ingresa al menos N dígitos":
+#   {tipo del select: (longitud exacta, alfanumérico?)}
+# El pasaporte es el único con inputmode="text": acepta letras y números.
+DOC_RULES_PERU = {
+    "DNI":                  (8,  False),
+    "RUC":                  (11, False),
+    "Carné de Extranjería": (12, False),
+    "Pasaporte":            (12, True),
+}
+
+_PASAPORTE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+
+def generar_documento_peru(tipo):
+    """Número de documento peruano válido para el tipo indicado (ver DOC_RULES_PERU)."""
+    largo, alfanumerico = DOC_RULES_PERU.get(tipo, DOC_RULES_PERU["DNI"])
+
+    if alfanumerico:
+        # Pasaporte: al menos una letra, para que se note que no es un número más.
+        chars = [random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")]
+        chars += [random.choice(_PASAPORTE_CHARS) for _ in range(largo - 1)]
+        random.shuffle(chars)
+        return "".join(chars)
+
+    if tipo == "RUC":
+        # El RUC real arranca con 10 (persona natural) o 20 (empresa).
+        prefijo = random.choice(("10", "20"))
+        return prefijo + "".join(str(random.randint(0, 9)) for _ in range(largo - len(prefijo)))
+
+    # Sin cero inicial: el form lo trata como número y se lo comería.
+    return str(random.randint(1, 9)) + "".join(
+        str(random.randint(0, 9)) for _ in range(largo - 1)
+    )
+
+
+def generar_tipo_y_documento_peru():
+    """Elige un tipo de documento al azar y devuelve (tipo, número) coherentes entre sí."""
+    tipo = random.choice(list(DOC_RULES_PERU))
+    return tipo, generar_documento_peru(tipo)
 
 
 # ── Generadores de celular ───────────────────────────────────────────────────
@@ -333,11 +376,21 @@ def generar_fila_datos(pais, device=None, doc_types=None):
     columnas semánticas (CPF/CNPJ/CEP) en vez de la única 'Documento'."""
     nombre = generar_nombre()
     apellido = generar_apellido()
+
+    # Perú: el tipo de documento y el número van juntos — cada tipo exige una longitud
+    # distinta (DNI 8 / RUC 11 / Carné 12 / Pasaporte 12 alfanumérico). Se sortea el tipo
+    # y se genera el número que le corresponde; si fueran independientes, el form rechaza
+    # el lead con "Ingresa al menos N dígitos".
+    if pais == "Peru":
+        tipo_doc_pe, documento = generar_tipo_y_documento_peru()
+    else:
+        tipo_doc_pe, documento = "", generar_documento(pais)
+
     fila = {
         "Modelo": "",
         "Nombre": nombre,
         "Apellido": apellido,
-        "Documento": generar_documento(pais),
+        "Documento": documento,
         "Celular": generar_celular(pais),
         "Email": generar_email(nombre, apellido, pais, device),
         # Campos de selección aleatoria en el formulario → vacíos
@@ -357,13 +410,11 @@ def generar_fila_datos(pais, device=None, doc_types=None):
         "Comentario": "",
         "Tipo de documento": "",
         "Tipo de documento (Perú)": "",
-        # Perú: el select 'document-type' define cuántos dígitos exige el nº de documento
-        # (DNI 8 / RUC 11 / Carné de Extranjería y Pasaporte 12). Si la columna va vacía, el
-        # form filler termina eligiendo una opción al azar DESPUÉS de haber escrito el
-        # documento y el form rechaza el lead por longitud. Se fija DNI, que es el tipo que
-        # matchea el 'Documento' de 8 dígitos que genera generar_documento("Peru").
+        # Perú: tipo sorteado arriba, en conjunto con el nº de documento. Si esta columna
+        # va vacía el form filler elige una opción al azar DESPUÉS de haber escrito el
+        # documento y el form rechaza el lead por longitud.
         # El nombre de la columna sale de country_configs (Peru → 'Tipo de Documento').
-        "Tipo de Documento": "DNI" if pais == "Peru" else "",
+        "Tipo de Documento": tipo_doc_pe,
         "Kilometraje": "",
         "Año de adquisición": "",
         "Seguro": "",
