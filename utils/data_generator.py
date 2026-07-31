@@ -278,6 +278,10 @@ def generar_documento(pais):
         # La CI paraguaya en los forms actuales acepta exactamente 7 dígitos
         # (minlength = maxlength = 7): con 8 el form recorta el último.
         return str(random.randint(1_000_000, 9_999_999))
+    if pais == "Peru":
+        # DNI peruano: exactamente 8 dígitos (los forms validan "Ingresa al menos 8 dígitos").
+        # El rango genérico podía devolver 7 y el form lo rechazaba.
+        return str(random.randint(10_000_000, 99_999_999))
     return str(random.randint(1_000_000, 99_999_999))
 
 
@@ -353,6 +357,13 @@ def generar_fila_datos(pais, device=None, doc_types=None):
         "Comentario": "",
         "Tipo de documento": "",
         "Tipo de documento (Perú)": "",
+        # Perú: el select 'document-type' define cuántos dígitos exige el nº de documento
+        # (DNI 8 / RUC 11 / Carné de Extranjería y Pasaporte 12). Si la columna va vacía, el
+        # form filler termina eligiendo una opción al azar DESPUÉS de haber escrito el
+        # documento y el form rechaza el lead por longitud. Se fija DNI, que es el tipo que
+        # matchea el 'Documento' de 8 dígitos que genera generar_documento("Peru").
+        # El nombre de la columna sale de country_configs (Peru → 'Tipo de Documento').
+        "Tipo de Documento": "DNI" if pais == "Peru" else "",
         "Kilometraje": "",
         "Año de adquisición": "",
         "Seguro": "",

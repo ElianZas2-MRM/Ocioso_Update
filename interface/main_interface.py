@@ -1054,6 +1054,7 @@ def iniciar_interfaz():
     # después de autenticar (por defecto, tras el login el navegador pasa a segundo plano).
     var_preview_navegador = tk.BooleanVar(value=bool(_ui_prefs.get("preview_visible_browser", False)))
 
+
     def _on_pause_change(*_):
         if var_pausar_autenticacion.get():
             var_ver_navegador.set(True)
@@ -1172,6 +1173,7 @@ def iniciar_interfaz():
         ("Validación de Campos", "validation", False),
         ("Generar Excels con Datos", "excel", False),
         ("Comparar Dealers vs Form", "dealers", False),
+        ("Revisión Masiva de Forms", "check_masivo", False),
     ]
     for t_text, t_name, t_disabled in tabs_data:
         btn = tk.Button(tab_bar, text=t_text, font=("Segoe UI", 9, "bold"), bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG,
@@ -3398,6 +3400,7 @@ def iniciar_interfaz():
                                               headless=False, background=background, is_scheduled=scheduled,
                                               pausar_autenticacion=_pausar,
                                               preview_visible_browser=_preview)
+
                     if excel:
                         form.EXCEL_PATH = excel  # ← una sesión por Excel generado
                     def _pcb(done, total):
@@ -3538,6 +3541,8 @@ def iniciar_interfaz():
     btn_resultados.bind("<Enter>", lambda e: btn_resultados.config(bg=BUTTON_HOVER))
     btn_resultados.bind("<Leave>", lambda e: btn_resultados.config(bg=BUTTON_INACTIVE))
 
+
+
     btn_enviar = tk.Button(d_header, text=" EJECUTAR ENVÍO", image=get_button_icon("play_green.png"), compound="left",
                            font=("Segoe UI", 10, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
                            relief="flat", bd=0, activebackground=EXECUTE_HOVER, activeforeground=EXECUTE_FG,
@@ -3622,7 +3627,837 @@ def iniciar_interfaz():
 
 
     # ==========================================
-    # TAB 3: GENERAR EXCELS CON DATOS (excel)
+    # TAB: REVISIÓN MASIVA DE FORMS (check_masivo)
+    # ==========================================
+    # Barra de acciones fija en el footer (siempre visible sin scroll)
+    masivo_actions_bar = tk.Frame(tabs["check_masivo"], bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    masivo_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
+
+    # Scrollable container (ocupa el resto)
+    masivo_scroll_frame = make_scrollable_tab_container(tabs["check_masivo"])
+
+    # 📖 GUÍA DE INICIO RÁPIDO
+    guia_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    guia_card.pack(fill="x", pady=(0, 8), ipady=5)
+    
+    g_header = tk.Frame(guia_card, bg=CARD_BG_COLOR)
+    g_header.pack(fill="x", padx=15, pady=(6, 4))
+    tk.Label(g_header, text="📖 GUÍA DE INICIO RÁPIDO", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+    
+    tk.Label(guia_card,
+             text="① Seleccioná el archivo Excel de PMs (ej. 'GM Forms - 2026.xlsx').\n"
+                  "② Configurá los nombres de las columnas en el panel de columnas si cambian a futuro.\n"
+                  "③ Tildá los mercados que querés auditar a la vez en la sección de Mercados.\n"
+                  "④ Clic en 'INICIAR REVISIÓN MASIVA'. Se abrirá una ventana de ejecución con el progreso detallado.\n"
+                  "💡 Disclaimer: Los comentarios en la columna 'Comentarios' se conservarán por defecto en el reporte final.",
+             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", justify="left", anchor="w", wraplength=1000).pack(fill="x", padx=15, pady=(2, 6))
+
+    # --- 2. PAÍSES A EJECUTAR (Card Panel) ---
+    paises_masivo_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    paises_masivo_card.pack(fill="x", pady=(0, 8), ipady=5)
+
+    pm_header = tk.Frame(paises_masivo_card, bg=CARD_BG_COLOR)
+    pm_header.pack(fill="x", padx=15, pady=(6, 4))
+    
+    tk.Label(pm_header, text="🌐 PAÍSES A EJECUTAR", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
+
+    selected_countries_masivo = {p: True for p in paises_list} # Todos seleccionados por defecto
+    country_cards_masivo = {}
+    country_code_labels_masivo = {}
+    country_name_labels_masivo = {}
+
+    counter_lbl_masivo = tk.Label(pm_header, text="9 seleccionados", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
+    counter_lbl_masivo.pack(side="right", padx=(10, 0))
+
+    tk.Label(paises_masivo_card, text="Elegí el o los países que querés ejecutar.",
+             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 4))
+
+    def update_country_counter_masivo():
+        count = sum(1 for v in selected_countries_masivo.values() if v)
+        counter_lbl_masivo.config(text=f"{count} seleccionados")
+
+    def toggle_country_masivo(name):
+        selected_countries_masivo[name] = not selected_countries_masivo[name]
+        card = country_cards_masivo[name]
+        lbl_code = country_code_labels_masivo[name]
+        lbl_name = country_name_labels_masivo[name]
+        if selected_countries_masivo[name]:
+            card.config(highlightbackground=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+            lbl_code.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+            lbl_name.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+        else:
+            card.config(highlightbackground=BORDER_COLOR, bg=CARD_BG_COLOR)
+            lbl_code.config(fg="white", bg=CARD_BG_COLOR)
+            lbl_name.config(fg=TEXT_SECONDARY, bg=CARD_BG_COLOR)
+        update_country_counter_masivo()
+
+    grid_frame_masivo = tk.Frame(paises_masivo_card, bg=CARD_BG_COLOR)
+    grid_frame_masivo.pack(fill="x", padx=15, pady=2)
+
+    p_codes = {"Argentina": "AR", "Bolivia": "BO", "Brasil": "BR", "Chile": "CL", "Colombia": "CO", "Ecuador": "EC", "Paraguay": "PY", "Peru": "PE", "Uruguay": "UY"}
+
+    for idx, pais in enumerate(paises_list):
+        code = p_codes[pais]
+        card = tk.Frame(grid_frame_masivo, bg=BUTTON_INACTIVE, bd=0, highlightthickness=1, highlightbackground=ACCENT_COLOR, cursor="hand2")
+        card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
+        grid_frame_masivo.columnconfigure(idx % 9, weight=1)
+
+        code_lbl = tk.Label(card, text=code, font=("Segoe UI", 11, "bold"), bg=BUTTON_INACTIVE, fg=ACCENT_COLOR, cursor="hand2")
+        code_lbl.pack(pady=(5, 1))
+        
+        name_lbl = tk.Label(card, text=pais, font=("Segoe UI", 8), bg=BUTTON_INACTIVE, fg=ACCENT_COLOR, cursor="hand2")
+        name_lbl.pack(pady=(0, 5))
+
+        country_cards_masivo[pais] = card
+        country_code_labels_masivo[pais] = code_lbl
+        country_name_labels_masivo[pais] = name_lbl
+
+        def bind_click_masivo(w, p=pais):
+            w.bind("<Button-1>", lambda e: toggle_country_masivo(p))
+        bind_click_masivo(card)
+        bind_click_masivo(code_lbl)
+        bind_click_masivo(name_lbl)
+
+    links_frame_masivo = tk.Frame(paises_masivo_card, bg=CARD_BG_COLOR)
+    links_frame_masivo.pack(fill="x", padx=15, pady=(2, 2))
+
+    def select_all_countries_masivo():
+        for p in paises_list:
+            if not selected_countries_masivo[p]:
+                toggle_country_masivo(p)
+    def select_none_countries_masivo():
+        for p in paises_list:
+            if selected_countries_masivo[p]:
+                toggle_country_masivo(p)
+
+    all_btn_masivo = tk.Label(links_frame_masivo, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+    all_btn_masivo.pack(side="left")
+    all_btn_masivo.bind("<Button-1>", lambda e: select_all_countries_masivo())
+
+    none_btn_masivo = tk.Label(links_frame_masivo, text="Ninguno", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+    none_btn_masivo.pack(side="left", padx=12)
+    none_btn_masivo.bind("<Button-1>", lambda e: select_none_countries_masivo())
+
+    # Card 1: Seleccionar Excel
+    excel_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    excel_card.pack(fill="x", pady=(0, 8), ipady=5)
+
+    e_header = tk.Frame(excel_card, bg=CARD_BG_COLOR)
+    e_header.pack(fill="x", padx=15, pady=(6, 4))
+    tk.Label(e_header, text="📂 SELECCIONAR EXCEL DE FORMS (GM Forms)", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+
+    file_frame = tk.Frame(excel_card, bg=CARD_BG_COLOR)
+    file_frame.pack(fill="x", padx=15, pady=5)
+
+    var_excel_masivo = tk.StringVar(value="")
+    
+    # Intento de cargar GM Forms - 2026.xlsx por defecto si existe
+    default_excel = os.path.join(DATA_DIR, "GM Forms - 2026.xlsx")
+    if os.path.exists(default_excel):
+        var_excel_masivo.set(os.path.normpath(default_excel))
+
+    entry_excel = tk.Entry(file_frame, textvariable=var_excel_masivo, font=("Segoe UI", 10), bg=ENTRY_BG, fg=TEXT_PRIMARY,
+                           insertbackground="white", bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR)
+    entry_excel.pack(side="left", fill="x", expand=True, ipady=3, padx=(0, 10))
+
+    def buscar_excel_masivo():
+        from tkinter import filedialog
+        fn = filedialog.askopenfilename(filetypes=[("Excel Files", "*.xlsx")])
+        if fn:
+            var_excel_masivo.set(os.path.normpath(fn))
+
+    btn_buscar = tk.Button(file_frame, text="Buscar archivo", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE,
+                           relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_SAVE,
+                           padx=12, pady=4, cursor="hand2", command=buscar_excel_masivo)
+    btn_buscar.pack(side="right")
+    btn_buscar.bind("<Enter>", lambda e: btn_buscar.config(bg=BUTTON_HOVER))
+    btn_buscar.bind("<Leave>", lambda e: btn_buscar.config(bg=BUTTON_INACTIVE))
+
+    # Card 2: Nombres de Columnas Mapeadas
+    mapping_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    mapping_card.pack(fill="x", pady=(0, 8), ipady=5)
+
+    map_header = tk.Frame(mapping_card, bg=CARD_BG_COLOR)
+    map_header.pack(fill="x", padx=15, pady=(6, 4))
+    tk.Label(map_header, text="⚙️ CONFIGURACIÓN DE COLUMNAS", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+    tk.Label(map_header, text="Nombres de las columnas en el Excel a buscar.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=12)
+
+    grid_frame = tk.Frame(mapping_card, bg=CARD_BG_COLOR)
+    grid_frame.pack(fill="x", padx=15, pady=5)
+
+    # Variables para configuración de mapeo de nombres de columnas
+    var_col_segmento = tk.StringVar(value="SEGMENTO")
+    var_col_estado = tk.StringVar(value="ESTADO")
+    var_col_url_live = tk.StringVar(value="URL LIVE")
+    var_col_url_secure = tk.StringVar(value="URL SECURE")
+
+    cols_config = [
+        ("Columna SEGMENTO:", var_col_segmento, 0, 0),
+        ("Columna ESTADO:", var_col_estado, 0, 1),
+        ("Columna URL LIVE:", var_col_url_live, 1, 0),
+        ("Columna URL SECURE:", var_col_url_secure, 1, 1),
+    ]
+
+    for label_text, var, row, col in cols_config:
+        f = tk.Frame(grid_frame, bg=CARD_BG_COLOR)
+        f.grid(row=row, column=col, padx=10, pady=5, sticky="ew")
+        grid_frame.columnconfigure(col, weight=1)
+        
+        tk.Label(f, text=label_text, font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 3))
+        ent = tk.Entry(f, textvariable=var, font=("Segoe UI", 10), bg=ENTRY_BG, fg=TEXT_PRIMARY,
+                       insertbackground="white", bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR)
+        ent.pack(fill="x", ipady=3)
+
+    # Card 3: Comparar y Sincronizar Reportes (dentro de masivo_scroll_frame)
+    sync_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    sync_card.pack(fill="x", pady=(0, 8), ipady=8)
+
+    sync_hdr = tk.Frame(sync_card, bg=CARD_BG_COLOR)
+    sync_hdr.pack(fill="x", padx=15, pady=(6, 4))
+    tk.Label(sync_hdr, text="🔄 COMPARAR Y SINCRONIZAR REPORTES", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+    tk.Label(sync_hdr, text="Sincroniza reportes previos con la matriz cargada arriba (dejar vacío para autodetección).", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=12)
+
+    sync_body = tk.Frame(sync_card, bg=CARD_BG_COLOR)
+    sync_body.pack(fill="x", padx=15, pady=5)
+
+    tk.Label(sync_body, text="Reporte de Resultados Histórico (Dejar vacío para buscar automáticamente todos en resultados/):", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 3))
+    
+    sync_file_frame = tk.Frame(sync_body, bg=CARD_BG_COLOR)
+    sync_file_frame.pack(fill="x")
+    
+    var_sync_report_path = tk.StringVar()
+    entry_sync_report = tk.Entry(sync_file_frame, textvariable=var_sync_report_path, font=("Segoe UI", 10), bg=ENTRY_BG, fg=TEXT_PRIMARY,
+                                 insertbackground="white", bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR)
+    entry_sync_report.pack(side="left", fill="x", expand=True, ipady=3, padx=(0, 10))
+    
+    def select_sync_report():
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(filetypes=[("Excel Files", "*.xlsx;*.xls")])
+        if path:
+            var_sync_report_path.set(os.path.normpath(path))
+            
+    btn_select_sync = tk.Button(sync_file_frame, text="Buscar archivo", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE,
+                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_SAVE,
+                                padx=12, pady=4, cursor="hand2", command=select_sync_report)
+    btn_select_sync.pack(side="right")
+    btn_select_sync.bind("<Enter>", lambda e: btn_select_sync.config(bg=BUTTON_HOVER))
+    btn_select_sync.bind("<Leave>", lambda e: btn_select_sync.config(bg=BUTTON_INACTIVE))
+
+    # Fila de Acción (Botón de Sincronizar)
+    sync_action_frame = tk.Frame(sync_body, bg=CARD_BG_COLOR)
+    sync_action_frame.pack(fill="x", pady=(10, 0))
+    
+    def run_sync_action():
+        master_path = var_excel_masivo.get().strip()
+        results_path = var_sync_report_path.get().strip()
+        
+        if not master_path or not os.path.exists(master_path):
+            messagebox.showerror("Error de Sincronización", "Por favor selecciona una Matriz Origen válida en la parte superior.")
+            return
+            
+        auto_mode = (len(results_path) == 0)
+        
+        custom_cols = {
+            "segmento": var_col_segmento.get().strip(),
+            "estado": var_col_estado.get().strip(),
+            "url_live": var_col_url_live.get().strip(),
+            "url_secure": var_col_url_secure.get().strip()
+        }
+
+        # Feedback visual inmediato
+        btn_run_sync.config(state="disabled", text=" Sincronizando...", bg="#AAAAAA")
+        
+        def _safe_ui(fn):
+            """Thread-safe UI update using root.after."""
+            try:
+                root.after(0, fn)
+            except Exception:
+                pass
+        
+        def sync_worker():
+            try:
+                from core.massive_check_runner import sincronizar_reporte_con_matriz
+                
+                if auto_mode:
+                    parent_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
+                    detected_files = []
+                    if os.path.exists(parent_dir):
+                        for folder_name in os.listdir(parent_dir):
+                            folder_path = os.path.join(parent_dir, folder_name)
+                            if os.path.isdir(folder_path) and folder_name.startswith("resultadoMasivo_"):
+                                xlsx_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(".xlsx") and not f.startswith("~$")]
+                                if xlsx_files:
+                                    xlsx_files.sort(key=os.path.getmtime, reverse=True)
+                                    detected_files.append((folder_name.replace("resultadoMasivo_", ""), xlsx_files[0]))
+                    
+                    if not detected_files:
+                        _safe_ui(lambda: messagebox.showerror(
+                            "Sincronización Automática", 
+                            "No se encontraron carpetas resultadoMasivo_* previas con Excels en la ruta de resultados.\n"
+                            "Por favor selecciona un reporte histórico de forma manual."
+                        ))
+                        return
+                        
+                    global_stats = {"added": 0, "updated_state": 0, "deleted": 0}
+                    synced_names = []
+                    last_changelog = ""
+                    
+                    for country, r_path in detected_files:
+                        success, stats = sincronizar_reporte_con_matriz(master_path, r_path, custom_cols)
+                        if success:
+                            global_stats["added"] += stats["added"]
+                            global_stats["updated_state"] += stats["updated_state"]
+                            global_stats["deleted"] += stats["deleted"]
+                            synced_names.append(country)
+                            if stats.get("changelog_path"):
+                                last_changelog = stats["changelog_path"]
+                    
+                    total_changes = global_stats["added"] + global_stats["updated_state"] + global_stats["deleted"]
+                    if total_changes == 0:
+                        title = "Resultado de Comparación"
+                        msg = (f"✅ Comparación realizada: No hay actualizaciones.\n\n"
+                               f"Se compararon {len(synced_names)} mercado(s) ({', '.join(synced_names)}) y no se detectaron diferencias.")
+                        _safe_ui(lambda: messagebox.showinfo(title, msg))
+                    else:
+                        title = "Resultado de Comparación"
+                        msg = (f"📋 Comparación realizada: Hay {total_changes} actualización(es).\n\n"
+                               f"Mercados sincronizados: {', '.join(synced_names)}\n\n"
+                               f"• Filas nuevas agregadas: {global_stats['added']}\n"
+                               f"• Estados/URLs actualizados: {global_stats['updated_state']}\n"
+                               f"• Filas marcadas como eliminadas: {global_stats['deleted']}\n")
+                        if last_changelog:
+                            msg += f"\n📄 Excel de changelog guardado en:\n{last_changelog}"
+                        _safe_ui(lambda: messagebox.showinfo(title, msg))
+                        if last_changelog and os.path.exists(last_changelog):
+                            try:
+                                os.startfile(os.path.dirname(last_changelog))
+                            except Exception:
+                                pass
+                    
+                else:
+                    if not os.path.exists(results_path):
+                        _safe_ui(lambda: messagebox.showerror("Error", "El archivo de resultados manual seleccionado no existe."))
+                        return
+                        
+                    success, stats = sincronizar_reporte_con_matriz(master_path, results_path, custom_cols)
+                    if success:
+                        total_changes = stats["added"] + stats["updated_state"] + stats["deleted"]
+                        changelog_path = stats.get("changelog_path", "")
+                        
+                        if total_changes == 0:
+                            title = "Resultado de Comparación"
+                            msg = "✅ Comparación realizada: No hay actualizaciones.\n\nSe comparó el reporte y no se detectaron diferencias con la matriz origen."
+                            _safe_ui(lambda: messagebox.showinfo(title, msg))
+                        else:
+                            title = "Resultado de Comparación"
+                            msg = (f"📋 Comparación realizada: Hay {total_changes} actualización(es).\n\n"
+                                   f"• Filas nuevas agregadas: {stats['added']}\n"
+                                   f"• Estados/URLs actualizados: {stats['updated_state']}\n"
+                                   f"• Filas marcadas como eliminadas: {stats['deleted']}\n")
+                            if changelog_path:
+                                msg += f"\n📄 Excel de changelog guardado en:\n{changelog_path}"
+                            _safe_ui(lambda: messagebox.showinfo(title, msg))
+                            if changelog_path and os.path.exists(changelog_path):
+                                try:
+                                    os.startfile(os.path.dirname(changelog_path))
+                                except Exception:
+                                    pass
+                    else:
+                        err = str(stats)
+                        _safe_ui(lambda: messagebox.showerror("Error de Sincronización", f"No se pudo sincronizar el reporte:\n{err}"))
+            except Exception as ex:
+                err_msg = str(ex)
+                _safe_ui(lambda: messagebox.showerror("Error Crítico", f"Excepción crítica durante la sincronización:\n{err_msg}"))
+            finally:
+                _safe_ui(lambda: btn_run_sync.config(state="normal", text=" Sincronizar y Actualizar Reporte", bg="#82E0AA"))
+                
+        import threading
+        threading.Thread(target=sync_worker, daemon=True).start()
+
+    btn_run_sync = tk.Button(sync_action_frame, text=" Sincronizar y Actualizar Reporte", image=get_button_icon("sync_white.png"), compound="left",
+                             bg="#82E0AA", fg="#1E6038", activebackground="#6ECB94", activeforeground="#1E6038",
+                             font=("Segoe UI", 10, "bold"), relief="flat", bd=0, padx=16, pady=6, cursor="hand2", command=run_sync_action)
+    btn_run_sync.pack(side="left")
+    btn_run_sync.bind("<Enter>", lambda e: btn_run_sync.config(bg="#6ECB94"))
+    btn_run_sync.bind("<Leave>", lambda e: btn_run_sync.config(bg="#82E0AA"))
+
+    # Card 4: Control de Comentarios y Ejecución (dentro del footer fijo masivo_actions_bar)
+    ctrl_card = tk.Frame(masivo_actions_bar, bg=CARD_BG_COLOR, bd=0)
+    ctrl_card.pack(fill="x", padx=15, pady=8)
+
+    ctrl_hdr = tk.Frame(ctrl_card, bg=CARD_BG_COLOR)
+    ctrl_hdr.pack(fill="x", pady=(2, 4))
+    tk.Label(ctrl_hdr, text="⚡ OPCIONES Y EJECUCIÓN", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
+
+    opts_f = tk.Frame(ctrl_card, bg=CARD_BG_COLOR)
+    opts_f.pack(fill="x", pady=5)
+
+    var_borrar_comentarios = tk.BooleanVar(value=False)
+    cb_borrar_com = tk.Checkbutton(opts_f, text="Borrar todos los comentarios", variable=var_borrar_comentarios,
+                                   bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                                   font=("Segoe UI", 9, "bold"), cursor="hand2")
+    cb_borrar_com.pack(side="left")
+
+    var_tomar_capturas = tk.BooleanVar(value=True)
+    cb_tomar_ss = tk.Checkbutton(opts_f, text="Tomar capturas de pantalla", variable=var_tomar_capturas,
+                                 bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                                 activebackground=CARD_BG_COLOR, activeforeground="white",
+                                 font=("Segoe UI", 9, "bold"), cursor="hand2")
+    cb_tomar_ss.pack(side="left", padx=(20, 0))
+
+    var_solo_fails = tk.BooleanVar(value=False)
+    cb_solo_fails = tk.Checkbutton(opts_f, text="Rerun fails previos", variable=var_solo_fails,
+                                   bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                                   font=("Segoe UI", 9, "bold"), cursor="hand2")
+    cb_solo_fails.pack(side="left", padx=(20, 0))
+
+    var_ejecucion_paralelo = tk.BooleanVar(value=False)
+    cb_paralelo = tk.Checkbutton(opts_f, text="Ejecución en paralelo", variable=var_ejecucion_paralelo,
+                                 bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
+                                 activebackground=CARD_BG_COLOR, activeforeground="white",
+                                 font=("Segoe UI", 9, "bold"), cursor="hand2")
+    cb_paralelo.pack(side="left", padx=(20, 0))
+
+    lbl_disclaimer = tk.Label(opts_f, text="⚠️ Los comentarios existentes en el Excel se conservarán por defecto.",
+                              font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#F1948A")
+    lbl_disclaimer.pack(side="left", padx=20)
+
+    btn_frame = tk.Frame(ctrl_card, bg=CARD_BG_COLOR)
+    btn_frame.pack(fill="x", pady=10)
+
+    def cmd_iniciar_masivo():
+        excel_path = var_excel_masivo.get().strip()
+        if not excel_path or not os.path.exists(excel_path):
+            messagebox.showerror("Archivo No Encontrado", f"El archivo Excel indicado no existe:\n{excel_path}")
+            return
+
+        custom_cols = {
+            "segmento": var_col_segmento.get().strip(),
+            "estado": var_col_estado.get().strip(),
+            "url_live": var_col_url_live.get().strip(),
+            "url_secure": var_col_url_secure.get().strip(),
+        }
+
+        if not all(custom_cols.values()):
+            messagebox.showerror("Error Configuración", "Todos los campos de nombres de columna deben ser completados.")
+            return
+
+        active_markets = [pais for pais, is_sel in selected_countries_masivo.items() if is_sel]
+        if not active_markets:
+            messagebox.showwarning("Sin Mercados", "Por favor, seleccioná al menos un mercado para revisar.")
+            return
+
+        btn_run.config(state="disabled", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
+
+        # Crear modal centrado
+        modal = tk.Toplevel(root)
+        modal.overrideredirect(True) # Quitar bordes de Windows
+        modal_width = 520
+        modal_height = 260 + 46 * len(active_markets)
+        modal_height = max(370, min(modal_height, int(root.winfo_screenheight() * 0.85)))
+        MODAL_BG = "#231830"
+        MODAL_PILL_BG = "#38234D"
+        
+        px = root.winfo_rootx() + (root.winfo_width() - modal_width) // 2
+        py = root.winfo_rooty() + (root.winfo_height() - modal_height) // 2
+        modal.geometry(f"{modal_width}x{modal_height}+{px}+{py}")
+        modal.configure(bg=MODAL_BG, bd=1, highlightthickness=1, highlightbackground=BORDER_COLOR)
+
+        stop_event = threading.Event()
+
+        def _ui(fn):
+            try:
+                root.after(0, fn)
+            except Exception:
+                pass
+
+        def _reset_masivo_btn():
+            try:
+                btn_run.config(state="normal", bg=EXECUTE_BG, fg=EXECUTE_FG)
+            except Exception:
+                pass
+        modal.bind("<Destroy>", lambda e: _reset_masivo_btn() if str(e.widget) == str(modal) else None, add="+")
+
+        def on_cerrar():
+            modal.destroy()
+
+        modal.transient(root)
+        modal.attributes("-topmost", False)
+        modal.lift()
+        try:
+            modal.focus_set()
+        except Exception:
+            pass
+
+        def set_event_blocking(parent, block):
+            for child in parent.winfo_children():
+                if child == modal or str(child).startswith(str(modal)):
+                    continue
+                tags = list(child.bindtags())
+                if block:
+                    if "BlockTag" not in tags:
+                        child.bindtags(("BlockTag",) + tuple(tags))
+                else:
+                    if "BlockTag" in tags:
+                        new_tags = tuple(t for t in tags if t != "BlockTag")
+                        child.bindtags(new_tags)
+                set_event_blocking(child, block)
+
+        def block_evt(e):
+            if modal.winfo_exists():
+                modal.lift()
+                modal.focus_set()
+            return "break"
+
+        root.bind_class("BlockTag", "<Button-1>", block_evt)
+        root.bind_class("BlockTag", "<ButtonRelease-1>", lambda e: "break")
+        root.bind_class("BlockTag", "<Double-Button-1>", lambda e: "break")
+        root.bind_class("BlockTag", "<B1-Motion>", lambda e: "break")
+        root.bind_class("BlockTag", "<FocusIn>", lambda e: block_evt(e))
+        set_event_blocking(root, True)
+
+        def on_close_modal():
+            if not modal.winfo_exists():
+                return
+            if stop_event.is_set():
+                on_cerrar()
+                return
+            if messagebox.askyesno("Detener revisión", "¿Querés detener la revisión masiva y cerrar la ventana?"):
+                stop_event.set()
+                btn_detener.config(state="disabled", text=" Deteniendo...")
+
+        modal.protocol("WM_DELETE_WINDOW", on_close_modal)
+
+        unmap_id = root.bind("<Unmap>", lambda e: modal.withdraw() if (e.widget == root and modal.winfo_exists()) else None, add="+")
+        map_id = root.bind("<Map>", lambda e: (modal.deiconify(), modal.lift()) if (e.widget == root and modal.winfo_exists()) else None, add="+")
+        focus_id = root.bind("<FocusIn>", lambda e: modal.lift() if (modal.winfo_exists() and e.widget.winfo_toplevel() == root and e.widget != modal and not str(e.widget).startswith(str(modal))) else None, add="+")
+
+        def cleanup_root_binds(e=None):
+            if e and str(e.widget) != str(modal):
+                return
+            try:
+                root.unbind("<Unmap>", unmap_id)
+                root.unbind("<Map>", map_id)
+                root.unbind("<FocusIn>", focus_id)
+                set_event_blocking(root, False)
+            except Exception:
+                pass
+        modal.bind("<Destroy>", cleanup_root_binds)
+
+        # Custom Title Bar
+        title_bar = tk.Frame(modal, bg=MODAL_BG)
+        title_bar.pack(fill="x", side="top", padx=15, pady=(5, 0))
+        
+        title_lbl_bar = tk.Label(title_bar, text="Revisión Masiva de Forms", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+        title_lbl_bar.pack(side="left")
+
+        def _start_drag(event):
+            modal._drag_start_x = event.x
+            modal._drag_start_y = event.y
+
+        def _drag(event):
+            x = modal.winfo_x() - modal._drag_start_x + event.x
+            y = modal.winfo_y() - modal._drag_start_y + event.y
+            modal.geometry(f"+{x}+{y}")
+
+        title_bar.bind("<Button-1>", _start_drag)
+        title_bar.bind("<B1-Motion>", _drag)
+        title_lbl_bar.bind("<Button-1>", _start_drag)
+        title_lbl_bar.bind("<B1-Motion>", _drag)
+        
+        btn_cls = tk.Button(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
+        btn_cls.pack(side="right")
+        btn_cls.bind("<Enter>", lambda e: btn_cls.config(bg="#E74C3C", fg="white"))
+        btn_cls.bind("<Leave>", lambda e: btn_cls.config(bg=MODAL_BG, fg="#C5A9DF"))
+
+        # Header
+        header_frame = tk.Frame(modal, bg=MODAL_BG)
+        header_frame.pack(fill="x", padx=20, pady=(5, 10))
+        
+        icon_lbl = tk.Label(header_frame, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+        icon_lbl.pack(side="left")
+
+        rotation_glyphs = ["↻", "➔", "↻", "➔"]
+        def rotate_icon(idx=0):
+            if modal.winfo_exists() and not stop_event.is_set():
+                icon_lbl.config(text=rotation_glyphs[idx % len(rotation_glyphs)])
+                modal.after(250, lambda: rotate_icon(idx + 1))
+
+        title_info = tk.Frame(header_frame, bg=MODAL_BG)
+        title_info.pack(side="left", padx=10)
+
+        title_lbl = tk.Label(title_info, text="Ejecutando Revisión...", font=("Segoe UI", 12, "bold"), bg=MODAL_BG, fg="white")
+        title_lbl.pack(anchor="w")
+        subtitle_lbl = tk.Label(title_info, text="Preparando...", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
+        subtitle_lbl.pack(anchor="w")
+        rotate_icon()
+
+        def on_detener_click():
+            on_close_modal()
+
+        btn_detener = tk.Button(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
+                                font=("Segoe UI", 9, "bold"),
+                                bg="#3D1220", fg="#F1948A", relief="flat", bd=0, highlightthickness=1,
+                                highlightbackground="#F1948A", cursor="hand2", command=on_detener_click, padx=12, pady=4)
+        btn_detener.pack(side="right")
+
+        # Badges Row
+        badges_row = tk.Frame(modal, bg=MODAL_BG)
+        badges_row.pack(fill="x", padx=20, pady=5)
+
+        def make_pill(parent, text, icon=None):
+            img = get_button_icon(icon) if icon else None
+            lbl = tk.Label(parent, text=text, font=("Segoe UI", 8, "bold"), bg=MODAL_PILL_BG, fg="white", padx=8, pady=3,
+                           bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+            if img:
+                lbl.config(image=img, compound="left")
+            lbl.pack(side="left", padx=3)
+            return lbl
+
+        make_pill(badges_row, f" Mercados: {len(active_markets)} seleccionados", icon="monitor_lav.png")
+        make_pill(badges_row, " Modo: No Enviar Lead", icon="gear_lav.png")
+
+        run_note = tk.Label(modal, text="⚠ No cierres esta ventana durante el análisis masivo.",
+                            font=("Segoe UI", 8, "italic"), bg=MODAL_BG, fg="#F8C471")
+        run_note.pack(anchor="w", padx=20, pady=(4, 8))
+
+        # Scrollable container for progress bars
+        markets_wrap = tk.Frame(modal, bg=MODAL_BG)
+        markets_wrap.pack(fill="both", expand=True, padx=20, pady=(2, 8))
+        markets_canvas = tk.Canvas(markets_wrap, bg=MODAL_BG, highlightthickness=0)
+        markets_sb = tk.Scrollbar(markets_wrap, orient="vertical", command=markets_canvas.yview)
+        markets_canvas.configure(yscrollcommand=markets_sb.set)
+        markets_canvas.pack(side="left", fill="both", expand=True)
+        markets_frame = tk.Frame(markets_canvas, bg=MODAL_BG)
+        _mk_win = markets_canvas.create_window((0, 0), window=markets_frame, anchor="nw")
+
+        def _sync_markets_scroll(_e=None):
+            try:
+                markets_canvas.configure(scrollregion=markets_canvas.bbox("all"))
+                markets_canvas.itemconfig(_mk_win, width=markets_canvas.winfo_width())
+                hace_falta = markets_frame.winfo_reqheight() > markets_canvas.winfo_height()
+                if hace_falta and not markets_sb.winfo_ismapped():
+                    markets_sb.pack(side="right", fill="y")
+                elif not hace_falta and markets_sb.winfo_ismapped():
+                    markets_sb.pack_forget()
+            except Exception:
+                pass
+
+        markets_frame.bind("<Configure>", _sync_markets_scroll)
+        markets_canvas.bind("<Configure>", _sync_markets_scroll)
+        markets_canvas.bind("<MouseWheel>",
+                            lambda e: markets_canvas.yview_scroll(int(-e.delta / 120), "units"))
+
+        # Crear barras de progreso
+        _pais_bars = {}
+        for _p in active_markets:
+            _row = tk.Frame(markets_frame, bg=MODAL_BG)
+            _row.pack(fill="x", pady=(0, 9))
+            _hdr = tk.Frame(_row, bg=MODAL_BG)
+            _hdr.pack(fill="x")
+            
+            tk.Label(_hdr, text=_p, font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white").pack(side="left")
+            _stx = tk.Label(_hdr, text="En espera...", font=("Segoe UI", 8), bg=MODAL_BG, fg=TEXT_SECONDARY)
+            _stx.pack(side="right")
+            _cb = tk.Canvas(_row, height=8, bg="#35164D", highlightthickness=0)
+            _cb.pack(fill="x", pady=(3, 0))
+            _fl = _cb.create_rectangle(0, 0, 0, 8, fill="#7D4E9F", width=0)
+            
+            _pais_bars[_p] = {"canvas": _cb, "fill": _fl, "status": _stx}
+
+        def pcb(pais, msg, pct):
+            def _u():
+                if modal.winfo_exists():
+                    bar = _pais_bars.get(pais)
+                    if bar:
+                        w = bar["canvas"].winfo_width()
+                        if w <= 1:
+                            w = 480
+                        new_width = int(w * (pct / 100.0))
+                        bar["canvas"].coords(bar["fill"], 0, 0, new_width, 8)
+                        bar["status"].config(text=f"{int(pct)}% — {msg[:40]}")
+                        subtitle_lbl.config(text=f"Procesando {pais}... {int(pct)}%")
+            _ui(_u)
+
+        def worker():
+            try:
+                from core.massive_check_runner import run_massive_check
+                import time
+                import copy
+                
+                dest_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
+                start_time_all = time.time()
+                paralelo = var_ejecucion_paralelo.get()
+                
+                if paralelo:
+                    threads = []
+                    results = {}
+                    
+                    def single_country_thread(country):
+                        try:
+                            res_success, res_info = run_massive_check(
+                                excel_path, custom_cols,
+                                selected_markets=[country],
+                                borrar_comentarios=var_borrar_comentarios.get(),
+                                tomar_capturas=var_tomar_capturas.get(),
+                                solo_fails=var_solo_fails.get(),
+                                browser="chrome", headless=True,
+                                progress_callback=pcb, stop_event=stop_event
+                            )
+                            results[country] = (res_success, res_info)
+                        except Exception as e:
+                            results[country] = (False, str(e))
+                            
+                    for m in active_markets:
+                        t = threading.Thread(target=single_country_thread, args=(m,))
+                        t.start()
+                        threads.append(t)
+                        
+                    for t in threads:
+                        t.join()
+                        
+                    # Evaluar si hubo éxitos
+                    any_success = any(r[0] for r in results.values())
+                    success = any_success
+                    
+                    timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+                    out_excel_path = os.path.join(dest_dir, f".temp_consolidado_{timestamp}.xlsx")
+                    
+                    import openpyxl
+                    wb_cons = openpyxl.Workbook()
+                    if "Sheet" in wb_cons.sheetnames:
+                        del wb_cons["Sheet"]
+                        
+                    total_processed = 0
+                    total_passed = 0
+                    total_failed = 0
+                    total_skipped = 0
+                    
+                    for country, r in results.items():
+                        if not r[0]:
+                            continue
+                        info = r[1]
+                        total_processed += info.get("total_processed", 0)
+                        total_passed += info.get("total_passed", 0)
+                        total_failed += info.get("total_failed", 0)
+                        total_skipped += info.get("total_skipped", 0)
+                        
+                        c_path = info.get("excel_path")
+                        if c_path and os.path.exists(c_path):
+                            try:
+                                wb_c = openpyxl.load_workbook(c_path)
+                                for s_name in wb_c.sheetnames:
+                                    ws_cons = wb_cons.create_sheet(title=s_name)
+                                    ws_orig = wb_c[s_name]
+                                    for r_idx in range(1, ws_orig.max_row + 1):
+                                        for c_idx in range(1, ws_orig.max_column + 1):
+                                            c_orig = ws_orig.cell(row=r_idx, column=c_idx)
+                                            c_cons = ws_cons.cell(row=r_idx, column=c_idx)
+                                            c_cons.value = c_orig.value
+                                            if c_orig.has_style:
+                                                c_cons.font = copy.copy(c_orig.font)
+                                                c_cons.fill = copy.copy(c_orig.fill)
+                            except Exception as e:
+                                print(f"Error consolidando hoja de {country}: {e}")
+                                
+                    try:
+                        wb_cons.save(out_excel_path)
+                    except Exception as e:
+                        print(f"Error guardando consolidado paralelo: {e}")
+                        
+                    # Eliminar reportes consolidados temporales individuales
+                    for country, r in results.items():
+                        if r[0] and os.path.exists(r[1]["excel_path"]):
+                            try:
+                                os.remove(r[1]["excel_path"])
+                            except Exception:
+                                pass
+                                
+                    elapsed = time.time() - start_time_all
+                    hours = int(elapsed // 3600)
+                    minutes = int((elapsed % 3600) // 60)
+                    seconds = int(elapsed % 60)
+                    time_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+                    
+                    info = {
+                        "excel_path": out_excel_path,
+                        "msg": f"Revisión en paralelo finalizada en {time_str}. Procesados: {total_processed} (PASS: {total_passed}, FAIL: {total_failed}), Omitidos: {total_skipped}",
+                        "elapsed_time": time_str,
+                        "total_processed": total_processed,
+                        "total_passed": total_passed,
+                        "total_failed": total_failed,
+                        "total_skipped": total_skipped
+                    }
+                    
+                else:
+                    success, info = run_massive_check(
+                        excel_path, custom_cols,
+                        selected_markets=active_markets,
+                        borrar_comentarios=var_borrar_comentarios.get(),
+                        tomar_capturas=var_tomar_capturas.get(),
+                        solo_fails=var_solo_fails.get(),
+                        browser="chrome", headless=True,
+                        progress_callback=pcb, stop_event=stop_event
+                    )
+                
+                # Enviar correo si corresponde
+                if var_enviar_email.get() and success and not stop_event.is_set():
+                    _ui(lambda: title_lbl.config(text="Enviando Email..."))
+                    from interface.helpers_interface import enviar_email_revision_masiva
+                    enviar_email_revision_masiva(
+                        info["excel_path"], 
+                        info,
+                        adjuntar_res=var_adjuntar_res.get(),
+                        adjuntar_ss=var_adjuntar_ss.get()
+                    )
+
+                # Eliminar el Excel consolidado temporal para que solo queden los reportes individuales por mercado
+                if success and os.path.exists(info["excel_path"]):
+                    try:
+                        os.remove(info["excel_path"])
+                    except Exception:
+                        pass
+
+                if stop_event.is_set():
+                    _ui(lambda: messagebox.showinfo("Revisión Detenida", "La revisión masiva de formularios fue cancelada."))
+                elif success:
+                    res_msg = f"Auditoría masiva completada con éxito.\n\nReportes generados por mercado en subcarpetas de:\n{dest_dir}\n\n{info['msg']}"
+                    _ui(lambda: messagebox.showinfo("Revisión Completada", res_msg))
+                else:
+                    _ui(lambda: messagebox.showerror("Error de Ejecución", f"Error en revisión masiva:\n{info}"))
+            except Exception as ex:
+                _ui(lambda: messagebox.showerror("Error Crítico", f"Excepción crítica durante la revisión masiva:\n{ex}"))
+            finally:
+                _ui(lambda: modal.destroy() if modal.winfo_exists() else None)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    btn_run = tk.Button(btn_frame, text=" INICIAR REVISIÓN MASIVA", image=get_button_icon("play_green.png"), compound="left",
+                       font=("Segoe UI", 10, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
+                       relief="flat", bd=0, activebackground=EXECUTE_HOVER, activeforeground=EXECUTE_FG,
+                       padx=22, pady=7, cursor="hand2", command=cmd_iniciar_masivo)
+    btn_run.pack(side="left", padx=(0, 10))
+    btn_run.bind("<Enter>", lambda e: btn_run.config(bg=EXECUTE_HOVER) if btn_run['state'] == "normal" else None)
+    btn_run.bind("<Leave>", lambda e: btn_run.config(bg=EXECUTE_BG) if btn_run['state'] == "normal" else None)
+
+    def abrir_carpeta_masivo():
+        dir_path = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
+        os.makedirs(dir_path, exist_ok=True)
+        try:
+            os.startfile(dir_path)
+        except Exception as e:
+            messagebox.showinfo("Resultados", f"Resultados guardados en:\n{dir_path}\n\n({e})")
+
+    btn_folder = tk.Button(btn_frame, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
+                          font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg="white",
+                          relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                          padx=14, pady=6, cursor="hand2", command=abrir_carpeta_masivo)
+    btn_folder.pack(side="right")
+    btn_folder.bind("<Enter>", lambda e: btn_folder.config(bg=BUTTON_HOVER))
+    btn_folder.bind("<Leave>", lambda e: btn_folder.config(bg=BUTTON_INACTIVE))
+# TAB 3: GENERAR EXCELS CON DATOS (excel)
     # ==========================================
     # Barra de acciones fija (Generar/Regenerar/Borrar), siempre visible sin scrollear
     excel_actions_bar = tk.Frame(tabs["excel"], bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
