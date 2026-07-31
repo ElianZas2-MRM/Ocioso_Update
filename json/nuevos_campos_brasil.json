@@ -1,6 +1,6 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-07-07T10:42:41",
+  "ultima_deteccion": "2026-07-28T17:11:27",
   "campos_nuevos": [
     {
       "id": "categories",
@@ -101,6 +101,12 @@
     {
       "id": "company-name",
       "type": "text",
+      "required": false,
+      "label": " "
+    },
+    {
+      "id": "requirement",
+      "type": "textarea",
       "required": false,
       "label": " "
     }
