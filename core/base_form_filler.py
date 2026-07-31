@@ -1814,20 +1814,34 @@ class BaseFormFiller:
     # E-mail…) y necesita el fill directo por ID.
     _LIBRO_RECLAMACIONES_IDS = ("cc_name", "cc_telephone")
 
-    def _is_libro_reclamaciones_form(self, landing_url):
-        """True si el form actual es un Libro de Reclamaciones.
+    # Fragmentos de URL que identifican un Libro de Reclamaciones, tanto en la landing como
+    # en la URL del form: chevrolet.com.pe/libro-reclamaciones-virtual (inserto) y
+    # gm_front/form/form-reclamos (suelto).
+    _LIBRO_RECLAMACIONES_URL_HINTS = ("libro-reclamaciones", "reclamos", "reclamaciones")
 
-        Se detecta por DOM (ids cc_*) y no sólo por la URL: además de la landing clásica
-        chevrolet.com.pe/libro-reclamaciones-virtual, el mismo formulario se publica suelto
-        en gm_front (…/form/form-reclamos), donde el match por slug no daba y los datos
-        terminaban corridos de campo.
-        """
-        if "libro-reclamaciones" in (landing_url or "").lower():
-            return True
+    def _has_libro_reclamaciones_fields(self):
+        """True si el DOM actual tiene los campos propios del Libro de Reclamaciones."""
         try:
             return all(self._element_exists_by_id(fid) for fid in self._LIBRO_RECLAMACIONES_IDS)
         except Exception:
             return False
+
+    def _is_libro_reclamaciones_form(self, landing_url):
+        """True si el form actual es un Libro de Reclamaciones.
+
+        Se mira la URL (landing Y form: en las URLs sueltas el slug 'reclamos' viene en la
+        del form, no en la landing) y, como respaldo, el DOM por los ids cc_*. El chequeo
+        por DOM solo no alcanza si el form React todavía no montó cuando se evalúa.
+
+        En estos forms NO se hace el clic de "enviar en vacío" que se usa en el resto para
+        disparar las validaciones: se llena primero y recién ahí se envía.
+        """
+        _urls = (landing_url or "", getattr(self, "expected_form_url", "") or "")
+        for _u in _urls:
+            _u = _u.lower()
+            if any(h in _u for h in self._LIBRO_RECLAMACIONES_URL_HINTS):
+                return True
+        return self._has_libro_reclamaciones_fields()
 
     def _fill_libro_reclamaciones_direct(self, form_data):
         """
@@ -5821,8 +5835,15 @@ class BaseFormFiller:
                     # Detección T3/AEM temprana: los forms 2.0 son más largos → capturas full-page
                     self._is_aem = self._is_aem_adaptive_form()
 
-                    # 3b. Click enviar vacío + captura errores (todos excepto libro-reclamaciones)
+                    # 3b. Click enviar vacío + captura errores (todos excepto libro-reclamaciones).
+                    # El Libro de Reclamaciones se detecta por URL (landing o form) o por DOM,
+                    # pero el llenado directo por ids cc_* sólo aplica si esos campos existen
+                    # de verdad: si una URL trae 'reclamos' pero el form es otro, se llena con
+                    # el motor normal en vez de quedar vacío.
                     _is_libro_reclamaciones = self._is_libro_reclamaciones_form(landing_url)
+                    if _is_libro_reclamaciones and not self._has_libro_reclamaciones_fields():
+                        print("URL de reclamos pero sin campos cc_*: se llena con el motor normal.")
+                        _is_libro_reclamaciones = False
                     if not _is_libro_reclamaciones:
                         try:
                             _btn_empty, _ = self._resolve_submit_button(wait_seconds=2)
