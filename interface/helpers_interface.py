@@ -1715,22 +1715,21 @@ def enviar_email_revision_masiva(excel_path, counts, adjuntar_res=True, adjuntar
         
         html_table = _build_masivo_table_html(failures, market_summaries)
         
+        # Las capturas siguen viviendo en resultados/resultado_urlsinsertas/resultadoMasivo_<mercado>/Capturas,
+        # pero el Excel de resultados ahora es el propio Excel matriz (excel_path).
+        parent_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
+
         adjuntos = []
         if adjuntar_res:
-            # Adjuntar los Excel individuales de cada mercado en vez del archivo consolidado temporal
-            parent_dir = os.path.dirname(excel_path)
-            if os.path.exists(parent_dir):
-                market_folders = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if d.startswith("resultadoMasivo_") and os.path.isdir(os.path.join(parent_dir, d))]
-                for folder in market_folders:
-                    for f_name in os.listdir(folder):
-                        if f_name.endswith(".xlsx") and not f_name.startswith("~$"):
-                            xlsx_path = os.path.join(folder, f_name)
-                            if os.path.getsize(xlsx_path) < 24 * 1024 * 1024:
-                                adjuntos.append(xlsx_path)
-            
+            # Un único Excel: la copia del matriz con los resultados en las primeras columnas
+            try:
+                if os.path.getsize(excel_path) < 24 * 1024 * 1024:
+                    adjuntos.append(excel_path)
+            except OSError:
+                pass
+
         # Buscar carpetas individuales de cada mercado (resultadoMasivo_*) para adjuntar sus ZIPs si corresponde
         if adjuntar_ss:
-            parent_dir = os.path.dirname(excel_path)
             if os.path.exists(parent_dir):
                 market_folders = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if d.startswith("resultadoMasivo_") and os.path.isdir(os.path.join(parent_dir, d))]
                 for folder in market_folders:

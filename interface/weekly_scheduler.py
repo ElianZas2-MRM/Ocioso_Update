@@ -138,8 +138,6 @@ class WeeklySchedulerDialog(Toplevel):
 
         p = dict(padx=14, pady=8)
         self._build_days_section(body, p)
-        self._build_countries_section(body, p)
-        self._build_modo_section(body, p)
 
     def _card_frame(self, parent):
         f = Frame(parent, bg=SCH_CARD, highlightbackground=SCH_BORDER,
@@ -169,7 +167,7 @@ class WeeklySchedulerDialog(Toplevel):
 
         # Day buttons row
         day_row = Frame(card, bg=SCH_CARD)
-        day_row.pack(fill="x", padx=12, pady=(4, 8))
+        day_row.pack(fill="x", padx=12, pady=(4, 6))
         self._day_btns = {}
         for short, full in DAYS_OF_WEEK:
             col_f = Frame(day_row, bg=SCH_CARD)
@@ -187,6 +185,7 @@ class WeeklySchedulerDialog(Toplevel):
         self._hours_outer.pack_forget()
 
         self._update_day_buttons()
+        self._select_day("Lunes")
 
     def _select_day(self, day):
         if self._selected_day == day:
@@ -216,10 +215,6 @@ class WeeklySchedulerDialog(Toplevel):
         Button(h_hdr, text="✕", font=("Segoe UI", 10), bg=SCH_BG, fg=SCH_MUTED,
                relief=FLAT, cursor="hand2", bd=0,
                command=self._close_hours_panel).pack(side=RIGHT)
-        Button(h_hdr, text="✓ Listo", font=("Segoe UI", 8, "bold"),
-               bg=SCH_GREEN, fg=SCH_WHITE, relief=FLAT, cursor="hand2",
-               padx=8, pady=3,
-               command=self._close_hours_panel).pack(side=RIGHT, padx=(0, 6))
 
         # Edit mode toggle: Solo este día / Todos los días
         mode_row = Frame(self._hours_outer, bg=SCH_BG)
@@ -664,9 +659,9 @@ class WeeklySchedulerDialog(Toplevel):
 
         btn_row = Frame(footer, bg=SCH_BG)
         btn_row.pack(fill="x")
-        self._save_btn = Button(btn_row, text="💾  Guardar configuración",
+        self._save_btn = Button(btn_row, text="💾  Guardar Horarios",
                                 font=("Segoe UI", 10, "bold"),
-                                bg=SCH_PRIMARY, fg=SCH_PFG,
+                                bg="#3498DB", fg="white",
                                 relief=FLAT, cursor="hand2", padx=16, pady=8,
                                 command=self._save)
         self._save_btn.pack(side=RIGHT)
@@ -676,31 +671,37 @@ class WeeklySchedulerDialog(Toplevel):
         if self._val_lbl is None:
             return
         total = sum(len(v) for v in self._schedule.values())
-        n = len(self._countries)
-        can = total > 0 and n > 0
+        can = total > 0
         if not can:
-            if total == 0 and n == 0:
-                msg = "⚠  Seleccioná al menos un horario y un país para continuar."
-            elif total == 0:
-                msg = "⚠  Seleccioná al menos un horario para continuar."
-            else:
-                msg = "⚠  Seleccioná al menos un país para continuar."
+            msg = "⚠  Seleccioná al menos un horario para continuar."
             self._val_lbl.config(text=msg)
             self._val_lbl.pack(fill="x", pady=(0, 8))
         else:
             self._val_lbl.pack_forget()
         self._save_btn.config(state=NORMAL if can else DISABLED,
-                               bg=SCH_PRIMARY if can else SCH_HOVER,
+                               bg="#3498DB" if can else SCH_HOVER,
+                               fg="white" if can else SCH_MUTED,
                                cursor="hand2" if can else "arrow")
+
+    def _add_preset_all_days(self, time_str):
+        for _, full in DAYS_OF_WEEK:
+            dh = self._schedule.setdefault(full, [])
+            if time_str not in dh:
+                dh.append(time_str)
+                dh.sort()
+        self._update_day_buttons()
+        self._update_footer()
+        if self._selected_day and getattr(self, "_badges_frame", None):
+            self._refresh_badges()
 
     def _save(self):
         total = sum(len(v) for v in self._schedule.values())
-        if total == 0 or not self._countries:
+        if total == 0:
             return
         config = {
             "horarios": {k: v for k, v in self._schedule.items() if v},
             "paises": list(self._countries),
-            "modo_mercados": self._modo_mercados_var.get(),
+            "modo_mercados": self._modo_mercados_var.get() if hasattr(self, "_modo_mercados_var") else "consecutivo",
         }
         self._on_save(config)
         self.destroy()

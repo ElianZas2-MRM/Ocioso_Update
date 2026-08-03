@@ -297,19 +297,38 @@ class MassiveFormFiller(GenericCountryBase):
         target_iframe = None
         iframe_src = ""
         
-        # Contar iframes disponibles (solo los que correspondan a formularios GM)
-        forms_count = 0
-        try:
-            iframes_found = self.driver.find_elements(By.TAG_NAME, "iframe")
-            for iframe in iframes_found:
+        # Contar iframes disponibles (solo los que correspondan a formularios GM).
+        # Muchas landings cargan el iframe del form en diferido: si se mira el DOM apenas
+        # termina de navegar, el form todavía no está y se marcaba FAIL un form que sí existe.
+        # Por eso se espera hasta FORM_WAIT_SECONDS a que aparezca alguno; si ya está, sigue
+        # de largo sin esperar nada.
+        FORM_WAIT_SECONDS = 5
+        GM_IFRAME_HINTS = ("gm_forms", "gm_formns", "gm_front", "gm_admin")
+
+        def _buscar_iframes_gm():
+            try:
+                todos = self.driver.find_elements(By.TAG_NAME, "iframe")
+            except Exception:
+                return [], []
+            gm = []
+            for fr in todos:
                 try:
-                    src = str(iframe.get_attribute("src") or "").lower()
-                    if any(x in src for x in ["gm_forms", "gm_formns", "gm_front", "gm_admin"]):
-                        forms_count += 1
+                    src = str(fr.get_attribute("src") or "").lower()
+                    if any(x in src for x in GM_IFRAME_HINTS):
+                        gm.append(fr)
                 except Exception:
                     pass
-        except Exception:
-            pass
+            return todos, gm
+
+        iframes_found, gm_iframes = _buscar_iframes_gm()
+        _deadline = time.time() + FORM_WAIT_SECONDS
+        while not gm_iframes and time.time() < _deadline:
+            if getattr(self, "stop_event", None) and self.stop_event.is_set():
+                break
+            time.sleep(0.5)
+            iframes_found, gm_iframes = _buscar_iframes_gm()
+
+        forms_count = len(gm_iframes)
 
         if use_iframe:
             try:
@@ -430,6 +449,14 @@ class MassiveFormFiller(GenericCountryBase):
 
 
 def load_passed_results_from_wb(wb, custom_cols):
+    """Devuelve {(url_live, url_secure): resultados} de las filas que pasaron LIMPIAS.
+
+    Una fila cuenta como pasada solo si TODAS las columnas de resultado tienen valor y
+    ninguna dice FAIL ni SKIPPED. Así, con "Rerun fails previos" tildado, se vuelve a correr
+    cualquier fila que haya fallado en cualquiera de las columnas (antes solo se miraban
+    Excel==Inserted?, Displayed? y LandingStatus, y un FAIL en statusInserted o en
+    Secure_Inserted quedaba sin reintentar).
+    """
     passed_results = {}
     for s_name in wb.sheetnames:
         sheet = wb[s_name]
@@ -475,11 +502,16 @@ def load_passed_results_from_wb(wb, custom_cols):
             if not url_live and not url_secure:
                 continue
                 
-            res_val = str(sheet.cell(row=r_idx, column=col_excel_ins).value or "").strip()
-            disp_val = str(sheet.cell(row=r_idx, column=col_disp).value or "").strip()
-            land_val = str(sheet.cell(row=r_idx, column=col_landing).value or "").strip()
-            
-            is_ok = ("✅ PASS" in res_val) and ("✅ PASS" in disp_val) and ("✅ PASS" in land_val)
+            cols_resultado = (col_current, col_landing, col_secure_ins, col_excel_ins,
+                              col_disp, col_status_ins, col_forms)
+            valores = [str(sheet.cell(row=r_idx, column=c).value or "").strip() for c in cols_resultado]
+
+            # Sin resultados previos (fila nunca corrida) -> hay que correrla.
+            # Con FAIL o SKIPPED en cualquier columna -> hay que volver a correrla.
+            is_ok = (
+                all(v != "" for v in valores)
+                and not any("FAIL" in v.upper() or "SKIPPED" in v.upper() for v in valores)
+            )
             if is_ok:
                 key = (url_live.lower(), url_secure.lower())
                 passed_results[key] = {
@@ -495,39 +527,77 @@ def load_passed_results_from_wb(wb, custom_cols):
     return passed_results
 
 
+# Columnas de resultado que se insertan al principio de cada hoja del Excel matriz.
+# El orden importa: se escriben en bloque contiguo arrancando en la columna 1.
+RESULT_HEADERS = [
+    "currentUrl",
+    "LandingStatus",
+    "Secure_Inserted",
+    "Excel==Inserted?",
+    "Displayed?",
+    "statusInserted",
+    "formsCount",
+]
+
+RESUMEN_SHEET_NAME = "RESUMEN REVISIÓN"
+
+
+def _sheet_headers(sheet, header_row_idx):
+    return [str(c.value).strip().upper() if c.value is not None else "" for c in sheet[header_row_idx]]
+
+
+def _find_result_block(sheet, header_row_idx):
+    """Columna (1-indexed) donde arranca el bloque de resultados si ya existe, o None."""
+    headers = _sheet_headers(sheet, header_row_idx)
+    wanted = [h.upper() for h in RESULT_HEADERS]
+    for start in range(0, max(1, len(headers) - len(wanted) + 1)):
+        if headers[start:start + len(wanted)] == wanted:
+            return start + 1
+    return None
+
+
+def _find_comments_col(headers):
+    for idx, val in enumerate(headers, start=1):
+        if val in ("COMENTARIOS", "COMENTARIO"):
+            return idx
+    return None
+
+
 def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentarios=False, tomar_capturas=True, solo_fails=False, browser="chrome", headless=True, progress_callback=None, stop_event=None):
     """
     Función controladora del chequeo masivo.
-    Crea un nuevo archivo Excel consolidado y carpetas separadas por cada mercado.
+
+    El Excel matriz que se recibe NO se modifica: se trabaja sobre una copia en memoria y de
+    cada corrida sale un único archivo, en resultados/resultado_urlsinsertas/:
+
+        Resultados_Revision_Masiva_<matriz>_<timestamp>.xlsx
+
+    que es el mismo Excel matriz pero ya editado con los resultados: en cada hoja (una por
+    mercado) las columnas de resultado quedan al principio y a continuación el resto de las
+    columnas originales. No se generan archivos por país: todo queda en ese único Excel.
     """
     import time
     start_time = time.time()
-    # 1. Crear carpeta destino dentro de resultados/resultado_urlsinsertas
+
+    # 1. Carpeta destino (capturas y respaldos)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dest_dir = os.path.join(base_dir, "resultados", "resultado_urlsinsertas")
     os.makedirs(dest_dir, exist_ok=True)
-    
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_excel_name = f".temp_consolidado_{timestamp}.xlsx"
-    out_excel_path = os.path.join(dest_dir, out_excel_name)
 
     if progress_callback:
         progress_callback("GENERAL", "Cargando archivo Excel...", 0)
 
-    # Cargar Excel con openpyxl
+    # Cargar Excel matriz con openpyxl
     try:
         wb = openpyxl.load_workbook(excel_path)
     except Exception as e:
         return False, f"Error cargando Excel: {e}"
 
-    # Crear libro consolidado de salida limpio
-    wb_out = openpyxl.Workbook()
-    if "Sheet" in wb_out.sheetnames:
-        del wb_out["Sheet"]
-
     # Cargar nombres de hojas
-    sheet_names = wb.sheetnames
-    
+    sheet_names = list(wb.sheetnames)
+
     # Mapeo de hojas a países
     sheet_to_country = {
         "COLOMBIA": "Colombia",
@@ -546,10 +616,10 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     # Definir estilos premium con colores verde/rojo
     fill_pass = PatternFill(fill_type="solid", fgColor="C6EFCE") # verde claro
     font_pass = Font(color="006100", bold=True)
-    
+
     fill_fail = PatternFill(fill_type="solid", fgColor="FFC7CE") # rojo claro
     font_fail = Font(color="9C0006", bold=True)
-    
+
     fill_skip = PatternFill(fill_type="solid", fgColor="EAECEE") # gris claro
     font_bold = Font(bold=True)
 
@@ -568,7 +638,26 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     total_skipped = 0
     total_failed = 0
     total_passed = 0
-    wb_country = None   # se crea por hoja procesada; queda None si no matcheó ningún mercado
+    hojas_procesadas = []
+    stats_por_mercado = {}
+
+    # Resultados previos (solo_fails). El matriz nunca se edita, así que la corrida anterior
+    # hay que buscarla en el último reporte generado en resultados/resultado_urlsinsertas/.
+    passed_results = {}
+    if solo_fails:
+        try:
+            previos = [os.path.join(dest_dir, f) for f in os.listdir(dest_dir)
+                       if f.startswith("Resultados_Revision_Masiva_") and f.endswith(".xlsx")
+                       and not f.startswith("~$")]
+            if previos:
+                previos.sort(key=os.path.getmtime, reverse=True)
+                wb_previo = openpyxl.load_workbook(previos[0], data_only=True)
+                passed_results.update(load_passed_results_from_wb(wb_previo, custom_cols))
+                print(f"Rerun fails: reusando resultados PASS de {os.path.basename(previos[0])}")
+            else:
+                print("Rerun fails: no hay reportes previos, se revisa todo.")
+        except Exception as e:
+            print(f"Rerun fails: no se pudieron leer resultados previos ({e}). Se revisa todo.")
 
     # Normalizar mercados seleccionados a mayúsculas
     selected_markets_upper = [m.upper() for m in selected_markets]
@@ -577,6 +666,9 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     for s_idx, s_name in enumerate(sheet_names):
         if stop_event and stop_event.is_set():
             break
+
+        if s_name == RESUMEN_SHEET_NAME:
+            continue
 
         # El nombre de la hoja no siempre coincide con el del mercado en la UI: la hoja de
         # Perú se llama "PERÚ" (con tilde) y la UI manda "Peru". Se compara contra el país
@@ -608,103 +700,49 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
             print(f"No se encontró la fila cabecera en hoja {s_name}")
             continue
 
-        # Obtener los índices de columna correspondientes (1-indexed para openpyxl)
-        header_row = [str(cell.value).strip().upper() if cell.value is not None else "" for cell in sheet[header_row_idx]]
-        
+        # --- Bloque de resultados al principio de la hoja ---
+        # Si ya existe (corrida anterior) se reutiliza y se sobrescribe; si no, se inserta.
+        # Así el Excel matriz no se llena de columnas nuevas en cada ejecución.
+        if _find_result_block(sheet, header_row_idx) is None:
+            sheet.insert_cols(1, amount=len(RESULT_HEADERS))
+            for off, title in enumerate(RESULT_HEADERS):
+                c = sheet.cell(row=header_row_idx, column=1 + off)
+                c.value = title
+                c.font = font_bold
+
+        headers = _sheet_headers(sheet, header_row_idx)
+        res_start = _find_result_block(sheet, header_row_idx)
+        new_col_indices = {name: res_start + off for off, name in enumerate(RESULT_HEADERS)}
+
+        # Índices de las columnas originales (ya corridas a la derecha por el insert)
         col_indices = {}
         try:
-            col_indices["segmento"] = header_row.index(custom_cols["segmento"].upper()) + 1
-            col_indices["estado"] = header_row.index(custom_cols["estado"].upper()) + 1
-            col_indices["url_live"] = header_row.index(custom_cols["url_live"].upper()) + 1
-            col_indices["url_secure"] = header_row.index(custom_cols["url_secure"].upper()) + 1
+            col_indices["segmento"] = headers.index(custom_cols["segmento"].upper()) + 1
+            col_indices["estado"] = headers.index(custom_cols["estado"].upper()) + 1
+            col_indices["url_live"] = headers.index(custom_cols["url_live"].upper()) + 1
+            col_indices["url_secure"] = headers.index(custom_cols["url_secure"].upper()) + 1
         except ValueError as e:
             print(f"Error indexando columnas en la hoja {s_name}: {e}")
             continue
 
-        # Comprobar si ya existe la columna de Comentarios en el original
-        comentarios_col_idx = None
-        for col_idx in range(1, len(header_row) + 1):
-            val = header_row[col_idx - 1]
-            if val == "COMENTARIOS" or val == "COMENTARIO":
-                comentarios_col_idx = col_idx
-                break
+        # Columna de Comentarios: se usa la del Excel si existe, si no se crea al final.
+        comentarios_col_idx = _find_comments_col(headers)
+        if not comentarios_col_idx:
+            comentarios_col_idx = len(headers) + 1
+            c = sheet.cell(row=header_row_idx, column=comentarios_col_idx)
+            c.value = "Comentarios"
+            c.font = font_bold
+        new_col_indices["Comentarios"] = comentarios_col_idx
 
-        # Cargar resultados anteriores de forma semántica si solo_fails está activo
-        passed_results = {}
-        if solo_fails:
-            try:
-                passed_results.update(load_passed_results_from_wb(wb, custom_cols))
-            except Exception:
-                pass
-            try:
-                files = [os.path.join(dest_dir, f) for f in os.listdir(dest_dir) if f.startswith("Resultados_Revision_Masiva_") and f.endswith(".xlsx")]
-                if not files:
-                    # check temp or subdirectories too
-                    files = []
-                    for root, dirs, filenames in os.walk(dest_dir):
-                        for f in filenames:
-                            if f.startswith("Resultados_Revision_Masiva_") and f.endswith(".xlsx"):
-                                files.append(os.path.join(root, f))
-                if files:
-                    files.sort(key=os.path.getmtime, reverse=True)
-                    wb_latest = openpyxl.load_workbook(files[0], data_only=True)
-                    passed_results.update(load_passed_results_from_wb(wb_latest, custom_cols))
-            except Exception:
-                pass
-
-        # 1a. Crear carpeta de salida específica del mercado
-        country_folder_name = f"resultadoMasivo_{country_name}"
-        country_dir = os.path.join(dest_dir, country_folder_name)
-        os.makedirs(country_dir, exist_ok=True)
-        
         # Carpeta de capturas del mercado
-        country_capturas_dir = os.path.join(country_dir, "Capturas") if tomar_capturas else None
-        if country_capturas_dir:
+        country_dir = os.path.join(dest_dir, f"resultadoMasivo_{country_name}")
+        country_capturas_dir = None
+        if tomar_capturas:
+            country_capturas_dir = os.path.join(country_dir, "Capturas")
             os.makedirs(country_capturas_dir, exist_ok=True)
 
-        # 1b. Crear hojas en consolidado y libro individual para el mercado
-        out_sheet = wb_out.create_sheet(title=s_name)
-        
-        wb_country = openpyxl.Workbook()
-        if "Sheet" in wb_country.sheetnames:
-            del wb_country["Sheet"]
-        country_sheet = wb_country.create_sheet(title=s_name)
-
-        new_headers = [
-            custom_cols["segmento"],
-            custom_cols["estado"],
-            custom_cols["url_live"],
-            custom_cols["url_secure"],
-            "currentUrl",
-            "LandingStatus",
-            "Secure_Inserted",
-            "Excel==Inserted?",
-            "Displayed?",
-            "statusInserted",
-            "formsCount",
-            "Comentarios"
-        ]
-        
-        for c_idx, title in enumerate(new_headers, start=1):
-            # Consolidado
-            cell_cons = out_sheet.cell(row=1, column=c_idx)
-            cell_cons.value = title
-            cell_cons.font = font_bold
-            # Individual
-            cell_ind = country_sheet.cell(row=1, column=c_idx)
-            cell_ind.value = title
-            cell_ind.font = font_bold
-
-        new_col_indices = {
-            "currentUrl": 5,
-            "LandingStatus": 6,
-            "Secure_Inserted": 7,
-            "Excel==Inserted?": 8,
-            "Displayed?": 9,
-            "statusInserted": 10,
-            "formsCount": 11,
-            "Comentarios": 12
-        }
+        hojas_procesadas.append(s_name)
+        m_proc = m_pass = m_fail = m_skip = 0
 
         # Inicializar el runner para el país actual
         filler = None
@@ -712,7 +750,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
             # Iterar por las filas de datos
             max_row = sheet.max_row
             active_rows = []
-            
+
             # Pre-escanear para saber cuántas filas ON hay que procesar para el progreso local
             for r_idx in range(header_row_idx + 1, max_row + 1):
                 url_live = str(sheet.cell(row=r_idx, column=col_indices["url_live"]).value or "").strip()
@@ -723,7 +761,6 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
 
             total_active_sheet = len(active_rows)
             processed_sheet = 0
-            out_row_idx = 2
 
             for i_idx, r_idx in enumerate(active_rows):
                 if stop_event and stop_event.is_set():
@@ -735,79 +772,64 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                 url_secure = str(sheet.cell(row=r_idx, column=col_indices["url_secure"]).value or "").strip()
 
                 # Conservar comentarios si corresponde
-                comentario_anterior = ""
-                if comentarios_col_idx:
-                    comentario_anterior = sheet.cell(row=r_idx, column=comentarios_col_idx).value or ""
+                comentario_anterior = sheet.cell(row=r_idx, column=comentarios_col_idx).value or ""
 
                 # Determinar si la fila está OFF
                 is_off = "OFF" in estado.upper() or "❌" in estado
 
-                # Si está activado solo_fails y esta URL ya pasó previamente, copiar resultado
+                # Si está activado solo_fails y esta URL ya pasó previamente, se deja el resultado previo
                 key = (url_live.lower(), url_secure.lower())
                 if solo_fails and key in passed_results and not is_off:
                     total_processed += 1
                     total_passed += 1
+                    m_proc += 1
+                    m_pass += 1
                     processed_sheet += 1
-                    
+
                     prev_res = passed_results[key]
                     for col_key, col_pos in new_col_indices.items():
                         if col_key == "Comentarios":
                             val = "" if borrar_comentarios else (comentario_anterior or prev_res.get("Comentarios") or "")
                         else:
                             val = prev_res.get(col_key)
-                            
-                        for s in (out_sheet, country_sheet):
-                            s.cell(row=out_row_idx, column=col_pos).value = val
-                            
-                    for s in (out_sheet, country_sheet):
-                        for col_key, col_pos in new_col_indices.items():
-                            if col_key != "Comentarios":
-                                color_cell_by_content(s.cell(row=out_row_idx, column=col_pos))
+                        sheet.cell(row=r_idx, column=col_pos).value = val
+
+                    for col_key, col_pos in new_col_indices.items():
+                        if col_key != "Comentarios":
+                            color_cell_by_content(sheet.cell(row=r_idx, column=col_pos))
 
                     if progress_callback:
                         pct = int((processed_sheet / total_active_sheet) * 100)
                         progress_callback(country_name, f"Revisando row {r_idx}: {segmento} (Prev PASS)", pct)
-
-                    out_row_idx += 1
                     continue
-
-                # Escribir las columnas de entrada en las hojas de salida
-                for s in (out_sheet, country_sheet):
-                    s.cell(row=out_row_idx, column=1).value = segmento
-                    s.cell(row=out_row_idx, column=2).value = estado
-                    s.cell(row=out_row_idx, column=3).value = url_live
-                    s.cell(row=out_row_idx, column=4).value = url_secure
 
                 if is_off:
                     total_skipped += 1
+                    m_skip += 1
                     processed_sheet += 1
-                    
-                    # Registrar como omitido
-                    for s in (out_sheet, country_sheet):
-                        s.cell(row=out_row_idx, column=5).value = "N/A"
-                        s.cell(row=out_row_idx, column=6).value = "OFF - Omitido"
-                        s.cell(row=out_row_idx, column=7).value = "N/A"
-                        s.cell(row=out_row_idx, column=8).value = "SKIPPED"
-                        s.cell(row=out_row_idx, column=9).value = "SKIPPED"
-                        s.cell(row=out_row_idx, column=10).value = "N/A"
-                        s.cell(row=out_row_idx, column=11).value = 0
-                        
-                        if borrar_comentarios:
-                            s.cell(row=out_row_idx, column=12).value = ""
-                        else:
-                            s.cell(row=out_row_idx, column=12).value = comentario_anterior
 
-                        # Colorear en gris
-                        for col_key, col_pos in new_col_indices.items():
-                            if col_key != "Comentarios" or borrar_comentarios:
-                                s.cell(row=out_row_idx, column=col_pos).fill = fill_skip
-                    
+                    # Registrar como omitido
+                    valores_off = {
+                        "currentUrl": "N/A",
+                        "LandingStatus": "OFF - Omitido",
+                        "Secure_Inserted": "N/A",
+                        "Excel==Inserted?": "SKIPPED",
+                        "Displayed?": "SKIPPED",
+                        "statusInserted": "N/A",
+                        "formsCount": 0,
+                    }
+                    for col_key, val in valores_off.items():
+                        cell = sheet.cell(row=r_idx, column=new_col_indices[col_key])
+                        cell.value = val
+                        cell.fill = fill_skip
+
+                    if borrar_comentarios:
+                        sheet.cell(row=r_idx, column=comentarios_col_idx).value = ""
+
                     # Reportar progreso intermedio
                     if progress_callback:
                         pct = int((processed_sheet / total_active_sheet) * 100)
                         progress_callback(country_name, f"{processed_sheet}/{total_active_sheet} (OFF)", pct)
-                    
-                    out_row_idx += 1
                     continue
 
                 # Si está ON o prioridad, realizar verificación
@@ -827,36 +849,37 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                     progress_callback(country_name, f"Revisando row {r_idx}: {segmento}", pct)
 
                 total_processed += 1
-                
+                m_proc += 1
+
                 # Ejecutar verificación de URL
                 res = filler.check_single_url(url_live, url_secure, r_idx, tomar_capturas=tomar_capturas)
 
-                # Guardar valores
-                for s in (out_sheet, country_sheet):
-                    s.cell(row=out_row_idx, column=5).value = res["current_url"]
-                    s.cell(row=out_row_idx, column=6).value = res["landing_status"]
-                    s.cell(row=out_row_idx, column=7).value = res["form_url_found"]
-                    s.cell(row=out_row_idx, column=8).value = res["form_coincide"]
-                    s.cell(row=out_row_idx, column=9).value = res["displayed"]
-                    s.cell(row=out_row_idx, column=10).value = res["secure_status"]
-                    s.cell(row=out_row_idx, column=11).value = res["forms_count"]
-                    
-                    if borrar_comentarios:
-                        s.cell(row=out_row_idx, column=12).value = ""
-                    else:
-                        s.cell(row=out_row_idx, column=12).value = comentario_anterior
+                # Guardar valores en la misma fila del Excel matriz
+                valores = {
+                    "currentUrl": res["current_url"],
+                    "LandingStatus": res["landing_status"],
+                    "Secure_Inserted": res["form_url_found"],
+                    "Excel==Inserted?": res["form_coincide"],
+                    "Displayed?": res["displayed"],
+                    "statusInserted": res["secure_status"],
+                    "formsCount": res["forms_count"],
+                }
+                for col_key, val in valores.items():
+                    cell = sheet.cell(row=r_idx, column=new_col_indices[col_key])
+                    cell.value = val
+                    cell.fill = PatternFill(fill_type=None)
+                    cell.font = Font()
+                    color_cell_by_content(cell)
 
-                    # Colorear cada celda según el contenido
-                    for col_key, col_pos in new_col_indices.items():
-                        if col_key != "Comentarios":
-                            color_cell_by_content(s.cell(row=out_row_idx, column=col_pos))
+                if borrar_comentarios:
+                    sheet.cell(row=r_idx, column=comentarios_col_idx).value = ""
 
                 if res["ok"]:
                     total_passed += 1
+                    m_pass += 1
                 else:
                     total_failed += 1
-
-                out_row_idx += 1
+                    m_fail += 1
 
         except Exception as e:
             print(f"Error procesando la hoja {s_name}: {e}")
@@ -868,7 +891,9 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                     pass
                 filler = None
 
-    # Calcular tiempo transcurrido antes de guardar para incluirlo en los Excels
+        stats_por_mercado[s_name] = (m_proc, m_pass, m_fail, m_skip)
+
+    # Calcular tiempo transcurrido antes de guardar para incluirlo en el Excel
     elapsed = time.time() - start_time
     hours = int(elapsed // 3600)
     minutes = int((elapsed % 3600) // 60)
@@ -880,57 +905,63 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     else:
         time_str = f"{seconds}s"
 
-    # Escribir fila de resumen con el tiempo en cada hoja de cada libro
-    summary_font = Font(bold=True, color="7D4E9F")
-    summary_fill = PatternFill(start_color="F2E6FF", end_color="F2E6FF", fill_type="solid")
-    # wb_country sólo existe si se procesó al menos una hoja. Si ningún mercado
-    # seleccionado matcheó una hoja del Excel, antes reventaba acá con UnboundLocalError
-    # en vez de avisar que no había nada para revisar.
-    if wb_country is None:
+    if not hojas_procesadas:
         return False, ("No se encontró ninguna hoja para los mercados seleccionados "
                        f"({', '.join(selected_markets)}). Hojas del Excel: {', '.join(sheet_names)}.")
 
-    for wb in [wb_out, wb_country]:
-        for ws_name in wb.sheetnames:
-            ws = wb[ws_name]
-            summary_row = ws.max_row + 2
-            cell_label = ws.cell(row=summary_row, column=1)
-            cell_label.value = "Duración del test:"
-            cell_label.font = summary_font
-            cell_label.fill = summary_fill
-            cell_value = ws.cell(row=summary_row, column=2)
-            cell_value.value = time_str
-            cell_value.font = summary_font
-            cell_value.fill = summary_fill
-            # Stats
-            stats_row = summary_row + 1
-            ws.cell(row=stats_row, column=1).value = "Resumen:"
-            ws.cell(row=stats_row, column=1).font = summary_font
-            ws.cell(row=stats_row, column=1).fill = summary_fill
-            stats_text = f"Procesados: {total_processed} | PASS: {total_passed} | FAIL: {total_failed} | Omitidos: {total_skipped}"
-            ws.cell(row=stats_row, column=2).value = stats_text
-            ws.cell(row=stats_row, column=2).font = summary_font
-            ws.cell(row=stats_row, column=2).fill = summary_fill
-
-    # Guardar Excel individual del mercado en su carpeta (re-save con tiempo incluido)
+    # Hoja de resumen (se regenera en cada corrida para no acumular filas sueltas)
+    summary_font = Font(bold=True, color="7D4E9F")
+    summary_fill = PatternFill(start_color="F2E6FF", end_color="F2E6FF", fill_type="solid")
     try:
-        country_excel_name = f"Resultados_Revision_Masiva_{country_name}_{timestamp}.xlsx"
-        country_excel_path = os.path.join(country_dir, country_excel_name)
-        wb_country.save(country_excel_path)
-    except Exception as e:
-        print(f"Error guardando libro de resultados individual ({country_name}): {e}")
+        if RESUMEN_SHEET_NAME in wb.sheetnames:
+            del wb[RESUMEN_SHEET_NAME]
+        ws_res = wb.create_sheet(title=RESUMEN_SHEET_NAME)
+        ws_res.cell(row=1, column=1).value = "Última revisión masiva"
+        ws_res.cell(row=1, column=2).value = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        ws_res.cell(row=2, column=1).value = "Duración del test:"
+        ws_res.cell(row=2, column=2).value = time_str
+        ws_res.cell(row=3, column=1).value = "Resumen:"
+        ws_res.cell(row=3, column=2).value = (f"Procesados: {total_processed} | PASS: {total_passed} | "
+                                              f"FAIL: {total_failed} | Omitidos: {total_skipped}")
+        for r in (1, 2, 3):
+            for c in (1, 2):
+                ws_res.cell(row=r, column=c).font = summary_font
+                ws_res.cell(row=r, column=c).fill = summary_fill
 
-    # Guardar Excel consolidado de salida
-    try:
-        wb_out.save(out_excel_path)
+        ws_res.cell(row=5, column=1).value = "Mercado"
+        ws_res.cell(row=5, column=2).value = "Procesados"
+        ws_res.cell(row=5, column=3).value = "PASS"
+        ws_res.cell(row=5, column=4).value = "FAIL"
+        ws_res.cell(row=5, column=5).value = "Omitidos"
+        for c in range(1, 6):
+            ws_res.cell(row=5, column=c).font = font_bold
+        for i, (m_name, (m_proc, m_pass, m_fail, m_skip)) in enumerate(stats_por_mercado.items(), start=6):
+            ws_res.cell(row=i, column=1).value = m_name
+            ws_res.cell(row=i, column=2).value = m_proc
+            ws_res.cell(row=i, column=3).value = m_pass
+            ws_res.cell(row=i, column=4).value = m_fail
+            ws_res.cell(row=i, column=5).value = m_skip
+        ws_res.column_dimensions["A"].width = 26
+        ws_res.column_dimensions["B"].width = 24
     except Exception as e:
-        print(f"Error guardando libro de resultados consolidado: {e}")
+        print(f"No se pudo escribir la hoja de resumen: {e}")
+
+    # Único archivo de salida: copia del matriz ya editada con los resultados.
+    # El Excel matriz original queda intacto.
+    nombre_base = os.path.splitext(os.path.basename(excel_path))[0]
+    reporte_path = os.path.join(dest_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}.xlsx")
+    try:
+        wb.save(reporte_path)
+    except Exception as e:
+        print(f"Error guardando el reporte de resultados: {e}")
         return False, f"Error al guardar reporte: {e}"
 
-    msg = f"Revisión finalizada en {time_str}. Procesados: {total_processed} (PASS: {total_passed}, FAIL: {total_failed}), Omitidos: {total_skipped}"
+    msg = (f"Revisión finalizada en {time_str}. Procesados: {total_processed} "
+           f"(PASS: {total_passed}, FAIL: {total_failed}), Omitidos: {total_skipped}.")
     return True, {
         "msg": msg,
-        "excel_path": out_excel_path,
+        "excel_path": reporte_path,
+        "reporte_path": reporte_path,
         "total_processed": total_processed,
         "total_passed": total_passed,
         "total_failed": total_failed,

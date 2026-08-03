@@ -15,14 +15,14 @@ else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JSON_DIR = os.path.join(BASE_DIR, "json")
 
-def guardar_programacion(programacion):
+def guardar_programacion(programacion, filename="programacion_test.json"):
     """Guarda la programación en archivo JSON. None = eliminar. Soporta esquema semanal y legado."""
     try:
         if programacion is None:
-            json_path = os.path.join(JSON_DIR, "programacion_test.json")
+            json_path = os.path.join(JSON_DIR, filename)
             if os.path.exists(json_path):
                 os.remove(json_path)
-                print("✅ Archivo de programación eliminado")
+                print(f"✅ Archivo {filename} eliminado")
             return True
 
         if not os.path.exists(JSON_DIR):
@@ -31,6 +31,7 @@ def guardar_programacion(programacion):
         if programacion.get("tipo") == "semanal":
             serializable = {
                 "tipo": "semanal",
+                "modo_tarea": programacion.get("modo_tarea", "leads"),
                 "horarios":    programacion["horarios"],
                 "paises":      programacion["paises"],
                 "navegadores": programacion.get("navegadores", []),
@@ -40,7 +41,6 @@ def guardar_programacion(programacion):
                 "modo_mercados": programacion.get("modo_mercados", "consecutivo"),
             }
         else:
-            # Formato legado (fecha_hora única)
             serializable = {
                 "fecha_hora": programacion["fecha_hora"].strftime("%Y-%m-%d %H:%M:%S"),
                 "paises":      programacion["paises"],
@@ -48,7 +48,7 @@ def guardar_programacion(programacion):
                 "viewports":   programacion["viewports"],
             }
 
-        json_path = os.path.join(JSON_DIR, "programacion_test.json")
+        json_path = os.path.join(JSON_DIR, filename)
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(serializable, f, indent=2, ensure_ascii=False)
 
@@ -58,10 +58,10 @@ def guardar_programacion(programacion):
         print(f"❌ Error guardando programación: {e}")
         return False
 
-def cargar_programacion():
+def cargar_programacion(filename="programacion_test.json"):
     """Carga la programación desde archivo JSON. Retorna dict con tipo='semanal' o None."""
     try:
-        json_path = os.path.join(JSON_DIR, "programacion_test.json")
+        json_path = os.path.join(JSON_DIR, filename)
         if not os.path.exists(json_path):
             return None
         with open(json_path, "r", encoding="utf-8") as f:
@@ -70,6 +70,7 @@ def cargar_programacion():
         if data.get("tipo") == "semanal":
             return {
                 "tipo":        "semanal",
+                "modo_tarea":  data.get("modo_tarea", "leads"),
                 "horarios":    data["horarios"],
                 "paises":      data["paises"],
                 "navegadores": data.get("navegadores", []),
@@ -79,21 +80,19 @@ def cargar_programacion():
                 "modo_mercados": data.get("modo_mercados", "consecutivo"),
             }
 
-        # Formato legado (fecha_hora): ignorar para no romper la nueva UI
-        print("⚠️ Programación en formato antiguo detectada — se ignorará.")
         return None
     except Exception as e:
-        print(f"Error cargando programación: {e}")
+        print(f"Error cargando programación ({filename}): {e}")
         return None
 
-def limpiar_programacion():
+def limpiar_programacion(filename="programacion_test.json"):
     """Elimina el archivo de programación de carpeta json/"""
     try:
-        json_path = os.path.join(JSON_DIR, "programacion_test.json")
+        json_path = os.path.join(JSON_DIR, filename)
         if os.path.exists(json_path):
             os.remove(json_path)
-            print("Archivo de programación eliminado")
+            print(f"Archivo {filename} eliminado")
         return True
     except Exception as e:
-        print(f"Error limpiando programación: {e}")
+        print(f"Error limpiando programación ({filename}): {e}")
         return False
