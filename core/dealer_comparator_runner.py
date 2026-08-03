@@ -639,8 +639,15 @@ def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeou
       configurada es la del formulario suelto (secure/stage/revise).
     En ambos casos cierra popups de cookies antes y después de entrar al form.
     Devuelve True si terminó sobre el contexto del form (o su iframe)."""
-    if url_mode == "solo_forms" or not landing_url:
-        driver.get(form_url)
+    def _same_url(a, b):
+        return (a or "").strip().rstrip("/").lower() == (b or "").strip().rstrip("/").lower()
+
+    # Form suelto: modo explícito, sin landing, o la misma URL repetida en las dos columnas.
+    # Este último caso es el de los forms .../gm_frontend/chevrolet/t3/<pais>/form/<slug>,
+    # que son una página entera; si se tratara como landing, el fallback "cualquier iframe
+    # visible" podría meterse en un iframe de tracking y no encontrar ningún campo.
+    if url_mode == "solo_forms" or not landing_url or _same_url(landing_url, form_url):
+        driver.get(form_url or landing_url)
         _wait_document_ready(driver, page_ready_timeout)
         handle_cookie_popups(driver)
         return True
