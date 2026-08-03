@@ -574,14 +574,75 @@ def analizar_errores_excel(ruta_excel):
         if not df.empty:
             df = df[df.apply(fila_tiene_datos, axis=1)]
 
-        # Asegurar que las columnas clave existan
-        columnas = [c.lower() for c in df.columns]
-        col_url = next((c for c in df.columns if c.lower() == "url"), None)
-        col_resultado = next((c for c in df.columns if c.lower() == "resultado"), None)
-        col_form_url_esperada   = next((c for c in df.columns if c.lower() in ("formulario", "form url esperada")), None)
-        col_form_url_encontrada = next((c for c in df.columns if c.lower() == "form url encontrada"), None)
-        col_form_coincide       = next((c for c in df.columns if c.lower() == "form coincide"), None)
-        col_link_issue          = next((c for c in df.columns if c.lower() == "link issue typ"), None)
+        # Resolución de columnas por NOMBRE y en orden de preferencia explícito, nunca por
+        # posición: desde que el Excel de resultados se reordena (columnas de resultado
+        # primero), 'Form URL esperada' pasó a aparecer antes que 'Formulario' y un
+        # next(... in ("formulario", "form url esperada")) agarraba la primera que encontraba
+        # en el documento. Como 'Form URL esperada' viene vacía en las corridas de URL suelta,
+        # el email mostraba "—" en URL FORM aunque el Excel tuviera la URL en 'Formulario'.
+        _por_nombre = {str(c).strip().lower(): c for c in df.columns}
+
+        def _col(*nombres):
+            """Primera columna existente siguiendo el orden de preferencia dado."""
+            for n in nombres:
+                if n in _por_nombre:
+                    return _por_nombre[n]
+            return None
+
+        col_url                 = _col("url")
+        col_resultado           = _col("resultado")
+        # 'Formulario' es la URL del form que se pidió testear (viene del Excel de entrada);
+        # 'Form URL esperada' es la que registra el runner y puede quedar vacía.
+        col_form_url_esperada   = _col("formulario", "form url esperada")
+        col_form_url_encontrada = _col("form url encontrada")
+        col_form_coincide       = _col("form coincide")
+        col_link_issue          = _col("link issue typ")
+        col_motivo              = _col("motivo")
+        col_estado_landing      = _col("estado url landing")
+        col_estado_form         = _col("estado url form")
+
+        def _val(fila, col):
+            """Valor de la celda como texto limpio, o '' si no existe / está vacía."""
+            if not col:
+                return ""
+            try:
+                v = fila[col]
+            except Exception:
+                return ""
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                return ""
+            s = str(v).strip()
+            return "" if s.lower() in ("nan", "none", "-") else s
+
+        def _urls_de(fila):
+            """(landing, form) de la fila. En las corridas de URL suelta la landing viene
+            vacía a propósito: el form ES la página, y así se avisa en el reporte."""
+            landing = _val(fila, col_url)
+            form = _val(fila, col_form_url_esperada) or _val(fila, col_form_url_encontrada)
+            return landing, form
+
+        def _detalle_error(fila):
+            """Texto corto que explica POR QUÉ falló la fila, armado con lo que el Excel
+            ya registró: Motivo + Resultado + estado HTTP de cada URL cuando aplica."""
+            partes = []
+            motivo = _val(fila, col_motivo)
+            resultado = limpiar_mensaje_error(_val(fila, col_resultado))
+            if motivo:
+                partes.append(motivo)
+            if resultado and resultado not in partes:
+                partes.append(resultado)
+            est_l = _val(fila, col_estado_landing)
+            est_f = _val(fila, col_estado_form)
+            if est_l and "200" not in est_l:
+                partes.append(f"URL landing: {est_l}")
+            if est_f and "200" not in est_f:
+                partes.append(f"URL form: {est_f}")
+            encontrada = _val(fila, col_form_url_encontrada)
+            esperada = _val(fila, col_form_url_esperada)
+            coincide = _val(fila, col_form_coincide).upper()
+            if encontrada and esperada and coincide in ("NO", "FAIL", "FORMULARIO INCORRECTO"):
+                partes.append(f"form encontrado: {encontrada}")
+            return " — ".join(p for p in partes if p) or "Sin detalle en el Excel"
 
         total_filas = len(df)
 
@@ -618,21 +679,16 @@ def analizar_errores_excel(ruta_excel):
         exitosos_df = df[procesados_mask & ~errores_mask]
         detalles_ok = []
         for _i, _fila in exitosos_df.iterrows():
-            _url = str(_fila[col_url]) if col_url and pd.notna(_fila[col_url]) else ""
-            _url_sec = str(_fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(_fila.get(col_form_url_esperada, float('nan'))) else ""
+            _url, _url_sec = _urls_de(_fila)
             detalles_ok.append({'url': _url, 'url_secure': _url_sec, 'linea': _i + 2})
 
         # Construir detalles estructurados
         detalles = []
         detalles_texto = []
-        
-        for i, fila in errores.iterrows():
-            url = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else ""
-            url_sec = str(fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(fila.get(col_form_url_esperada, float('nan'))) else ""
-            mensaje_error = str(fila[col_resultado]).strip()
 
-            # Limpiar el mensaje de error
-            mensaje_limpio = limpiar_mensaje_error(mensaje_error)
+        for i, fila in errores.iterrows():
+            url, url_sec = _urls_de(fila)
+            mensaje_limpio = _detalle_error(fila)
 
             linea_excel = i + 2  # +2 porque Excel empieza en 1 y la fila 1 son los encabezados
 
@@ -643,7 +699,7 @@ def analizar_errores_excel(ruta_excel):
                 'linea': linea_excel
             })
             detalles_texto.append(
-                f"➡️ En la URL: {url}\n"
+                f"➡️ En la URL: {url or url_sec or '(sin URL)'}\n"
                 f"   Línea: {linea_excel}\n"
                 f"   ❌ {mensaje_limpio}"
             )
@@ -654,9 +710,10 @@ def analizar_errores_excel(ruta_excel):
             _fc = df[col_form_coincide].astype(str).str.strip().str.upper()
             form_no_coincide_mask = _fc.isin(["NO", "FORMULARIO INCORRECTO", "FAIL"])
             for idx, fila in df[form_no_coincide_mask].iterrows():
-                url_landing    = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
-                url_esperada   = str(fila[col_form_url_esperada]) if col_form_url_esperada and pd.notna(fila.get(col_form_url_esperada, float('nan'))) else "?"
-                url_encontrada = str(fila[col_form_url_encontrada]) if col_form_url_encontrada and pd.notna(fila.get(col_form_url_encontrada, float('nan'))) else "ninguna"
+                _l, _f = _urls_de(fila)
+                url_landing    = _l or "(form suelto, sin landing)"
+                url_esperada   = _f or "?"
+                url_encontrada = _val(fila, col_form_url_encontrada) or "ninguna"
                 detalles_form.append({
                     'linea': idx + 2,
                     'url_landing': url_landing,
@@ -671,7 +728,8 @@ def analizar_errores_excel(ruta_excel):
             "campos opcionales vacíos", case=False, na=False
         )
         for idx, fila in df[_aviso_sin_valor_mask].iterrows():
-            _url_sv = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
+            _l_sv, _f_sv = _urls_de(fila)
+            _url_sv = _l_sv or _f_sv or "(sin URL)"
             _res_sv = str(fila[col_resultado])
             _m = re.search(r"campos opcionales vacíos \(sin valor asignado\):\s*(.+?)(?:\s+—|$)", _res_sv)
             detalles_sin_valor.append({
@@ -686,7 +744,8 @@ def analizar_errores_excel(ruta_excel):
             _li = df[col_link_issue].astype(str).str.strip()
             link_issue_mask = _li.notna() & ~_li.isin(["", "-", "nan", "None"])
             for idx, fila in df[link_issue_mask].iterrows():
-                url_landing = str(fila[col_url]) if col_url and pd.notna(fila[col_url]) else "(sin URL)"
+                _l_li, _f_li = _urls_de(fila)
+                url_landing = _l_li or _f_li or "(sin URL)"
                 detalles_link_issue.append({
                     'linea': idx + 2,
                     'url_landing': url_landing,
@@ -1136,27 +1195,45 @@ def _build_url_table_html(items):
     _TD = 'style="padding:7px 10px;border:1px solid #ddd;vertical-align:top"'
     _TD_IC = 'style="padding:7px 8px;border:1px solid #ddd;vertical-align:top;text-align:center;width:28px"'
 
+    _TD_EST = ('style="padding:7px 10px;border:1px solid #ddd;vertical-align:top;'
+               'text-align:center;white-space:nowrap;font-weight:bold;width:64px"')
+    _MUTED = '<span style="color:#999">— (form suelto)</span>'
+
     rows_html = ""
     for item in sorted_items:
-        landing = _h.escape(item.get('url', '') or '—')
-        form_url = _h.escape(item.get('url_secure', '') or '—')
+        # En las corridas de URL suelta no hay landing: el form ES la página. Se dice
+        # explicitamente en vez de dejar un guion pelado, que parecia un dato faltante.
+        landing_raw = (item.get('url') or '').strip()
+        landing = _h.escape(landing_raw) if landing_raw else _MUTED
+        form_raw = (item.get('url_secure') or '').strip()
+        form_url = _h.escape(form_raw) if form_raw else '<span style="color:#999">—</span>'
         error   = _h.escape(item.get('error', ''))
-        icon    = "✅" if item['ok'] else "❌"
-        row_bg  = "#f0fff4" if item['ok'] else "#fff5f5"
+        es_ok   = bool(item['ok'])
+        icon    = "✅" if es_ok else "❌"
+        estado  = "PASS" if es_ok else "FAIL"
+        est_col = "#1e8449" if es_ok else "#c0392b"
+        row_bg  = "#f0fff4" if es_ok else "#fff5f5"
+        linea   = item.get('linea', '')
 
         rows_html += (
             f'<tr style="background:{row_bg}">'
             f'<td {_TD_IC}>{icon}</td>'
+            f'<td {_TD_EST}><span style="color:{est_col}">{estado}</span></td>'
             f'<td {_TD}>{landing}</td>'
             f'<td {_TD}>{form_url}</td>'
             '</tr>'
         )
-        if not item['ok'] and error:
+        if not es_ok and error:
+            # 'linea' suele ser el numero de fila del Excel, pero Validacion de Campos manda
+            # una etiqueta (pais + browser/viewport): solo se antepone "Fila" si es un numero.
+            _linea_txt = ''
+            if linea not in (None, ''):
+                _linea_txt = f'Fila {linea} — ' if str(linea).strip().isdigit() else f'{linea} — '
             rows_html += (
                 f'<tr style="background:{row_bg}">'
                 '<td style="border:1px solid #ddd;border-top:none"></td>'
-                f'<td colspan="2" style="padding:3px 10px 8px 10px;border:1px solid #ddd;'
-                f'border-top:none;color:#c0392b;font-size:12px">↳ {error}</td>'
+                f'<td colspan="3" style="padding:3px 10px 8px 10px;border:1px solid #ddd;'
+                f'border-top:none;color:#c0392b;font-size:12px">↳ {_h.escape(str(_linea_txt))}{error}</td>'
                 '</tr>'
             )
 
@@ -1166,6 +1243,7 @@ def _build_url_table_html(items):
         '<table style="border-collapse:collapse;width:100%;font-size:13px">'
         '<thead><tr>'
         f'<th {_TH} style="width:28px;text-align:center"> </th>'
+        f'<th {_TH} style="text-align:center;width:64px">ESTADO</th>'
         f'<th {_TH}>URL LANDING</th>'
         f'<th {_TH}>URL FORM</th>'
         '</tr></thead>'
@@ -1384,10 +1462,15 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
                 bloque += f"   Errores: {con_errores} leads NO enviados, {exitosos} OK\n\n"
                 if errores.get("detalles"):
                     for detalle in errores["detalles"]:
-                        url = detalle.get("url", "N/A")
+                        # En URL suelta no hay landing: se muestra la del form, que es la util.
+                        url = (detalle.get("url") or "").strip()
+                        url_form = (detalle.get("url_secure") or "").strip()
                         error = detalle.get("error", "Sin descripción")
                         linea = detalle.get("linea", "?")
-                        bloque += f"   ❌ Linea {linea} | URL: {url}\n      Error: {error}\n\n"
+                        bloque += f"   ❌ Linea {linea}\n"
+                        bloque += f"      URL landing: {url or '— (form suelto)'}\n"
+                        bloque += f"      URL form:    {url_form or '—'}\n"
+                        bloque += f"      Error: {error}\n\n"
                 detalles_fallidos.append(bloque)
 
             _sv_items = errores.get("detalles_sin_valor") or []
@@ -1562,58 +1645,88 @@ def analizar_resultados_masivos(excel_path):
             continue
             
         header_row = [str(sheet.cell(row=header_row_idx, column=c).value or "").strip().upper() for c in range(1, sheet.max_column + 1)]
-        try:
-            col_seg = header_row.index("SEGMENTO") + 1
-            col_est = header_row.index("ESTADO") + 1
-            col_url = header_row.index("URL LIVE") + 1
-            col_res = header_row.index("EXCEL==INSERTED?") + 1
-            col_disp = header_row.index("DISPLAYED?") + 1
-            col_land = header_row.index("LANDINGSTATUS") + 1
-        except ValueError:
+
+        def _idx(nombre):
+            try:
+                return header_row.index(nombre) + 1
+            except ValueError:
+                return None
+
+        col_seg = _idx("SEGMENTO")
+        col_est = _idx("ESTADO")
+        col_url = _idx("URL LIVE")
+        col_sec = _idx("URL SECURE")
+        col_res = _idx("EXCEL==INSERTED?")
+        col_disp = _idx("DISPLAYED?")
+        col_land = _idx("LANDINGSTATUS")
+        col_cur = _idx("CURRENTURL")
+        col_ins = _idx("SECURE_INSERTED")
+        col_stat = _idx("STATUSINSERTED")
+        if not all((col_seg, col_est, col_url, col_res, col_disp, col_land)):
             continue
-            
+
+        def _celda(r, c):
+            if not c:
+                return ""
+            v = sheet.cell(row=r, column=c).value
+            return "" if v is None else str(v).strip()
+
         market_summaries[sheet_name] = {"total": 0, "pass": 0, "fail": 0}
-        
+
         for r_idx in range(header_row_idx + 1, sheet.max_row + 1):
-            seg = str(sheet.cell(row=r_idx, column=col_seg).value or "").strip()
-            est = str(sheet.cell(row=r_idx, column=col_est).value or "").strip()
-            url = str(sheet.cell(row=r_idx, column=col_url).value or "").strip()
-            res_val = str(sheet.cell(row=r_idx, column=col_res).value or "").strip()
-            disp_val = str(sheet.cell(row=r_idx, column=col_disp).value or "").strip()
-            land_val = str(sheet.cell(row=r_idx, column=col_land).value or "").strip()
-            
-            if not url:
+            seg = _celda(r_idx, col_seg)
+            est = _celda(r_idx, col_est)
+            url = _celda(r_idx, col_url)
+            url_sec = _celda(r_idx, col_sec)
+            res_val = _celda(r_idx, col_res)
+            disp_val = _celda(r_idx, col_disp)
+            land_val = _celda(r_idx, col_land)
+            stat_val = _celda(r_idx, col_stat)
+            ins_val = _celda(r_idx, col_ins)
+
+            # Las filas de URL suelta traen solo URL SECURE: antes se salteaban enteras
+            # (if not url: continue) y no aparecian ni en el resumen ni en los fallos.
+            if not url and not url_sec:
                 continue
-                
+
             is_off = "OFF" in est.upper() or "❌" in est
             if is_off:
                 continue
-                
-            is_ok = ("✅ PASS" in res_val) and ("✅ PASS" in disp_val) and ("✅ PASS" in land_val)
-            
+
+            # FAIL si cualquiera de las columnas de resultado dice FAIL, no solo las tres
+            # que se miraban antes (un FAIL en statusInserted pasaba como PASS).
+            _cols_resultado = [land_val, ins_val, res_val, disp_val, stat_val]
+            is_ok = not any("FAIL" in v.upper() or "MISMATCH" in v.upper() for v in _cols_resultado)
+
             market_summaries[sheet_name]["total"] += 1
             if is_ok:
                 market_summaries[sheet_name]["pass"] += 1
             else:
                 market_summaries[sheet_name]["fail"] += 1
-                
-                # Obtener detalles del error específico
-                err_detail = ""
-                if "❌ FAIL" in land_val or "🔀 FAIL" in land_val:
-                    err_detail = land_val
-                elif "❌ FAIL" in res_val or "Mismatch" in res_val:
-                    err_detail = res_val
-                elif "❌ FAIL" in disp_val:
-                    err_detail = "Formulario no visible / no mostrado en pantalla"
-                else:
-                    err_detail = "Fallo indeterminado en verificación"
-                
+
+                # Detalle del error: se listan TODAS las columnas que fallaron, no solo la
+                # primera, para no perder informacion cuando hay mas de un problema.
+                _motivos = []
+                if "FAIL" in land_val.upper():
+                    _motivos.append(f"Landing: {land_val}")
+                if "FAIL" in ins_val.upper() or "MISMATCH" in ins_val.upper():
+                    _motivos.append(f"Form inserto: {ins_val}")
+                if "FAIL" in res_val.upper() or "MISMATCH" in res_val.upper():
+                    _motivos.append(f"Excel vs inserto: {res_val}")
+                if "FAIL" in disp_val.upper():
+                    _motivos.append("Formulario no visible / no mostrado en pantalla")
+                if "FAIL" in stat_val.upper():
+                    _motivos.append(f"URL del form: {stat_val}")
+                err_detail = " | ".join(_motivos) or "Fallo indeterminado en verificación"
+
                 failures.append({
                     "pais": sheet_name,
                     "fila": r_idx,
                     "segmento": seg,
                     "url": url,
-                    "error": err_detail
+                    "url_form": url_sec,
+                    "url_actual": _celda(r_idx, col_cur),
+                    "error": err_detail,
                 })
     return {"failures": failures, "market_summaries": market_summaries}
 
@@ -1652,16 +1765,29 @@ def _build_masivo_table_html(failures, market_summaries):
     if not failures:
         fail_table = "<p style='color:green;font-weight:bold;'>🎉 ¡Todos los formularios activos pasaron la revisión masiva con éxito!</p>"
     else:
+        import html as _h
+
+        def _celda_url(u):
+            """Link recortado, o el aviso de form suelto si la columna viene vacia."""
+            u = (u or "").strip()
+            if not u:
+                return "<span style='color:#999'>—</span>"
+            _txt = _h.escape(u if len(u) <= 60 else u[:60] + "…")
+            return f"<a href='{_h.escape(u, quote=True)}'>{_txt}</a>"
+
         fail_rows = ""
         for f in failures:
+            _landing = _celda_url(f.get("url")) if (f.get("url") or "").strip() \
+                else "<span style='color:#999'>— (form suelto)</span>"
             fail_rows += "<tr>"
-            fail_rows += f"<td {_TD}>{f['pais']}</td>"
+            fail_rows += f"<td {_TD}>{_h.escape(str(f['pais']))}</td>"
             fail_rows += f"<td {_TD} style='font-weight:bold;'>Fila {f['fila']}</td>"
-            fail_rows += f"<td {_TD}>{f['segmento']}</td>"
-            fail_rows += f"<td {_TD}><a href='{f['url']}'>{f['url'][:50]}...</a></td>"
-            fail_rows += f"<td {_TD} style='color:#c0392b;font-weight:bold;'>{f['error']}</td>"
+            fail_rows += f"<td {_TD}>{_h.escape(str(f['segmento']))}</td>"
+            fail_rows += f"<td {_TD}>{_landing}</td>"
+            fail_rows += f"<td {_TD}>{_celda_url(f.get('url_form'))}</td>"
+            fail_rows += f"<td {_TD} style='color:#c0392b;font-weight:bold;'>{_h.escape(str(f['error']))}</td>"
             fail_rows += "</tr>"
-            
+
         fail_table = (
             f"<h3 style='color:#c0392b;'>⚠️ Detalle de URLs con Desviaciones / Errores ({len(failures)})</h3>"
             "<table style='border-collapse:collapse;width:100%;font-family:sans-serif;'>"
@@ -1669,7 +1795,8 @@ def _build_masivo_table_html(failures, market_summaries):
             f"<th {_TH}>MERCADO</th>"
             f"<th {_TH}>EXCEL FILA</th>"
             f"<th {_TH}>SEGMENTO</th>"
-            f"<th {_TH}>URL LIVE</th>"
+            f"<th {_TH}>URL LANDING</th>"
+            f"<th {_TH}>URL FORM</th>"
             f"<th {_TH}>DETALLE DEL ERROR</th>"
             "</tr></thead>"
             f"<tbody>{fail_rows}</tbody>"

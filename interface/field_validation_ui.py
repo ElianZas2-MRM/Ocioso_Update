@@ -2362,6 +2362,9 @@ def build_field_validation_tab(parent, palette, shared_config=None):
                 "ui_ok": 0,
                 "ids_no_mapeados": 0,
                 "regex_ok": True,
+                # Detalle por URL, para que el email pueda listar landing/form y el motivo
+                # del fallo en vez de solo un contador.
+                "url_details": [],
             }
             execution_errors = []
             selected_countries_from_urls = list(set(triple[0] for triple in url_triples))
@@ -2413,6 +2416,17 @@ def build_field_validation_tab(parent, palette, shared_config=None):
                                     all_error_rows.extend(error_rows)
                                     all_unmapped_ids.extend(unmapped_ids)
                                     aggregated_summary["urls_ok"] += 1
+                                    _errs_url = int(summary.get("errors", 0)) + int(summary.get("ui_errors", 0))
+                                    aggregated_summary["url_details"].append({
+                                        "pais": pais_abrev.upper(),
+                                        "browser": browser_name,
+                                        "viewport": viewport_name,
+                                        "landing": landing_url or "",
+                                        "form": form_url or "",
+                                        "ok": _errs_url == 0,
+                                        "error": ("" if _errs_url == 0
+                                                  else f"{_errs_url} validacion(es) fallida(s) — ver el Excel adjunto"),
+                                    })
                                     aggregated_summary["fields"] += int(summary.get("fields", 0))
                                     aggregated_summary["characters"] += int(summary.get("characters", 0))
                                     aggregated_summary["errors"] += int(summary.get("errors", 0))
@@ -2425,6 +2439,15 @@ def build_field_validation_tab(parent, palette, shared_config=None):
                                 except Exception as url_exc:
                                     aggregated_summary["urls_error"] += 1
                                     aggregated_summary["regex_ok"] = False
+                                    aggregated_summary["url_details"].append({
+                                        "pais": pais_abrev.upper(),
+                                        "browser": browser_name,
+                                        "viewport": viewport_name,
+                                        "landing": landing_url or "",
+                                        "form": form_url or "",
+                                        "ok": False,
+                                        "error": str(url_exc)[:300],
+                                    })
                                     LOGGER.warning(
                                         "Falla de validación país=%s browser=%s viewport=%s landing=%s form=%s",
                                         pais_abrev,
