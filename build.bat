@@ -21,9 +21,13 @@ REM           FAIL en CUALQUIER columna (antes solo miraba 3) y las SKIPPED
 REM           Revision Masiva: se saca el check "Ejecucion en paralelo" del footer (el modo
 REM           se elige en la card); los mercados se recorren de a uno porque todos escriben
 REM           en el mismo libro. Boton "INICIAR REVISION MASIVA" -> "Iniciar ahora"
+REM           Build: vuelve a ONEFILE (un solo .exe con todo comprimido adentro, sin la
+REM           carpeta _internal\ con las librerias sueltas) y se rearma el ZIP del portable
 REM           Build: el portable ya no viaja con resultados/capturas/reportes de esta PC;
-REM           esas carpetas se crean vacias. json/: se excluyen tambien programacion_leads
-REM           y programacion_masivo
+REM           esas carpetas se crean vacias. Tampoco viaja ningun Excel de datos: solo
+REM           data\Field_Validation_URLs.xlsx (los de leads los genera la app, el matriz de
+REM           Revision Masiva lo elige el usuario). json/: se excluyen tambien
+REM           programacion_leads y programacion_masivo
 REM Jul 2026: Excel de resultados: columnas de RESULTADO primero y los datos de entrada al
 REM           final (antes era al reves). Se reordena al cerrar la corrida, no antes: los
 REM           runners leen los datos del lead de la misma hoja (URL en A, Formulario en B)
@@ -180,19 +184,19 @@ if errorlevel 1 goto :error
 echo Armando carpeta portable...
 if exist "%PORTABLE_DIR%" rmdir /s /q "%PORTABLE_DIR%"
 mkdir "%PORTABLE_DIR%"
-REM Build onedir: PyInstaller deja una CARPETA dist\%APP_NAME%\ (el .exe + _internal\)
-REM en vez de un unico .exe, asi que se copia entera a la raiz del portable.
-robocopy "dist\%APP_NAME%" "%PORTABLE_DIR%" /E /NFL /NDL /NJH /NJS /NC /NS >nul
-if errorlevel 8 goto :error
+REM Build onefile: PyInstaller deja UN solo dist\%APP_NAME%.exe con todo comprimido
+REM adentro (sin carpeta _internal\ con las librerias sueltas).
+copy /y "dist\%APP_NAME%.exe" "%PORTABLE_DIR%\%APP_NAME%.exe" >nul
+if errorlevel 1 goto :error
 if not exist "%PORTABLE_DIR%\%APP_NAME%.exe" goto :error
 
-REM data/ se copia aparte: hay que dejar afuera los Excel reales de clientes
-REM (rankings/listados de dealers), que no deben viajar en el portable ni en el ZIP
-if exist ".\data" (
-    robocopy ".\data" "%PORTABLE_DIR%\data" /E /NFL /NDL /NJH /NJS /NC /NS /XF "*Ranking Dealers*.xls*" >nul
-    if errorlevel 8 goto :error
-) else (
-    mkdir "%PORTABLE_DIR%\data"
+REM data/: NO viaja ningun Excel de datos. Los de leads los genera la propia app desde
+REM "Generar Excels con Datos", el Excel matriz de Revision Masiva lo elige el usuario, y
+REM los listados de dealers son datos reales de clientes. Lo unico que se lleva es el Excel
+REM de URLs de Validacion de Campos, que la pestana espera encontrar ahi.
+mkdir "%PORTABLE_DIR%\data"
+if exist ".\data\Field_Validation_URLs.xlsx" (
+    copy /y ".\data\Field_Validation_URLs.xlsx" "%PORTABLE_DIR%\data\Field_Validation_URLs.xlsx" >nul
 )
 
 REM drivers/ si viaja: son los chromedriver/geckodriver pineados que necesita el portable
@@ -234,15 +238,24 @@ if not exist "%PORTABLE_DIR%\lambdatest_credentials.txt" (
     echo Plantilla lambdatest_credentials.txt creada en portable.
 )
 
-REM Solo se entrega la carpeta portable: se borra la carpeta cruda de PyInstaller
-REM dist\%APP_NAME%\ (ya fue copiada adentro del portable) y no se arma ZIP.
+REM Se borra el .exe crudo de PyInstaller (ya fue copiado adentro del portable) y la carpeta
+REM dist\%APP_NAME%\ por si quedo de un build onedir anterior.
 if exist "dist\%APP_NAME%" rmdir /s /q "dist\%APP_NAME%"
 if exist "dist\%APP_NAME%.exe" del /f /q "dist\%APP_NAME%.exe"
+
+REM ZIP del portable, para repartir un unico archivo comprimido.
 if exist "dist\%APP_NAME%_portable.zip" del /f /q "dist\%APP_NAME%_portable.zip"
+echo Comprimiendo el portable...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "Compress-Archive -Path '%PORTABLE_DIR%' -DestinationPath 'dist\%APP_NAME%_portable.zip' -CompressionLevel Optimal -Force"
+if not exist "dist\%APP_NAME%_portable.zip" (
+    echo ADVERTENCIA: no se pudo armar el ZIP, queda solo la carpeta portable.
+)
 
 echo.
 echo Build completado correctamente.
 echo   Portable: %PORTABLE_DIR%\
+echo   ZIP:      dist\%APP_NAME%_portable.zip
 echo   (Abrir con: %PORTABLE_DIR%\Abrir_Osocio_Form_Automation.bat)
 pause
 exit /b 0
