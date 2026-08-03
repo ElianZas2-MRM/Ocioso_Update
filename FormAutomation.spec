@@ -25,6 +25,7 @@ a = Analysis(
         'browser_manager',
         'screenshot_manager',
         'utils.data_generator',
+        'utils.field_id_aliases',
         'utils.fixed_field_mapping_store',
         'utils.paths',
         'utils.popup_logger',
@@ -48,6 +49,8 @@ a = Analysis(
         'pytz',
         'openpyxl',
         'truststore',
+        # Revisión Masiva en paralelo: se importa dentro de la función, no al tope del módulo.
+        'concurrent.futures',
         # Icono de la bandeja (SysTrayIcon en interface/main_interface.py)
         'win32gui',
         'win32con',
