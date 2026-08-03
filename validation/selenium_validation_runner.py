@@ -17,6 +17,7 @@ from selenium.common.exceptions import TimeoutException
 
 from core.browser_manager import BrowserManager
 from core.field_dependencies import FIELD_DEPENDENCIES
+from utils.field_id_aliases import alias_ids_for
 
 from selenium.webdriver.support.ui import Select
 
@@ -62,6 +63,25 @@ def _pre_scroll_for_dynamic_content(driver):
         pass
 
 
+def _wait_for_standalone_form_ready(driver, timeout=15):
+    """Espera a que un form standalone (sin iframe) monte sus campos.
+
+    Los forms nuevos .../gm_frontend/chevrolet/t3/<pais>/form/<slug> son SPA de React:
+    el HTML llega con un <div id="root"> vacío y los inputs recién existen cuando montó
+    el bundle, así que no alcanza con readyState=complete.
+    """
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: bool(d.find_elements(
+                By.CSS_SELECTOR,
+                "input:not([type='hidden']):not([type='submit']):not([type='button']), select, textarea",
+            ))
+        )
+    except TimeoutException:
+        LOGGER.warning("El form standalone no mostró campos dentro del timeout")
+    time.sleep(0.5)
+
+
 def _find_form_iframe(driver, expected_form_url):
     expected_form_url = _sanitize_url(expected_form_url)
     if not expected_form_url:
@@ -92,13 +112,20 @@ def _is_text_input_candidate(element):
         return False
 
 
+def _ids_a_probar(element_id):
+    """El ID de la regla, y si no está en el DOM, sus alias entre estándares de form.
+    Ej: la regla dice 'firstname' y el form gm_frontend/t3 lo llama 'name'."""
+    return [element_id] + alias_ids_for(element_id)
+
+
 def _get_visible_element_by_id(driver, element_id):
-    try:
-        element = driver.find_element(By.ID, element_id)
-        if element.is_displayed() and _is_text_input_candidate(element):
-            return element
-    except Exception:
-        return None
+    for eid in _ids_a_probar(element_id):
+        try:
+            element = driver.find_element(By.ID, eid)
+            if element.is_displayed() and _is_text_input_candidate(element):
+                return element
+        except Exception:
+            continue
     return None
 
 
@@ -116,13 +143,14 @@ def _collect_visible_fields(driver, normalized_fields):
 
 
 def _get_element_by_id_any_tag(driver, element_id):
-    """Busca cualquier elemento visible por ID, sin restriccion de tag."""
-    try:
-        element = driver.find_element(By.ID, element_id)
-        if element.is_displayed():
-            return element
-    except Exception:
-        pass
+    """Busca cualquier elemento visible por ID (o por su alias), sin restriccion de tag."""
+    for eid in _ids_a_probar(element_id):
+        try:
+            element = driver.find_element(By.ID, eid)
+            if element.is_displayed():
+                return element
+        except Exception:
+            continue
     return None
 
 
@@ -984,10 +1012,24 @@ def run_field_validations(
     target_landing_url = _sanitize_url(landing_url or url)
     target_form_url = _sanitize_url(expected_form_url)
 
+    # Form standalone (URL suelta): la fila trae solo una de las dos URLs, o las dos son la
+    # misma. Es el caso de los forms nuevos .../gm_frontend/chevrolet/t3/<pais>/form/<slug>,
+    # que son una página entera y no un iframe embebido en una landing. Se abre esa URL
+    # directo y no se busca ningún iframe.
+    def _same_url(a, b):
+        return (a or "").strip().rstrip("/").lower() == (b or "").strip().rstrip("/").lower()
+
+    standalone_form = (
+        not target_landing_url
+        or not target_form_url
+        or _same_url(target_landing_url, target_form_url)
+    )
+    if standalone_form:
+        target_landing_url = target_landing_url or target_form_url
+        target_form_url = target_form_url or target_landing_url
+
     if not target_landing_url:
-        raise ValueError("La URL de landing es obligatoria")
-    if not target_form_url:
-        raise ValueError("La URL del form es obligatoria")
+        raise ValueError("Hay que indicar al menos una URL (landing o form)")
 
     normalized_fields = _normalize_field_mapping(field_mapping)
     _driver_owned = driver is None  # True si lo creamos aquí, False si es externo
@@ -1007,19 +1049,26 @@ def run_field_validations(
             time.sleep(post_load_wait)
 
         _pre_scroll_for_dynamic_content(driver)
-        iframe = _find_form_iframe(driver, target_form_url)
-        if iframe is None:
-            raise ValueError(f"No se encontró iframe para el form URL: {target_form_url}")
+        if standalone_form:
+            # No hay iframe que buscar: la página abierta ya ES el formulario. Se le da un
+            # margen a que monte (los forms gm_frontend son SPA React) y se sigue de largo.
+            _wait_for_standalone_form_ready(driver, page_ready_timeout)
+            iframe = None
+        else:
+            iframe = _find_form_iframe(driver, target_form_url)
+            if iframe is None:
+                raise ValueError(f"No se encontró iframe para el form URL: {target_form_url}")
 
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", iframe)
-        time.sleep(0.3)
-        driver.switch_to.frame(iframe)
-        switched_to_form_iframe = True
+        if iframe is not None:
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", iframe)
+            time.sleep(0.3)
+            driver.switch_to.frame(iframe)
+            switched_to_form_iframe = True
 
-        try:
-            _wait_document_ready(driver, page_ready_timeout)
-        except TimeoutException:
-            LOGGER.warning("El iframe no reportó readyState=complete dentro del timeout")
+            try:
+                _wait_document_ready(driver, page_ready_timeout)
+            except TimeoutException:
+                LOGGER.warning("El iframe no reportó readyState=complete dentro del timeout")
 
         detail_rows = []
         field_summaries = []

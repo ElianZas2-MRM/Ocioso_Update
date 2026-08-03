@@ -231,6 +231,19 @@ class MassiveFormFiller(GenericCountryBase):
         landing_url = self._sanitize_url(landing_url)
         expected_form_url = self._sanitize_url(expected_form_url)
 
+        # URL suelta (form standalone, sin landing que lo embeba). Pasa cuando la fila trae
+        # solo URL SECURE, o cuando las dos columnas son la misma URL — típico de los forms
+        # nuevos tipo .../gm_frontend/chevrolet/t3/<pais>/form/<slug>, que son una página
+        # entera y no un iframe. Se abre el form directo y no se busca ningún iframe: es la
+        # misma convención que ya usa Envío de Leads (columna URL vacía = form standalone).
+        def _norm(u):
+            return (u or "").strip().rstrip("/").lower()
+
+        standalone = (not landing_url) or (_norm(landing_url) == _norm(expected_form_url))
+        if standalone:
+            landing_url = landing_url or expected_form_url
+            expected_form_url = ""
+
         self.expected_form_url = expected_form_url
         self.ss_counter = row_num
         self._url_form_encontrado = ""
@@ -303,32 +316,30 @@ class MassiveFormFiller(GenericCountryBase):
         # Por eso se espera hasta FORM_WAIT_SECONDS a que aparezca alguno; si ya está, sigue
         # de largo sin esperar nada.
         FORM_WAIT_SECONDS = 5
-        GM_IFRAME_HINTS = ("gm_forms", "gm_formns", "gm_front", "gm_admin")
 
         def _buscar_iframes_gm():
             try:
                 todos = self.driver.find_elements(By.TAG_NAME, "iframe")
             except Exception:
                 return [], []
-            gm = []
-            for fr in todos:
-                try:
-                    src = str(fr.get_attribute("src") or "").lower()
-                    if any(x in src for x in GM_IFRAME_HINTS):
-                        gm.append(fr)
-                except Exception:
-                    pass
+            # Mismo criterio que Envio de Leads (BaseFormFiller.GM_FORM_URL_MARKERS), para no
+            # tener dos listas de marcadores que se desincronicen.
+            gm = [fr for fr in todos if self._is_gm_form_src(self._iframe_src_of(fr))]
             return todos, gm
 
         iframes_found, gm_iframes = _buscar_iframes_gm()
-        _deadline = time.time() + FORM_WAIT_SECONDS
-        while not gm_iframes and time.time() < _deadline:
-            if getattr(self, "stop_event", None) and self.stop_event.is_set():
-                break
-            time.sleep(0.5)
-            iframes_found, gm_iframes = _buscar_iframes_gm()
+        if use_iframe:
+            # Solo tiene sentido esperar si se espera un iframe: en un form standalone no hay
+            # ninguno y la espera serían 5 segundos perdidos por fila.
+            _deadline = time.time() + FORM_WAIT_SECONDS
+            while not gm_iframes and time.time() < _deadline:
+                if getattr(self, "stop_event", None) and self.stop_event.is_set():
+                    break
+                time.sleep(0.5)
+                iframes_found, gm_iframes = _buscar_iframes_gm()
 
-        forms_count = len(gm_iframes)
+        # En un form standalone la página ES el formulario: cuenta como 1, no como 0.
+        forms_count = 1 if standalone else len(gm_iframes)
 
         if use_iframe:
             try:
