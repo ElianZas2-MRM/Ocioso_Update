@@ -6204,9 +6204,15 @@ class BaseFormFiller:
                         self.run_summary["ok"] += 1
                     else:
                         self.run_summary["fail"] += 1
-                        # fila + motivo corto (para el resumen rápido del modal / email).
-                        self.run_summary["fail_rows"].append(
-                            {"row": i, "reason": self._short_fail_reason(result_text)})
+                        # fila + motivo corto + URL (para el resumen rápido del modal / email).
+                        # La URL importa: con "fila 6" solo, hay que abrir el Excel para saber
+                        # cual fallo. En URL suelta landing_url ya trae la URL del form.
+                        self.run_summary["fail_rows"].append({
+                            "row": i,
+                            "reason": self._short_fail_reason(result_text),
+                            "url": landing_url or "",
+                            "url_form": expected_form_url or "",
+                        })
                 except Exception:
                     pass
                 _done_leads += 1
