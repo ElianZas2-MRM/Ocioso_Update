@@ -266,9 +266,39 @@ class _DemoSchedulerPanel(tk.Frame):
         body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
 
+        # OJO: acá había un canvas.bind_all("<MouseWheel>", ...). bind_all registra el handler
+        # en el bindtag "all", que es GLOBAL a toda la aplicación, así que al abrir este panel
+        # una sola vez la rueda del mouse quedaba secuestrada para siempre: se pisaba el
+        # handler global de la app y, al cerrar el popup, apuntaba a un canvas ya destruido.
+        # Por eso dejaba de scrollear en todas las pestañas (Revisión Masiva incluida) aunque
+        # la barra de scroll siguiera funcionando.
+        # Ahora el binding se toma al entrar con el mouse y se suelta al salir o al destruirse.
         def _on_mw(e):
-            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mw)
+            try:
+                canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+            except Exception:
+                pass
+            return "break"
+
+        def _tomar_rueda(_e=None):
+            canvas.bind_all("<MouseWheel>", _on_mw)
+
+        def _soltar_rueda(_e=None):
+            try:
+                canvas.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+            # Devolver la rueda al handler global de la app, si ya está montado.
+            try:
+                restaurar = getattr(self.nametowidget("."), "_restaurar_mousewheel", None)
+                if callable(restaurar):
+                    restaurar()
+            except Exception:
+                pass
+
+        canvas.bind("<Enter>", _tomar_rueda)
+        canvas.bind("<Leave>", _soltar_rueda)
+        self.bind("<Destroy>", lambda e: _soltar_rueda() if e.widget is self else None, add="+")
 
         p = dict(padx=14, pady=8)
         self._build_days_section(body, p)
@@ -1784,10 +1814,13 @@ def iniciar_interfaz():
 
     paises_card = build_country_selection_card(leads_scroll_frame)
 
-    # --- 3. TESTEO PROGRAMADO (Sub-pestañas: Envío de Leads Normales / Revisión Masiva) ---
+    # --- 3. TESTEO PROGRAMADO (Sub-pestañas: Envío de Leads Programados / Revisión Masiva) ---
     SCHED_BG = "#3B1E5E"
     SCHED_BORDER = "#8B5FB5"
     GUIDE_ACCENT = "#FFC845"
+    # Navegadores simultáneos en la Revisión Masiva en paralelo. Cada mercado levanta un
+    # Chrome completo: abrir los nueve de golpe deja la máquina inservible.
+    _MASIVO_MAX_WORKERS = 3
     BADGE_TEAL = "#5DCFCF"
     BADGE_GREEN = "#82E0AA"
     BADGE_AMBER = "#F8C471"
@@ -1873,7 +1906,7 @@ def iniciar_interfaz():
                 btn.config(bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, highlightthickness=0)
         _refresh_prog()
 
-    btn_sub_sem = tk.Button(sched_subtab_bar, text="📅 Envío de Leads Normales", font=("Segoe UI", 9, "bold"),
+    btn_sub_sem = tk.Button(sched_subtab_bar, text="📅 Envío de Leads Programados", font=("Segoe UI", 9, "bold"),
                             bg=TAB_ACTIVE_BG, fg=TAB_ACTIVE_FG, relief="flat", bd=0, activebackground=TAB_ACTIVE_BG,
                             activeforeground=TAB_ACTIVE_FG, padx=16, pady=6, cursor="hand2",
                             command=lambda: switch_sched_subtab("semanal"))
@@ -4367,15 +4400,12 @@ def iniciar_interfaz():
                 
                 dest_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
                 start_time_all = time.time()
+                # El modo se toma de la columna MERCADOS de la card de configuración.
                 paralelo = (scheduler_cfg_masivo.get("modo_excel") == "paralelo")
-
                 if paralelo:
-                    # La Revisión Masiva escribe todos los resultados dentro del MISMO Excel matriz.
-                    # Si cada mercado corriera en su propio hilo, todos abrirían y guardarían el mismo
-                    # archivo y el último en guardar pisaría a los demás. Por eso acá se fuerza el
-                    # recorrido secuencial de mercados (dentro de cada mercado no cambia nada).
-                    log_message("[INFO] Revisión Masiva: los mercados se recorren de a uno porque todos "
-                                "los resultados se escriben en el mismo Excel matriz.")
+                    log_message(f"[INFO] Revisión Masiva en paralelo: hasta {_MASIVO_MAX_WORKERS} "
+                                "mercados a la vez, cada uno con su propio navegador. El Excel se "
+                                "escribe al final, de a uno.")
 
                 success, info = run_massive_check(
                     excel_path, custom_cols,
@@ -4384,7 +4414,8 @@ def iniciar_interfaz():
                     tomar_capturas=var_tomar_capturas.get(),
                     solo_fails=var_solo_fails.get(),
                     browser="chrome", headless=True,
-                    progress_callback=pcb, stop_event=stop_event
+                    progress_callback=pcb, stop_event=stop_event,
+                    paralelo=paralelo, max_workers=_MASIVO_MAX_WORKERS,
                 )
                 
                 # Enviar correo si corresponde
@@ -4971,9 +5002,15 @@ def iniciar_interfaz():
                 break
 
     # Bindear a nivel root global
-    root.bind_all("<MouseWheel>", _on_global_mousewheel)
-    root.bind_all("<Button-4>", _on_global_mousewheel)
-    root.bind_all("<Button-5>", _on_global_mousewheel)
+    def _restaurar_mousewheel():
+        """Vuelve a poner el scroll global. Lo llaman los popups que necesitan la rueda para
+        su propio canvas (ver _DemoSchedulerPanel), al salir con el mouse o al cerrarse."""
+        root.bind_all("<MouseWheel>", _on_global_mousewheel)
+        root.bind_all("<Button-4>", _on_global_mousewheel)
+        root.bind_all("<Button-5>", _on_global_mousewheel)
+
+    root._restaurar_mousewheel = _restaurar_mousewheel
+    _restaurar_mousewheel()
 
     # Créditos (footer discreto)
     footer_credit = tk.Frame(root, bg=APP_BG_COLOR)
