@@ -224,6 +224,13 @@ if exist ".\json" (
     mkdir "%PORTABLE_DIR%\json"
 )
 
+REM Red de seguridad: el portable tiene que arrancar SIN ninguna programacion activa (ni
+REM Envio de Leads Programados ni Revision Masiva). El /XF de arriba ya los excluye, pero
+REM se borra por patron ademas, para que un archivo de programacion con nombre nuevo no se
+REM cuele por estar fuera de esa lista.
+if exist "%PORTABLE_DIR%\json\programacion_*.json" del /f /q "%PORTABLE_DIR%\json\programacion_*.json"
+if exist "%PORTABLE_DIR%\json\scheduler_triggered.json" del /f /q "%PORTABLE_DIR%\json\scheduler_triggered.json"
+
 (
     echo @echo off
     echo cd /d "%%~dp0"
