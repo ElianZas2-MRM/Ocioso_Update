@@ -65,21 +65,24 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-# Build en modo ONEDIR (exclude_binaries=True + COLLECT), no onefile.
-# En onefile el bootloader descomprime TODO el bundle (~56 MB) a %TEMP%\_MEIxxxxx en cada
-# arranque y lo borra al salir: son varios segundos de espera cada vez que se abre la app.
-# Acá no se gana nada con onefile porque build.bat igual entrega una carpeta portable
-# (con data/, json/, drivers/ al lado del ejecutable), así que onedir arranca directo.
+# Build en modo ONEFILE: un unico OsocioFormAutomation.exe con todo comprimido adentro,
+# sin carpeta _internal\ con las librerias sueltas al lado.
+# Contra: el bootloader descomprime el bundle a %TEMP%\_MEIxxxxx en cada arranque, asi que
+# la app tarda unos segundos mas en abrir que en onedir. Se acepta a cambio de entregar un
+# solo archivo (lo que se reparte es el .exe + las carpetas de datos, nada mas).
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='OsocioFormAutomation',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -87,14 +90,4 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['Asset\\icon.ico'],
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='OsocioFormAutomation',
 )

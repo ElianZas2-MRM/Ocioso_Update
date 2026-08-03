@@ -486,24 +486,34 @@ La app usa exclusivamente drivers locales desde `drivers/` (junto al proyecto, o
 Genera **solo la carpeta portable**:
 
 - `dist/OsocioFormAutomation_portable/` — con el `.exe` adentro más `data/`, `drivers/`, `json/`, `resultados/`, `temporales/`, `Dealerscheck_resultados/`, `resultados_lambdatestmac/` y `resultados_lambdatest_android/`. Se abre con `Abrir_Osocio_Form_Automation.bat`.
+- `dist/OsocioFormAutomation_portable.zip` — la misma carpeta comprimida, para mandarla de una.
 
-> El build **ya no deja** el `.exe` suelto en `dist/` ni arma el `.zip`: son pasos que sumaban tiempo y el portable ya trae todo. Si necesitás mandarle la app a alguien, comprimí vos la carpeta `dist/OsocioFormAutomation_portable/`.
+**Qué NO viaja en el portable:**
 
-### Por qué el portable trae una carpeta `_internal/`
+- **Ningún Excel de datos**, salvo `data/Field_Validation_URLs.xlsx` (la pestaña de Validación de Campos lo espera ahí). Los Excels de leads los genera la propia app desde "Generar Excels con Datos", el Excel matriz de Revisión Masiva lo elige el usuario, y los listados de dealers son datos reales de clientes.
+- **Ningún resultado, captura ni reporte** de la PC donde se compiló: `resultados/`, `temporales/`, `Dealerscheck_resultados/` y las de LambdaTest se crean **vacías**.
+- El estado local del scheduler (`programacion_test/leads/masivo.json`, `scheduler_triggered.json`), `dealer_comparator_settings.json` y `config_global.json`.
 
-El build se hace en modo **onedir**: el portable tiene el `OsocioFormAutomation.exe` (~14 MB)
-más una carpeta `_internal/` con las librerías. **Las dos cosas viajan juntas** — si copiás
-solo el `.exe` suelto, no abre.
+Los **drivers sí viajan** (`chromedriver`, `geckodriver`, `msedgedriver`): el portable los tiene pineados.
 
-Antes se compilaba en modo *onefile* (un único `.exe` de ~56 MB). Se cambió porque en ese modo
-el ejecutable **descomprime todo el contenido a `%TEMP%\_MEIxxxxx` en cada arranque** y lo borra
-al cerrar, lo que hacía que la app tardara muchísimo en abrir. Con onedir la ventana aparece en
-unos **3 segundos**. No se pierde nada: el portable siempre fue una carpeta (con `data/`,
-`json/`, `drivers/` al lado), así que el "archivo único" nunca se estaba aprovechando.
+### Un solo `.exe` (modo onefile)
+
+El build se hace en modo **onefile**: el portable tiene **un único `OsocioFormAutomation.exe`**
+con todas las librerías comprimidas adentro. No hay carpeta `_internal/` con archivos sueltos
+al lado.
+
+En julio 2026 se había pasado a *onedir* (el `.exe` + una carpeta `_internal/`) porque en onefile
+el ejecutable **descomprime todo a `%TEMP%\_MEIxxxxx` en cada arranque**, y eso hacía que la app
+tardara unos segundos más en abrir (onedir mostraba la ventana en ~3 s). Se volvió a onefile en
+agosto 2026: la carpeta `_internal/` confundía al entregar la app y se rompía si alguien copiaba
+solo el `.exe`. Se acepta el arranque más lento a cambio de repartir un archivo.
+
+**Igual el `.exe` no va solo:** necesita `data/`, `json/`, `drivers/` y las carpetas de salida al
+lado. Lo que se entrega es la carpeta portable (o su `.zip`), no el `.exe` suelto.
 
 > **Ojo:** el `.exe` del portable se compila desde el código fuente **en el momento del build**. Si cambiás código, tenés que volver a correr `build.bat` para que el portable lo tome — abrir el `.exe` viejo sigue ejecutando la versión anterior. Para probar cambios al toque, corré `python run.py` desde la carpeta del proyecto.
 
-`lambdatest_mac/` y `lambdatest_android/` van empaquetados por PyInstaller **dentro de `_internal/`**, no como carpetas sueltas al lado del `.exe` — no hace falta copiarlos a mano.
+`lambdatest_mac/` y `lambdatest_android/` van empaquetados por PyInstaller **adentro del `.exe`**, no como carpetas sueltas al lado — no hace falta copiarlos a mano.
 
 El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email del destinatario de la PC donde se compiló). Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 
