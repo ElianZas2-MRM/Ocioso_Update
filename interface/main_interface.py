@@ -255,12 +255,23 @@ class _DemoSchedulerPanel(tk.Frame):
         self._build_footer(self, dict(padx=14, pady=10))
         tk.Frame(self, bg=_S_BORDER, height=1).pack(fill="x", side="bottom")
 
-        body = tk.Frame(self, bg=_S_BG)
-        body.pack(fill="both", expand=True)
+        canvas = tk.Canvas(self, bg=_S_BG, highlightthickness=0)
+        vsb = tk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        body = tk.Frame(canvas, bg=_S_BG)
+        win_id = canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+
+        def _on_mw(e):
+            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mw)
 
         p = dict(padx=14, pady=8)
         self._build_days_section(body, p)
-        self._build_countries_section(body, p)
 
     def _card_frame(self, parent):
         return tk.Frame(parent, bg=_S_CARD, highlightbackground=_S_BORDER, highlightthickness=1)
@@ -280,7 +291,7 @@ class _DemoSchedulerPanel(tk.Frame):
         self._clear_all_lbl.bind("<Button-1>", lambda e: self._clear_all())
 
         day_row = tk.Frame(card, bg=_S_CARD)
-        day_row.pack(fill="x", padx=12, pady=(4, 8))
+        day_row.pack(fill="x", padx=12, pady=(4, 6))
         self._day_btns = {}
         for short, full in _SCH_DAYS:
             col_f = tk.Frame(day_row, bg=_S_CARD)
@@ -298,6 +309,7 @@ class _DemoSchedulerPanel(tk.Frame):
         self._hours_outer.pack(fill="x", padx=12, pady=(0, 8))
         self._hours_outer.pack_forget()
         self._update_day_buttons()
+        self._select_day("Lunes")
 
     def _select_day(self, day):
         if self._selected_day == day:
@@ -321,14 +333,11 @@ class _DemoSchedulerPanel(tk.Frame):
 
         self._apply_days = set()
 
-        # Header + Guardar
+        # Header
         h_hdr = tk.Frame(self._hours_outer, bg=_S_BG)
         h_hdr.pack(fill="x", pady=(8, 4))
         tk.Label(h_hdr, text=f"🕐  Horarios para el {self._selected_day}", font=("Segoe UI", 10, "bold"),
                  bg=_S_BG, fg=_S_WHITE).pack(side="left")
-        tk.Button(h_hdr, text="✓ Guardar", font=("Segoe UI", 8, "bold"), bg=SAVE_BG, fg=SAVE_FG, relief="flat",
-                  activebackground=SAVE_HOVER, activeforeground=SAVE_FG,
-                  cursor="hand2", padx=10, pady=3, command=self._close_hours_panel).pack(side="right")
 
         # 1) Agregar horario personalizado
         cust_row = tk.Frame(self._hours_outer, bg=_S_BG)
@@ -531,72 +540,16 @@ class _DemoSchedulerPanel(tk.Frame):
         self._schedule = {}
         self._close_hours_panel()
         self._update_day_buttons()
+    def _add_preset_all_days(self, time_str):
+        for _, full in _SCH_DAYS:
+            dh = self._schedule.setdefault(full, [])
+            if time_str not in dh:
+                dh.append(time_str)
+                dh.sort()
+        self._update_day_buttons()
         self._update_footer()
-
-    def _build_countries_section(self, parent, pad):
-        card = self._card_frame(parent)
-        card.pack(fill="x", **pad)
-
-        hrow = tk.Frame(card, bg=_S_CARD)
-        hrow.pack(fill="x", padx=12, pady=(12, 6))
-        tk.Label(hrow, text="🌎  PAÍSES A TESTEAR", font=("Segoe UI", 9, "bold"), bg=_S_CARD, fg=_S_MUTED).pack(side="left")
-        self._toggle_all_lbl = tk.Label(hrow, text="Seleccionar todos", font=("Segoe UI", 9, "underline"),
-                                        bg=_S_CARD, fg=_S_ACCENT, cursor="hand2")
-        self._toggle_all_lbl.pack(side="right")
-        self._toggle_all_lbl.bind("<Button-1>", lambda e: self._toggle_all())
-
-        grid = tk.Frame(card, bg=_S_CARD)
-        grid.pack(fill="x", padx=12, pady=(0, 4))
-        for c in range(3):
-            grid.columnconfigure(c, weight=1)
-
-        self._country_vars = {}
-        self._country_items = {}
-        for idx, country in enumerate(_SCH_COUNTRIES):
-            r, c = divmod(idx, 3)
-            checked = country in self._countries
-            var = tk.BooleanVar(value=checked)
-            self._country_vars[country] = var
-            bg = _S_SEL if checked else _S_UNSEL
-            border = _S_ACCENT if checked else _S_BORDER
-            item = tk.Frame(grid, bg=bg, highlightbackground=border, highlightthickness=1)
-            item.grid(row=r, column=c, padx=3, pady=3, sticky="ew")
-            self._country_items[country] = item
-            cb = tk.Checkbutton(item, text=country, variable=var, font=("Segoe UI", 9), bg=bg,
-                                fg=_S_WHITE, activebackground=_S_SEL, activeforeground=_S_WHITE,
-                                selectcolor=_S_UNSEL, padx=8, pady=6)
-            cb.pack(fill="x")
-            var.trace("w", lambda *a, co=country, it=item, cb_=cb, v=var: self._on_country_toggle(co, it, cb_, v))
-
-        self._count_lbl = tk.Label(card, text="", font=("Segoe UI", 8), bg=_S_CARD, fg=_S_MUTED)
-        self._count_lbl.pack(anchor="w", padx=12, pady=(2, 10))
-        self._update_country_count()
-
-    def _on_country_toggle(self, country, item, cb, var):
-        checked = var.get()
-        bg = _S_SEL if checked else _S_UNSEL
-        border = _S_ACCENT if checked else _S_BORDER
-        item.config(bg=bg, highlightbackground=border)
-        cb.config(bg=bg, fg=_S_WHITE)
-        if checked and country not in self._countries:
-            self._countries.append(country)
-        elif not checked and country in self._countries:
-            self._countries.remove(country)
-        self._update_country_count()
-        self._update_toggle_all_label()
-        self._update_footer()
-
-    def _toggle_all(self):
-        all_sel = len(self._countries) == len(_SCH_COUNTRIES)
-        for var in self._country_vars.values():
-            var.set(not all_sel)
-
-    def _update_toggle_all_label(self):
-        self._toggle_all_lbl.config(text="Desmarcar todos" if len(self._countries) == len(_SCH_COUNTRIES) else "Seleccionar todos")
-
-    def _update_country_count(self):
-        n = len(self._countries)
-        self._count_lbl.config(text=f"{n} de {len(_SCH_COUNTRIES)} países seleccionados" if n > 0 else "")
+        if self._selected_day and getattr(self, "_badges_frame", None):
+            self._refresh_badges()
 
     def _build_footer(self, parent, pad):
         footer = tk.Frame(parent, bg=_S_BG)
@@ -605,8 +558,8 @@ class _DemoSchedulerPanel(tk.Frame):
                                  padx=10, pady=6, justify="left", anchor="w", wraplength=500, relief="flat")
         btn_row = tk.Frame(footer, bg=_S_BG)
         btn_row.pack(fill="x")
-        self._save_btn = tk.Button(btn_row, text="💾  Guardar configuración", font=("Segoe UI", 10, "bold"),
-                                   bg=_S_SEL, fg=_S_WHITE, relief="flat", cursor="hand2", padx=16, pady=8,
+        self._save_btn = tk.Button(btn_row, text="💾  Guardar Horarios", font=("Segoe UI", 10, "bold"),
+                                   bg="#3498DB", fg="white", relief="flat", cursor="hand2", padx=16, pady=8,
                                    command=self._save)
         self._save_btn.pack(side="right")
         self._update_footer()
@@ -615,25 +568,21 @@ class _DemoSchedulerPanel(tk.Frame):
         if self._val_lbl is None:
             return
         total = sum(len(v) for v in self._schedule.values())
-        n = len(self._countries)
-        can = total > 0 and n > 0
+        can = total > 0
         if not can:
-            if total == 0 and n == 0:
-                msg = "⚠  Seleccioná al menos un horario y un país para continuar."
-            elif total == 0:
-                msg = "⚠  Seleccioná al menos un horario para continuar."
-            else:
-                msg = "⚠  Seleccioná al menos un país para continuar."
+            msg = "⚠  Seleccioná al menos un horario para continuar."
             self._val_lbl.config(text=msg)
             self._val_lbl.pack(fill="x", pady=(0, 8))
         else:
             self._val_lbl.pack_forget()
-        self._save_btn.config(state="normal" if can else "disabled", bg=_S_SEL if can else _S_UNSEL,
+        self._save_btn.config(state="normal" if can else "disabled",
+                              bg="#3498DB" if can else _S_UNSEL,
+                              fg="white" if can else _S_MUTED,
                               cursor="hand2" if can else "arrow")
 
     def _save(self):
         total = sum(len(v) for v in self._schedule.values())
-        if total == 0 or not self._countries:
+        if total == 0:
             return
         config = {"horarios": {k: v for k, v in self._schedule.items() if v}, "paises": list(self._countries)}
         if self._on_save(config) is False:
@@ -1169,11 +1118,10 @@ def iniciar_interfaz():
 
     tabs_data = [
         ("Envío de Leads", "leads", False),
-        ("Programación de Tests", "scheduler", False),
+        ("Testeo Programado", "scheduler", False),
         ("Validación de Campos", "validation", False),
         ("Generar Excels con Datos", "excel", False),
         ("Comparar Dealers vs Form", "dealers", False),
-        ("Revisión Masiva de Forms", "check_masivo", False),
     ]
     for t_text, t_name, t_disabled in tabs_data:
         btn = tk.Button(tab_bar, text=t_text, font=("Segoe UI", 9, "bold"), bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG,
@@ -1723,472 +1671,584 @@ def iniciar_interfaz():
         tk.Button(btns, text="Cancelar", font=("Segoe UI", 9), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
                   relief="flat", bd=0, padx=14, pady=6, cursor="hand2", command=win.destroy).pack(side="right", padx=(0, 8))
 
-    actualizar_warning()  # reflejar el modo persistido al abrir la app
-    global_config_btn.config(command=abrir_config_avanzada)
-
-    # --- 2. PAÍSES A EJECUTAR (Card Panel) ---
-    paises_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
-    paises_card.pack(fill="x", pady=(0, 8), ipady=5)
-
-    p_header = tk.Frame(paises_card, bg=CARD_BG_COLOR)
-    p_header.pack(fill="x", padx=15, pady=(6, 4))
-    
-    tk.Label(p_header, text="🌐 PAÍSES A EJECUTAR", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
-
+    actualizar_warning()
     paises_list = ["Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "Paraguay", "Peru", "Uruguay"]
     p_codes = {"Argentina": "AR", "Bolivia": "BO", "Brasil": "BR", "Chile": "CL", "Colombia": "CO", "Ecuador": "EC", "Paraguay": "PY", "Peru": "PE", "Uruguay": "UY"}
-    selected_countries = {p: False for p in paises_list}
-    country_cards = {}
-    country_labels = {}
+    selected_countries = {p: True for p in paises_list} # Selección de países UNIFICADA para todas las pestañas/apartados
+    # (card_frame, code_label, name_label, counter_label, pais_name, estilo)
+    # estilo: "card" = tarjeta grande (pestaña Envío de Leads) | "pill" = píldora compacta (Testeo Programado)
+    country_ui_registry = []
 
-    counter_lbl = tk.Label(p_header, text="0 seleccionados", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
-    counter_lbl.pack(side="right", padx=(10, 0))
-
-    tk.Label(paises_card, text="Elegí el o los países que querés ejecutar.",
-             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 4))
-
-    def update_country_counter():
+    def refresh_all_country_ui():
         count = sum(1 for v in selected_countries.values() if v)
-        counter_lbl.config(text=f"{count} seleccionados")
+        for card, code_lbl, name_lbl, counter_lbl, pais, estilo in country_ui_registry:
+            if counter_lbl and counter_lbl.winfo_exists():
+                try:
+                    counter_lbl.config(text=f"{count} seleccionados")
+                except Exception:
+                    pass
+            if card.winfo_exists() and code_lbl.winfo_exists() and name_lbl.winfo_exists():
+                try:
+                    sel = selected_countries[pais]
+                    if estilo == "pill":
+                        c_bg = BUTTON_ACTIVE if sel else BUTTON_INACTIVE
+                        card.config(highlightbackground=ACCENT_COLOR if sel else BORDER_COLOR, bg=c_bg)
+                        code_lbl.config(fg="white" if sel else TEXT_SECONDARY, bg=c_bg)
+                        name_lbl.config(fg="white" if sel else TEXT_SECONDARY, bg=c_bg)
+                    elif sel:
+                        card.config(highlightbackground=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+                        code_lbl.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+                        name_lbl.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
+                    else:
+                        card.config(highlightbackground=BORDER_COLOR, bg=CARD_BG_COLOR)
+                        code_lbl.config(fg="white", bg=CARD_BG_COLOR)
+                        name_lbl.config(fg=TEXT_SECONDARY, bg=CARD_BG_COLOR)
+                except Exception:
+                    pass
+        try:
+            refresh_execute_state()
+        except Exception:
+            pass
+        try:
+            _refresh_prog()
+        except Exception:
+            pass
 
     def toggle_country(name):
         selected_countries[name] = not selected_countries[name]
-        card = country_cards[name]
-        c_lbl = country_labels[name]
-        if selected_countries[name]:
-            card.config(highlightbackground=ACCENT_COLOR, bg=BUTTON_INACTIVE)
-            c_lbl.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
-        else:
-            card.config(highlightbackground=BORDER_COLOR, bg=CARD_BG_COLOR)
-            c_lbl.config(fg="white", bg=CARD_BG_COLOR)
-        update_country_counter()
-        refresh_execute_state()
-
-    grid_frame = tk.Frame(paises_card, bg=CARD_BG_COLOR)
-    grid_frame.pack(fill="x", padx=15, pady=2)
-
-    for idx, pais in enumerate(paises_list):
-        code = p_codes[pais]
-        card = tk.Frame(grid_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, cursor="hand2")
-        card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
-        grid_frame.columnconfigure(idx % 9, weight=1)
-
-        code_lbl = tk.Label(card, text=code, font=("Segoe UI", 11, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, cursor="hand2")
-        code_lbl.pack(pady=(5, 1))
-        
-        name_lbl = tk.Label(card, text=pais, font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
-        name_lbl.pack(pady=(0, 5))
-
-        country_cards[pais] = card
-        country_labels[pais] = name_lbl
-
-        def bind_click(w, p=pais):
-            w.bind("<Button-1>", lambda e: toggle_country(p))
-        bind_click(card)
-        bind_click(code_lbl)
-        bind_click(name_lbl)
-
-    links_frame = tk.Frame(paises_card, bg=CARD_BG_COLOR)
-    links_frame.pack(fill="x", padx=15, pady=(2, 2))
+        refresh_all_country_ui()
 
     def select_all_countries():
         for p in paises_list:
-            if not selected_countries[p]:
-                toggle_country(p)
+            selected_countries[p] = True
+        refresh_all_country_ui()
+
     def select_none_countries():
         for p in paises_list:
-            if selected_countries[p]:
-                toggle_country(p)
+            selected_countries[p] = False
+        refresh_all_country_ui()
 
-    all_btn = tk.Label(links_frame, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
-    all_btn.pack(side="left")
-    all_btn.bind("<Button-1>", lambda e: select_all_countries())
+    def build_country_selection_card(parent_frame):
+        p_card = tk.Frame(parent_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+        p_card.pack(fill="x", pady=(0, 8), ipady=5)
 
-    none_btn = tk.Label(links_frame, text="Ninguno", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
-    none_btn.pack(side="left", padx=12)
-    none_btn.bind("<Button-1>", lambda e: select_none_countries())
+        p_hdr = tk.Frame(p_card, bg=CARD_BG_COLOR)
+        p_hdr.pack(fill="x", padx=15, pady=(6, 4))
+        tk.Label(p_hdr, text="🌐 PAÍSES A EJECUTAR", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
 
-    # --- 3. PROGRAMACIÓN SEMANAL / TEST AUTOMÁTICO (Card Panel — fondo distinto para resaltar) ---
-    SCHED_BG = "#3B1E5E"      # Morado un poco más azulado/oscuro que las demás cards
-    SCHED_BORDER = "#8B5FB5"  # Borde más visible
-    scheduler_scroll_frame = make_scrollable_tab_container(tabs["scheduler"])
+        c_lbl = tk.Label(p_hdr, text=f"{sum(1 for v in selected_countries.values() if v)} seleccionados",
+                         font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
+        c_lbl.pack(side="right", padx=(10, 0))
 
-    programacion_card = tk.Frame(scheduler_scroll_frame, bg=SCHED_BG, bd=0, highlightthickness=1, highlightbackground=SCHED_BORDER)
-    programacion_card.pack(fill="x", padx=20, pady=(20, 10), ipady=5)
+        tk.Label(p_card, text="Elegí el o los países que querés ejecutar.",
+                 font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 4))
 
-    left_col = tk.Frame(programacion_card, bg=SCHED_BG)
-    left_col.pack(side="left", fill="both", expand=True, padx=(15, 10), pady=10)
+        g_frame = tk.Frame(p_card, bg=CARD_BG_COLOR)
+        g_frame.pack(fill="x", padx=15, pady=2)
 
-    right_col = tk.Frame(programacion_card, bg=SCHED_BG)
-    right_col.pack(side="right", fill="both", expand=True, padx=(10, 15), pady=10)
+        for idx, pais in enumerate(paises_list):
+            code = p_codes[pais]
+            is_sel = selected_countries[pais]
+            c_bg = BUTTON_INACTIVE if is_sel else CARD_BG_COLOR
+            c_hb = ACCENT_COLOR if is_sel else BORDER_COLOR
+            c_fg = ACCENT_COLOR if is_sel else "white"
+            n_fg = ACCENT_COLOR if is_sel else TEXT_SECONDARY
 
-    # --- Columna Izquierda ---
-    tk.Label(left_col, text="📅 PROGRAMACIÓN DE TEST AUTOMÁTICO", font=("Segoe UI", 9, "bold"), bg=SCHED_BG, fg=TEXT_SECONDARY).pack(anchor="w", pady=(0, 10))
+            card = tk.Frame(g_frame, bg=c_bg, bd=0, highlightthickness=1, highlightbackground=c_hb, cursor="hand2")
+            card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
+            g_frame.columnconfigure(idx % 9, weight=1)
 
-    prog_btns = tk.Frame(left_col, bg=SCHED_BG)
+            code_lbl = tk.Label(card, text=code, font=("Segoe UI", 11, "bold"), bg=c_bg, fg=c_fg, cursor="hand2")
+            code_lbl.pack(pady=(5, 1))
 
-    # --- Columna Derecha ---
-    header_ctas = tk.Frame(right_col, bg=SCHED_BG)
-    header_ctas.pack(fill="x", pady=(0, 6))
+            name_lbl = tk.Label(card, text=pais, font=("Segoe UI", 8), bg=c_bg, fg=n_fg, cursor="hand2")
+            name_lbl.pack(pady=(0, 5))
 
-    prog_badge = tk.Label(header_ctas, text="", font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, padx=10, pady=2)
-    prog_badge.pack(side="right")
+            country_ui_registry.append((card, code_lbl, name_lbl, c_lbl, pais, "card"))
 
-    btn_config_prog = tk.Button(header_ctas, text=" Configurar automatización", image=get_button_icon("gear_white.png"), compound="left",
-                                font=("Segoe UI", 8, "bold"),
-                                bg=BUTTON_ACTIVE, fg="white", relief="flat", bd=0, activebackground=BUTTON_HOVER,
-                                activeforeground="white", padx=12, pady=3, cursor="hand2",
-                                command=lambda: toggle_scheduler_config())
-    btn_config_prog.pack(side="right", padx=(0, 8))
-    btn_config_prog.bind("<Enter>", lambda e: btn_config_prog.config(bg=BUTTON_HOVER))
-    btn_config_prog.bind("<Leave>", lambda e: btn_config_prog.config(bg=BUTTON_ACTIVE))
+            for _w in (card, code_lbl, name_lbl):
+                _w.bind("<Button-1>", lambda e, p=pais: toggle_country(p))
 
-    prog_hint = tk.Label(right_col,
-                         text="📖  Guía de inicio rápido:\n"
-                              "① Definí el modo de Mercados y los Dispositivos abajo.  "
-                              "② Clic en “Configurar automatización” (arriba) para definir días, horarios y países.  "
-                              "③ Clic en “Programar test automático” (al final) para activar la tarea en background.\n"
-                              "💡 El test programado lee automáticamente los archivos Excel correspondientes a los dispositivos seleccionados.",
-                         font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF", justify="left", anchor="w", wraplength=480)
-    prog_hint.pack(anchor="w", pady=(2, 6))
+        l_frame = tk.Frame(p_card, bg=CARD_BG_COLOR)
+        l_frame.pack(fill="x", padx=15, pady=(2, 2))
 
-    prog_body = tk.Frame(right_col, bg=SCHED_BG)
-    prog_body.pack(fill="x", pady=2)
+        a_btn = tk.Label(l_frame, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+        a_btn.pack(side="left")
+        a_btn.bind("<Button-1>", lambda e: select_all_countries())
 
-    prog_desc = tk.Label(prog_body, text="", font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF",
-                         justify="left", anchor="w", wraplength=480)
-    prog_desc.pack(side="left", fill="x", expand=True)
+        n_btn = tk.Label(l_frame, text="Ninguno", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
+        n_btn.pack(side="left", padx=12)
+        n_btn.bind("<Button-1>", lambda e: select_none_countries())
 
+        return p_card
 
-    prog_state = {"mode": "sin_config"}   # sin_config | configurado | activado
-    scheduler_cfg = {"horarios": {}, "paises": [], "dispositivo": "local", "modo_excel": "consecutivo", "navegadores": ["chrome"]}
+    paises_card = build_country_selection_card(leads_scroll_frame)
 
-    sched_mode_btns = {}
-    sched_navs_btns = {}
+    # --- 3. TESTEO PROGRAMADO (Sub-pestañas: Envío de Leads Normales / Revisión Masiva) ---
+    SCHED_BG = "#3B1E5E"
+    SCHED_BORDER = "#8B5FB5"
+    GUIDE_ACCENT = "#FFC845"
+    BADGE_TEAL = "#5DCFCF"
+    BADGE_GREEN = "#82E0AA"
+    BADGE_AMBER = "#F8C471"
 
-    def select_sched_mode(val):
-        scheduler_cfg["modo_excel"] = val
-        _refresh_sched_config_ui()
+    prog_state_leads = {"mode": "sin_config"}
+    prog_state_masivo = {"mode": "sin_config"}
+    scheduler_cfg_leads = {"horarios": {}, "paises": [], "dispositivo": "local", "modo_excel": "consecutivo", "navegadores": ["chrome"], "modo_tarea": "leads"}
+    scheduler_cfg_masivo = {"horarios": {}, "paises": [], "dispositivo": "local", "modo_excel": "consecutivo", "navegadores": ["chrome"], "modo_tarea": "masivo"}
+
+    _active_sched_subtab = {"current": "semanal"}
+    # UI por sub-pestaña: cada una tiene su propia copia de la card de configuración.
+    sched_ui = {"semanal": {}, "masivo": {}}
+    sched_mode_btns = {"semanal": {}, "masivo": {}}
+    sched_navs_btns = {"semanal": {}, "masivo": {}}
+
+    _NAV_OPTS = [("Chrome", "chrome"), ("Firefox", "firefox"), ("Edge", "edge")]
+    _NAV_TEXT = {val: txt for txt, val in _NAV_OPTS}
+    _MODE_OPTS = [("☰ SECUENCIAL", "consecutivo"), ("⚡ PARALELO", "paralelo")]
+
+    def _cfg_for(sub):
+        return scheduler_cfg_masivo if sub == "masivo" else scheduler_cfg_leads
+
+    def _state_for(sub):
+        return prog_state_masivo if sub == "masivo" else prog_state_leads
+
+    def get_current_cfg():
+        return _cfg_for(_active_sched_subtab["current"])
+
+    def _sched_summary(subtab=None):
+        cfg = _cfg_for(subtab or _active_sched_subtab["current"])
+        dias = len([d for d, h in cfg.get("horarios", {}).items() if h])
+        total = sum(len(v) for v in cfg.get("horarios", {}).values())
+        active_p = len([p for p, sel in selected_countries.items() if sel])
+        return dias, total, active_p
+
+    def set_execution_mode(is_parallel, sub=None):
+        sub = sub or _active_sched_subtab["current"]
+        cfg = _cfg_for(sub)
+        val = "paralelo" if is_parallel else "consecutivo"
+        cfg["modo_excel"] = val
+        cfg["modo_mercados"] = val
+
+    def select_sched_mode(val, sub="semanal"):
+        set_execution_mode(val == "paralelo", sub)
         _refresh_prog()
 
-    def toggle_sched_nav(val):
-        cur_disp = scheduler_cfg.get("dispositivo", "local")
-        cur_navs = list(scheduler_cfg.get("navegadores", ["chrome"]))
+    def toggle_sched_nav(val, sub="semanal"):
+        cfg = _cfg_for(sub)
+        navs = list(cfg.get("navegadores") or ["chrome"])
+        if val in navs:
+            if len(navs) > 1:
+                navs.remove(val)
+        else:
+            navs.append(val)
+        cfg["dispositivo"] = "local"
+        cfg["navegadores"] = [n for _, n in _NAV_OPTS if n in navs] or ["chrome"]
+        _refresh_prog()
 
-        if val == "lambdatest_mac":
-            scheduler_cfg["dispositivo"] = "lambdatest_mac"
-            scheduler_cfg["navegadores"] = ["lambdatest_mac"]
-        elif val == "lambdatest_android":
-            scheduler_cfg["dispositivo"] = "lambdatest_android"
-            scheduler_cfg["navegadores"] = ["lambdatest_android"]
-        else:  # local chrome/firefox/edge
-            if cur_disp in ("lambdatest_android", "lambdatest_mac"):
-                scheduler_cfg["dispositivo"] = "local"
-                scheduler_cfg["navegadores"] = [val]
+    # ====================================================
+    # Barra de sub-pestañas (fija arriba, fuera del scroll)
+    # ====================================================
+    sched_subtab_bar = tk.Frame(tabs["scheduler"], bg=APP_BG_COLOR)
+    sched_subtab_bar.pack(fill="x", pady=(6, 4))
+
+    sched_semanal_container = tk.Frame(tabs["scheduler"], bg=APP_BG_COLOR)
+    sched_masivo_container = tk.Frame(tabs["scheduler"], bg=APP_BG_COLOR)
+    sched_semanal_container.pack(fill="both", expand=True)
+
+    sched_subtab_btns = {}
+
+    def switch_sched_subtab(sub_name):
+        _active_sched_subtab["current"] = sub_name
+        if sub_name == "semanal":
+            sched_masivo_container.pack_forget()
+            sched_semanal_container.pack(fill="both", expand=True)
+        else:
+            sched_semanal_container.pack_forget()
+            sched_masivo_container.pack(fill="both", expand=True)
+        for k, btn in sched_subtab_btns.items():
+            if k == sub_name:
+                btn.config(bg=TAB_ACTIVE_BG, fg=TAB_ACTIVE_FG, highlightthickness=1, highlightbackground=BORDER_COLOR)
             else:
-                if val in cur_navs:
-                    if len(cur_navs) > 1:
-                        cur_navs.remove(val)
-                else:
-                    cur_navs.append(val)
-                scheduler_cfg["navegadores"] = [n for n in cur_navs if n in ("chrome", "firefox", "edge")]
-
-        _refresh_sched_config_ui()
+                btn.config(bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, highlightthickness=0)
         _refresh_prog()
+
+    btn_sub_sem = tk.Button(sched_subtab_bar, text="📅 Envío de Leads Normales", font=("Segoe UI", 9, "bold"),
+                            bg=TAB_ACTIVE_BG, fg=TAB_ACTIVE_FG, relief="flat", bd=0, activebackground=TAB_ACTIVE_BG,
+                            activeforeground=TAB_ACTIVE_FG, padx=16, pady=6, cursor="hand2",
+                            command=lambda: switch_sched_subtab("semanal"))
+    btn_sub_sem.pack(side="left", padx=(0, 4))
+    sched_subtab_btns["semanal"] = btn_sub_sem
+
+    btn_sub_mas = tk.Button(sched_subtab_bar, text="🔍 Revisión Masiva de Inserción (Smoke Test)", font=("Segoe UI", 9, "bold"),
+                            bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, relief="flat", bd=0, activebackground=TAB_ACTIVE_BG,
+                            activeforeground=TAB_ACTIVE_FG, padx=16, pady=6, cursor="hand2",
+                            command=lambda: switch_sched_subtab("masivo"))
+    btn_sub_mas.pack(side="left", padx=4)
+    sched_subtab_btns["masivo"] = btn_sub_mas
+
+    # ====================================================
+    # Card de configuración compartida (una copia por sub-pestaña)
+    # ====================================================
+    def _build_sched_block(parent, sub):
+        """Guía rápida + card 'Configurá tu envío' para la sub-pestaña indicada."""
+        is_mas = (sub == "masivo")
+        ui = sched_ui[sub]
+
+        # --- Guía rápida ---
+        guide = tk.Frame(parent, bg=SCHED_BG, bd=0, highlightthickness=1, highlightbackground=SCHED_BORDER)
+        guide.pack(fill="x", pady=(0, 6))
+        g_row = tk.Frame(guide, bg=SCHED_BG)
+        g_row.pack(fill="x", padx=12, pady=5)
+        tk.Label(g_row, text=("💡 GUÍA RÁPIDA (REVISIÓN MASIVA):" if is_mas else "💡 GUÍA RÁPIDA:"),
+                 font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg=GUIDE_ACCENT).pack(side="left")
+        tk.Label(g_row,
+                 text=("① Cargá el Excel Matriz (GM Forms).   ② Mapeá las columnas requeridas.   "
+                       "③ Elegí los mercados y ejecutá la auditoría masiva.") if is_mas else
+                      ("① Elegí mercados, navegadores y modo de ejecución.   ② Definí días y horarios abajo.   "
+                       "③ Hacé clic en 'Iniciar' al final."),
+                 font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF").pack(side="left", padx=(8, 0))
+
+        # --- Card de configuración ---
+        card = tk.Frame(parent, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+        card.pack(fill="x", pady=(0, 8), ipady=6)
+
+        tk.Label(card, text="Configurá tu envío: elegí mercado, modo de ejecución y dispositivos",
+                 font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w", padx=15, pady=(8, 2))
+        tk.Label(card, text="① Elegí los mercados y navegadores activos.   ② Elegí el modo Secuencial o Paralelo.   "
+                            "③ Definí los días y horarios programados.",
+                 font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 8))
+
+        row = tk.Frame(card, bg=CARD_BG_COLOR)
+        row.pack(fill="x", padx=15)
+
+        # Los días y horarios se configuran desde el botón del footer, no desde la card.
+
+        # Columna 1: PAÍSES A EJECUTAR
+        col_p = tk.Frame(row, bg=CARD_BG_COLOR)
+        col_p.pack(side="left", anchor="n", padx=(0, 24))
+        tk.Label(col_p, text="PAÍSES A EJECUTAR", font=("Segoe UI", 7, "bold"),
+                 bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
+        pills = tk.Frame(col_p, bg=CARD_BG_COLOR)
+        pills.pack(anchor="w", pady=(4, 2))
+        for idx, pais in enumerate(paises_list):
+            sel = selected_countries[pais]
+            c_bg = BUTTON_ACTIVE if sel else BUTTON_INACTIVE
+            c_fg = "white" if sel else TEXT_SECONDARY
+            c_hb = ACCENT_COLOR if sel else BORDER_COLOR
+            pill = tk.Frame(pills, bg=c_bg, bd=0, highlightthickness=1, highlightbackground=c_hb, cursor="hand2")
+            pill.grid(row=0, column=idx, padx=2, sticky="nsew")
+            lbl = tk.Label(pill, text=p_codes[pais], font=("Segoe UI", 8, "bold"), bg=c_bg, fg=c_fg,
+                           padx=7, pady=3, cursor="hand2")
+            lbl.pack()
+            country_ui_registry.append((pill, lbl, lbl, None, pais, "pill"))
+            for _w in (pill, lbl):
+                _w.bind("<Button-1>", lambda e, p=pais: toggle_country(p))
+
+        links = tk.Frame(col_p, bg=CARD_BG_COLOR)
+        links.pack(anchor="w", pady=(2, 0))
+        lk_all = tk.Label(links, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR,
+                          fg=TEXT_SECONDARY, cursor="hand2")
+        lk_all.pack(side="left")
+        lk_all.bind("<Button-1>", lambda e: select_all_countries())
+        lk_none = tk.Label(links, text="Ninguno", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR,
+                           fg=TEXT_SECONDARY, cursor="hand2")
+        lk_none.pack(side="left", padx=10)
+        lk_none.bind("<Button-1>", lambda e: select_none_countries())
+
+        # Columna 2: DISPOSITIVOS / NAVEGADORES
+        col_nav = tk.Frame(row, bg=CARD_BG_COLOR)
+        col_nav.pack(side="left", anchor="n", padx=(0, 24))
+        tk.Label(col_nav, text="DISPOSITIVOS / NAVEGADORES", font=("Segoe UI", 7, "bold"),
+                 bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
+        nav_row = tk.Frame(col_nav, bg=CARD_BG_COLOR)
+        nav_row.pack(anchor="w", pady=(4, 2))
+        for txt, val in _NAV_OPTS:
+            b = tk.Button(nav_row, text="◉ " + txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE,
+                          fg=TEXT_SECONDARY, relief="flat", bd=0, activebackground=BUTTON_HOVER,
+                          activeforeground="white", padx=10, pady=4, cursor="hand2",
+                          highlightthickness=1, highlightbackground=BORDER_COLOR,
+                          command=lambda v=val, s=sub: toggle_sched_nav(v, s))
+            b.pack(side="left", padx=2)
+            sched_navs_btns[sub][val] = b
+
+        # Columna 3: MERCADOS (Secuencial / Paralelo)
+        col_merc = tk.Frame(row, bg=CARD_BG_COLOR)
+        col_merc.pack(side="left", anchor="n")
+        tk.Label(col_merc, text="MERCADOS", font=("Segoe UI", 7, "bold"),
+                 bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
+        merc_row = tk.Frame(col_merc, bg=CARD_BG_COLOR)
+        merc_row.pack(anchor="w", pady=(4, 2))
+        for txt, val in _MODE_OPTS:
+            b = tk.Button(merc_row, text=txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE,
+                          fg=TEXT_SECONDARY, relief="flat", bd=0, activebackground=BUTTON_HOVER,
+                          activeforeground="white", padx=12, pady=4, cursor="hand2",
+                          highlightthickness=1, highlightbackground=BORDER_COLOR,
+                          command=lambda v=val, s=sub: select_sched_mode(v, s))
+            b.pack(side="left", padx=2)
+            sched_mode_btns[sub][val] = b
+
+        # Slot para la fila del Excel Matriz (solo Revisión Masiva; se llena más abajo)
+        ui["excel_slot"] = tk.Frame(card, bg=CARD_BG_COLOR)
+        if is_mas:
+            ui["excel_slot"].pack(fill="x", padx=15, pady=(12, 0))
+
+        # Resumen de configuración
+        sum_wrap = tk.Frame(card, bg=CARD_BG_COLOR)
+        sum_wrap.pack(fill="x", padx=15, pady=(12, 2))
+        tk.Label(sum_wrap, text=("⚙ Configuración (Revisión Masiva):" if is_mas else "⚙ Configuración (Envío de Leads):"),
+                 font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w")
+        ui["badges"] = tk.Frame(sum_wrap, bg=CARD_BG_COLOR)
+        ui["badges"].pack(fill="x", pady=(5, 3))
+        ui["status_lbl"] = tk.Label(sum_wrap, text="", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR,
+                                    fg="#C5A9DF", anchor="w", justify="left")
+        ui["status_lbl"].pack(anchor="w")
+        return card
+
+    def _mk_sched_badge(parent, text, fg, border, bg=BUTTON_INACTIVE):
+        f = tk.Frame(parent, bg=bg, bd=0, highlightthickness=1, highlightbackground=border)
+        f.pack(side="left", padx=(0, 8), pady=1)
+        tk.Label(f, text=text, font=("Segoe UI", 8, "bold"), bg=bg, fg=fg, padx=9, pady=3).pack()
+        return f
+
+    def _refresh_prog():
+        """Repinta botones, badge de horarios y resumen de ambas sub-pestañas."""
+        for sub in ("semanal", "masivo"):
+            ui = sched_ui.get(sub) or {}
+            if not ui:
+                continue  # todavía no construida (la masiva se arma más abajo)
+            cfg = _cfg_for(sub)
+            st = _state_for(sub)
+            dias, total, n_p = _sched_summary(sub)
+            navs = cfg.get("navegadores") or ["chrome"]
+            modo = cfg.get("modo_excel", "consecutivo")
+
+            for key, btn in sched_mode_btns.get(sub, {}).items():
+                if not btn.winfo_exists():
+                    continue
+                if key == modo:
+                    btn.config(bg=BUTTON_ACTIVE, fg="white", highlightbackground=ACCENT_COLOR)
+                else:
+                    btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightbackground=BORDER_COLOR)
+
+            for key, btn in sched_navs_btns.get(sub, {}).items():
+                if not btn.winfo_exists():
+                    continue
+                on = key in navs
+                btn.config(text=("◉ " if on else "○ ") + _NAV_TEXT.get(key, key.title()),
+                           bg=BUTTON_ACTIVE if on else BUTTON_INACTIVE,
+                           fg="white" if on else TEXT_SECONDARY,
+                           highlightbackground=ACCENT_COLOR if on else BORDER_COLOR)
+
+            bframe = ui["badges"]
+            for w in bframe.winfo_children():
+                w.destroy()
+            _mk_sched_badge(bframe, "🎯 MODO: REVISIÓN MASIVA" if sub == "masivo" else "🎯 MODO: ENVÍO DE LEADS",
+                            "white", ACCENT_COLOR, BUTTON_ACTIVE)
+            _mk_sched_badge(bframe, "💻 LOCAL (" + " + ".join(n.upper() for n in navs) + ")",
+                            TEXT_SECONDARY, BORDER_COLOR)
+            _mk_sched_badge(bframe, "PARALELO" if modo == "paralelo" else "SECUENCIAL", BADGE_TEAL, BADGE_TEAL)
+            sel_codes = [p_codes[p] for p in paises_list if selected_countries.get(p)]
+            _mk_sched_badge(bframe, "MERCADOS   " + (", ".join(sel_codes) if sel_codes else "(ninguno)"),
+                            BADGE_GREEN, BADGE_GREEN)
+            if total > 0:
+                _mk_sched_badge(bframe, f"📅 {dias} día(s) · {total} horario(s)", BADGE_GREEN, BADGE_GREEN)
+
+            falta = []
+            if n_p == 0:
+                falta.append("mercados")
+            if total == 0:
+                falta.append("horarios")
+            if sub == "masivo":
+                try:
+                    if not var_excel_masivo.get().strip():
+                        falta.append("Excel Matriz")
+                except Exception:
+                    pass
+            if st["mode"] == "activado":
+                ui["status_lbl"].config(text="✓ Programado y activo: se ejecutará en los días y horarios definidos.",
+                                        fg=BADGE_GREEN)
+            elif falta:
+                ui["status_lbl"].config(text="Para poder programar todavía falta definir: " + ", ".join(falta) + ".",
+                                        fg=BADGE_AMBER)
+            else:
+                ui["status_lbl"].config(text="Todo listo: ya podés programar el test automático.", fg=BADGE_GREEN)
 
     def _refresh_sched_config_ui():
-        cur_disp = scheduler_cfg.get("dispositivo", "local")
-        cur_mode = scheduler_cfg.get("modo_excel", "consecutivo")
-        cur_navs = scheduler_cfg.get("navegadores", ["chrome"])
+        _refresh_prog()
 
-        # 1. Botones de mercados
-        is_lt = cur_disp in ("lambdatest_android", "lambdatest_mac")
-        for m_key, btn in sched_mode_btns.items():
-            btn.config(state="normal", cursor="hand2")
-            if m_key == cur_mode:
-                btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
-            else:
-                btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=0)
+    # Footer fijo de la sub-pestaña de leads (se completa más abajo) + zona scrolleable
+    leads_prog_actions_bar = tk.Frame(sched_semanal_container, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    leads_prog_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
 
-        # 2. Botones de navegadores / dispositivos
-        for n_key, btn in sched_navs_btns.items():
-            if n_key in cur_navs:
-                btn.config(bg=BUTTON_ACTIVE, fg="white", highlightthickness=1, highlightbackground=ACCENT_COLOR)
-            else:
-                btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=0)
-
-        if is_lt:
-            sched_warning_lbl.config(text="⚠️ Si corrés en paralelo con LambdaTest, asegurate de que tu plan soporte suficientes sesiones concurrentes.")
-            sched_warning_lbl.pack(fill="x", pady=(4, 0))
-        else:
-            sched_warning_lbl.pack_forget()
-
-    prog_config = tk.Frame(left_col, bg=SCHED_BG)
-    prog_config.pack(fill="x", pady=(4, 6))
-
-    # Columna 1: MERCADOS (Consecutivo / Paralelo)
-    col_merc = tk.Frame(prog_config, bg=SCHED_BG)
-    col_merc.pack(side="left", padx=(0, 40), anchor="n")
-    tk.Label(col_merc, text="MERCADOS", font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg=TEXT_SECONDARY).pack(anchor="w", pady=(0, 2))
-    merc_btn_row = tk.Frame(col_merc, bg=SCHED_BG)
-    merc_btn_row.pack(anchor="w")
-
-    # Columna 2: DISPOSITIVOS / NAVEGADORES (Chrome, Firefox, Edge, Mac LT, Android LT)
-    col_navs = tk.Frame(prog_config, bg=SCHED_BG)
-    col_navs.pack(side="left", anchor="n")
-    tk.Label(col_navs, text="DISPOSITIVOS / NAVEGADORES", font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg=TEXT_SECONDARY).pack(anchor="w", pady=(0, 2))
-    navs_btn_row = tk.Frame(col_navs, bg=SCHED_BG)
-    navs_btn_row.pack(anchor="w")
-
-    prog_btns.pack(fill="x", pady=(10, 0))
-
-    sched_warning_lbl = tk.Label(right_col, text="", font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#F8C471", justify="left")
-
-    _mode_opts = [
-        ("Secuencial", "consecutivo"),
-        ("Paralelo", "paralelo")
-    ]
-    for opt_txt, opt_val in _mode_opts:
-        b = tk.Button(merc_btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
-                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
-                      padx=12, pady=4, cursor="hand2")
-        b.pack(side="left", padx=2)
-        b.config(command=lambda val=opt_val: select_sched_mode(val))
-        sched_mode_btns[opt_val] = b
-
-    _nav_opts = [
-        ("Chrome", "chrome"),
-        ("Firefox", "firefox"),
-        ("Edge", "edge"),
-        ("Mac LT", "lambdatest_mac"),
-        ("Android LT", "lambdatest_android")
-    ]
-    for opt_txt, opt_val in _nav_opts:
-        b = tk.Button(navs_btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
-                      relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
-                      padx=12, pady=4, cursor="hand2")
-        b.pack(side="left", padx=2)
-        b.config(command=lambda val=opt_val: toggle_sched_nav(val))
-        sched_navs_btns[opt_val] = b
-
-
-
-    def _sched_summary():
-        dias = len([d for d, h in scheduler_cfg["horarios"].items() if h])
-        total = sum(len(v) for v in scheduler_cfg["horarios"].values())
-        return dias, total, len(scheduler_cfg["paises"])
-
-    def _mk_prog_btn(text, cmd, bg, fg, hover, icon=None):
-        b = tk.Button(prog_btns, text=text, font=("Segoe UI", 8, "bold"), bg=bg, fg=fg, relief="flat", bd=0,
-                      activebackground=hover, activeforeground=fg, padx=12, pady=4, cursor="hand2", command=cmd)
-        img = get_button_icon(icon) if icon else None
-        if img:
-            b.config(image=img, compound="left")
-        b.bind("<Enter>", lambda e: b.config(bg=hover) if str(b["state"]) == "normal" else None)
-        b.bind("<Leave>", lambda e: b.config(bg=bg) if str(b["state"]) == "normal" else None)
-        return b
-    def _refresh_prog():
-        for w in prog_btns.winfo_children():
-            w.destroy()
-        for w in prog_body.winfo_children():
-            w.destroy()
-        dias, total, n_p = _sched_summary()
-        configured = total > 0 and n_p > 0
-        if prog_state["mode"] != "activado":
-            prog_state["mode"] = "configurado" if configured else "sin_config"
-
-        if prog_state["mode"] == "activado":
-            prog_badge.config(text="✓ Activado", bg=EXECUTE_BG, fg=EXECUTE_FG)
-        elif configured:
-            prog_badge.config(text="⚙ Configurado", bg=BORDER_COLOR, fg=TEXT_PRIMARY)
-        else:
-            prog_badge.config(text="🕐 Sin configurar", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
-
-        if configured:
-            # Título de estado
-            title_txt = "📅 Programado en background:" if prog_state["mode"] == "activado" else "⚙️ Configuración lista:"
-            tk.Label(prog_body, text=title_txt, font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg="white").pack(anchor="w", pady=(0, 4))
-
-            # Contenedor para los horarios individuales (vertical)
-            hours_frame = tk.Frame(prog_body, bg=SCHED_BG)
-            hours_frame.pack(fill="x", anchor="w", pady=2)
-
-            if total <= 10:
-                for day_abbr, day_full in _SCH_DAYS:
-                    hours = scheduler_cfg["horarios"].get(day_full) or []
-                    if hours:
-                        pill = tk.Frame(hours_frame, bg="#4A2666", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
-                        pill.pack(anchor="w", pady=2)
-                        tk.Label(pill, text=f" {day_abbr.upper()} ", font=("Segoe UI", 8, "bold"), bg="#4A2666", fg=ACCENT_COLOR).pack(side="left", pady=1)
-                        hours_str = ", ".join(sorted(hours))
-                        tk.Label(pill, text=f"{hours_str} ", font=("Segoe UI", 8), bg="#4A2666", fg="white").pack(side="left", pady=1)
-            else:
-                pill = tk.Frame(hours_frame, bg="#4A2666", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
-                pill.pack(anchor="w", pady=2)
-                tk.Label(pill, text=f" 📆 {dias} DÍAS ({total} HORARIOS) ", font=("Segoe UI", 8, "bold"), bg="#4A2666", fg=ACCENT_COLOR).pack(side="left", pady=1)
-
-            # Contenedor de detalles de ejecución (abajo de los horarios)
-            details_frame = tk.Frame(prog_body, bg=SCHED_BG)
-            details_frame.pack(fill="x", anchor="w", pady=(6, 2))
-
-            # Pill de dispositivo
-            cur_disp = scheduler_cfg.get("dispositivo", "local")
-            cur_navs = scheduler_cfg.get("navegadores", ["chrome"])
-            if cur_disp == "local":
-                nav_names = [n.upper() for n in cur_navs]
-                disp_txt = f"🖥️ LOCAL ({', '.join(nav_names)})"
-            elif cur_disp == "lambdatest_android":
-                disp_txt = "🤖 ANDROID LT"
-            else:
-                disp_txt = "🍏 MAC LT"
-            pill_d = tk.Frame(details_frame, bg="#3E2B5A", bd=0, highlightthickness=1, highlightbackground="#9B7FCD")
-            pill_d.pack(side="left", padx=(0, 4), pady=2)
-            tk.Label(pill_d, text=f" {disp_txt} ", font=("Segoe UI", 8, "bold"), bg="#3E2B5A", fg="#C5A9DF").pack(side="left", pady=1)
-
-            # Pill de modo de ejecución
-            cur_mode = scheduler_cfg.get("modo_excel", "consecutivo")
-            mode_txt = "SECUENCIAL" if cur_mode == "consecutivo" else "PARALELO"
-            pill_m = tk.Frame(details_frame, bg="#2C3E50", bd=0, highlightthickness=1, highlightbackground="#5DADE2")
-            pill_m.pack(side="left", padx=4, pady=2)
-            tk.Label(pill_m, text=f" {mode_txt} ", font=("Segoe UI", 8, "bold"), bg="#2C3E50", fg="#AED6F1").pack(side="left", pady=1)
-
-            # Pill de países
-            paises_abrevs = [_VAL_ABBR.get(p, p) for p in scheduler_cfg["paises"]]
-            pstr = ", ".join(paises_abrevs)
-            pill_p = tk.Frame(details_frame, bg="#194D33", bd=0, highlightthickness=1, highlightbackground="#82E0AA")
-            pill_p.pack(side="left", padx=4, pady=2)
-            tk.Label(pill_p, text=" MERCADOS ", font=("Segoe UI", 8, "bold"), bg="#194D33", fg="#82E0AA").pack(side="left", pady=1)
-            tk.Label(pill_p, text=f"{pstr} ", font=("Segoe UI", 8), bg="#194D33", fg="white").pack(side="left", pady=1)
-
-            info_txt = " (Se ejecuta en background según los horarios)" if prog_state["mode"] == "activado" else " (Programá el test para activarlo)"
-            tk.Label(prog_body, text=info_txt, font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF").pack(anchor="w", pady=2)
-        else:
-            tk.Label(prog_body, text="Sin configuración. Usá \"Configurar automatización\" para definir días, horarios y países.",
-                      font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF").pack(anchor="w", pady=2)
-
-        if prog_state["mode"] == "activado":
-            _mk_prog_btn(" Iniciar ahora", _sched_run_now, EXECUTE_BG, EXECUTE_FG, EXECUTE_HOVER, icon="play_green.png").pack(side="left", padx=6)
-            _mk_prog_btn(" Desactivar", _sched_deactivate, BUTTON_INACTIVE, TEXT_DELETE, BUTTON_HOVER, icon="stop_coral.png").pack(side="left", padx=6)
-        else:
-            # Color azul brillante (#3498DB) para resaltar el botón de activar sobre el fondo morado
-            bg_color = "#3498DB" if configured else BUTTON_INACTIVE
-            fg_color = "white" if configured else TEXT_SECONDARY
-            hover_color = "#2980B9" if configured else BUTTON_HOVER
-            b = _mk_prog_btn(" Programar test automático", _sched_activate,
-                             bg_color, fg_color, hover_color, icon="play_white.png")
-            if not configured:
-                b.config(state="disabled", cursor="arrow")
-            b.pack(side="left", padx=6)
+    scheduler_scroll_frame = make_scrollable_tab_container(sched_semanal_container)
+    _build_sched_block(scheduler_scroll_frame, "semanal")
 
     def _on_sched_save(cfg):
-        selected_paises = cfg.get("paises", [])
-        selected_navs = scheduler_cfg.get("navegadores", ["chrome"])
-        missing_files = []
-
-        for pais in selected_paises:
-            for nav in selected_navs:
-                if nav == "lambdatest_mac":
-                    dev_name = "Mac"
-                elif nav == "lambdatest_android":
-                    dev_name = "Android"
-                elif nav == "firefox":
-                    dev_name = "Firefox"
-                elif nav == "edge":
-                    dev_name = "Edge"
-                else:
-                    dev_name = "Chrome"
-
-                excel_name = f"Lead_information_Formulario_{pais}_{dev_name}.xlsx"
-                excel_path = os.path.join(DATA_DIR, excel_name)
-                if not os.path.exists(excel_path):
-                    missing_files.append(f"• {pais} ({dev_name}) -> {excel_name}")
-
-        if missing_files:
-            missing_str = "\n".join(missing_files)
-            messagebox.showerror(
-                "Archivos Excel Faltantes",
-                f"No se puede guardar la configuración porque no se encuentran los archivos Excel requeridos en la carpeta 'data/':\n\n{missing_str}\n\nPor favor, generá los Excels para estos mercados y navegadores antes de programar la automatización."
-            )
-            return False
-
-        scheduler_cfg["horarios"] = cfg.get("horarios", {})
-        scheduler_cfg["paises"] = selected_paises
-        log_message("[INFO] Programación semanal guardada.")
+        selected_paises = [p for p, sel in selected_countries.items() if sel]
+        if not selected_paises:
+            selected_paises = cfg.get("paises", [])
+        cur_cfg = get_current_cfg()
+        cur_cfg["horarios"] = cfg.get("horarios", {})
+        cur_cfg["paises"] = selected_paises
+        log_message("[INFO] Programación guardada.")
         _refresh_prog()
         return True
-    # Panel de configuración (desplegable)
-    def _on_config_close():
-        config_panel.pack_forget()
 
-    config_panel = _DemoSchedulerPanel(
-        scheduler_scroll_frame, 
-        on_save=_on_sched_save, 
-        initial_config=scheduler_cfg,
-        on_close=_on_config_close
-    )
+    def open_scheduler_config_popup():
+        popup = tk.Toplevel(root)
+        popup.title("⏰ Configurar Horarios")
+        popup.configure(bg=APP_BG_COLOR)
+        popup_w, popup_h = 780, 660
+        px = root.winfo_rootx() + (root.winfo_width() - popup_w) // 2
+        py = root.winfo_rooty() + (root.winfo_height() - popup_h) // 2
+        popup.geometry(f"{popup_w}x{popup_h}+{px}+{py}")
+        popup.transient(root)
+        popup.grab_set()
+
+        panel_container = tk.Frame(popup, bg=APP_BG_COLOR)
+        panel_container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        def _on_popup_save(cfg):
+            if not messagebox.askyesno("Confirmar Horarios", "¿Confirmás guardar y activar la programación automática con estos horarios?"):
+                return False
+            ok = _on_sched_save(cfg)
+            if ok:
+                popup.destroy()
+                if _active_sched_subtab["current"] == "masivo":
+                    _sched_activate_masivo()
+                else:
+                    _sched_activate()
+            return ok
+
+        cur_cfg = get_current_cfg()
+        config_panel_popup = _DemoSchedulerPanel(panel_container, on_save=_on_popup_save,
+                                                  initial_config=cur_cfg, on_close=popup.destroy)
+        config_panel_popup._schedule = {k: list(v) for k, v in cur_cfg.get("horarios", {}).items()}
+        config_panel_popup._countries = list(cur_cfg.get("paises", []))
+        config_panel_popup._update_day_buttons()
+        config_panel_popup._select_day("Lunes")
+        config_panel_popup._update_footer()
+        config_panel_popup.pack(fill="both", expand=True)
 
     def toggle_scheduler_config():
-        if config_panel.winfo_ismapped():
-            config_panel.pack_forget()
-        else:
-            # Sincronizar la config actual
-            config_panel._schedule = {k: list(v) for k, v in scheduler_cfg.get("horarios", {}).items()}
-            config_panel._countries = list(scheduler_cfg.get("paises", []))
-            
-            # Actualizar la UI del panel
-            config_panel._update_day_buttons()
-            config_panel._update_country_count()
-            config_panel._update_toggle_all_label()
-            for country, var in config_panel._country_vars.items():
-                var.set(country in config_panel._countries)
-            config_panel._close_hours_panel()
-            config_panel._update_footer()
-            
-            config_panel.pack(fill="x", padx=20, pady=(0, 20))
-            
-            # Auto-scroll al final de la pestaña para visualizar el panel abierto
-            try:
-                scheduler_scroll_frame.update_idletasks()
-                canvas = scheduler_scroll_frame.master
-                canvas.yview_moveto(1.0)
-            except Exception:
-                pass
+        open_scheduler_config_popup()
 
     def _sched_activate():
-        dias, total, n_p = _sched_summary()
+        dias, total, n_p = _sched_summary("leads")
         if not (total > 0 and n_p > 0):
             messagebox.showwarning("Programación", "Configurá días, horarios y países antes de programar.")
             return
         
-        disp = scheduler_cfg.get("dispositivo", "local")
-        navs = scheduler_cfg.get("navegadores", ["chrome"])
+        disp = scheduler_cfg_leads.get("dispositivo", "local")
+        navs = scheduler_cfg_leads.get("navegadores", ["chrome"])
+        active_p = [p for p, sel in selected_countries.items() if sel]
 
         try:
             guardar_programacion({
                 "tipo": "semanal",
-                "horarios": {k: v for k, v in scheduler_cfg.get("horarios", {}).items() if v},
-                "paises": list(scheduler_cfg.get("paises", [])),
+                "modo_tarea": "leads",
+                "horarios": {k: v for k, v in scheduler_cfg_leads.get("horarios", {}).items() if v},
+                "paises": active_p if active_p else list(scheduler_cfg_leads.get("paises", [])),
                 "navegadores": navs,
                 "viewports": ["fullscreen"],
                 "dispositivo": disp,
-                "modo_excel": scheduler_cfg.get("modo_excel", "consecutivo"),
-                "modo_mercados": scheduler_cfg.get("modo_excel", "consecutivo"),
-            })
+                "modo_excel": scheduler_cfg_leads.get("modo_excel", "consecutivo"),
+                "modo_mercados": scheduler_cfg_leads.get("modo_excel", "consecutivo"),
+            }, filename="programacion_leads.json")
         except Exception as e:
             log_message(f"[ERROR] No se pudo guardar la programación: {e}")
-        prog_state["mode"] = "activado"
-        log_message("[SUCCESS] Test automático programado y activado (json/programacion_test.json).")
+        scheduler_cfg_leads["modo_tarea"] = "leads"
+        prog_state_leads["mode"] = "activado"
+        log_message("[SUCCESS] Envío de leads automático programado y activado.")
         _refresh_prog()
-        messagebox.showinfo("Programación", "✓ Test automático activado. Se ejecutará según los horarios (con la app abierta).")
+        _refresh_deact_btn()
+        messagebox.showinfo("Programación", "✓ Envío de leads automático activado. Se ejecutará según los horarios configurados.")
+
+    def _sched_activate_masivo():
+        dias, total, n_p = _sched_summary("masivo")
+        if not (total > 0 and n_p > 0):
+            messagebox.showwarning("Programación", "Configurá días, horarios y países antes de programar.")
+            return
+        
+        active_p = [p for p, sel in selected_countries.items() if sel]
+        if not active_p:
+            messagebox.showwarning("Programación", "Seleccioná al menos un país antes de programar.")
+            return
+
+        try:
+            guardar_programacion({
+                "tipo": "semanal",
+                "modo_tarea": "masivo",
+                "horarios": {k: v for k, v in scheduler_cfg_masivo.get("horarios", {}).items() if v},
+                "paises": active_p,
+                "navegadores": scheduler_cfg_masivo.get("navegadores", ["chrome"]),
+                "viewports": ["fullscreen"],
+                "dispositivo": scheduler_cfg_masivo.get("dispositivo", "local"),
+                "modo_excel": scheduler_cfg_masivo.get("modo_excel", "consecutivo"),
+                "modo_mercados": scheduler_cfg_masivo.get("modo_excel", "consecutivo"),
+                "var_borrar_comentarios": bool(var_borrar_comentarios.get()),
+                "var_tomar_capturas": bool(var_tomar_capturas.get()),
+                "var_solo_fails": bool(var_solo_fails.get()),
+                "var_excel_masivo": var_excel_masivo.get(),
+                "var_col_segmento": var_col_segmento.get(),
+                "var_col_estado": var_col_estado.get(),
+                "var_col_url_live": var_col_url_live.get(),
+                "var_col_url_secure": var_col_url_secure.get(),
+            }, filename="programacion_masivo.json")
+        except Exception as e:
+            log_message(f"[ERROR] No se pudo guardar la programación masiva: {e}")
+        scheduler_cfg_masivo["modo_tarea"] = "masivo"
+        prog_state_masivo["mode"] = "activado"
+        log_message("[SUCCESS] Revisión Masiva automática programada y activada.")
+        _refresh_prog()
+        _refresh_deact_btn()
+        messagebox.showinfo("Programación", "✓ Revisión Masiva automática activada. Se ejecutará según los horarios configurados.")
 
     def _sched_deactivate():
         try:
-            limpiar_programacion()
+            limpiar_programacion("programacion_leads.json")
         except Exception:
             pass
-        prog_state["mode"] = "configurado"
-        log_message("[INFO] Test automático desactivado.")
+        prog_state_leads["mode"] = "configurado"
+        log_message("[INFO] Test automático de leads desactivado.")
         _refresh_prog()
+        _refresh_deact_btn()
+
+    def _sched_deactivate_masivo():
+        try:
+            limpiar_programacion("programacion_masivo.json")
+        except Exception:
+            pass
+        prog_state_masivo["mode"] = "configurado"
+        log_message("[INFO] Revisión masiva automática desactivada.")
+        _refresh_prog()
+        _refresh_deact_btn()
+
+    def _refresh_deact_btn():
+        """Muestra u oculta los botones Desactivar y actualiza el texto de los botones Programar."""
+        act_l = (prog_state_leads["mode"] == "activado")
+        act_m = (prog_state_masivo["mode"] == "activado")
+
+        # Los botones se crean más abajo: si todavía no existen, se ignora (NameError).
+        try:
+            btn_sched_deact.pack(side="left", padx=6) if act_l else btn_sched_deact.pack_forget()
+        except Exception:
+            pass
+        try:
+            btn_deact_mas.pack(side="left", padx=6) if act_m else btn_deact_mas.pack_forget()
+        except Exception:
+            pass
+        try:
+            btn_sched_act.config(text=" ✓ Programado", bg="#27AE60") if act_l else \
+                btn_sched_act.config(text=" Programar test automático", bg="#3498DB")
+        except Exception:
+            pass
+        try:
+            btn_sched_mas.config(text=" ✓ Programado", bg="#27AE60") if act_m else \
+                btn_sched_mas.config(text=" Programar revisión automática", bg="#3498DB")
+        except Exception:
+            pass
 
     def _sched_run_now():
         log_message("[INFO] Iniciando test programado ahora...")
@@ -2196,19 +2256,96 @@ def iniciar_interfaz():
 
     # Cargar programación persistida al iniciar
     try:
-        _existing = cargar_programacion()
-        if _existing and _existing.get("tipo") == "semanal":
-            scheduler_cfg["horarios"] = _existing.get("horarios", {})
-            scheduler_cfg["paises"] = _existing.get("paises", [])
-            scheduler_cfg["dispositivo"] = _existing.get("dispositivo", "local")
-            scheduler_cfg["modo_excel"] = _existing.get("modo_mercados") or _existing.get("modo_excel", "consecutivo")
-            scheduler_cfg["navegadores"] = _existing.get("navegadores", ["chrome"])
-            prog_state["mode"] = "activado"
+        ex_leads = cargar_programacion("programacion_leads.json")
+        if ex_leads and ex_leads.get("tipo") == "semanal":
+            scheduler_cfg_leads["horarios"] = ex_leads.get("horarios", {})
+            scheduler_cfg_leads["paises"] = ex_leads.get("paises", [])
+            scheduler_cfg_leads["dispositivo"] = ex_leads.get("dispositivo", "local")
+            scheduler_cfg_leads["modo_excel"] = ex_leads.get("modo_mercados") or ex_leads.get("modo_excel", "consecutivo")
+            scheduler_cfg_leads["navegadores"] = ex_leads.get("navegadores", ["chrome"])
+            prog_state_leads["mode"] = "activado"
     except Exception:
         pass
 
-    _refresh_sched_config_ui()
+    try:
+        ex_mas = cargar_programacion("programacion_masivo.json")
+        if ex_mas and ex_mas.get("tipo") == "semanal":
+            scheduler_cfg_masivo["horarios"] = ex_mas.get("horarios", {})
+            scheduler_cfg_masivo["paises"] = ex_mas.get("paises", [])
+            scheduler_cfg_masivo["dispositivo"] = ex_mas.get("dispositivo", "local")
+            scheduler_cfg_masivo["modo_excel"] = ex_mas.get("modo_mercados") or ex_mas.get("modo_excel", "consecutivo")
+            scheduler_cfg_masivo["navegadores"] = ex_mas.get("navegadores", ["chrome"])
+            prog_state_masivo["mode"] = "activado"
+    except Exception:
+        pass
+
+    # Cargar programación persistida legacy si existe
+    try:
+        _existing = cargar_programacion("programacion_test.json")
+        if _existing and _existing.get("tipo") == "semanal":
+            if _existing.get("modo_tarea") == "masivo":
+                scheduler_cfg_masivo["horarios"] = _existing.get("horarios", {})
+                scheduler_cfg_masivo["paises"] = _existing.get("paises", [])
+                prog_state_masivo["mode"] = "activado"
+            else:
+                scheduler_cfg_leads["horarios"] = _existing.get("horarios", {})
+                scheduler_cfg_leads["paises"] = _existing.get("paises", [])
+                prog_state_leads["mode"] = "activado"
+    except Exception:
+        pass
+
     _refresh_prog()
+    _refresh_deact_btn()
+
+    # Footer fijo para Envío de Leads Programado (solo Programar + Configurar)
+    ctrl_card_leads = tk.Frame(leads_prog_actions_bar, bg=CARD_BG_COLOR, bd=0)
+    ctrl_card_leads.pack(fill="x", padx=15, pady=8)
+
+    btn_frame_leads = tk.Frame(ctrl_card_leads, bg=CARD_BG_COLOR)
+    btn_frame_leads.pack(fill="x", pady=(4, 4))
+
+    btn_sched_act = tk.Button(btn_frame_leads, text=" Programar test automático", image=get_button_icon("play_white.png"), compound="left",
+                              font=("Segoe UI", 10, "bold"), bg="#3498DB", fg="white",
+                              relief="flat", bd=0, activebackground="#2980B9", activeforeground="white",
+                              padx=18, pady=7, cursor="hand2", command=lambda: _sched_activate())
+    btn_sched_act.pack(side="left", padx=(0, 10))
+    btn_sched_act.bind("<Enter>", lambda e: btn_sched_act.config(bg="#2980B9"))
+    btn_sched_act.bind("<Leave>", lambda e: btn_sched_act.config(bg="#3498DB"))
+
+    btn_config_prog_leads_footer = tk.Button(btn_frame_leads, text=" Configurar días y horarios", image=get_button_icon("gear_white.png"), compound="left",
+                                             font=("Segoe UI", 9, "bold"),
+                                             bg=BUTTON_ACTIVE, fg="white", relief="flat", bd=0, activebackground=BUTTON_HOVER,
+                                             activeforeground="white", padx=14, pady=6, cursor="hand2",
+                                             command=lambda: toggle_scheduler_config())
+    btn_config_prog_leads_footer.pack(side="left", padx=6)
+    btn_config_prog_leads_footer.bind("<Enter>", lambda e: btn_config_prog_leads_footer.config(bg=BUTTON_HOVER))
+    btn_config_prog_leads_footer.bind("<Leave>", lambda e: btn_config_prog_leads_footer.config(bg=BUTTON_ACTIVE))
+
+    btn_sched_deact = tk.Button(btn_frame_leads, text=" Desactivar", image=get_button_icon("stop_coral.png"), compound="left",
+                                font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
+                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
+                                padx=14, pady=6, cursor="hand2", command=lambda: _sched_deactivate())
+    # Oculto por defecto, se muestra solo si está activado
+    # Oculto por defecto, se muestra solo si está activado
+    if prog_state_leads["mode"] == "activado":
+        btn_sched_deact.pack(side="left", padx=6)
+
+    def view_results_dialog_leads():
+        carpeta = os.path.join(BASE_DIR, "resultados")
+        try:
+            os.makedirs(carpeta, exist_ok=True)
+            os.startfile(carpeta)
+            log_message("[INFO] Abriendo carpeta de resultados.")
+        except Exception as e:
+            messagebox.showinfo("Resultados", f"Carpeta de resultados:\n{carpeta}\n\n({e})")
+
+    btn_results_leads = tk.Button(btn_frame_leads, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
+                                  font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg="white",
+                                  relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                                  padx=14, pady=6, cursor="hand2", command=view_results_dialog_leads)
+    btn_results_leads.pack(side="right")
+    btn_results_leads.bind("<Enter>", lambda e: btn_results_leads.config(bg=BUTTON_HOVER))
+    btn_results_leads.bind("<Leave>", lambda e: btn_results_leads.config(bg=BUTTON_INACTIVE))
 
     # Monitor semanal: dispara la ejecución cuando llega un horario programado (app abierta)
     _SCHED_TRIG_PATH = os.path.join(JSON_DIR, "scheduler_triggered.json")
@@ -2237,23 +2374,42 @@ def iniciar_interfaz():
         first = True
         while True:
             try:
-                if prog_state["mode"] == "activado" and scheduler_cfg.get("horarios"):
-                    ahora = _dt.now()
-                    dia = _DAYS_ES[ahora.weekday()]
-                    now_min = ahora.hour * 60 + ahora.minute
-                    for hora in list(scheduler_cfg["horarios"].get(dia, [])):
+                ahora = _dt.now()
+                dia = _DAYS_ES[ahora.weekday()]
+                now_min = ahora.hour * 60 + ahora.minute
+
+                # Programación para Envío de Leads
+                if prog_state_leads["mode"] == "activado" and scheduler_cfg_leads.get("horarios"):
+                    for hora in list(scheduler_cfg_leads["horarios"].get(dia, [])):
                         try:
                             hh, mm = int(hora[:2]), int(hora[3:5])
                         except Exception:
                             continue
                         start = hh * 60 + mm
                         if start <= now_min < start + 15:
-                            key = (dia, hora)
+                            key = ("leads", dia, hora)
                             if _sched_triggered.get(key) != ahora.date():
                                 _sched_triggered[key] = ahora.date()
                                 _sched_save_triggered()
                                 if not first:
                                     root.after(0, lambda: execute_send_leads(scheduled=True))
+
+                # Programación para Revisión Masiva
+                if prog_state_masivo["mode"] == "activado" and scheduler_cfg_masivo.get("horarios"):
+                    for hora in list(scheduler_cfg_masivo["horarios"].get(dia, [])):
+                        try:
+                            hh, mm = int(hora[:2]), int(hora[3:5])
+                        except Exception:
+                            continue
+                        start = hh * 60 + mm
+                        if start <= now_min < start + 15:
+                            key = ("masivo", dia, hora)
+                            if _sched_triggered.get(key) != ahora.date():
+                                _sched_triggered[key] = ahora.date()
+                                _sched_save_triggered()
+                                if not first:
+                                    root.after(0, lambda: cmd_iniciar_masivo())
+
                 first = False
             except Exception:
                 pass
@@ -3627,130 +3783,29 @@ def iniciar_interfaz():
 
 
     # ==========================================
-    # TAB: REVISIÓN MASIVA DE FORMS (check_masivo)
+    # SUB-TAB INTERNA: REVISIÓN MASIVA DE FORMS
     # ==========================================
     # Barra de acciones fija en el footer (siempre visible sin scroll)
-    masivo_actions_bar = tk.Frame(tabs["check_masivo"], bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    masivo_actions_bar = tk.Frame(sched_masivo_container, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     masivo_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
 
     # Scrollable container (ocupa el resto)
-    masivo_scroll_frame = make_scrollable_tab_container(tabs["check_masivo"])
+    masivo_scroll_frame = make_scrollable_tab_container(sched_masivo_container)
 
-    # 📖 GUÍA DE INICIO RÁPIDO
-    guia_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
-    guia_card.pack(fill="x", pady=(0, 8), ipady=5)
-    
-    g_header = tk.Frame(guia_card, bg=CARD_BG_COLOR)
-    g_header.pack(fill="x", padx=15, pady=(6, 4))
-    tk.Label(g_header, text="📖 GUÍA DE INICIO RÁPIDO", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
-    
-    tk.Label(guia_card,
-             text="① Seleccioná el archivo Excel de PMs (ej. 'GM Forms - 2026.xlsx').\n"
-                  "② Configurá los nombres de las columnas en el panel de columnas si cambian a futuro.\n"
-                  "③ Tildá los mercados que querés auditar a la vez en la sección de Mercados.\n"
-                  "④ Clic en 'INICIAR REVISIÓN MASIVA'. Se abrirá una ventana de ejecución con el progreso detallado.\n"
-                  "💡 Disclaimer: Los comentarios en la columna 'Comentarios' se conservarán por defecto en el reporte final.",
-             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", justify="left", anchor="w", wraplength=1000).pack(fill="x", padx=15, pady=(2, 6))
+    # Guía rápida + card de configuración compartida (mercados, navegadores, modo y horarios)
+    _build_sched_block(masivo_scroll_frame, "masivo")
 
-    # --- 2. PAÍSES A EJECUTAR (Card Panel) ---
-    paises_masivo_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
-    paises_masivo_card.pack(fill="x", pady=(0, 8), ipady=5)
+    # Fila del Excel Matriz: vive dentro de la card de configuración de arriba
+    excel_row = sched_ui["masivo"]["excel_slot"]
 
-    pm_header = tk.Frame(paises_masivo_card, bg=CARD_BG_COLOR)
-    pm_header.pack(fill="x", padx=15, pady=(6, 4))
-    
-    tk.Label(pm_header, text="🌐 PAÍSES A EJECUTAR", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
-
-    selected_countries_masivo = {p: True for p in paises_list} # Todos seleccionados por defecto
-    country_cards_masivo = {}
-    country_code_labels_masivo = {}
-    country_name_labels_masivo = {}
-
-    counter_lbl_masivo = tk.Label(pm_header, text="9 seleccionados", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
-    counter_lbl_masivo.pack(side="right", padx=(10, 0))
-
-    tk.Label(paises_masivo_card, text="Elegí el o los países que querés ejecutar.",
-             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 4))
-
-    def update_country_counter_masivo():
-        count = sum(1 for v in selected_countries_masivo.values() if v)
-        counter_lbl_masivo.config(text=f"{count} seleccionados")
-
-    def toggle_country_masivo(name):
-        selected_countries_masivo[name] = not selected_countries_masivo[name]
-        card = country_cards_masivo[name]
-        lbl_code = country_code_labels_masivo[name]
-        lbl_name = country_name_labels_masivo[name]
-        if selected_countries_masivo[name]:
-            card.config(highlightbackground=ACCENT_COLOR, bg=BUTTON_INACTIVE)
-            lbl_code.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
-            lbl_name.config(fg=ACCENT_COLOR, bg=BUTTON_INACTIVE)
-        else:
-            card.config(highlightbackground=BORDER_COLOR, bg=CARD_BG_COLOR)
-            lbl_code.config(fg="white", bg=CARD_BG_COLOR)
-            lbl_name.config(fg=TEXT_SECONDARY, bg=CARD_BG_COLOR)
-        update_country_counter_masivo()
-
-    grid_frame_masivo = tk.Frame(paises_masivo_card, bg=CARD_BG_COLOR)
-    grid_frame_masivo.pack(fill="x", padx=15, pady=2)
-
-    p_codes = {"Argentina": "AR", "Bolivia": "BO", "Brasil": "BR", "Chile": "CL", "Colombia": "CO", "Ecuador": "EC", "Paraguay": "PY", "Peru": "PE", "Uruguay": "UY"}
-
-    for idx, pais in enumerate(paises_list):
-        code = p_codes[pais]
-        card = tk.Frame(grid_frame_masivo, bg=BUTTON_INACTIVE, bd=0, highlightthickness=1, highlightbackground=ACCENT_COLOR, cursor="hand2")
-        card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
-        grid_frame_masivo.columnconfigure(idx % 9, weight=1)
-
-        code_lbl = tk.Label(card, text=code, font=("Segoe UI", 11, "bold"), bg=BUTTON_INACTIVE, fg=ACCENT_COLOR, cursor="hand2")
-        code_lbl.pack(pady=(5, 1))
-        
-        name_lbl = tk.Label(card, text=pais, font=("Segoe UI", 8), bg=BUTTON_INACTIVE, fg=ACCENT_COLOR, cursor="hand2")
-        name_lbl.pack(pady=(0, 5))
-
-        country_cards_masivo[pais] = card
-        country_code_labels_masivo[pais] = code_lbl
-        country_name_labels_masivo[pais] = name_lbl
-
-        def bind_click_masivo(w, p=pais):
-            w.bind("<Button-1>", lambda e: toggle_country_masivo(p))
-        bind_click_masivo(card)
-        bind_click_masivo(code_lbl)
-        bind_click_masivo(name_lbl)
-
-    links_frame_masivo = tk.Frame(paises_masivo_card, bg=CARD_BG_COLOR)
-    links_frame_masivo.pack(fill="x", padx=15, pady=(2, 2))
-
-    def select_all_countries_masivo():
-        for p in paises_list:
-            if not selected_countries_masivo[p]:
-                toggle_country_masivo(p)
-    def select_none_countries_masivo():
-        for p in paises_list:
-            if selected_countries_masivo[p]:
-                toggle_country_masivo(p)
-
-    all_btn_masivo = tk.Label(links_frame_masivo, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
-    all_btn_masivo.pack(side="left")
-    all_btn_masivo.bind("<Button-1>", lambda e: select_all_countries_masivo())
-
-    none_btn_masivo = tk.Label(links_frame_masivo, text="Ninguno", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
-    none_btn_masivo.pack(side="left", padx=12)
-    none_btn_masivo.bind("<Button-1>", lambda e: select_none_countries_masivo())
-
-    # Card 1: Seleccionar Excel
-    excel_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
-    excel_card.pack(fill="x", pady=(0, 8), ipady=5)
-
-    e_header = tk.Frame(excel_card, bg=CARD_BG_COLOR)
-    e_header.pack(fill="x", padx=15, pady=(6, 4))
-    tk.Label(e_header, text="📂 SELECCIONAR EXCEL DE FORMS (GM Forms)", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
-
-    file_frame = tk.Frame(excel_card, bg=CARD_BG_COLOR)
-    file_frame.pack(fill="x", padx=15, pady=5)
+    file_frame = tk.Frame(excel_row, bg=CARD_BG_COLOR)
+    file_frame.pack(fill="x")
+    tk.Label(file_frame, text="📄 EXCEL MATRIZ FORMS:", font=("Segoe UI", 8, "bold"),
+             bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left", padx=(0, 10))
 
     var_excel_masivo = tk.StringVar(value="")
-    
+    var_excel_masivo.trace_add("write", lambda *a: _refresh_prog())
+
     # Intento de cargar GM Forms - 2026.xlsx por defecto si existe
     default_excel = os.path.join(DATA_DIR, "GM Forms - 2026.xlsx")
     if os.path.exists(default_excel):
@@ -3882,19 +3937,22 @@ def iniciar_interfaz():
                     parent_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
                     detected_files = []
                     if os.path.exists(parent_dir):
-                        for folder_name in os.listdir(parent_dir):
-                            folder_path = os.path.join(parent_dir, folder_name)
-                            if os.path.isdir(folder_path) and folder_name.startswith("resultadoMasivo_"):
-                                xlsx_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(".xlsx") and not f.startswith("~$")]
-                                if xlsx_files:
-                                    xlsx_files.sort(key=os.path.getmtime, reverse=True)
-                                    detected_files.append((folder_name.replace("resultadoMasivo_", ""), xlsx_files[0]))
-                    
+                        # Cada corrida deja un Resultados_Revision_Masiva_<matriz>_<fecha>.xlsx
+                        # con todos los mercados adentro: se toma el más reciente.
+                        reportes = [os.path.join(parent_dir, f) for f in os.listdir(parent_dir)
+                                    if f.startswith("Resultados_Revision_Masiva_")
+                                    and f.endswith(".xlsx") and not f.startswith("~$")]
+                        if reportes:
+                            reportes.sort(key=os.path.getmtime, reverse=True)
+                            detected_files.append((os.path.basename(reportes[0]), reportes[0]))
+
                     if not detected_files:
                         _safe_ui(lambda: messagebox.showerror(
                             "Sincronización Automática", 
-                            "No se encontraron carpetas resultadoMasivo_* previas con Excels en la ruta de resultados.\n"
-                            "Por favor selecciona un reporte histórico de forma manual."
+                            "No se encontraron reportes históricos autodetectables.\n\n"
+                            "La Revisión Masiva genera un único Excel de resultados por corrida en "
+                            "resultados/resultado_urlsinsertas/Resultados_Revision_Masiva_*.xlsx. "
+                            "Corré una revisión primero, o elegí un reporte a mano."
                         ))
                         return
                         
@@ -4013,12 +4071,7 @@ def iniciar_interfaz():
                                    font=("Segoe UI", 9, "bold"), cursor="hand2")
     cb_solo_fails.pack(side="left", padx=(20, 0))
 
-    var_ejecucion_paralelo = tk.BooleanVar(value=False)
-    cb_paralelo = tk.Checkbutton(opts_f, text="Ejecución en paralelo", variable=var_ejecucion_paralelo,
-                                 bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
-                                 activebackground=CARD_BG_COLOR, activeforeground="white",
-                                 font=("Segoe UI", 9, "bold"), cursor="hand2")
-    cb_paralelo.pack(side="left", padx=(20, 0))
+    # El modo Secuencial/Paralelo se elige en la card de configuración de arriba (columna MERCADOS).
 
     lbl_disclaimer = tk.Label(opts_f, text="⚠️ Los comentarios existentes en el Excel se conservarán por defecto.",
                               font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#F1948A")
@@ -4044,7 +4097,7 @@ def iniciar_interfaz():
             messagebox.showerror("Error Configuración", "Todos los campos de nombres de columna deben ser completados.")
             return
 
-        active_markets = [pais for pais, is_sel in selected_countries_masivo.items() if is_sel]
+        active_markets = [pais for pais, is_sel in selected_countries.items() if is_sel]
         if not active_markets:
             messagebox.showwarning("Sin Mercados", "Por favor, seleccioná al menos un mercado para revisar.")
             return
@@ -4075,7 +4128,7 @@ def iniciar_interfaz():
 
         def _reset_masivo_btn():
             try:
-                btn_run.config(state="normal", bg=EXECUTE_BG, fg=EXECUTE_FG)
+                btn_run.config(state="normal", bg=RUN_MAS_BG, fg=RUN_MAS_FG)
             except Exception:
                 pass
         modal.bind("<Destroy>", lambda e: _reset_masivo_btn() if str(e.widget) == str(modal) else None, add="+")
@@ -4289,118 +4342,25 @@ def iniciar_interfaz():
                 
                 dest_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
                 start_time_all = time.time()
-                paralelo = var_ejecucion_paralelo.get()
-                
+                paralelo = (scheduler_cfg_masivo.get("modo_excel") == "paralelo")
+
                 if paralelo:
-                    threads = []
-                    results = {}
-                    
-                    def single_country_thread(country):
-                        try:
-                            res_success, res_info = run_massive_check(
-                                excel_path, custom_cols,
-                                selected_markets=[country],
-                                borrar_comentarios=var_borrar_comentarios.get(),
-                                tomar_capturas=var_tomar_capturas.get(),
-                                solo_fails=var_solo_fails.get(),
-                                browser="chrome", headless=True,
-                                progress_callback=pcb, stop_event=stop_event
-                            )
-                            results[country] = (res_success, res_info)
-                        except Exception as e:
-                            results[country] = (False, str(e))
-                            
-                    for m in active_markets:
-                        t = threading.Thread(target=single_country_thread, args=(m,))
-                        t.start()
-                        threads.append(t)
-                        
-                    for t in threads:
-                        t.join()
-                        
-                    # Evaluar si hubo éxitos
-                    any_success = any(r[0] for r in results.values())
-                    success = any_success
-                    
-                    timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
-                    out_excel_path = os.path.join(dest_dir, f".temp_consolidado_{timestamp}.xlsx")
-                    
-                    import openpyxl
-                    wb_cons = openpyxl.Workbook()
-                    if "Sheet" in wb_cons.sheetnames:
-                        del wb_cons["Sheet"]
-                        
-                    total_processed = 0
-                    total_passed = 0
-                    total_failed = 0
-                    total_skipped = 0
-                    
-                    for country, r in results.items():
-                        if not r[0]:
-                            continue
-                        info = r[1]
-                        total_processed += info.get("total_processed", 0)
-                        total_passed += info.get("total_passed", 0)
-                        total_failed += info.get("total_failed", 0)
-                        total_skipped += info.get("total_skipped", 0)
-                        
-                        c_path = info.get("excel_path")
-                        if c_path and os.path.exists(c_path):
-                            try:
-                                wb_c = openpyxl.load_workbook(c_path)
-                                for s_name in wb_c.sheetnames:
-                                    ws_cons = wb_cons.create_sheet(title=s_name)
-                                    ws_orig = wb_c[s_name]
-                                    for r_idx in range(1, ws_orig.max_row + 1):
-                                        for c_idx in range(1, ws_orig.max_column + 1):
-                                            c_orig = ws_orig.cell(row=r_idx, column=c_idx)
-                                            c_cons = ws_cons.cell(row=r_idx, column=c_idx)
-                                            c_cons.value = c_orig.value
-                                            if c_orig.has_style:
-                                                c_cons.font = copy.copy(c_orig.font)
-                                                c_cons.fill = copy.copy(c_orig.fill)
-                            except Exception as e:
-                                print(f"Error consolidando hoja de {country}: {e}")
-                                
-                    try:
-                        wb_cons.save(out_excel_path)
-                    except Exception as e:
-                        print(f"Error guardando consolidado paralelo: {e}")
-                        
-                    # Eliminar reportes consolidados temporales individuales
-                    for country, r in results.items():
-                        if r[0] and os.path.exists(r[1]["excel_path"]):
-                            try:
-                                os.remove(r[1]["excel_path"])
-                            except Exception:
-                                pass
-                                
-                    elapsed = time.time() - start_time_all
-                    hours = int(elapsed // 3600)
-                    minutes = int((elapsed % 3600) // 60)
-                    seconds = int(elapsed % 60)
-                    time_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
-                    
-                    info = {
-                        "excel_path": out_excel_path,
-                        "msg": f"Revisión en paralelo finalizada en {time_str}. Procesados: {total_processed} (PASS: {total_passed}, FAIL: {total_failed}), Omitidos: {total_skipped}",
-                        "elapsed_time": time_str,
-                        "total_processed": total_processed,
-                        "total_passed": total_passed,
-                        "total_failed": total_failed,
-                        "total_skipped": total_skipped
-                    }
-                    
-                else:
-                    success, info = run_massive_check(
-                        excel_path, custom_cols,
-                        selected_markets=active_markets,
-                        borrar_comentarios=var_borrar_comentarios.get(),
-                        tomar_capturas=var_tomar_capturas.get(),
-                        solo_fails=var_solo_fails.get(),
-                        browser="chrome", headless=True,
-                        progress_callback=pcb, stop_event=stop_event
-                    )
+                    # La Revisión Masiva escribe todos los resultados dentro del MISMO Excel matriz.
+                    # Si cada mercado corriera en su propio hilo, todos abrirían y guardarían el mismo
+                    # archivo y el último en guardar pisaría a los demás. Por eso acá se fuerza el
+                    # recorrido secuencial de mercados (dentro de cada mercado no cambia nada).
+                    log_message("[INFO] Revisión Masiva: los mercados se recorren de a uno porque todos "
+                                "los resultados se escriben en el mismo Excel matriz.")
+
+                success, info = run_massive_check(
+                    excel_path, custom_cols,
+                    selected_markets=active_markets,
+                    borrar_comentarios=var_borrar_comentarios.get(),
+                    tomar_capturas=var_tomar_capturas.get(),
+                    solo_fails=var_solo_fails.get(),
+                    browser="chrome", headless=True,
+                    progress_callback=pcb, stop_event=stop_event
+                )
                 
                 # Enviar correo si corresponde
                 if var_enviar_email.get() and success and not stop_event.is_set():
@@ -4413,17 +4373,16 @@ def iniciar_interfaz():
                         adjuntar_ss=var_adjuntar_ss.get()
                     )
 
-                # Eliminar el Excel consolidado temporal para que solo queden los reportes individuales por mercado
-                if success and os.path.exists(info["excel_path"]):
-                    try:
-                        os.remove(info["excel_path"])
-                    except Exception:
-                        pass
+                # Ya no se borra nada: los resultados viven dentro del propio Excel matriz.
 
                 if stop_event.is_set():
                     _ui(lambda: messagebox.showinfo("Revisión Detenida", "La revisión masiva de formularios fue cancelada."))
                 elif success:
-                    res_msg = f"Auditoría masiva completada con éxito.\n\nReportes generados por mercado en subcarpetas de:\n{dest_dir}\n\n{info['msg']}"
+                    res_msg = (f"Auditoría masiva completada con éxito.\n\n"
+                               f"Excel de resultados (copia del matriz con las columnas de resultado "
+                               f"al principio, una hoja por mercado):\n{info['excel_path']}\n\n"
+                               f"El Excel matriz original no fue modificado.\n"
+                               f"Capturas en:\n{dest_dir}\n\n{info['msg']}")
                     _ui(lambda: messagebox.showinfo("Revisión Completada", res_msg))
                 else:
                     _ui(lambda: messagebox.showerror("Error de Ejecución", f"Error en revisión masiva:\n{info}"))
@@ -4434,13 +4393,41 @@ def iniciar_interfaz():
 
         threading.Thread(target=worker, daemon=True).start()
 
-    btn_run = tk.Button(btn_frame, text=" INICIAR REVISIÓN MASIVA", image=get_button_icon("play_green.png"), compound="left",
-                       font=("Segoe UI", 10, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
-                       relief="flat", bd=0, activebackground=EXECUTE_HOVER, activeforeground=EXECUTE_FG,
+    btn_sched_mas = tk.Button(btn_frame, text=" Programar revisión automática", image=get_button_icon("play_white.png"), compound="left",
+                              font=("Segoe UI", 9, "bold"), bg="#3498DB", fg="white",
+                              relief="flat", bd=0, activebackground="#2980B9", activeforeground="white",
+                              padx=16, pady=6, cursor="hand2", command=lambda: _sched_activate_masivo())
+    btn_sched_mas.pack(side="left", padx=(0, 6))
+    btn_sched_mas.bind("<Enter>", lambda e: btn_sched_mas.config(bg="#2980B9"))
+    btn_sched_mas.bind("<Leave>", lambda e: btn_sched_mas.config(bg="#3498DB"))
+
+    # Amarillo mate: destaca lo justo sin competir con el resto del footer.
+    RUN_MAS_BG = "#C9A227"
+    RUN_MAS_HOVER = "#B3901F"
+    RUN_MAS_FG = "#2E1146"
+
+    btn_run = tk.Button(btn_frame, text="▶  Iniciar ahora",
+                       font=("Segoe UI", 10, "bold"), bg=RUN_MAS_BG, fg=RUN_MAS_FG,
+                       relief="flat", bd=0, activebackground=RUN_MAS_HOVER, activeforeground=RUN_MAS_FG,
                        padx=22, pady=7, cursor="hand2", command=cmd_iniciar_masivo)
-    btn_run.pack(side="left", padx=(0, 10))
-    btn_run.bind("<Enter>", lambda e: btn_run.config(bg=EXECUTE_HOVER) if btn_run['state'] == "normal" else None)
-    btn_run.bind("<Leave>", lambda e: btn_run.config(bg=EXECUTE_BG) if btn_run['state'] == "normal" else None)
+    btn_run.pack(side="left", padx=6)
+    btn_run.bind("<Enter>", lambda e: btn_run.config(bg=RUN_MAS_HOVER) if btn_run['state'] == "normal" else None)
+    btn_run.bind("<Leave>", lambda e: btn_run.config(bg=RUN_MAS_BG) if btn_run['state'] == "normal" else None)
+
+    btn_config_mas = tk.Button(btn_frame, text=" Configurar días y horarios", image=get_button_icon("gear_white.png"), compound="left",
+                               font=("Segoe UI", 9, "bold"), bg=BUTTON_ACTIVE, fg="white",
+                               relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                               padx=14, pady=6, cursor="hand2", command=lambda: open_scheduler_config_popup())
+    btn_config_mas.pack(side="left", padx=6)
+    btn_config_mas.bind("<Enter>", lambda e: btn_config_mas.config(bg=BUTTON_HOVER))
+    btn_config_mas.bind("<Leave>", lambda e: btn_config_mas.config(bg=BUTTON_ACTIVE))
+
+    btn_deact_mas = tk.Button(btn_frame, text=" Desactivar", image=get_button_icon("stop_coral.png"), compound="left",
+                               font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
+                               relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
+                               padx=16, pady=6, cursor="hand2", command=lambda: _sched_deactivate_masivo())
+    if prog_state_masivo["mode"] == "activado":
+        btn_deact_mas.pack(side="left", padx=6)
 
     def abrir_carpeta_masivo():
         dir_path = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
@@ -5087,6 +5074,14 @@ def iniciar_interfaz():
             _force_close()
 
     root.protocol("WM_DELETE_WINDOW", _on_close)
+
+    # Repintado final: ya existen todas las cards y footers de ambas sub-pestañas.
+    try:
+        _refresh_prog()
+        _refresh_deact_btn()
+    except Exception:
+        pass
+
     root.mainloop()
 
 def create_demo_interface():

@@ -1,5 +1,29 @@
 @echo off
 REM -- Changelog -----------------------------------------------------------------
+REM Ago 2026: Fix: la app no arrancaba (NameError sched_mode_btns al armar la pestana de
+REM           programacion). Ademas: los paises de "Envio de Leads" no eran clickeables
+REM           (faltaba el bind), y "Desactivar"/"Programado" del footer nunca se
+REM           actualizaban (el guard usaba globals()/locals(), siempre False)
+REM           Pestana "Programacion de Tests" -> "Testeo Programado", con sub-pestanas
+REM           "Envio de Leads Normales" y "Revision Masiva de Insercion (Smoke Test)".
+REM           Cada sub-pestana tiene su guia rapida, su card de configuracion (mercados,
+REM           navegadores, secuencial/paralelo) y su resumen con badges. Los dias y
+REM           horarios se configuran desde el boton del footer
+REM           Revision Masiva: ya NO genera un Excel por pais. Sale UN solo archivo por
+REM           corrida, resultados/resultado_urlsinsertas/Resultados_Revision_Masiva_
+REM           <matriz>_<fecha>.xlsx: es una COPIA del Excel matriz ya editada, con las
+REM           columnas de resultado al principio de cada hoja/mercado y el resto de las
+REM           columnas originales atras. El Excel matriz NO se modifica
+REM           Revision Masiva: espera hasta 5s a que aparezca el iframe del form antes de
+REM           darlo por ausente (landings que lo cargan en diferido daban FAIL falso)
+REM           Revision Masiva: "Rerun fails previos" ahora reintenta cualquier fila con
+REM           FAIL en CUALQUIER columna (antes solo miraba 3) y las SKIPPED
+REM           Revision Masiva: se saca el check "Ejecucion en paralelo" del footer (el modo
+REM           se elige en la card); los mercados se recorren de a uno porque todos escriben
+REM           en el mismo libro. Boton "INICIAR REVISION MASIVA" -> "Iniciar ahora"
+REM           Build: el portable ya no viaja con resultados/capturas/reportes de esta PC;
+REM           esas carpetas se crean vacias. json/: se excluyen tambien programacion_leads
+REM           y programacion_masivo
 REM Jul 2026: Excel de resultados: columnas de RESULTADO primero y los datos de entrada al
 REM           final (antes era al reves). Se reordena al cerrar la corrida, no antes: los
 REM           runners leen los datos del lead de la misma hoja (URL en A, Formulario en B)
@@ -171,20 +195,26 @@ if exist ".\data" (
     mkdir "%PORTABLE_DIR%\data"
 )
 
-for %%D in (drivers resultados temporales Dealerscheck_resultados resultados_lambdatestmac resultados_lambdatest_android) do (
-    if exist ".\%%D" (
-        robocopy ".\%%D" "%PORTABLE_DIR%\%%D" /E /NFL /NDL /NJH /NJS /NC /NS >nul
-        if errorlevel 8 goto :error
-    ) else (
-        mkdir "%PORTABLE_DIR%\%%D"
-    )
+REM drivers/ si viaja: son los chromedriver/geckodriver pineados que necesita el portable
+if exist ".\drivers" (
+    robocopy ".\drivers" "%PORTABLE_DIR%\drivers" /E /NFL /NDL /NJH /NJS /NC /NS >nul
+    if errorlevel 8 goto :error
+) else (
+    mkdir "%PORTABLE_DIR%\drivers"
+)
+
+REM Las carpetas de salida se crean VACIAS. Antes se copiaban enteras y el portable
+REM viajaba con los resultados, capturas y reportes de revision masiva de esta PC
+REM (cientos de MB de datos de otra corrida). El portable arranca limpio.
+for %%D in (resultados temporales Dealerscheck_resultados resultados_lambdatestmac resultados_lambdatest_android) do (
+    if not exist "%PORTABLE_DIR%\%%D" mkdir "%PORTABLE_DIR%\%%D"
 )
 
 REM Copiar json/ sin los archivos de estado del scheduler, la config personal del
 REM Comparador Dealers, ni config_global.json (tiene el email y la access key de
 REM LambdaTest en texto plano) — el portable arranca limpio, sin datos de otra PC
 if exist ".\json" (
-    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json scheduler_triggered.json dealer_comparator_settings.json config_global.json ejecutor_autonomo.log >nul
+    robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json programacion_leads.json programacion_masivo.json scheduler_triggered.json dealer_comparator_settings.json config_global.json ejecutor_autonomo.log >nul
     if errorlevel 8 goto :error
 ) else (
     mkdir "%PORTABLE_DIR%\json"

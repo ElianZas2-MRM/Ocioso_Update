@@ -214,7 +214,9 @@ Las capturas de este chequeo se guardan aparte, en `cta_evidence/`. En LambdaTes
 
 ## Pestaña: Programación de Tests
 
-Programa la ejecución automática y recurrente de "Envío de Leads" (por ejemplo, todos los martes a las 03:00) sin que tengas que apretar nada.
+Esta pestaña cuenta con dos sub-pestañas internas:
+- **📅 Programación Semanal**: Programa la ejecución automática y recurrente de "Envío de Leads" (por ejemplo, todos los martes a las 03:00) sin que tengas que apretar nada.
+- **🔍 Revisión Masiva de Forms**: Auditoría y verificación rápida de formularios masivos mediante matriz de URLs.
 
 ![Programación de Tests](Asset/screenshots/04_programacion_tests.png)
 
