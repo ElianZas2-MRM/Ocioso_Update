@@ -16,6 +16,16 @@ for p in (_base, os.path.join(_base, "core")):
 from core.generic_country_base import GenericCountryBase
 from utils.data_generator import generar_fila_datos
 
+# Igual que en run.py: hace que Python use la lista de certificados de confianza de Windows.
+# Sin esto, detrás de un proxy corporativo que inspecciona TLS (Netskope/Zscaler) la
+# verificación de certificados fallaría y el chequeo marcaría FAIL a URLs sanas. Se repite
+# acá porque este módulo es el que hace las llamadas HTTP y puede importarse suelto.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 class MassiveFormFiller(GenericCountryBase):
     """
     Subclase especializada de GenericCountryBase para el chequeo masivo sin envíos.
@@ -175,6 +185,43 @@ class MassiveFormFiller(GenericCountryBase):
                 print(f"Error custom dropdown fallback: {e}")
         return (filled_text and filled_dropdown)
 
+    _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    def _http_status_str(self, url, report_redirects=False):
+        """Status HTTP de una URL para el reporte. Devuelve (texto, url_final).
+
+        La verificación TLS va ACTIVADA a propósito. Antes se llamaba con verify=False y
+        se silenciaba el InsecureRequestWarning: un certificado vencido, mal emitido o un
+        intermediario que interceptara el tráfico devolvían "200 PASS" igual. En una
+        herramienta cuyo trabajo es justamente validar que las URLs estén sanas, un
+        certificado roto tiene que salir como FAIL, no taparse.
+
+        En oficinas con proxy que inspecciona TLS (Netskope/Zscaler) el certificado lo
+        firma el proxy: Windows ya confía en él, y truststore hace que Python use esa misma
+        lista, así que no genera falsos FAIL (ver la inyección arriba y en run.py).
+        """
+        try:
+            r = requests.get(url, headers={"User-Agent": self._UA},
+                             timeout=8, allow_redirects=True)
+        except requests.exceptions.SSLError as e:
+            # Certificado inválido/vencido/no confiable: es un hallazgo real del chequeo.
+            return f"SSL - ❌ FAIL Certificado TLS inválido o no confiable: {str(e)[:160]}", url
+        except requests.exceptions.Timeout:
+            return "Timeout - ❌ FAIL La URL no respondió en 8s", url
+        except requests.exceptions.RequestException as e:
+            return f"Error - ❌ FAIL {type(e).__name__}: {str(e)[:160]}", url
+        except Exception as e:
+            return f"Error - ❌ FAIL HTTP Code: {type(e).__name__}", url
+
+        if report_redirects and r.history:
+            code = r.history[0].status_code
+            return (f"{code} - 🔀 FAIL Link redirects. Code: {code}, "
+                    f"URL Original: {url} redirects to: {r.url}"), r.url
+        if r.status_code == 200:
+            return "200 - ✅ PASS Valid link. HTTP Code: 200", r.url
+        return f"{r.status_code} - ❌ FAIL HTTP Code: {r.status_code}", r.url
+
     def check_single_url(self, landing_url, expected_form_url, row_num, tomar_capturas=True):
         """
         Navega a la URL y ejecuta la lógica de verificación (HTTP Status, Iframe Match, Llenado parcial)
@@ -197,44 +244,11 @@ class MassiveFormFiller(GenericCountryBase):
             self.screenshot_manager.current_frame = None
 
         # 1. Obtener HTTP Status Code y Redirecciones del landing page
-        landing_status_str = ""
-        final_url_found = landing_url
-        try:
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            r = requests.get(landing_url, headers=headers, timeout=8, allow_redirects=True, verify=False)
-            final_url_found = r.url
-            if r.history:
-                # Ocurrió un redirect
-                code = r.history[0].status_code
-                landing_status_str = f"{code} - 🔀 FAIL Link redirects. Code: {code}, URL Original: {landing_url} redirects to: {r.url}"
-            else:
-                if r.status_code == 200:
-                    landing_status_str = f"200 - ✅ PASS Valid link. HTTP Code: 200"
-                else:
-                    landing_status_str = f"{r.status_code} - ❌ FAIL HTTP Code: {r.status_code}"
-        except Exception as e:
-            landing_status_str = f"Error - ❌ FAIL HTTP Code: {type(e).__name__}"
+        landing_status_str, final_url_found = self._http_status_str(landing_url, report_redirects=True)
 
         # 1b. Obtener HTTP Status del expected secure URL (Secure_Excel)
-        secure_status_str = ""
         if expected_form_url:
-            try:
-                import urllib3
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-                r_sec = requests.get(expected_form_url, headers=headers, timeout=8, allow_redirects=True, verify=False)
-                if r_sec.status_code == 200:
-                    secure_status_str = "200 - ✅ PASS Valid link. HTTP Code: 200"
-                else:
-                    secure_status_str = f"{r_sec.status_code} - ❌ FAIL HTTP Code: {r_sec.status_code}"
-            except Exception as e:
-                secure_status_str = f"Error - ❌ FAIL HTTP Code: {type(e).__name__}"
+            secure_status_str, _ = self._http_status_str(expected_form_url)
         else:
             secure_status_str = "N/A"
 
