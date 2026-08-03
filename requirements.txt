@@ -1,8 +1,12 @@
-selenium
-openpyxl
-pandas
-pillow
-pytz
-pywin32
-requests
-truststore
+# Rangos compatibles (~=): aceptan parches y minors dentro de la misma major, pero NO
+# saltos de major, que son los que rompen. build.bat recrea el venv desde cero en cada
+# build: sin acotar, dos builds del mismo codigo podian quedar con dependencias distintas.
+# Al subir de major hay que probar y actualizar el rango a mano.
+selenium~=4.46
+openpyxl~=3.1
+pandas~=3.0
+pillow~=12.3
+pytz~=2026.3
+pywin32~=312.0
+requests~=2.34
+truststore~=0.10

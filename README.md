@@ -465,7 +465,7 @@ Es la memoria de la app: sin esta carpeta, la app abre pero **no sabe cómo llen
 
 | Archivo | Qué guarda |
 |---|---|
-| `config_global.json` | Email destinatario, **access key de LambdaTest**, dispositivos tildados, y todas tus preferencias de la UI. **Está en `.gitignore`: nunca se sube ni se distribuye.** |
+| `config_global.json` | Email destinatario, dispositivos tildados y todas tus preferencias de la UI. **No guarda credenciales de LambdaTest** (ésas van en `lambdatest_credentials.txt` o en variables de entorno). Está en `.gitignore`: nunca se sube ni se distribuye. |
 | `programacion_test.json` | El calendario semanal de la pestaña Programación de Tests. |
 | `scheduler_triggered.json` | Marca qué horarios ya se dispararon hoy (para no repetir una corrida). |
 | `dealer_comparator_settings.json` | Los presets guardados del Comparador de Dealers, por país. |
@@ -503,15 +503,26 @@ unos **3 segundos**. No se pierde nada: el portable siempre fue una carpeta (con
 
 `lambdatest_mac/` y `lambdatest_android/` van empaquetados por PyInstaller **dentro de `_internal/`**, no como carpetas sueltas al lado del `.exe` — no hace falta copiarlos a mano.
 
-El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email o la access key de LambdaTest de la PC donde se compiló). Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
+El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email del destinatario de la PC donde se compiló). Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
 
 ## Seguridad — credenciales
 
-- `lambdatest_credentials.txt` y `json/config_global.json` (contiene el email y la access key de LambdaTest) están en `.gitignore` — nunca se suben al repositorio.
+- `lambdatest_credentials.txt` y `json/config_global.json` están en `.gitignore` — nunca se suben al repositorio. (`config_global.json` guarda el email destinatario y tus preferencias de UI; **no** guarda la access key.)
 - El build portable tampoco los incluye (ver arriba).
-- Si necesitás correr LambdaTest, creá `lambdatest_credentials.txt` en la raíz del proyecto con:
-  ```
-  username=TU_USUARIO
-  access_key=TU_ACCESS_KEY
-  ```
-  o cargalas directo desde la app (panel **CREDENCIALES LT** en la pestaña Envío de Leads, ver arriba).
+
+Las credenciales de LambdaTest se buscan **en este orden**:
+
+1. **Variables de entorno** (recomendado): así la access key no queda escrita en claro en un archivo del disco.
+   ```powershell
+   setx LT_USERNAME    "TU_USUARIO"
+   setx LT_ACCESS_KEY  "TU_ACCESS_KEY"
+   ```
+   (también se aceptan `LAMBDATEST_USERNAME` / `LAMBDATEST_ACCESS_KEY`). Hay que **reabrir la terminal o la app** para que `setx` tome efecto. Si solo una de las dos está definida, se ignora el entorno y se pasa al archivo.
+2. **`lambdatest_credentials.txt`** en la raíz del proyecto — sigue funcionando igual que siempre:
+   ```
+   username=TU_USUARIO
+   access_key=TU_ACCESS_KEY
+   ```
+   o cargalas directo desde la app (panel **CREDENCIALES LT** en la pestaña Envío de Leads, ver arriba).
+
+> Si usás el archivo, **no compartas la carpeta portable con el archivo lleno**: `build.bat` genera una plantilla vacía, pero si lo completaste ahí adentro viaja con la carpeta.

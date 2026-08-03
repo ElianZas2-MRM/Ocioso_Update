@@ -107,7 +107,32 @@ class LTRunOptions:
 # CREDENCIALES
 # ══════════════════════════════════════════════════════════════════════════════
 
+#: Variables de entorno que se leen antes del archivo. LT_USERNAME/LT_ACCESS_KEY son los
+#: nombres que usa la propia documentación de LambdaTest.
+_ENV_USER_VARS = ("LT_USERNAME", "LAMBDATEST_USERNAME")
+_ENV_KEY_VARS = ("LT_ACCESS_KEY", "LAMBDATEST_ACCESS_KEY")
+
+
+def _first_env(names):
+    for n in names:
+        v = (os.environ.get(n) or "").strip()
+        if v:
+            return v
+    return ""
+
+
 def load_credentials(filepath: str = ""):
+    """Credenciales de LambdaTest: primero variables de entorno, si no el archivo.
+
+    Se prioriza el entorno para poder correr sin dejar la access key escrita en claro en
+    el disco (y para CI). El archivo lambdatest_credentials.txt sigue funcionando igual
+    que siempre como fallback, así que no rompe las instalaciones que ya lo usan.
+    """
+    if not filepath:
+        env_user, env_key = _first_env(_ENV_USER_VARS), _first_env(_ENV_KEY_VARS)
+        if env_user and env_key:
+            return env_user, env_key
+
     if not filepath:
         for candidate in [
             os.path.join(_THIS_DIR, "lambdatest_credentials.txt"),
@@ -119,8 +144,12 @@ def load_credentials(filepath: str = ""):
 
     if not os.path.exists(filepath or ""):
         raise FileNotFoundError(
-            "No se encontró lambdatest_credentials.txt.\n"
-            "Creá el archivo con:\n    username=tu_usuario\n    access_key=tu_key"
+            "No se encontraron credenciales de LambdaTest.\n"
+            "Opción 1 (recomendada) — variables de entorno:\n"
+            "    setx LT_USERNAME tu_usuario\n"
+            "    setx LT_ACCESS_KEY tu_key\n"
+            "Opción 2 — archivo lambdatest_credentials.txt con:\n"
+            "    username=tu_usuario\n    access_key=tu_key"
         )
 
     username = access_key = None
