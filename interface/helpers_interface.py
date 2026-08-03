@@ -1554,9 +1554,10 @@ def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
     """Envía por email el resultado de UNA corrida del Comparador de Dealers, con el mismo
     criterio que el resto de la app:
       - Respeta el flag global 'enviar_mail' (si está apagado, no envía).
-      - incluir_capturas=True (modo 'Excel + Capturas'): adjunta un ZIP con TODA la carpeta
-        del reporte (Excel + capturas). incluir_capturas=False (modo 'Solo Excel'): adjunta
-        sólo el Excel.
+      - Respeta los flags globales 'adjuntar_resultados' y 'adjuntar_screenshots' de
+        Configuración, igual que el resto de las pestañas. incluir_capturas (el modo
+        'Excel + Capturas' de la pestaña) manda solo si además el flag global lo permite:
+        antes se adjuntaban capturas aunque el usuario las tuviera desactivadas.
       - Destinatario: el mismo 'email_destinatario' global que Envío de Leads.
     Devuelve True si se encoló (o si el envío está deshabilitado), False ante error.
     """
@@ -1596,15 +1597,20 @@ def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
         )
         cuerpo += "\nSaludos,\nAutomación de Formularios"
 
+        # Los dos flags globales de Configuración mandan por encima del modo de la pestaña.
+        adjuntar_resultados = bool(config.get("adjuntar_resultados", True))
+        adjuntar_screenshots = bool(config.get("adjuntar_screenshots", True))
+        con_capturas = bool(incluir_capturas) and adjuntar_screenshots
+
         adjuntos = []
-        if incluir_capturas and carpeta_reporte and os.path.isdir(carpeta_reporte):
+        if con_capturas and carpeta_reporte and os.path.isdir(carpeta_reporte):
             # ZIP con toda la carpeta (Excel + capturas)
             zip_files = crear_zip_de_carpeta(carpeta_reporte)
             if zip_files:
                 adjuntos.extend(zip_files)
-            elif excel_path and os.path.exists(excel_path):
+            elif adjuntar_resultados and excel_path and os.path.exists(excel_path):
                 adjuntos.append(excel_path)
-        elif excel_path and os.path.exists(excel_path):
+        elif adjuntar_resultados and excel_path and os.path.exists(excel_path):
             if os.path.getsize(excel_path) < 24 * 1024 * 1024:
                 adjuntos.append(excel_path)
             else:
@@ -1855,10 +1861,19 @@ def enviar_email_revision_masiva(excel_path, counts, adjuntar_res=True, adjuntar
             except OSError:
                 pass
 
-        # Buscar carpetas individuales de cada mercado (resultadoMasivo_*) para adjuntar sus ZIPs si corresponde
+        # Capturas de cada mercado (resultadoMasivo_<mercado>). Solo las de los mercados
+        # revisados en ESTA corrida: la carpeta resultados/ conserva las de corridas
+        # anteriores, así que sin este filtro se adjuntaban capturas de mercados que ni
+        # siquiera estaban seleccionados.
         if adjuntar_ss:
             if os.path.exists(parent_dir):
-                market_folders = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if d.startswith("resultadoMasivo_") and os.path.isdir(os.path.join(parent_dir, d))]
+                mercados_corridos = counts.get("mercados") or []
+                if mercados_corridos:
+                    market_folders = [os.path.join(parent_dir, f"resultadoMasivo_{m}") for m in mercados_corridos]
+                    market_folders = [f for f in market_folders if os.path.isdir(f)]
+                else:
+                    market_folders = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir)
+                                      if d.startswith("resultadoMasivo_") and os.path.isdir(os.path.join(parent_dir, d))]
                 for folder in market_folders:
                     capturas_path = os.path.join(folder, "Capturas")
                     # Solo zippeamos y adjuntamos el mercado si contiene capturas de pantalla creadas
