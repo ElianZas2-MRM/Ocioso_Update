@@ -371,6 +371,38 @@ def ejecutar_tests(programacion):
         return []
 
 
+def ejecutar_masivo_autonomo(programacion):
+    """Ejecuta la revisión masiva de forms de forma autónoma."""
+    try:
+        from core.massive_check_runner import run_massive_check
+        log_mensaje(" INICIANDO REVISIÓN MASIVA AUTÓNOMA")
+        excel_path = programacion.get("var_excel_masivo") or os.path.join(PROJECT_ROOT, "data", "GM Forms - 2026.xlsx")
+        custom_cols = {
+            "segmento": programacion.get("var_col_segmento", "SEGMENTO"),
+            "estado": programacion.get("var_col_estado", "ESTADO"),
+            "url_live": programacion.get("var_col_url_live", "URL LIVE"),
+            "url_secure": programacion.get("var_col_url_secure", "URL SECURE"),
+        }
+        paises = programacion.get("paises", [])
+        log_mensaje(f" Mercados a revisar: {paises}")
+        log_mensaje(f" Excel: {excel_path}")
+        
+        success, info = run_massive_check(
+            excel_path, custom_cols,
+            selected_markets=paises,
+            borrar_comentarios=programacion.get("var_borrar_comentarios", False),
+            tomar_capturas=programacion.get("var_tomar_capturas", True),
+            solo_fails=programacion.get("var_solo_fails", False),
+            browser="chrome", headless=True
+        )
+        msg = info.get("msg", "") if isinstance(info, dict) else str(info)
+        log_mensaje(f" Revisión masiva completada ({'OK' if success else 'FAIL'}): {msg}")
+        return success
+    except Exception as exc:
+        log_mensaje(f" Error en revisión masiva autónoma: {exc}")
+        return False
+
+
 def main():
     """Función principal del ejecutor autónomo."""
     if not acquire_autonomous_lock():
@@ -405,33 +437,35 @@ def main():
                     key = (dia_actual, hora_actual)
                     if last_triggered.get(key) != ahora.date():
                         last_triggered[key] = ahora.date()
-                        log_mensaje(f" ¡SLOT DETECTADO! {dia_actual} {hora_actual} — ejecutando test...")
-                        resultados = ejecutar_tests(programacion)
-
-                        log_mensaje(f"\n📊 RESULTADOS RECOPILADOS: {len(resultados)} ejecuciones")
-                        for index, resultado in enumerate(resultados, 1):
-                            log_mensaje(
-                                f"   [{index}] {resultado['pais']} ({resultado['navegador']}/{resultado['viewport']}) - {resultado['estado']}"
-                            )
-
-                        if resultados:
-                            log_mensaje(f" ✅ {len(resultados)} ejecuciones completadas")
-                            log_mensaje(" 📧 INICIANDO ENVÍO DE EMAIL CONSOLIDADO...")
-                            try:
-                                envio_exitoso = enviar_email_resultados_consolidados(resultados)
-                                if envio_exitoso:
-                                    log_mensaje(" ✅ Email enviado exitosamente")
-                                    time.sleep(10)
-                                else:
-                                    log_mensaje(" ⚠️ Proceso de email devolvió False")
-                            except Exception as exc:
-                                import traceback
-                                log_mensaje(f" ❌ Excepción al enviar email: {exc}")
-                                log_mensaje(traceback.format_exc())
-                            # NO limpiar — programación semanal persiste para la próxima semana
-                            log_mensaje(" Slot completado. Próxima ejecución: semana siguiente.")
+                        log_mensaje(f" ¡SLOT DETECTADO! {dia_actual} {hora_actual} — ejecutando...")
+                        modo_t = programacion.get("modo_tarea", "leads")
+                        if modo_t == "masivo":
+                            log_mensaje(" ▶ Ejecutando Revisión Masiva programada...")
+                            ejecutar_masivo_autonomo(programacion)
                         else:
-                            log_mensaje(" ⚠️ No se recopilaron resultados")
+                            resultados = ejecutar_tests(programacion)
+
+                            log_mensaje(f"\n📊 RESULTADOS RECOPILADOS: {len(resultados)} ejecuciones")
+                            for index, resultado in enumerate(resultados, 1):
+                                log_mensaje(
+                                    f"   [{index}] {resultado['pais']} ({resultado['navegador']}/{resultado['viewport']}) - {resultado['estado']}"
+                                )
+
+                            if resultados:
+                                log_mensaje(f" ✅ {len(resultados)} ejecuciones completadas")
+                                log_mensaje(" 📧 INICIANDO ENVÍO DE EMAIL CONSOLIDADO...")
+                                try:
+                                    envio_exitoso = enviar_email_resultados_consolidados(resultados)
+                                    if envio_exitoso:
+                                        log_mensaje(" ✅ Email enviado exitosamente")
+                                        time.sleep(10)
+                                    else:
+                                        log_mensaje(" ⚠️ Proceso de email devolvió False")
+                                except Exception as exc:
+                                    import traceback
+                                    log_mensaje(f" ❌ Excepción al enviar email: {exc}")
+                                    log_mensaje(traceback.format_exc())
+                        log_mensaje(" Slot completado. Próxima ejecución: semana siguiente.")
 
             time.sleep(60)
 
