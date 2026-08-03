@@ -2535,19 +2535,18 @@ def build_field_validation_tab(parent, palette, shared_config=None):
             state["export_path"] = export_path
             status_var.set(f"{status_message} | Excel: {os.path.basename(export_path)}")
 
-            if enviar_mail_var.get() and adjuntar_resultados_var.get():
+            # "Enviar mail" manda el mail; "Adjuntar resultados" decide solo si va el Excel
+            # adjunto. Antes, con adjuntar apagado, NO se enviaba nada y el usuario se
+            # quedaba sin el reporte, que es la parte que importa.
+            if enviar_mail_var.get():
                 ok, msg = send_validation_report_email(
                     state["export_path"],
                     state["summary"],
                     recipient=(email_var.get() or "").strip(),
+                    adjuntar_excel=bool(adjuntar_resultados_var.get()),
                 )
                 if not ok:
                     messagebox.showerror("Validación de campos", _format_user_error(msg))
-            elif enviar_mail_var.get() and not adjuntar_resultados_var.get():
-                messagebox.showinfo(
-                    "Validación de campos",
-                    "Enviar mail está activo, pero Adjuntar resultados está desactivado. No se enviará email en esta ejecución.",
-                )
         except Exception as exc:
             status_var.set(status_message)
             LOGGER.exception("No se pudo generar el Excel automático")
