@@ -42,6 +42,8 @@ builtins.print = _safe_global_print
 from browser_manager import BrowserManager
 from screenshot_manager import ScreenshotManager
 
+from utils.field_id_aliases import VISID_ID_ALIASES
+
 try:
     from utils.popup_logger import popup_log, log_runtime
 except Exception:
@@ -88,7 +90,9 @@ class BaseFormFiller:
     # formulario SIEMPRE tiene un src que contiene uno de estos fragmentos. Cuando una landing
     # tiene varios iframes hay que priorizar SIEMPRE el que matchee estos marcadores, y recién
     # como último recurso caer a cualquier iframe visible.
-    GM_FORM_URL_MARKERS = ("gm_forms", "gm_front", "gm_admin")
+    # "gm_front" cubre tambien "gm_frontend" (los forms nuevos
+    # .../gm_frontend/chevrolet/t3/<pais>/form/<slug>), porque el match es por substring.
+    GM_FORM_URL_MARKERS = ("gm_forms", "gm_formns", "gm_front", "gm_admin")
 
     @staticmethod
     def _iframe_src_of(iframe):
@@ -142,20 +146,8 @@ class BaseFormFiller:
 
     # Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
     # Si el ID del mapping no se encuentra en el DOM, se prueba el alias visid.
-    # Agregar aquí si en la migración aparecen nuevos IDs que difieren del estándar actual.
-    _VISID_ID_ALIASES: dict = {
-        "firstname":               "name",
-        "models":                  "model",
-        "model_1":                 "model",
-        "model_2":                 "model",
-        "estimated-date-purchase": "estimated-day",
-        "estimated-date":          "estimated-day",
-        "estimated_date_purchase": "estimated-day",
-        # gm_front / alianzas modernas
-        "telephone":               "phone",
-        "cellphone":               "phone",
-        "ci":                      "document",
-    }
+    # La tabla vive en utils/field_id_aliases.py: la comparte la Validación de Campos.
+    _VISID_ID_ALIASES: dict = VISID_ID_ALIASES
 
     # Adobe AEM Adaptive Form (Guide) — términos / checkbox
     _GUIDE_CHECKBOX_CONTAINER_ID = "guideContainer-rootPanel-guidecheckbox___guide-item"
