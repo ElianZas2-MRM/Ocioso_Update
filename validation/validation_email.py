@@ -3,10 +3,11 @@ validation_email.py — Envía el reporte de validación de campos por email.
 Formatea el resumen (campos testeados, errores encontrados, resultados UI) y lo manda
 usando la misma infraestructura de email de la interfaz (cola Outlook asíncrona).
 """
+import os
 from datetime import datetime
 
 
-def send_validation_report_email(excel_path, summary, recipient=None):
+def send_validation_report_email(excel_path, summary, recipient=None, adjuntar_excel=None):
     """Envia el reporte de validacion usando la infraestructura de mails existente."""
     from interface.helpers_interface import (
         _encolar_email,
@@ -67,5 +68,16 @@ def send_validation_report_email(excel_path, summary, recipient=None):
     } for d in detalles]
     html_extra = _build_url_table_html(items) + _FIRMA_HTML
 
-    _encolar_email(destinatario, asunto, cuerpo, [excel_path], html_extra=html_extra)
+    # El Excel va adjunto solo si "Adjuntar resultados" esta activo. Si no lo esta, el mail
+    # se manda igual con el resumen y la tabla: apagar el adjunto no deberia dejar al
+    # usuario sin reporte. Si no llega el flag, se toma el de Configuracion.
+    if adjuntar_excel is None:
+        adjuntar_excel = bool(config.get("adjuntar_resultados", True))
+    adjuntos = []
+    if adjuntar_excel and excel_path and os.path.exists(excel_path):
+        adjuntos.append(excel_path)
+    elif not adjuntar_excel:
+        cuerpo += f"\nEl Excel no se adjunto (Adjuntar resultados esta desactivado). Esta en: {excel_path}\n"
+
+    _encolar_email(destinatario, asunto, cuerpo, adjuntos, html_extra=html_extra)
     return True, f"Reporte encolado para {destinatario}."

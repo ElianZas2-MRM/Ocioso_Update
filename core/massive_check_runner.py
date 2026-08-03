@@ -1045,7 +1045,10 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         "total_passed": total_passed,
         "total_failed": total_failed,
         "total_skipped": total_skipped,
-        "elapsed_time": time_str
+        "elapsed_time": time_str,
+        # Mercados realmente revisados en ESTA corrida. Lo usa el email para no adjuntar
+        # capturas de mercados de corridas anteriores que siguen en resultados/.
+        "mercados": [sheet_to_country.get(h.upper(), h) for h in hojas_procesadas],
     }
 
 
