@@ -3395,10 +3395,22 @@ def iniciar_interfaz():
             except Exception:
                 pass
 
-            # Subtítulo final: total de formularios OK / con error.
+            # Veredicto global + subtítulo con el total de formularios OK / con error.
+            _global_ok = (fail_total == 0 and not err_msg and not detenido)
             try:
                 subtitle_lbl.config(text=f"{ok_total + fail_total}/{total_leads} forms  ·  "
                                          f"{ok_total} OK · {fail_total} con error")
+            except Exception:
+                pass
+            try:
+                if detenido:
+                    _v_txt, _v_bg = "⏹  DETENIDO POR EL USUARIO", "#B9770E"
+                elif _global_ok:
+                    _v_txt, _v_bg = "✓  RESULTADO GLOBAL: PASS", "#1E8449"
+                else:
+                    _v_txt, _v_bg = f"✕  RESULTADO GLOBAL: FAIL  ({fail_total} form/s con error)", "#943126"
+                tk.Label(modal, text=_v_txt, font=("Segoe UI", 10, "bold"),
+                         bg=_v_bg, fg="white", padx=12, pady=6).pack(fill="x", padx=20, pady=(6, 4))
             except Exception:
                 pass
 
@@ -3411,27 +3423,40 @@ def iniciar_interfaz():
                 _wfull = max(1, b["canvas"].winfo_width())
                 b["canvas"].itemconfig(b["fill"], fill=_col)
                 b["canvas"].coords(b["fill"], 0, 0, _wfull, 8)
-                b["status"].config(text=f"✓ {b['forms_ok']} OK · {b['forms_fail']} error(es)", fg=_col)
+                # PASS/FAIL explicito por mercado: antes decia "✓ 7 OK · 1 error(es)" y el
+                # tilde daba a entender que habia salido todo bien aunque hubiera fallas.
+                _es_pass = not (b["forms_fail"] or err_msg or detenido)
+                _pf = "PASS" if _es_pass else "FAIL"
+                _mark = "✓" if _es_pass else "✕"
+                b["status"].config(
+                    text=f"{_mark} {_pf} — {b['forms_ok']} OK · {b['forms_fail']} error(es)", fg=_col)
                 if b.get("fail_rows"):
-                    _parts = []
                     for _fr in b["fail_rows"]:
                         if isinstance(_fr, dict):
                             _rn = _fr.get("row", "?")
                             _rs = _fr.get("reason", "")
-                            _parts.append(f"fila {_rn} ({_rs})" if _rs else f"fila {_rn}")
+                            # URL suelta: la landing viene vacia y la URL util es la del form
+                            _u = (_fr.get("url") or _fr.get("url_form") or "").strip()
                         else:
-                            _parts.append(f"fila {_fr}")
-                    _fail_detail_lines.append((_p, ", ".join(_parts)))
+                            _rn, _rs, _u = _fr, "", ""
+                        _fail_detail_lines.append((_p, _rn, _rs, _u))
 
-            # Detalle de filas con error (para ubicarlas rápido), por mercado.
+            # Detalle de los forms con error: fila, motivo y URL, para ubicarlos sin
+            # tener que abrir el Excel.
             if _fail_detail_lines:
                 _det = tk.Frame(modal, bg=MODAL_BG)
                 _det.pack(fill="x", padx=20, pady=(2, 0))
-                tk.Label(_det, text="Forms con error:", font=("Segoe UI", 8, "bold"),
+                tk.Label(_det, text="Forms con error (FAIL):", font=("Segoe UI", 8, "bold"),
                          bg=MODAL_BG, fg="#F1948A").pack(anchor="w")
-                for _p, _rows_str in _fail_detail_lines:
-                    tk.Label(_det, text=f"   • {_p}: {_rows_str}", font=("Segoe UI", 8),
+                for _p, _rn, _rs, _u in _fail_detail_lines:
+                    _txt = f"   • {_p} — fila {_rn}"
+                    if _rs:
+                        _txt += f": {_rs}"
+                    tk.Label(_det, text=_txt, font=("Segoe UI", 8),
                              bg=MODAL_BG, fg="#F1948A", wraplength=470, justify="left").pack(anchor="w")
+                    if _u:
+                        tk.Label(_det, text=f"       {_u}", font=("Segoe UI", 7),
+                                 bg=MODAL_BG, fg="#D98880", wraplength=460, justify="left").pack(anchor="w")
 
             if err_msg:
                 tk.Label(modal, text=f"✕ {err_msg}", font=("Segoe UI", 8), bg=MODAL_BG, fg="#F1948A",
@@ -4378,12 +4403,28 @@ def iniciar_interfaz():
                 if stop_event.is_set():
                     _ui(lambda: messagebox.showinfo("Revisión Detenida", "La revisión masiva de formularios fue cancelada."))
                 elif success:
-                    res_msg = (f"Auditoría masiva completada con éxito.\n\n"
+                    # Veredicto explicito arriba de todo: antes decia siempre "completada con
+                    # exito" aunque hubiera formularios en FAIL, y habia que leer el conteo.
+                    _fails = int(info.get("total_failed", 0) or 0)
+                    _passes = int(info.get("total_passed", 0) or 0)
+                    if _fails == 0:
+                        _veredicto = f"✅ RESULTADO GLOBAL: PASS — {_passes} form(s) OK"
+                        _titulo = "Revisión Completada — PASS"
+                    else:
+                        _veredicto = (f"❌ RESULTADO GLOBAL: FAIL — {_fails} form(s) con error "
+                                      f"de {_passes + _fails} revisados")
+                        _titulo = "Revisión Completada — FAIL"
+                    res_msg = (f"{_veredicto}\n\n"
+                               f"El detalle fila por fila (con el motivo de cada FAIL) está en el "
+                               f"Excel de resultados y en el mail, si lo tenés activado.\n\n"
                                f"Excel de resultados (copia del matriz con las columnas de resultado "
                                f"al principio, una hoja por mercado):\n{info['excel_path']}\n\n"
                                f"El Excel matriz original no fue modificado.\n"
                                f"Capturas en:\n{dest_dir}\n\n{info['msg']}")
-                    _ui(lambda: messagebox.showinfo("Revisión Completada", res_msg))
+                    if _fails == 0:
+                        _ui(lambda: messagebox.showinfo(_titulo, res_msg))
+                    else:
+                        _ui(lambda: messagebox.showwarning(_titulo, res_msg))
                 else:
                     _ui(lambda: messagebox.showerror("Error de Ejecución", f"Error en revisión masiva:\n{info}"))
             except Exception as ex:
