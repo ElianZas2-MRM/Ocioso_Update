@@ -4258,7 +4258,7 @@ def iniciar_interfaz():
                 set_event_blocking(root, False)
             except Exception:
                 pass
-        modal.bind("<Destroy>", cleanup_root_binds)
+        modal.bind("<Destroy>", cleanup_root_binds, add="+")
 
         # Custom Title Bar
         title_bar = tk.Frame(modal, bg=MODAL_BG)
@@ -4465,6 +4465,7 @@ def iniciar_interfaz():
                 _ui(lambda: messagebox.showerror("Error Crítico", f"Excepción crítica durante la revisión masiva:\n{ex}"))
             finally:
                 _ui(lambda: modal.destroy() if modal.winfo_exists() else None)
+                _ui(_reset_masivo_btn)
 
         threading.Thread(target=worker, daemon=True).start()
 
