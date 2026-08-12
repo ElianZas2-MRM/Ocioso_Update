@@ -37,20 +37,27 @@ class MassiveFormFiller(GenericCountryBase):
         self.config["solo_verificar_visual"] = True
         self.config["no_enviar_lead"] = True
 
-    def setup_directories_and_files(self, custom_dir=None):
-        """Sobrescribir para guardar las capturas en la subcarpeta resultados/resultado_urlsinsertas/Capturas"""
+    def setup_directories_and_files(self, custom_dir=None, crear=True):
+        """Sobrescribir para guardar las capturas en la subcarpeta resultados/resultado_urlsinsertas/Capturas.
+
+        crear=False (revisión sin capturas) deja la ruta calculada pero no crea la carpeta:
+        así una corrida sin capturas deja únicamente el Excel de resultados.
+        """
         if custom_dir:
             self.SCREENSHOT_DIR = os.path.normpath(custom_dir)
         else:
             self.SCREENSHOT_DIR = os.path.normpath(os.path.join(self.BASE_DIR, "resultados", "resultado_urlsinsertas", "Capturas"))
-        os.makedirs(self.SCREENSHOT_DIR, exist_ok=True)
+        if crear:
+            os.makedirs(self.SCREENSHOT_DIR, exist_ok=True)
         self.RUN_NUMBER = 1
         return 1
 
     def fill_minimum_fields_massive(self):
         """
-        Completa al menos un campo de texto (Nombre/Apellido) con caracteres aleatorios (mínimo 4)
-        y un dropdown (Select o personalizado) seleccionando una opción aleatoria no placeholder.
+        Detecta si al menos un campo del formulario es visible (input de texto, select,
+        o elemento con id conocido). Si lo encuentra → PASS.  Además intenta rellenar
+        campos de texto y dropdowns para la captura, pero el resultado depende solo de
+        haber *detectado* al menos un campo visible, no de haber rellenado todos.
         """
         import random
         nombres_db = ["Carlos", "Daniel", "Mariana", "Alejandro", "Sofia", "Mateo", "Camila", "Nicolas", "Valentina", "Sebastian"]
@@ -66,7 +73,56 @@ class MassiveFormFiller(GenericCountryBase):
         while len(last_val) < 4:
             last_val = " ".join(random.choices(apellidos_db, k=random.randint(1, 2)))
 
-        # 1. Rellenar Campo de Texto (Nombre o Apellido)
+        # ── 0. Detección rápida: ¿hay al menos UN campo de formulario visible? ──
+        # IDs conocidos de los forms GM (cualquier país): basta con que uno esté visible.
+        _KNOWN_FIELD_IDS = [
+            "firstname", "lastname", "name", "first_name", "last_name",
+            "model", "models", "region", "city", "dealer",
+            "email", "phone", "document", "patent",
+            "estimated-day", "estimated-mileage",
+        ]
+        found_any_visible_field = False
+
+        # Buscar por IDs conocidos
+        for fid in _KNOWN_FIELD_IDS:
+            try:
+                el = self.driver.find_element(By.ID, fid)
+                if el.is_displayed():
+                    found_any_visible_field = True
+                    break
+            except Exception:
+                pass
+
+        # Si no encontró por ID, buscar cualquier input visible de tipo texto/email/tel
+        if not found_any_visible_field:
+            try:
+                for inp in self.driver.find_elements(By.TAG_NAME, "input"):
+                    try:
+                        if not inp.is_displayed():
+                            continue
+                        itype = str(inp.get_attribute("type") or "").lower()
+                        if itype in ["text", "", "email", "tel"]:
+                            found_any_visible_field = True
+                            break
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # Si tampoco, buscar cualquier <select> visible
+        if not found_any_visible_field:
+            try:
+                for sel in self.driver.find_elements(By.TAG_NAME, "select"):
+                    try:
+                        if sel.is_displayed():
+                            found_any_visible_field = True
+                            break
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # ── 1. Rellenar Campo de Texto (Nombre o Apellido) ──
         inputs = self.driver.find_elements(By.TAG_NAME, "input")
         name_inputs = []
         lastname_inputs = []
@@ -132,7 +188,7 @@ class MassiveFormFiller(GenericCountryBase):
             except Exception:
                 pass
 
-        # 2. Seleccionar Dropdown (Select o custom)
+        # ── 2. Seleccionar Dropdown (Select o custom) ──
         selects = self.driver.find_elements(By.TAG_NAME, "select")
         filled_dropdown = False
         
@@ -183,7 +239,9 @@ class MassiveFormFiller(GenericCountryBase):
                         pass
             except Exception as e:
                 print(f"Error custom dropdown fallback: {e}")
-        return (filled_text and filled_dropdown)
+
+        # PASS si se detectó al menos un campo visible del formulario
+        return found_any_visible_field
 
     _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -415,7 +473,7 @@ class MassiveFormFiller(GenericCountryBase):
             self.wait_for_form_ready_in_iframe()
             if getattr(self, "stop_event", None) and self.stop_event.is_set():
                 raise Exception("Cancelado por el usuario")
-            # Ejecutar rellenado mínimo personalizado (dos campos interactivos)
+            # Detectar si al menos un campo del form es visible
             fill_success = self.fill_minimum_fields_massive()
             if fill_success:
                 displayed_str = "✅ PASS"
@@ -445,7 +503,7 @@ class MassiveFormFiller(GenericCountryBase):
 
         return {
             "ok": True if fill_success else False,
-            "error": "" if fill_success else "No se pudo rellenar los dos campos interactivos (nombre y dropdown)",
+            "error": "" if fill_success else "No se detectó ningún campo visible del formulario",
             "current_url": self.driver.current_url,
             "landing_status": landing_status_str,
             "iframe_correct": iframe_correct_str,
@@ -594,8 +652,17 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     import time
     start_time = time.time()
 
-    # 1. Carpeta destino (capturas y respaldos)
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # 1. Carpeta destino (Excel de resultados y capturas).
+    # Se usa utils.paths.BASE_DIR porque en el portable (PyInstaller) __file__ apunta al
+    # temporal _MEIPASS: sin esto el Excel terminaba en una carpeta temporal aleatoria en
+    # vez de resultados/resultado_urlsinsertas/ al lado del .exe.
+    try:
+        from utils.paths import BASE_DIR as base_dir
+    except ImportError:
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dest_dir = os.path.join(base_dir, "resultados", "resultado_urlsinsertas")
     os.makedirs(dest_dir, exist_ok=True)
 
@@ -860,7 +927,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                         progress_callback(country_name, "Abriendo navegador...", 0)
                     filler = MassiveFormFiller(country_name, browser=browser, headless=headless, background=True)
                     filler.stop_event = stop_event
-                    filler.setup_directories_and_files(custom_dir=plan["capturas_dir"])
+                    filler.setup_directories_and_files(custom_dir=plan["capturas_dir"], crear=tomar_capturas)
                     filler.initialize_browser()
                     if not tomar_capturas:
                         filler.screenshot_manager = None
