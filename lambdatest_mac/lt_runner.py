@@ -382,6 +382,26 @@ _HEADER_TO_IDS = {
     "email":    ["email"],
     "correo":   ["email"],
     "modelo":   ["models", "model"],
+    # Campos de elección: el Excel que genera 'Generar Excels' trae varias columnas
+    # equivalentes ("Fecha estimada", "Fecha estimada de compra", "Fecha de compra") y el
+    # id real del form cambia según la versión (estimated-date-purchase / estimated-day).
+    # Sin estos alias, el valor cargado a mano en la columna "de más" se ignoraba y el
+    # campo terminaba sorteado.
+    "fecha estimada":            ["estimated-date-purchase", "estimated-day", "estimated-date"],
+    "fecha estimada de compra":  ["estimated-date-purchase", "estimated-day", "estimated-date"],
+    "fecha de compra":           ["estimated-date-purchase", "estimated-day", "estimated-date"],
+    "región":                    ["region", "state"],
+    "region":                    ["region", "state"],
+    "ciudad":                    ["city"],
+    "concesionario":             ["dealer"],
+    "evento":                    ["event", "event-name"],
+    "tipo de documento":         ["document-type"],
+    "tipo de documento (perú)":  ["document-type"],
+    "color":                     ["color"],
+    "kit":                       ["kit"],
+    "seguro":                    ["insurance"],
+    "versión":                   ["version"],
+    "version":                   ["version"],
 }
 
 
@@ -1175,7 +1195,7 @@ def _wait_for_dropdown_options(driver, select_id: str,
     return False
 
 
-_SELECT_JS = """
+_SELECT_JS = r"""
 var id=arguments[0], val=arguments[1], isEmpty=arguments[2];
 var el=document.getElementById(id);
 if(!el)return{ok:false,r:'notfound'};
@@ -1190,20 +1210,27 @@ var opts=Array.from(el.options).filter(function(o){
     return o.value&&o.value!=='0'&&!o.disabled&&o.text&&o.text.trim()!==''&&!bad.test(o.text.trim());
 });
 if(!opts.length)return{ok:false,r:'noopts'};
+// Normalizar ambos lados antes de comparar: los forms escriben las opciones con &nbsp;
+// y acentos ("1 mes", "Más de 6 meses") y el Excel con espacios normales, asi que la
+// comparacion cruda fallaba y caia al random, pisando lo que pidio el usuario.
+var norm=function(s){return String(s||'').replace(/ /g,' ').normalize('NFD')
+    .replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();};
 var target=null;
 if(!isEmpty&&val){
-    var vl=val.toLowerCase().trim();
-    for(var i=0;i<opts.length;i++){if(opts[i].text.toLowerCase().trim()===vl){target=opts[i];break;}}
-    if(!target)for(var i=0;i<opts.length;i++){if(opts[i].text.toLowerCase().indexOf(vl)>=0){target=opts[i];break;}}
-    if(!target)for(var i=0;i<opts.length;i++){if(vl.indexOf(opts[i].text.toLowerCase().trim())>=0){target=opts[i];break;}}
+    var vl=norm(val);
+    for(var i=0;i<opts.length;i++){if(norm(opts[i].text)===vl){target=opts[i];break;}}
+    if(!target)for(var i=0;i<opts.length;i++){if(norm(opts[i].text).indexOf(vl)>=0){target=opts[i];break;}}
+    if(!target)for(var i=0;i<opts.length;i++){var ot=norm(opts[i].text);if(ot&&vl.indexOf(ot)>=0){target=opts[i];break;}}
+    if(!target)for(var i=0;i<opts.length;i++){if(norm(opts[i].value)===vl){target=opts[i];break;}}
 }
+var matched=!!target;
 if(!target)target=opts[Math.floor(Math.random()*opts.length)];
 try{var s=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value');if(s&&s.set)s.set.call(el,target.value);else el.value=target.value;}catch(e){el.value=target.value;}
 el.dispatchEvent(new Event('focus',{bubbles:true}));
 el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));
 el.dispatchEvent(new Event('input',{bubbles:true}));
 el.dispatchEvent(new Event('blur',{bubbles:true}));
-return{ok:true,text:target.text,wasRandom:!arguments[1]||!target};
+return{ok:true,text:target.text,matched:matched,wasRandom:!matched};
 """
 
 def _scroll_to_bottom_parent_aware(driver, log: Callable = print):
@@ -1303,7 +1330,14 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
                 return False
             if res.get("ok"):
                 txt = res.get("text", value or "?")
-                log(f"  {'🎲' if is_empty else '✓'} {field_name} = '{txt}'")
+                if not is_empty and not res.get("matched"):
+                    # El Excel pidió un valor concreto y el dropdown no lo tiene: se eligió
+                    # uno al azar. Se avisa acá además de quedar en "Datos vs Excel", para
+                    # que se vea en el log por qué el resultado no coincide con lo pedido.
+                    log(f"  ⚠ {field_name}: el Excel pide '{value}' pero el dropdown no "
+                        f"ofrece esa opción → quedó '{txt}' (aleatorio)")
+                else:
+                    log(f"  {'🎲' if is_empty else '✓'} {field_name} = '{txt}'")
                 if _out is not None:
                     _out.append(txt)
                 return True
@@ -1318,6 +1352,127 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
 # ══════════════════════════════════════════════════════════════════════════════
 # LLENADO DE CAMPOS (lógica de Osocio + JS text input)
 # ══════════════════════════════════════════════════════════════════════════════
+
+_RADIO_GROUP_JS = r"""
+// Busca el grupo de radios de un campo del mapping (por name o por id/prefijo de id) y
+// selecciona la opción que pidió el Excel. Los forms 2.0 dibujan 'Fecha estimada'
+// (estimated-date-purchase) como radios, no como <select>: sin esto el campo no se
+// resolvía, se salteaba, y después _mark_preferred_radios elegía la primera opción.
+var ids = arguments[0], val = arguments[1];
+var norm = function (s) {
+    return String(s || '').replace(/ /g, ' ').normalize('NFD')
+        .replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+};
+var vis = function (e) {
+    return e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+};
+
+var radios = [], seen = [];
+for (var n = 0; n < ids.length; n++) {
+    var nm = ids[n];
+    if (!nm) continue;
+    var sel = 'input[type="radio"][name="' + nm + '"],'
+            + 'input[type="radio"][id="' + nm + '"],'
+            + 'input[type="radio"][id^="' + nm + '-"]';
+    var found;
+    try { found = document.querySelectorAll(sel); } catch (e) { continue; }
+    for (var k = 0; k < found.length; k++) {
+        if (seen.indexOf(found[k]) < 0) { seen.push(found[k]); radios.push(found[k]); }
+    }
+}
+radios = radios.filter(vis);
+if (!radios.length) return {r: 'noradios'};
+
+// Texto asociado a cada radio: value, title, aria-label y el label que lo describe.
+var labelOf = function (r) {
+    var out = [r.value, r.getAttribute('title'), r.getAttribute('aria-label'),
+              r.getAttribute('data-dtm')];
+    if (r.id) {
+        var lb = document.querySelector('label[for="' + r.id + '"]');
+        if (lb) out.push(lb.textContent);
+    }
+    var anc = r.closest ? r.closest('label') : null;
+    if (anc) out.push(anc.textContent);
+    return out.filter(function (t) { return t; }).map(norm);
+};
+
+var target = null, matched = false;
+if (val) {
+    var vl = norm(val);
+    for (var i = 0; i < radios.length && !target; i++) {
+        var c = labelOf(radios[i]);
+        for (var j = 0; j < c.length; j++) { if (c[j] === vl) { target = radios[i]; break; } }
+    }
+    if (!target) {
+        for (var i = 0; i < radios.length && !target; i++) {
+            var c = labelOf(radios[i]);
+            for (var j = 0; j < c.length; j++) {
+                if (c[j].indexOf(vl) >= 0 || (c[j] && vl.indexOf(c[j]) >= 0)) { target = radios[i]; break; }
+            }
+        }
+    }
+    matched = !!target;
+}
+// Sin valor en el Excel: respetar lo que el form ya tenga marcado antes de tocar nada.
+if (!target) {
+    for (var i = 0; i < radios.length; i++) { if (radios[i].checked) { target = radios[i]; break; } }
+    if (target) {
+        var pre = labelOf(target);
+        return {r: 'ok', ok: true, matched: false, kept: true, text: pre.length ? pre[0] : (target.value || '')};
+    }
+}
+if (!target) {
+    var enabled = radios.filter(function (r) { return !r.disabled; });
+    if (!enabled.length) return {r: 'nonenabled'};
+    target = enabled[Math.floor(Math.random() * enabled.length)];
+}
+
+target.scrollIntoView({block: 'center', behavior: 'instant'});
+target.removeAttribute('disabled'); target.disabled = false;
+try { target.click(); } catch (e) { target.checked = true; }
+if (!target.checked) target.checked = true;
+target.dispatchEvent(new Event('change', {bubbles: true}));
+target.dispatchEvent(new Event('input', {bubbles: true}));
+target.dispatchEvent(new Event('blur', {bubbles: true}));
+var lbls = labelOf(target);
+return {r: 'ok', ok: true, matched: matched, kept: false,
+        text: target.getAttribute('title') || target.value || (lbls.length ? lbls[0] : '')};
+"""
+
+
+def _select_radio_group(driver, ids: List[str], value: str, field_name: str,
+                        log: Callable = print):
+    """Completa un campo del mapping que el form renderiza como radio group.
+
+    Devuelve None si no hay radios para ese campo (el flujo sigue con select/input),
+    o (ok: bool, texto_elegido: str). Respeta SIEMPRE el valor del Excel: sólo sortea
+    cuando la columna viene vacía y el form no trae nada marcado.
+    """
+    try:
+        res = driver.execute_script(_RADIO_GROUP_JS, [str(i) for i in ids if i], value or "")
+    except Exception as e:
+        log(f"  ✗ Error en radios de '{field_name}': {e}")
+        return None
+    if not res or res.get("r") == "noradios":
+        return None
+    if res.get("r") == "nonenabled":
+        log(f"  ⚠ {field_name}: radios presentes pero todos deshabilitados")
+        return (False, "")
+
+    # El title del radio trae &nbsp; ("3\xa0meses"): se normaliza a espacio común para que
+    # el Excel de resultados muestre el texto tal cual lo escribiría el usuario.
+    txt = " ".join((res.get("text") or "").replace("\xa0", " ").split())
+    if res.get("kept"):
+        log(f"  ✓ {field_name} (radio) ya venía marcado: '{txt}' — se conserva")
+    elif value and not res.get("matched"):
+        log(f"  ⚠ {field_name}: el Excel pide '{value}' pero ningún radio coincide "
+            f"→ quedó '{txt}' (aleatorio)")
+    elif value:
+        log(f"  ✓ {field_name} (radio) = '{txt}' (pedido en el Excel)")
+    else:
+        log(f"  🎲 {field_name} (radio) = '{txt}'")
+    return (True, txt)
+
 
 def _get_field_mapping_for_pais(pais: str) -> List[Dict]:
     """Carga el field_mapping efectivo de Osocio para el país."""
@@ -1451,10 +1606,29 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
             except Exception:
                 resolved = None
 
+        value = _get_value(fname, fid_raw)
+
+        # Campo del mapping que el form dibuja como RADIOS en vez de <select> (típico de
+        # 'Fecha estimada' / estimated-date-purchase en los forms 2.0). Se prueba SIEMPRE
+        # antes que la rama select: el id suele resolverse igual al del radio individual
+        # ('estimated-date-purchase-1'), con lo que _select_option fallaba en silencio, el
+        # campo quedaba sin llenar y después _mark_preferred_radios ponía la 1ª opción,
+        # pisando lo que pidió el Excel. Si no hay radios, _select_radio_group devuelve
+        # None y el flujo sigue normalmente por select/input.
+        if ftype == "select":
+            radio_res = _select_radio_group(driver, _ids_batch[i], value, fname, log=log)
+            if radio_res is not None:
+                ok, chosen = radio_res
+                if ok:
+                    tracked[fname] = chosen
+                    for _rid in _ids_batch[i]:
+                        processed.add(_rid)
+                        if cross_processed is not None:
+                            cross_processed.add(_rid)
+                continue
+
         if not resolved or resolved in processed:
             continue
-
-        value = _get_value(fname, fid_raw)
 
         # ── Texto ────────────────────────────────────────────────────────────
         if ftype == "text":
@@ -2062,6 +2236,19 @@ def _choose_radio_option(group: Dict) -> Optional[Dict]:
     options = group.get("options", [])
     if not options:
         return None
+    # Si el grupo YA tiene una opción marcada, esa gana: puede venir del valor que el
+    # usuario puso en el Excel (fill_form_fields → _select_radio_group) o del default del
+    # form. Sin este chequeo el grupo se re-marcaba con la preferida/primera y la fecha
+    # estimada pedida en el Excel terminaba reemplazada por otra.
+    for opt in options:
+        try:
+            el = opt.get("element")
+            if el is not None and el.is_selected():
+                return opt
+        except StaleElementReferenceException:
+            continue
+        except Exception:
+            continue
     prefer = {"si", "sí", "yes", "renovar", "acepto", "acepta", "1", "true", "on"}
     for opt in options:
         if (opt.get("value") or "").lower() in prefer:
@@ -2488,7 +2675,16 @@ for (var i = 0; i < els.length; i++) {
     } else if (type === "checkbox" || type === "radio") {
         if (!e.checked) continue;
         value = e.value || "on";
-        text  = value;
+        // El 'value' de un radio suele ser un código ("1", "3m"). Lo legible —y lo que el
+        // usuario escribe en el Excel— es el title o el texto del label: sin esto el
+        // resultado mostraba el código y "Datos vs Excel" marcaba diferencias falsas.
+        var lbl = e.getAttribute("title") || e.getAttribute("aria-label") || "";
+        if (!lbl && e.id) {
+            var lb = document.querySelector('label[for="' + e.id + '"]');
+            if (lb) lbl = lb.textContent;
+        }
+        if (!lbl && e.closest) { var anc = e.closest("label"); if (anc) lbl = anc.textContent; }
+        text = String(lbl || value).replace(/ /g, " ").replace(/\s+/g, " ").trim();
     } else {
         value = e.value || "";
         text  = value;
@@ -2845,10 +3041,31 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
             if not valid_opts:
                 continue
 
-            if sel_id in ids_dinamicos:
+            chosen = None
+            from_excel = False
+            # Prioridad 1: valor pedido en el Excel para ese campo. Un select puede quedar
+            # fuera del field_mapping (form nuevo, id distinto) y aun así tener su columna
+            # cargada en el Excel: antes se sorteaba igual y se perdía el dato del usuario.
+            excel_val = _lead_value_for(lead, sel_id, [real_id, sel_id]) if lead else ""
+            if excel_val and not _is_placeholder(excel_val):
+                exp = _norm_cmp(excel_val)
+                chosen = next((o for o in valid_opts if _norm_cmp(o.text) == exp), None)
+                if chosen is None:
+                    chosen = next((o for o in valid_opts
+                                   if exp and exp in _norm_cmp(o.text)), None)
+                if chosen is None:
+                    chosen = next((o for o in valid_opts
+                                   if _norm_cmp(o.get_attribute("value") or "") == exp), None)
+                if chosen is None:
+                    log(f"  ⚠ Select '{sel_id}': el Excel pide '{excel_val}' pero no hay "
+                        f"esa opción → se elige una al azar")
+                else:
+                    from_excel = True
+
+            if chosen is None and sel_id in ids_dinamicos:
                 target_val = ids_dinamicos[sel_id]
-                chosen = next((o for o in valid_opts if o.text.strip() == target_val), None) or random.choice(valid_opts)
-            else:
+                chosen = next((o for o in valid_opts if o.text.strip() == target_val), None)
+            if chosen is None:
                 chosen = random.choice(valid_opts)
 
             opt_val  = chosen.get_attribute("value") or chosen.text.strip()
@@ -2872,7 +3089,8 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
                 sel_el, opt_val
             )
             time.sleep(0.1)
-            log(f"  🎲 Select no mapeado '{sel_id}' → '{opt_text}'")
+            log(f"  {'✓' if from_excel else '🎲'} Select no mapeado '{sel_id}' → '{opt_text}'"
+                f"{' (pedido en el Excel)' if from_excel else ''}")
             # Registrar el random elegido: si no queda trackeado, el Excel de resultados
             # no muestra qué se envió realmente en ese campo.
             if isinstance(tracked, dict):
