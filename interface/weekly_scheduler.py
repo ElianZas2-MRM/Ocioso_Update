@@ -989,20 +989,24 @@ class WeeklySchedulerPanel(Frame):
         self._stop_event.clear()
         root = self._root or self.winfo_toplevel()
         root.after(0, lambda: self.set_status("running"))
+        # El estado se restaura SIEMPRE en el finally. Antes, detenerse a mitad salía por un
+        # return temprano y un error salía por el except sin volver a tocar el estado, así que
+        # la tarjeta quedaba clavada en "running" — con sólo el botón Detener— y no se podía
+        # lanzar otra corrida (p. ej. la Revisión Masiva de otros mercados) sin reiniciar la app.
         try:
             resultados = self._execute_cb(self._config, self._stop_event)
             if self._stop_event.is_set():
                 print("⛔ Ejecución detenida por el usuario.")
-                return
-            if resultados and self._send_email_cb:
+            elif resultados and self._send_email_cb:
                 try:
                     self._send_email_cb(resultados)
                 except Exception as e:
                     print(f"❌ Error enviando email consolidado: {e}")
         except Exception as e:
             print(f"❌ Error durante ejecución programada: {e}")
-        if not self._stop_event.is_set():
-            root.after(0, lambda: self.set_status("completed"))
+        finally:
+            estado = "stopped" if self._stop_event.is_set() else "completed"
+            root.after(0, lambda: self.set_status(estado))
 
     # ── Triggered persistence ──────────────────────────────────────────────────
 
