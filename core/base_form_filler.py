@@ -1195,6 +1195,16 @@ class BaseFormFiller:
             if data_index is not None and data_index < len(form_data):
                 val = form_data[data_index]
 
+        # El mapping resuelve por id/posición. Si esa columna vino vacía pero el Excel trae
+        # una columna equivalente cargada a mano (p. ej. "Fecha estimada de compra" en vez
+        # de "Fecha estimada"), se usa igual: lo que el usuario escribió manda siempre.
+        if (val is None or not str(val).strip()) and isinstance(form_data, dict):
+            fid = field_config.get("__resolved_id") or field_config.get("id")
+            fids = fid if isinstance(fid, list) else [fid]
+            alt = self._excel_value_for_field_id(*fids, form_data=form_data)
+            if alt:
+                val = alt
+
         return self._normalize_resolved_value(val, field_config)
 
     def setup_directories_and_files(self):
@@ -3174,6 +3184,9 @@ class BaseFormFiller:
         Útil para formularios multi-paso: no toma screenshots ni marca términos.
         """
         mapping = field_mapping or self.field_mapping or []
+        # Que el auto-relleno de no mapeados pueda consultar lo pedido en el Excel también
+        # cuando se entra por este camino (forms multi-paso).
+        self._current_form_data = form_data or {}
 
         resolved_field_configs = []
         for field_config in mapping:
@@ -4116,8 +4129,51 @@ class BaseFormFiller:
             element, value,
         )
 
+    # Columnas del Excel que corresponden a campos de elección cuyo <select> puede quedar
+    # FUERA del field_mapping (el id real cambia según la versión del form). Sin esto, un
+    # valor que el usuario cargó a mano en el Excel se ignoraba y el campo se sorteaba.
+    _ID_TO_EXCEL_HEADERS = {
+        "estimated-date-purchase": ["fecha estimada", "fecha estimada de compra", "fecha de compra"],
+        "estimated-day":           ["fecha estimada", "fecha estimada de compra", "fecha de compra"],
+        "estimated-date":          ["fecha estimada", "fecha estimada de compra", "fecha de compra"],
+        "region":        ["region", "región"],
+        "state":         ["region", "región"],
+        "city":          ["ciudad"],
+        "dealer":        ["concesionario"],
+        "event":         ["evento"],
+        "event-name":    ["evento"],
+        "document-type": ["tipo de documento", "tipo de documento (perú)"],
+        "models":        ["modelo"],
+        "model":         ["modelo"],
+        "color":         ["color"],
+        "kit":           ["kit"],
+        "insurance":     ["seguro"],
+        "version":       ["version", "versión"],
+    }
+
+    def _excel_value_for_field_id(self, *field_ids, form_data=None):
+        """Valor que el Excel pide para un id HTML, buscando por NOMBRE de columna.
+        Sirve tanto para campos fuera del mapping como para cuando la columna que el
+        mapping resuelve por posición vino vacía pero hay una columna equivalente cargada."""
+        if form_data is None:
+            form_data = getattr(self, "_current_form_data", {}) or {}
+        if not isinstance(form_data, dict):
+            return ""
+        norm_data = {self._normalize_text(k): v
+                     for k, v in form_data.items() if isinstance(k, str)}
+        for fid in field_ids:
+            fid_n = str(fid or "").strip().lower()
+            if not fid_n:
+                continue
+            for header in self._ID_TO_EXCEL_HEADERS.get(fid_n, []) + [fid_n]:
+                val = norm_data.get(self._normalize_text(header), "")
+                if val is not None and str(val).strip() and str(val).strip().lower() != "none":
+                    return str(val).strip()
+        return ""
+
     def _auto_fill_unmapped_dropdowns(self, field_mapping=None):
-        """Completa campos no mapeados: selects aleatorios y valores fijos para IDs dinámicos."""
+        """Completa campos no mapeados: respeta lo pedido en el Excel, después IDs
+        dinámicos, y sólo sortea cuando no hay ningún valor pedido."""
         mapped_ids = self._get_mapped_select_ids(field_mapping)
         # Ids ya llenados/registrados por el mapping en ESTA fila. Cubre el caso en que el
         # id real del form difiere del de la config (ej. 'estimated-day' vs
@@ -4183,8 +4239,31 @@ class BaseFormFiller:
                     print(f"⚠️ Select '{select_id}': sin opciones seleccionables, se omite")
                     continue
 
-                # Usar valor fijo si el ID está en IDs dinámicos
-                if select_id in ids_dinamicos:
+                chosen_option = None
+                from_excel = False
+
+                # Prioridad 1: lo que pidió el usuario en el Excel. Manda siempre sobre el
+                # random y sobre los IDs dinámicos.
+                excel_val = self._excel_value_for_field_id(elem_real_id, select_id)
+                if excel_val and not self._is_placeholder_text(excel_val):
+                    exp = self._normalize_text(excel_val)
+                    chosen_option = next(
+                        (o for o in valid_options if self._normalize_text(o.text) == exp), None)
+                    if chosen_option is None:
+                        chosen_option = next(
+                            (o for o in valid_options if exp and exp in self._normalize_text(o.text)), None)
+                    if chosen_option is None:
+                        chosen_option = next(
+                            (o for o in valid_options
+                             if self._normalize_text(o.get_attribute("value") or "") == exp), None)
+                    if chosen_option is None:
+                        print(f"⚠️ Select '{select_id}': el Excel pide '{excel_val}' pero el "
+                              f"dropdown no ofrece esa opción → se elige una al azar")
+                    else:
+                        from_excel = True
+
+                # Prioridad 2: valor fijo si el ID está en IDs dinámicos
+                if chosen_option is None and select_id in ids_dinamicos:
                     fixed_candidates = self._resolve_dynamic_id_values(ids_dinamicos[select_id])
                     matched_options = []
                     for candidate in fixed_candidates:
@@ -4199,9 +4278,10 @@ class BaseFormFiller:
                         chosen_option, matched_value = random.choice(matched_options)
                         print(f"📌 Select no mapeado '{select_id}' valor fijo: {matched_value}")
                     else:
-                        chosen_option = random.choice(valid_options)
                         print(f"⚠️ '{select_id}': ningún valor dinámico coincide, usando aleatorio")
-                else:
+
+                # Prioridad 3: aleatorio (nadie pidió nada para este campo)
+                if chosen_option is None:
                     chosen_option = random.choice(valid_options)
 
                 option_value = chosen_option.get_attribute("value") or chosen_option.text
@@ -4235,7 +4315,8 @@ class BaseFormFiller:
                     select_element, option_value
                 )
                 time.sleep(0.3)
-                print(f"🎲 Select no mapeado '{select_id}' → '{option_text}'")
+                print(f"{'✓' if from_excel else '🎲'} Select no mapeado '{select_id}' → "
+                      f"'{option_text}'{' (pedido en el Excel)' if from_excel else ''}")
                 self._record_field_value(select_id, option_text)
                 filled_any = True
             except Exception as e:
