@@ -28,6 +28,7 @@ from tkinter import (
 from core.browser_manager import BrowserManager
 from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
+    MODEL_FIELD_ID_ALIASES,
     StopRequested,
     _locate_form_iframe,
     advance_to_selects,
@@ -46,6 +47,7 @@ from core.dealer_comparator_runner import (
     open_target,
     read_excel_rows,
     resolve_column,
+    resolve_model_field_id,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -644,19 +646,20 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     # ── 4b. Modelos (3ra columna del bloque A: Navegador · URLs · Modelos) ──────
     models_card = card("🚗 MODELOS", parent=blockA, side="left", expand=True, subtitle_wrap=200)
-    mini_guide(models_card, "Opcional: si el form tiene selector de Modelo (id \"models\").")
+    mini_guide(models_card, "Opcional: si el form tiene selector de Modelo (id \"models\" o \"model\").")
     has_models_var = BooleanVar(value=False)
     models_toggle_row = Frame(models_card, bg=CARD_BG)
     models_toggle_row.pack(fill="x", padx=15, pady=(0, 4))
     models_toggle_btn, _models_refresh = make_toggle_pill(models_toggle_row, "🚗  Tiene selector de Modelo", has_models_var)
-    Label(models_card, text="⚠ Solo forms T1 (id \"models\" estándar). T2/T3 con selector distinto no soportados aún.",
+    Label(models_card, text="⚠ Detecta el selector con id \"models\" o \"model\". Otros ids no soportados aún.",
           font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=320,
           justify="left").pack(anchor="w", padx=15, pady=(0, 4))
 
     models_body = Frame(models_card, bg=CARD_BG)
     models_body.pack(fill="x", padx=15, pady=(0, 6))
 
-    # ID del campo fijo (no editable): todos los forms de este proyecto usan "models".
+    # ID del campo fijo (no editable): se prueba "models" y, si no existe, "model"
+    # (ver MODEL_FIELD_ID_ALIASES en dealer_comparator_runner).
     models_field_id_var = StringVar(value="models")
 
     models_mode_var = StringVar(value="all")
@@ -1484,9 +1487,21 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
                 model_field_id = None
                 models_to_run = None
+                # Si el usuario marcó que el form TIENE selector de Modelo y no aparece con
+                # ninguno de los ids conocidos, el form no se compara: se reporta FAIL. Sin
+                # esto la corrida seguía sin filtrar por modelo y el reporte parecía válido.
+                model_missing_msg = None
                 if has_models_var.get():
-                    model_field_id = models_field_id_var.get().strip() or "models"
-                    if models_mode_var.get() == "specific":
+                    model_field_id = resolve_model_field_id(
+                        driver, models_field_id_var.get().strip() or "models")
+                    if model_field_id is None:
+                        model_missing_msg = (
+                            "Selector de Modelo no encontrado en el form (se buscaron los ids "
+                            + " / ".join(f'"{alias}"' for alias in MODEL_FIELD_ID_ALIASES)
+                            + "). Marcaste que este form tiene selector de Modelo, así que no "
+                              "se comparó ninguna fila."
+                        )
+                    elif models_mode_var.get() == "specific":
                         models_to_run = [m.strip() for m in models_list_var.get().split(",") if m.strip()]
                         if not models_to_run:
                             ui_log("No ingresaste ningún modelo específico, se omite el filtro por modelo.", "warn")
@@ -1500,17 +1515,27 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
                     _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total}: {label_txt}")
 
-                pair_results = compare_dealers(
-                    driver, filtered_rows, column_map,
-                    level_ids=DEFAULT_SELECT_IDS,
-                    has_region=has_region_var.get(), has_city=has_city_var.get(),
-                    has_dealer=has_dealer_var.get(),
-                    chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
-                    model_field_id=model_field_id, models=models_to_run,
-                    log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
-                    screenshot_cb=None,
-                    expect_absent=expect_absent,
-                )
+                if model_missing_msg:
+                    ui_log(model_missing_msg, "warn")
+                    pair_results = [{
+                        "status": "FAIL",
+                        "region": "",
+                        "city": "",
+                        "dealer": "",
+                        "fails": [model_missing_msg],
+                    }]
+                else:
+                    pair_results = compare_dealers(
+                        driver, filtered_rows, column_map,
+                        level_ids=DEFAULT_SELECT_IDS,
+                        has_region=has_region_var.get(), has_city=has_city_var.get(),
+                        has_dealer=has_dealer_var.get(),
+                        chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
+                        model_field_id=model_field_id, models=models_to_run,
+                        log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
+                        screenshot_cb=None,
+                        expect_absent=expect_absent,
+                    )
                 _hidden_filas = state.get("hidden_rows") or {}
                 for r in pair_results:
                     r["url_form"] = form_url
@@ -1525,7 +1550,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                             f"⚠ La fila del Excel está {'FILTRADA (AutoFilter)' if _tipo == 'filtrada' else 'OCULTA (a mano)'}"
                         )
 
-                if _should_find_extras() and not expect_absent:
+                if _should_find_extras() and not expect_absent and not model_missing_msg:
                     ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
                     extras = find_extra_dealers(
                         driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
@@ -1563,7 +1588,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
 
                 # --- FASE 2 (opcional): capturas — mismo form, misma carpeta que el Excel ---
-                if output_mode == "caps" and not state["stop_event"].is_set():
+                if output_mode == "caps" and not state["stop_event"].is_set() and not model_missing_msg:
                     ui_log(f"Generando capturas para Form {pair_idx}/{total_pairs}...", "info")
                     open_target(driver, current_url_mode, landing_url, form_url)
                     if pair_idx == 1 and _pausar_auth:

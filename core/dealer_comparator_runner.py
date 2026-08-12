@@ -35,6 +35,10 @@ except Exception:
 
 DEFAULT_SELECT_IDS = {"region": "region", "city": "city", "dealer": "dealer"}
 
+# El <select> de modelos aparece con el id en plural o en singular segun el form.
+# Se prueba el id pedido primero y luego el resto como fallback.
+MODEL_FIELD_ID_ALIASES = ("models", "model")
+
 _PASS_FILL = PatternFill(fill_type="solid", fgColor="00C6EFCE")
 _FAIL_FILL = PatternFill(fill_type="solid", fgColor="00FFC7CE")
 _EXTRA_FILL = PatternFill(fill_type="solid", fgColor="00FFEB9C")
@@ -480,17 +484,38 @@ def _read_form_field_value(driver, field_id):
         return None
 
 
+def resolve_model_field_id(driver, field_id=None):
+    """Devuelve el id real del <select> de modelos en el form actual, tolerando la variante
+    singular/plural ("models" / "model"): prueba el id pedido y luego los alias conocidos.
+    Devuelve None si ninguna variante existe — ahí no hay selector de modelo que usar."""
+    candidates = [field_id] if field_id else []
+    candidates += [alias for alias in MODEL_FIELD_ID_ALIASES if alias != field_id]
+    for idx, candidate in enumerate(candidates):
+        # El primer candidato es el esperado y merece la espera normal; los alias son
+        # sólo una variante de nombre y se prueban con timeout corto para no encadenar
+        # esperas largas cuando el form directamente no tiene selector de modelo.
+        if _get_select(driver, candidate, timeout=10 if idx == 0 else 2) is not None:
+            return candidate
+    return None
+
+
+def _get_model_select(driver, field_id):
+    """Resuelve el <select> de modelos por id o alias. None si no está en el form."""
+    resolved = resolve_model_field_id(driver, field_id)
+    return _get_select(driver, resolved, timeout=2) if resolved else None
+
+
 def list_model_options(driver, field_id):
     """Devuelve los textos de todas las opciones válidas (no placeholder) del <select> de
     modelos, tal como están hoy en el form real. Usado para el modo 'Todos los modelos'."""
-    el = _get_select(driver, field_id)
+    el = _get_model_select(driver, field_id)
     if el is None:
         return []
     return [o.text.strip() for o in _valid_options(el) if not _is_placeholder(o.text)]
 
 
 def _select_model(driver, field_id, model_text):
-    el = _get_select(driver, field_id)
+    el = _get_model_select(driver, field_id)
     if el is None:
         return False
     opt, _disclaimer = _find_option_by_text(el, model_text)
