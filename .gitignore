@@ -59,3 +59,6 @@ Diagnostico_LambdaTest_resultado.txt
 # Excels de trabajo local (matriz de forms y datos de prueba) - no versionar
 data/GM Forms*.xls*
 data/FormsBolivia_TDP_test_data.xlsx
+
+# Indice generado por CodeGraph (base SQLite + estado del daemon) - se regenera solo
+.codegraph/
