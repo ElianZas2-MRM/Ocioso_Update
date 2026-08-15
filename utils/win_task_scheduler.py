@@ -25,16 +25,23 @@ def _project_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _launch_command():
-    """Comando que ejecutará Windows. Entre comillas: las rutas llevan espacios."""
+def _launch_command(abrir_app=False):
+    """Comando que ejecutará Windows. Entre comillas: las rutas llevan espacios.
+
+    abrir_app=False → ejecución silenciosa (`--autonomous --once`): no se abre nada,
+                      el envío corre en segundo plano.
+    abrir_app=True  → se abre la app y ella misma dispara el envío programado
+                      (`--autostart-leads`), aunque estuviera cerrada.
+    """
+    modo = "--autostart-leads" if abrir_app else "--autonomous --once"
     if getattr(sys, "frozen", False):
-        return f'"{sys.executable}" --autonomous --once'
-    # pythonw.exe evita la ventana negra de consola en cada disparo.
+        return f'"{sys.executable}" {modo}'
+    # pythonw.exe: sin ventana negra de consola. La ventana de la app (Tk) sí se ve.
     exe = sys.executable
     pythonw = os.path.join(os.path.dirname(exe), "pythonw.exe")
     if os.path.isfile(pythonw):
         exe = pythonw
-    return f'"{exe}" "{os.path.join(_project_root(), "run.py")}" --autonomous --once'
+    return f'"{exe}" "{os.path.join(_project_root(), "run.py")}" {modo}'
 
 
 def task_name_for(hora):
@@ -57,7 +64,7 @@ def _horas_validas(horarios):
     return sorted(out)
 
 
-def registrar(horarios):
+def registrar(horarios, abrir_app=False):
     """Crea (o reemplaza) una tarea diaria por horario.
 
     Devuelve (ok, mensaje). No pide permisos de administrador: las tareas se crean
@@ -70,7 +77,7 @@ def registrar(horarios):
     if not horas:
         return False, "No hay horarios válidos para registrar."
 
-    comando = _launch_command()
+    comando = _launch_command(abrir_app)
     creadas, errores = [], []
     for hora in horas:
         nombre = task_name_for(hora)
