@@ -1784,6 +1784,72 @@ class BaseFormFiller:
         from utils import aem_fill
         return aem_fill.is_aem_adaptive_form(self.driver)
 
+    # Sufijo del data-path cuando el guideContainer ya muestra la Thank You page.
+    _AEM_TY_SUFFIX = ".guideThankYouPage.html"
+
+    def _aem_guide_data_paths(self):
+        """data-path de los <div id="guideContainer-rootPanel…"> de la página actual."""
+        try:
+            return self.driver.execute_script("""
+                var out = [];
+                var els = document.querySelectorAll("div[id^='guideContainer-rootPanel']");
+                for (var i = 0; i < els.length; i++) {
+                    var p = els[i].getAttribute('data-path');
+                    if (p) { out.push(p); }
+                }
+                return out;
+            """) or []
+        except Exception:
+            return []
+
+    def _aem_form_presente(self):
+        """True si el guideContainer de la página corresponde al content path del Excel."""
+        base = getattr(self, "_aem_content_path", "") or ""
+        if not base:
+            return False
+        return any(str(p).strip().startswith(base) for p in self._aem_guide_data_paths())
+
+    # Texto de confirmación del handraiser de Cadillac Brasil (sin tildes, minúsculas).
+    _AEM_TY_TEXTO = "formulario enviado com sucesso"
+
+    def _aem_ty_presente(self):
+        """True si el form AEM ya mostró su Thank You page.
+
+        Se aceptan tres señales, de la más fuerte a la más específica:
+          1. el navegador quedó en la página de gracias (…/obrigado.html);
+          2. el guideContainer conmutó su data-path a …guideThankYouPage.html;
+          3. el mensaje de confirmación aparece dentro de un bloque .adv-col
+             (es lo que hace hoy Cadillac Brasil: no cambia de URL ni de data-path,
+             reemplaza el form por el bloque de agradecimiento en la misma página).
+        """
+        base = getattr(self, "_aem_content_path", "") or ""
+        if not base:
+            return False
+
+        try:
+            if "/obrigado" in (self.driver.current_url or "").lower():
+                return True
+        except Exception:
+            pass
+
+        objetivo = base + self._AEM_TY_SUFFIX
+        if any(str(p).strip() == objetivo for p in self._aem_guide_data_paths()):
+            return True
+
+        try:
+            return bool(self.driver.execute_script("""
+                var els = document.querySelectorAll("[class*='adv-col']");
+                var buscado = arguments[0];
+                for (var i = 0; i < els.length; i++) {
+                    var t = (els[i].innerText || '').toLowerCase()
+                              .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+                    if (t.indexOf(buscado) !== -1) { return true; }
+                }
+                return false;
+            """, self._AEM_TY_TEXTO))
+        except Exception:
+            return False
+
     def _fill_aem_by_semantic_id(self, form_data):
         """Llena un AEM Adaptive Form delegando en utils.aem_fill (fuente única)."""
         from utils import aem_fill
@@ -5525,6 +5591,15 @@ class BaseFormFiller:
 
             # Verificación positiva: esperar div#thank-you con display:block (dentro del iframe)
             def _ty_visible(d):
+                # AEM por content path (ej. Cadillac Brasil): la TY no es un div nuevo,
+                # el mismo guideContainer cambia su data-path a …guideThankYouPage.html.
+                # Es un chequeo estructural, así que va primero: no depende de textos.
+                if getattr(self, "_aem_content_path", ""):
+                    try:
+                        if self._aem_ty_presente():
+                            return True
+                    except Exception:
+                        pass
                 # Plataforma clásica: div#thank-you display:block
                 try:
                     el = d.find_element(By.CSS_SELECTOR, "div#thank-you")
@@ -5742,8 +5817,18 @@ class BaseFormFiller:
                     landing_url = expected_form_url
                     expected_form_url = ""
 
+                # Formularios AEM identificados por content path (ej. Cadillac Brasil):
+                # la columna "Formulario" no es una URL sino la ruta del componente
+                # (/content/forms/af/...). El form está embebido en la landing, sin
+                # iframe, y se lo reconoce por el atributo data-path del guideContainer.
+                self._aem_content_path = ""
+                if expected_form_url.startswith("/content/"):
+                    self._aem_content_path = expected_form_url.rstrip("/")
+                    print(f"🧩 Formulario AEM por content path: {self._aem_content_path}")
+                    expected_form_url = ""
+
                 use_iframe = bool(expected_form_url)
-                
+
                 form_data = self.extract_form_data(row)
                 result_text = ""
                 form_url_mismatch = False
@@ -5893,6 +5978,18 @@ class BaseFormFiller:
                         print("Columna B vacía: formulario embebido en documento principal (sin iframe)")
                         # Form suelto (sin landing): el RAQ de Brasil igual arranca en la pantalla del CTA
                         self._maybe_click_raq_cta(landing_url)
+
+                    # 2b. AEM por content path: confirmar que el guideContainer de la página
+                    # es el formulario pedido en el Excel antes de llenar nada. Si no está,
+                    # el lead falla con la causa exacta en vez de un error genérico.
+                    if getattr(self, "_aem_content_path", ""):
+                        if self._aem_form_presente():
+                            self._url_form_encontrado = self._aem_content_path
+                            print(f"Formulario AEM correcto en la página (data-path: {self._aem_content_path})")
+                        else:
+                            _paths = self._aem_guide_data_paths()
+                            print(f"Formulario AEM NO encontrado. data-path presentes: {_paths}")
+                            form_url_mismatch = True
 
                     # 3. Esperar a que el formulario esté listo
                     self.wait_for_form_ready_in_iframe()
