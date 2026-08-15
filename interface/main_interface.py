@@ -796,7 +796,10 @@ if os.name == 'nt':
 else:
     SysTrayIcon = None
 
-def iniciar_interfaz():
+def iniciar_interfaz(autostart_leads=False):
+    """autostart_leads: la app se abrió sola desde el Programador de tareas de
+    Windows. Arranca normal y, apenas termina de construirse la UI, dispara el
+    envío de leads programado sin que nadie toque un botón."""
     # AppUserModelID propio: evita que Windows agrupe la app bajo el ícono de python.exe en la barra de tareas
     if os.name == 'nt':
         try:
@@ -1460,6 +1463,10 @@ def iniciar_interfaz():
                 cfg["ui_prefs"]["url_max"] = url_max_var.get()
             if 'var_t3' in globals() or 'var_t3' in locals():
                 cfg["ui_prefs"]["t3"] = bool(var_t3.get())
+            if 'var_t3_also' in globals() or 'var_t3_also' in locals():
+                cfg["ui_prefs"]["t3_also"] = bool(var_t3_also.get())
+            if 'var_win_abrir_app' in globals() or 'var_win_abrir_app' in locals():
+                cfg["ui_prefs"]["win_task_abrir_app"] = bool(var_win_abrir_app.get())
             
             # Email fields (in both root and ui_prefs)
             enviar_mail = bool(var_enviar_email.get())
@@ -1506,11 +1513,39 @@ def iniciar_interfaz():
     var_t3 = tk.BooleanVar(value=bool(_ui_prefs.get("t3", False)))
     t3_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
     t3_row.pack(anchor="w", pady=(2, 0))
-    tk.Checkbutton(t3_row, text="🧩 Formularios T3 2.0 (usa los Excels …_T3)", variable=var_t3,
-                   command=lambda: update_table_data(active_p_tab[0]),
-                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                   activebackground=CARD_BG_COLOR, activeforeground="white",
-                   font=("Segoe UI", 8), cursor="hand2").pack(side="left")
+    cb_t3 = tk.Checkbutton(t3_row, text="🧩 Formularios T3 2.0 (usa los Excels …_T3)", variable=var_t3,
+                           command=lambda: (update_table_data(active_p_tab[0]), _refresh_t3_also_state()),
+                           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                           activebackground=CARD_BG_COLOR, activeforeground="white",
+                           font=("Segoe UI", 8), cursor="hand2")
+    cb_t3.pack(side="left")
+
+    # Correr el mercado normal Y ADEMÁS su formulario T3 2.0 en la misma ejecución:
+    # se agrega una sesión extra por dispositivo usando el Excel …_T3.xlsx, sólo si
+    # ese Excel existe (un mercado sin form T3 simplemente no suma sesiones).
+    var_t3_also = tk.BooleanVar(value=bool(_ui_prefs.get("t3_also", False)))
+    t3_also_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    t3_also_row.pack(anchor="w", pady=(2, 0))
+    cb_t3_also = tk.Checkbutton(t3_also_row, text="➕ Correr también los formularios T3 2.0 (AEM) del mercado",
+                                variable=var_t3_also,
+                                bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                                activebackground=CARD_BG_COLOR, activeforeground="white",
+                                font=("Segoe UI", 8), cursor="hand2")
+    cb_t3_also.pack(side="left")
+    t3_also_hint = tk.Label(t3_also_row, text="", font=("Segoe UI", 8, "italic"),
+                            bg=CARD_BG_COLOR, fg="#C5A9DF")
+    t3_also_hint.pack(side="left", padx=(8, 0))
+
+    def _refresh_t3_also_state(*_):
+        """Con el modo 'sólo T3' activo, 'correr también T3' no tiene sentido: se apaga."""
+        if var_t3.get():
+            var_t3_also.set(False)
+            cb_t3_also.config(state="disabled", cursor="arrow")
+            t3_also_hint.config(text="(ya estás corriendo sólo los Excels …_T3)")
+        else:
+            cb_t3_also.config(state="normal", cursor="hand2")
+            t3_also_hint.config(text="")
+    _refresh_t3_also_state()
 
     def refresh_ver_nav_state():
         # "Ver navegador" sólo aplica a browsers de escritorio (chrome/firefox/edge).
@@ -1522,6 +1557,7 @@ def iniciar_interfaz():
     var_url_parallel.trace_add("write", _save_ui_prefs)
     url_max_var.trace_add("write", _save_ui_prefs)
     var_t3.trace_add("write", _save_ui_prefs)
+    var_t3_also.trace_add("write", _save_ui_prefs)
     var_enviar_email.trace_add("write", _save_ui_prefs)
     var_adjuntar_res.trace_add("write", _save_ui_prefs)
     var_adjuntar_ss.trace_add("write", _save_ui_prefs)
@@ -1833,6 +1869,10 @@ def iniciar_interfaz():
     scheduler_cfg_leads = {"horarios": {}, "paises": [], "dispositivo": "local", "modo_excel": "consecutivo", "navegadores": ["chrome"], "modo_tarea": "leads"}
     scheduler_cfg_masivo = {"horarios": {}, "paises": [], "dispositivo": "local", "modo_excel": "consecutivo", "navegadores": ["chrome"], "modo_tarea": "masivo"}
 
+    # "Correr también los T3" de la programación: es propio del test programado, no
+    # hereda el checkbox de Envío de Leads (esa pestaña es para corridas manuales).
+    var_sched_t3 = tk.BooleanVar(value=False)
+
     _active_sched_subtab = {"current": "semanal"}
     # UI por sub-pestaña: cada una tiene su propia copia de la card de configuración.
     sched_ui = {"semanal": {}, "masivo": {}}
@@ -2024,6 +2064,20 @@ def iniciar_interfaz():
             b.pack(side="left", padx=2)
             sched_mode_btns[sub][val] = b
 
+        # Columna 4: FORMULARIOS T3 2.0 (sólo Envío de Leads programado)
+        if not is_mas:
+            col_t3 = tk.Frame(row, bg=CARD_BG_COLOR)
+            col_t3.pack(side="left", anchor="n", padx=(24, 0))
+            tk.Label(col_t3, text="FORMULARIOS T3 2.0 (AEM)", font=("Segoe UI", 7, "bold"),
+                     bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
+            tk.Checkbutton(col_t3, text="➕ Correr también los T3 del mercado", variable=var_sched_t3,
+                           command=_refresh_prog,
+                           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                           activebackground=CARD_BG_COLOR, activeforeground="white",
+                           font=("Segoe UI", 8), cursor="hand2").pack(anchor="w", pady=(4, 0))
+            tk.Label(col_t3, text="Suma una corrida extra por mercado que tenga Excel …_T3.",
+                     font=("Segoe UI", 7, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w")
+
         # Slot para la fila del Excel Matriz (solo Revisión Masiva; se llena más abajo)
         ui["excel_slot"] = tk.Frame(card, bg=CARD_BG_COLOR)
         if is_mas:
@@ -2089,6 +2143,8 @@ def iniciar_interfaz():
                             BADGE_GREEN, BADGE_GREEN)
             if total > 0:
                 _mk_sched_badge(bframe, f"📅 {dias} día(s) · {total} horario(s)", BADGE_GREEN, BADGE_GREEN)
+            if sub == "semanal" and var_sched_t3.get():
+                _mk_sched_badge(bframe, "🧩 + FORMULARIOS T3", BADGE_AMBER, BADGE_AMBER)
 
             falta = []
             if n_p == 0:
@@ -2179,11 +2235,14 @@ def iniciar_interfaz():
         disp = scheduler_cfg_leads.get("dispositivo", "local")
         navs = scheduler_cfg_leads.get("navegadores", ["chrome"])
         active_p = [p for p, sel in selected_countries.items() if sel]
+        # El ejecutor headless no ve la UI: se persiste si hay que correr también los T3.
+        _t3_also_flag = bool(var_sched_t3.get())
 
         try:
             guardar_programacion({
                 "tipo": "semanal",
                 "modo_tarea": "leads",
+                "t3_also": _t3_also_flag,
                 "horarios": {k: v for k, v in scheduler_cfg_leads.get("horarios", {}).items() if v},
                 "paises": active_p if active_p else list(scheduler_cfg_leads.get("paises", [])),
                 "navegadores": navs,
@@ -2299,6 +2358,7 @@ def iniciar_interfaz():
             scheduler_cfg_leads["dispositivo"] = ex_leads.get("dispositivo", "local")
             scheduler_cfg_leads["modo_excel"] = ex_leads.get("modo_mercados") or ex_leads.get("modo_excel", "consecutivo")
             scheduler_cfg_leads["navegadores"] = ex_leads.get("navegadores", ["chrome"])
+            var_sched_t3.set(bool(ex_leads.get("t3_also", False)))
             prog_state_leads["mode"] = "activado"
     except Exception:
         pass
@@ -2365,6 +2425,100 @@ def iniciar_interfaz():
     # Oculto por defecto, se muestra solo si está activado
     if prog_state_leads["mode"] == "activado":
         btn_sched_deact.pack(side="left", padx=6)
+
+    # ── Programador de tareas de Windows ──────────────────────────────────────
+    # El monitor interno sólo dispara con la app abierta. Estas tareas ejecutan
+    # `run.py --autonomous --once` a la hora indicada aunque Osocio esté cerrado.
+    def _horas_programadas_leads():
+        horas = set()
+        for hs in (scheduler_cfg_leads.get("horarios") or {}).values():
+            horas.update(hs or [])
+        return sorted(horas)
+
+    def _refresh_win_task_lbl():
+        try:
+            from utils.win_task_scheduler import listar
+            tareas = listar()
+        except Exception:
+            tareas = []
+        if tareas:
+            win_task_lbl.config(text=f"🗓 Windows: {len(tareas)} tarea(s) activa(s)", fg=BADGE_GREEN)
+            btn_win_task_del.pack(side="left", padx=6)
+        else:
+            win_task_lbl.config(text="🗓 Windows: sin tareas registradas", fg=TEXT_SECONDARY)
+            btn_win_task_del.pack_forget()
+
+    # Modo de la tarea de Windows: silenciosa (nada visible) o abriendo la app.
+    var_win_abrir_app = tk.BooleanVar(value=bool(_ui_prefs.get("win_task_abrir_app", False)))
+
+    def cmd_registrar_win_task():
+        horas = _horas_programadas_leads()
+        if not horas:
+            messagebox.showwarning("Programador de Windows",
+                                   "Primero configurá los horarios en 'Configurar días y horarios'.")
+            return
+        if prog_state_leads["mode"] != "activado":
+            messagebox.showwarning("Programador de Windows",
+                                   "Primero tocá 'Programar test automático' para guardar la programación.\n\n"
+                                   "Windows lee esa configuración cuando dispara la tarea.")
+            return
+        abrir_app = bool(var_win_abrir_app.get())
+        _modo_txt = ("Se va a ABRIR la app sola a esa hora y va a arrancar el envío"
+                     if abrir_app else
+                     "El envío corre en segundo plano, sin abrir nada (no vas a ver ninguna ventana)")
+        if not messagebox.askyesno(
+                "Programador de Windows",
+                "Se van a crear tareas diarias de Windows en estos horarios:\n\n"
+                + "\n".join("• " + h for h in horas)
+                + f"\n\n{_modo_txt}.\n\nFunciona aunque Osocio esté cerrado "
+                  "(requiere que la sesión de Windows esté iniciada).\n\n¿Continuar?"):
+            return
+        try:
+            from utils.win_task_scheduler import registrar
+            ok, msg = registrar(horas, abrir_app=abrir_app)
+        except Exception as e:
+            ok, msg = False, str(e)
+        log_message(("[SUCCESS] " if ok else "[ERROR] ") + msg.replace("\n", " | "))
+        (messagebox.showinfo if ok else messagebox.showerror)("Programador de Windows", msg)
+        _refresh_win_task_lbl()
+
+    def cmd_quitar_win_task():
+        if not messagebox.askyesno("Programador de Windows",
+                                   "¿Eliminar las tareas de Windows del envío de leads?"):
+            return
+        try:
+            from utils.win_task_scheduler import desregistrar
+            ok, msg = desregistrar()
+        except Exception as e:
+            ok, msg = False, str(e)
+        log_message(("[INFO] " if ok else "[ERROR] ") + msg.replace("\n", " | "))
+        (messagebox.showinfo if ok else messagebox.showerror)("Programador de Windows", msg)
+        _refresh_win_task_lbl()
+
+    btn_win_task = tk.Button(btn_frame_leads, text=" Programar en Windows", image=get_button_icon("gear_white.png"),
+                             compound="left", font=("Segoe UI", 9, "bold"), bg=BUTTON_ACTIVE, fg="white",
+                             relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
+                             padx=14, pady=6, cursor="hand2", command=cmd_registrar_win_task)
+    btn_win_task.pack(side="left", padx=6)
+    btn_win_task.bind("<Enter>", lambda e: btn_win_task.config(bg=BUTTON_HOVER))
+    btn_win_task.bind("<Leave>", lambda e: btn_win_task.config(bg=BUTTON_ACTIVE))
+
+    btn_win_task_del = tk.Button(btn_frame_leads, text=" Quitar de Windows", image=get_button_icon("trash_coral.png"),
+                                 compound="left", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
+                                 relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
+                                 padx=14, pady=6, cursor="hand2", command=cmd_quitar_win_task)
+
+    win_task_row = tk.Frame(ctrl_card_leads, bg=CARD_BG_COLOR)
+    win_task_row.pack(anchor="w", pady=(2, 0))
+    win_task_lbl = tk.Label(win_task_row, text="", font=("Segoe UI", 8, "italic"),
+                            bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
+    win_task_lbl.pack(side="left")
+    tk.Checkbutton(win_task_row, text="🪟 Abrir la app al ejecutar (si no, corre invisible)",
+                   variable=var_win_abrir_app, command=_save_ui_prefs,
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2").pack(side="left", padx=(14, 0))
+    _refresh_win_task_lbl()
 
     def view_results_dialog_leads():
         carpeta = os.path.join(BASE_DIR, "resultados")
@@ -2860,6 +3014,25 @@ def iniciar_interfaz():
 
         # Formularios T3 2.0 (Adobe AEM): usar los Excels con nombre …_T3.xlsx
         t3 = bool(var_t3.get())
+        # "Correr también T3": el mercado corre normal y, además, con su Excel …_T3.
+        t3_also = (not t3) and bool(var_t3_also.get())
+
+        def _t3_extra_sessions(sessions):
+            """Duplica cada sesión apuntando a su Excel …_T3.xlsx. Sólo devuelve las
+            que tienen Excel T3 real: un mercado sin form T3 no suma sesiones (y así
+            no dispara la validación de 'Excel faltante' más abajo)."""
+            if not t3_also:
+                return []
+            extra = []
+            for s in sessions:
+                t3_path = os.path.join(DATA_DIR, _lead_excel_name(s["pais"], s["device"], True))
+                if not os.path.exists(t3_path):
+                    continue
+                e = dict(s)
+                e["excel"] = t3_path
+                e["device"] = f"{s['device']}·T3"
+                extra.append(e)
+            return extra
 
         def _sessions_for(pais):
             """Una sesión por dispositivo tildado. Cada dispositivo (desktop y LT)
@@ -2874,13 +3047,13 @@ def iniciar_interfaz():
                     continue
                 path = gpath if shared else os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, t3))
                 out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix, "excel": path})
-            return out
+            return out + _t3_extra_sessions(out)
 
         if scheduled:
-            disp_sched = scheduler_cfg.get("dispositivo", "local")
-            p_mode = scheduler_cfg.get("modo_excel", "consecutivo")
-            paises_run = list(scheduler_cfg.get("paises", [])) or [active_p_tab[0]]
-            
+            disp_sched = scheduler_cfg_leads.get("dispositivo", "local")
+            p_mode = scheduler_cfg_leads.get("modo_excel", "consecutivo")
+            paises_run = list(scheduler_cfg_leads.get("paises", [])) or [active_p_tab[0]]
+
             market_jobs = []
             for p in paises_run:
                 sessions = []
@@ -2895,13 +3068,14 @@ def iniciar_interfaz():
                         "excel": os.path.join(DATA_DIR, _lead_excel_name(p, "Mac", t3))
                     })
                 else: # local
-                    navs = scheduler_cfg.get("navegadores", []) or ["chrome"]
+                    navs = scheduler_cfg_leads.get("navegadores", []) or ["chrome"]
                     for nav in navs:
                         suffix = "Chrome" if nav == "chrome" else "Firefox" if nav == "firefox" else "Edge"
                         sessions.append({
                             "pais": p, "dtype": "desktop", "browser": nav, "device": suffix,
                             "excel": os.path.join(DATA_DIR, _lead_excel_name(p, suffix, t3))
                         })
+                sessions += _t3_extra_sessions(sessions)
                 market_jobs.append((p, sessions))
                 
             mercados_par = (p_mode == "paralelo") and (len(market_jobs) > 1)
@@ -2920,9 +3094,6 @@ def iniciar_interfaz():
         if total_sessions == 0:
             messagebox.showwarning("Ejecutar", "No hay Excels para ejecutar. Generá datos o seleccioná un dispositivo.")
             return
-
-        mercados_par = (mercados_mode[0] == "paralelo") and (len(market_jobs) > 1)
-        excels_par = (excels_mode[0] == "paralelo")
 
         # Modo "una sesión por URL": expande cada fila de cada Excel en su propia sesión
         url_par = (not scheduled) and bool(var_url_parallel.get())
@@ -5163,6 +5334,22 @@ def iniciar_interfaz():
         _refresh_deact_btn()
     except Exception:
         pass
+
+    # Arranque automático (la abrió el Programador de tareas de Windows).
+    if autostart_leads:
+        def _autostart():
+            try:
+                switch_tab("scheduler")
+            except Exception:
+                pass
+            log_message("[INFO] La app se abrió automáticamente por el Programador de tareas: "
+                        "iniciando el envío de leads programado...")
+            try:
+                execute_send_leads(scheduled=True)
+            except Exception as e:
+                log_message(f"[ERROR] No se pudo iniciar el envío automático: {e}")
+        # Un respiro para que la ventana termine de dibujarse antes de abrir el modal.
+        root.after(2500, _autostart)
 
     root.mainloop()
 

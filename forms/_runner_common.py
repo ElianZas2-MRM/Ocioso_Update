@@ -68,17 +68,18 @@ def run_country_form(form_class, country_name, browser="chrome", viewport="fulls
     return formulario
 
 
-def get_runner(country_name: str):
+def get_runner(country_name: str, excel_suffix: str = ""):
     """
     Devuelve la función run_formularios_<País> para el país dado.
     Reemplaza la carga dinámica de los 9 Formulario_*_Main.py eliminados.
+    `excel_suffix` (ej. "_T3") elige una variante del Excel del mercado.
     """
     from generic_country_base import GenericCountryBase
 
     def _runner(browser="chrome", viewport="fullscreen", headless=False, enviar_email=True, background=True, progress_callback=None, email_callback=None, stop_event=None, is_scheduled=False, pausar_autenticacion=False):
         class _DynamicCountry(GenericCountryBase):
             def __init__(self, browser=browser, viewport=viewport, headless=headless, background=background, pausar_autenticacion=pausar_autenticacion):
-                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background, is_scheduled=is_scheduled, pausar_autenticacion=pausar_autenticacion)
+                super().__init__(country_name, browser=browser, viewport=viewport, headless=headless, background=background, is_scheduled=is_scheduled, pausar_autenticacion=pausar_autenticacion, excel_suffix=excel_suffix)
 
         return run_country_form(
             _DynamicCountry,
