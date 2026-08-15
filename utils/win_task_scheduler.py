@@ -44,6 +44,46 @@ def _launch_command(abrir_app=False):
     return f'"{exe}" "{os.path.join(_project_root(), "run.py")}" {modo}'
 
 
+def _launch_parts(abrir_app=False):
+    """Igual que _launch_command pero separado en (ejecutable, argumentos), que es
+    lo que necesita Register-ScheduledTask de PowerShell."""
+    modo = "--autostart-leads" if abrir_app else "--autonomous --once"
+    if getattr(sys, "frozen", False):
+        return sys.executable, modo
+    exe = sys.executable
+    pythonw = os.path.join(os.path.dirname(exe), "pythonw.exe")
+    if os.path.isfile(pythonw):
+        exe = pythonw
+    return exe, f'"{os.path.join(_project_root(), "run.py")}" {modo}'
+
+
+def _ps_quote(valor):
+    """Cita un literal para PowerShell (comilla simple: se escapa duplicándola)."""
+    return "'" + str(valor).replace("'", "''") + "'"
+
+
+def _registrar_ps(nombre, hora, exe, args):
+    """Registra la tarea con PowerShell en vez de schtasks.
+
+    schtasks no permite configurar lo que hace falta para que esto sirva de verdad
+    en una notebook: despertar la máquina si está suspendida (-WakeToRun) y correr
+    igual si el horario se perdió porque estaba apagada/dormida (-StartWhenAvailable).
+    Register-ScheduledTask sí.
+    """
+    script = (
+        f"$a = New-ScheduledTaskAction -Execute {_ps_quote(exe)} "
+        f"-Argument {_ps_quote(args)} -WorkingDirectory {_ps_quote(_project_root())}; "
+        f"$t = New-ScheduledTaskTrigger -Daily -At {_ps_quote(hora)}; "
+        "$s = New-ScheduledTaskSettingsSet -WakeToRun -StartWhenAvailable "
+        "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
+        "-ExecutionTimeLimit (New-TimeSpan -Hours 3) "
+        "-MultipleInstances IgnoreNew; "
+        f"Register-ScheduledTask -TaskName {_ps_quote(nombre)} -Action $a -Trigger $t "
+        "-Settings $s -Force | Out-Null"
+    )
+    return _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
+
+
 def task_name_for(hora):
     """"09:00" → "Osocio - Envio de Leads 09h"."""
     return f"{TASK_PREFIX} {hora[:2]}h"
@@ -77,16 +117,15 @@ def registrar(horarios, abrir_app=False):
     if not horas:
         return False, "No hay horarios válidos para registrar."
 
-    comando = _launch_command(abrir_app)
+    exe, args = _launch_parts(abrir_app)
     creadas, errores = [], []
     for hora in horas:
         nombre = task_name_for(hora)
-        res = _run(["schtasks", "/Create", "/TN", nombre, "/TR", comando,
-                    "/SC", "DAILY", "/ST", hora, "/F"])
+        res = _registrar_ps(nombre, hora, exe, args)
         if res.returncode == 0:
             creadas.append(f"{nombre} ({hora})")
         else:
-            errores.append(f"{nombre}: {(res.stderr or res.stdout or '').strip()}")
+            errores.append(f"{nombre}: {(res.stderr or res.stdout or '').strip()[:200]}")
 
     if errores and not creadas:
         return False, "No se pudo registrar ninguna tarea:\n" + "\n".join(errores)

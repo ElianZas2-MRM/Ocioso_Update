@@ -14,7 +14,10 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from interface.helpers_interface import enviar_email_resultados_consolidados
+from interface.helpers_interface import (
+    enviar_email_resultados_consolidados,
+    esperar_envios_pendientes,
+)
 from utils.scheduling import cargar_programacion, limpiar_programacion
 
 
@@ -477,7 +480,13 @@ def run_once():
         log_mensaje(" 📧 INICIANDO ENVÍO DE EMAIL CONSOLIDADO...")
         try:
             if enviar_email_resultados_consolidados(resultados):
-                log_mensaje(" ✅ Email enviado exitosamente")
+                # OJO: la función de arriba devuelve True al ENCOLAR el mail, no al
+                # entregarlo. Como el worker de Outlook es daemon, si el proceso termina
+                # acá el mail se pierde. Hay que esperar a que la cola se vacíe.
+                if esperar_envios_pendientes(180):
+                    log_mensaje(" ✅ Email entregado a Outlook")
+                else:
+                    log_mensaje(" ⚠️ Timeout esperando que Outlook envíe el email consolidado")
             else:
                 log_mensaje(" ⚠️ Proceso de email devolvió False")
         except Exception as exc:
@@ -545,8 +554,11 @@ def main():
                                 try:
                                     envio_exitoso = enviar_email_resultados_consolidados(resultados)
                                     if envio_exitoso:
-                                        log_mensaje(" ✅ Email enviado exitosamente")
-                                        time.sleep(10)
+                                        # Esperar la entrega real en vez de dormir 10s a ciegas.
+                                        if esperar_envios_pendientes(180):
+                                            log_mensaje(" ✅ Email entregado a Outlook")
+                                        else:
+                                            log_mensaje(" ⚠️ Timeout esperando el envío del email")
                                     else:
                                         log_mensaje(" ⚠️ Proceso de email devolvió False")
                                 except Exception as exc:

@@ -272,6 +272,31 @@ def _iniciar_worker_envio():
         _worker_thread.start()
 
 
+def esperar_envios_pendientes(timeout=180):
+    """Bloquea hasta que la cola de emails se vacíe (o venza el timeout).
+
+    El worker que habla con Outlook es un thread DAEMON: si el proceso termina apenas
+    encoló el mail —como pasa en la ejecución única del Programador de tareas— el
+    thread muere antes de enviarlo y el mail nunca sale, aunque el log diga que se
+    envió (las funciones de envío devuelven True al ENCOLAR, no al entregar).
+
+    Devuelve True si la cola se vació a tiempo.
+    """
+    if _worker_thread is None or not _worker_thread.is_alive():
+        return _cola_emails.empty()
+
+    listo = threading.Event()
+
+    def _esperar():
+        try:
+            _cola_emails.join()
+        finally:
+            listo.set()
+
+    threading.Thread(target=_esperar, daemon=True).start()
+    return listo.wait(timeout)
+
+
 def _encolar_email(destinatarios, asunto, cuerpo, adjuntos=None, callback=None, html_extra=""):
     """Encola un email para ser enviado por el worker."""
     _iniciar_worker_envio()

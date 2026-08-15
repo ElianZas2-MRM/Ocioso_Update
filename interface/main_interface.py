@@ -2518,8 +2518,29 @@ def iniciar_interfaz(autostart_leads=False):
     win_task_lbl = tk.Label(win_task_row, text="", font=("Segoe UI", 8, "italic"),
                             bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
     win_task_lbl.pack(side="left")
+    def _on_toggle_abrir_app():
+        """Si ya hay tareas creadas, el check tiene que re-registrarlas: si no, el
+        usuario lo tilda, no pasa nada, y la tarea sigue corriendo en el modo viejo."""
+        _save_ui_prefs()
+        try:
+            from utils.win_task_scheduler import listar, registrar
+            if not listar():
+                return  # todavía no hay tareas: el check se aplicará al crearlas
+            horas = _horas_programadas_leads()
+            if not horas:
+                return
+            ok, msg = registrar(horas, abrir_app=bool(var_win_abrir_app.get()))
+            modo = "abriendo la app" if var_win_abrir_app.get() else "en segundo plano"
+            log_message(("[SUCCESS] " if ok else "[ERROR] ")
+                        + f"Tareas de Windows actualizadas: ahora se ejecutan {modo}.")
+            if not ok:
+                messagebox.showerror("Programador de Windows", msg)
+        except Exception as e:
+            log_message(f"[ERROR] No se pudieron actualizar las tareas de Windows: {e}")
+        _refresh_win_task_lbl()
+
     tk.Checkbutton(win_task_row, text="🪟 Abrir la app al ejecutar (si no, corre invisible)",
-                   variable=var_win_abrir_app, command=_save_ui_prefs,
+                   variable=var_win_abrir_app, command=_on_toggle_abrir_app,
                    bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
                    activebackground=CARD_BG_COLOR, activeforeground="white",
                    font=("Segoe UI", 8), cursor="hand2").pack(side="left", padx=(14, 0))
