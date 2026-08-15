@@ -2930,6 +2930,75 @@ class BaseFormFiller:
         except Exception as _e:
             print(f"#contact-by-form no encontrado: {_e}")
 
+    # Landing de eléctricos de Brasil: es a donde tiene que apuntar el CTA "Formulário"
+    # de la card "Veículos elétricos" dentro del RAQ de solicitar-contato.
+    _CTA_ELETRICOS_URL = "https://www.chevrolet.com.br/eletrico/solicitar-contato"
+
+    def _verificar_cta_eletricos_br(self, landing_url, form_url):
+        """Chequeo extra, sólo para el RAQ de Brasil (chevrolet.com.br/solicitar-contato).
+
+        Esa pantalla ofrece dos cards: "Veículos a combustão" y "Veículos elétricos".
+        El CTA "Formulário" de la card de eléctricos tiene que llevar a la landing de
+        eléctricos, que es donde vive el form raq-eletricos. Se verifica que el link
+        exista, que apunte a esa URL y que la URL responda 200.
+
+        Debe llamarse ESTANDO DENTRO del iframe y ANTES de clickear #contact-by-form
+        (ese click reemplaza la pantalla de las cards por el formulario).
+        """
+        pais = str(self.config.get("pais", "")).lower()
+        blob = f"{landing_url or ''} {form_url or ''}".lower()
+        if pais not in ("brasil", "brazil", "br"):
+            return
+        if "solicitar-contato" not in blob or "eletrico" in blob:
+            return  # sólo la landing genérica; la de eléctricos no tiene estas cards
+
+        try:
+            href = self.driver.execute_script("""
+                var sels = ["a.actions-link.actions-links-form[data-dtm='electric vehicles']",
+                            "a.actions-links-form[data-dtm='electric vehicles']",
+                            "a[data-dtm='electric vehicles'][href*='/eletrico/']"];
+                for (var s = 0; s < sels.length; s++) {
+                    var e = document.querySelector(sels[s]);
+                    if (e) { return e.getAttribute('href') || ''; }
+                }
+                var links = document.querySelectorAll("a[href*='/eletrico/solicitar-contato']");
+                return links.length ? (links[0].getAttribute('href') || '') : '';
+            """) or ""
+        except Exception as e:
+            self._cta_eletricos = f"FAIL — no se pudo leer el CTA ({e})"
+            print(f"CTA eléctricos: error leyendo el link: {e}")
+            return
+
+        href = str(href).strip()
+        if not href:
+            self._cta_eletricos = "FAIL — no se encontró el CTA 'Formulário' de Veículos elétricos"
+            print("CTA eléctricos: NO se encontró el link")
+            return
+
+        from urllib.parse import urljoin
+        href_abs = urljoin(self._CTA_ELETRICOS_URL, href)
+        if href_abs.rstrip("/").lower() != self._CTA_ELETRICOS_URL.rstrip("/").lower():
+            self._cta_eletricos = f"FAIL — el CTA apunta a {href_abs}"
+            print(f"CTA eléctricos: apunta a {href_abs} (se esperaba {self._CTA_ELETRICOS_URL})")
+            return
+
+        try:
+            from utils.url_status import check_url_status
+            estado = check_url_status(href_abs) or {}
+            etiqueta = estado.get("label", "")
+            code = estado.get("code")
+        except Exception as e:
+            self._cta_eletricos = f"FAIL — no se pudo verificar la URL ({e})"
+            print(f"CTA eléctricos: error verificando la URL: {e}")
+            return
+
+        if code == 200:
+            self._cta_eletricos = f"PASS — {href_abs} ({etiqueta or '200 OK'})"
+            print(f"CTA eléctricos OK: {href_abs} → {etiqueta or '200 OK'}")
+        else:
+            self._cta_eletricos = f"FAIL — {href_abs} responde {etiqueta or code}"
+            print(f"CTA eléctricos: {href_abs} responde {etiqueta or code}")
+
     def _slug_for(self, landing_url, form_url):
         """Slug corto y legible para nombrar las capturas de un form (siempre el mismo para el
         mismo form). Toma el último segmento significativo de la URL del form (o de la landing),
@@ -5750,7 +5819,8 @@ class BaseFormFiller:
                                 "TYP con CTA", "LINK ISSUE TYP",
                                 "Form URL esperada", "Form URL encontrada", "Form coincide",
                                 "Datos vs Excel", "Motivo",
-                                "Estado URL landing", "Estado URL form"]
+                                "Estado URL landing", "Estado URL form",
+                                "CTA Eletricos BR"]
 
             for col_name in required_columns:
                 if col_name not in headers:
@@ -5777,6 +5847,8 @@ class BaseFormFiller:
                                       if "Estado URL landing" in headers else None)
             estado_url_form_col = (headers.index("Estado URL form") + 1
                                    if "Estado URL form" in headers else None)
+            cta_eletricos_col = (headers.index("CTA Eletricos BR") + 1
+                                 if "CTA Eletricos BR" in headers else None)
 
             ss_counter = 1
             _total_leads = max(0, sheet.max_row - 1)
@@ -5848,6 +5920,8 @@ class BaseFormFiller:
                 self._estado_url_landing = "-"
                 self._estado_url_form = "-"
                 self._url_status_problema = ""
+                # Chequeo extra del CTA de eléctricos (sólo aplica al RAQ de Brasil).
+                self._cta_eletricos = "-"
                 try:
                     from utils.url_status import check_url_status, format_status_pair
                     _st_landing = check_url_status(landing_url)
@@ -5968,6 +6042,8 @@ class BaseFormFiller:
                                 self.screenshot_manager.url_form_encontrado = _iframe_src
                             self._url_form_encontrado = _iframe_src
                             print("Cambiado al contexto del iframe")
+                            # Antes del click: la pantalla de cards todavía está visible.
+                            self._verificar_cta_eletricos_br(landing_url, _iframe_src)
                             self._maybe_click_raq_cta(landing_url, _iframe_src)
                         else:
                             form_url_mismatch = True
@@ -6329,6 +6405,9 @@ class BaseFormFiller:
                 if estado_url_form_col:
                     sheet.cell(row=i, column=estado_url_form_col).value = (
                         getattr(self, "_estado_url_form", "-") or "-")
+                if cta_eletricos_col:
+                    sheet.cell(row=i, column=cta_eletricos_col).value = (
+                        getattr(self, "_cta_eletricos", "-") or "-")
 
                 self.write_tracked_fields_to_sheet(sheet, i)
 
