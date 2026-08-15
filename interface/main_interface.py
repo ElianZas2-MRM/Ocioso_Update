@@ -2602,14 +2602,38 @@ def iniciar_interfaz(autostart_leads=False):
     def _sched_save_triggered():
         try:
             import json
+            # Las claves son ("leads"|"masivo", día, hora): hay que guardar las TRES
+            # partes. Antes se guardaban sólo las dos primeras, así que al releer el
+            # archivo la clave nunca coincidía y, además, todos los horarios de un
+            # mismo día se pisaban entre sí.
             with open(_SCHED_TRIG_PATH, "w", encoding="utf-8") as f:
-                json.dump({f"{k[0]}|{k[1]}": v.isoformat() for k, v in _sched_triggered.items()}, f)
+                json.dump({"|".join(k): v.isoformat() for k, v in _sched_triggered.items()}, f)
         except Exception:
             pass
 
+    def _sched_marcar_ventana_actual(modo="leads"):
+        """Marca como disparados los horarios cuya ventana contiene este momento.
+
+        Lo usa el arranque automático: si la app la abrió el Programador de tareas y
+        ya está ejecutando, el monitor interno no tiene que lanzar la misma corrida
+        otra vez unos segundos después.
+        """
+        cfg = scheduler_cfg_leads if modo == "leads" else scheduler_cfg_masivo
+        ahora = _dt.now()
+        dia = _DAYS_ES[ahora.weekday()]
+        now_min = ahora.hour * 60 + ahora.minute
+        for hora in list((cfg.get("horarios") or {}).get(dia, [])):
+            try:
+                hh, mm = int(hora[:2]), int(hora[3:5])
+            except Exception:
+                continue
+            start = hh * 60 + mm
+            if start <= now_min < start + 15:
+                _sched_triggered[(modo, dia, hora)] = ahora.date()
+        _sched_save_triggered()
+
     def _sched_monitor():
         _sched_triggered.update(_sched_load_triggered())
-        first = True
         while True:
             try:
                 ahora = _dt.now()
@@ -2627,10 +2651,14 @@ def iniciar_interfaz(autostart_leads=False):
                         if start <= now_min < start + 15:
                             key = ("leads", dia, hora)
                             if _sched_triggered.get(key) != ahora.date():
+                                # Antes había un `if not first:` que en la PRIMERA vuelta
+                                # marcaba el slot como disparado SIN ejecutarlo. Si abrías
+                                # la app dentro de la ventana del horario (p. ej. 09:05 con
+                                # el slot de las 09:00), ese horario quedaba quemado para
+                                # todo el día y no corría nunca.
                                 _sched_triggered[key] = ahora.date()
                                 _sched_save_triggered()
-                                if not first:
-                                    root.after(0, lambda: execute_send_leads(scheduled=True))
+                                root.after(0, lambda: execute_send_leads(scheduled=True))
 
                 # Programación para Revisión Masiva
                 if prog_state_masivo["mode"] == "activado" and scheduler_cfg_masivo.get("horarios"):
@@ -3063,7 +3091,10 @@ def iniciar_interfaz(autostart_leads=False):
         # Formularios T3 2.0 (Adobe AEM): usar los Excels con nombre …_T3.xlsx
         t3 = bool(var_t3.get())
         # "Correr también T3": el mercado corre normal y, además, con su Excel …_T3.
-        t3_also = (not t3) and bool(var_t3_also.get())
+        # Cada pestaña tiene su propio check de "correr también los T3": la corrida
+        # programada debe mirar el de Envío de Leads Programados, no el de la pestaña
+        # manual (si no, el T3 nunca entraba en las corridas automáticas).
+        t3_also = (not t3) and bool(var_sched_t3.get() if scheduled else var_t3_also.get())
 
         def _t3_extra_sessions(sessions):
             """Duplica cada sesión apuntando a su Excel …_T3.xlsx. Sólo devuelve las
@@ -3721,8 +3752,19 @@ def iniciar_interfaz(autostart_leads=False):
                          wraplength=480, justify="left").pack(anchor="w", padx=20, pady=(2, 0))
 
             if scheduled:
-                tk.Label(modal, text="✓ Ya podés cerrar esta ventana. Los tests programados posteriores se ejecutarán igual.",
+                tk.Label(modal, text="✓ Esta ventana se cierra sola en unos segundos. Los tests programados posteriores se ejecutarán igual.",
                          font=("Segoe UI", 8, "italic"), bg=MODAL_BG, fg="#82E0AA", wraplength=480, justify="left").pack(anchor="w", padx=20, pady=(2, 0))
+                # El modal bloquea toda la interfaz (BlockTag) y sólo se libera al
+                # destruirse. En una corrida automática no hay nadie para cerrarlo, así
+                # que la app quedaba inutilizable hasta que alguien la mirara: se cierra
+                # solo y devuelve el control. El resultado ya quedó en el Excel y el mail.
+                def _autocerrar_modal():
+                    try:
+                        if modal.winfo_exists():
+                            modal.destroy()  # el handler <Destroy> saca el BlockTag
+                    except Exception:
+                        pass
+                root.after(20000, _autocerrar_modal)
 
             # Banner de email (el backend encola el envío si "Enviar mail" está activo)
             if enviar_mail and not detenido:
