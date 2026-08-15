@@ -636,6 +636,7 @@ def analizar_errores_excel(ruta_excel):
         col_motivo              = _col("motivo")
         col_estado_landing      = _col("estado url landing")
         col_estado_form         = _col("estado url form")
+        col_cta_eletricos       = _col("cta eletricos br")
 
         def _val(fila, col):
             """Valor de la celda como texto limpio, o '' si no existe / está vacía."""
@@ -674,10 +675,14 @@ def analizar_errores_excel(ruta_excel):
             if est_f and "200" not in est_f:
                 partes.append(f"URL form: {est_f}")
             encontrada = _val(fila, col_form_url_encontrada)
-            esperada = _val(fila, col_form_url_esperada)
             coincide = _val(fila, col_form_coincide).upper()
-            if encontrada and esperada and coincide in ("NO", "FAIL", "FORMULARIO INCORRECTO"):
-                partes.append(f"form encontrado: {encontrada}")
+            # El valor real es "FAIL — form inserto no coincide con el esperado": comparar
+            # por igualdad exacta nunca daba, así que este detalle no salía nunca.
+            if coincide.startswith("FAIL") or coincide in ("NO", "FORMULARIO INCORRECTO"):
+                partes.append(f"form distinto al esperado (se abrió {encontrada or 'otro'})")
+            cta = _val(fila, col_cta_eletricos)
+            if cta.upper().startswith("FAIL"):
+                partes.append(f"CTA eléctricos: {cta[7:].strip(' —')}")
             return " — ".join(p for p in partes if p) or "Sin detalle en el Excel"
 
         total_filas = len(df)
@@ -704,7 +709,19 @@ def analizar_errores_excel(ruta_excel):
         # llenar: cuenta como error aunque el lead se haya enviado (el usuario debe ir a
         # ⚙ IDs Dinámicos a asignarles un valor).
         _sin_completar_mask = resultados.str.contains("Campos sin completar", case=False, na=False)
-        errores_mask = procesados_mask & (~_ok_mask | _sin_completar_mask)
+
+        def _mask_fail(col):
+            """Filas donde esa columna de verificación quedó en FAIL."""
+            if not col:
+                return pd.Series(False, index=df.index)
+            s = df[col].astype(str).fillna("").str.strip().str.upper()
+            return s.str.startswith("FAIL") | s.isin(["NO", "FORMULARIO INCORRECTO"])
+
+        # El lead puede haberse enviado y aun así la corrida estar mal: si se llenó un
+        # formulario distinto al pedido, o si el CTA de eléctricos de Brasil está roto,
+        # el Excel lo marcaba pero el email lo reportaba como PASS. Ahora también fallan.
+        _verif_fail_mask = _mask_fail(col_form_coincide) | _mask_fail(col_cta_eletricos)
+        errores_mask = procesados_mask & (~_ok_mask | _sin_completar_mask | _verif_fail_mask)
 
         errores = df[errores_mask]
         con_errores = int(errores_mask.sum())
