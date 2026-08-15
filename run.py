@@ -41,7 +41,7 @@ def _ensure_form_paths():
             sys.path.insert(0, path)
 
 
-def _load_country_run_function(country_name):
+def _load_country_run_function(country_name, excel_suffix=""):
     _ensure_form_paths()
 
     try:
@@ -49,7 +49,7 @@ def _load_country_run_function(country_name):
             from forms._runner_common import get_runner
         except ImportError:
             from _runner_common import get_runner  # type: ignore[import-not-found]
-        return get_runner(country_name)
+        return get_runner(country_name, excel_suffix)
     except (ImportError, AttributeError):
         module_name = f"Formulario_{country_name}_Main"
         script_path = os.path.join(FORMS_DIR, f"{module_name}.py")
@@ -70,12 +70,12 @@ def _load_country_run_function(country_name):
         return run_func
 
 
-def _run_country(country_name, environment, headless=False, enviar_email=True, is_scheduled=False):
+def _run_country(country_name, environment, headless=False, enviar_email=True, is_scheduled=False, excel_suffix=""):
     config = ENVIRONMENTS.get(environment)
     if config is None:
         raise ValueError(f"Entorno '{environment}' no reconocido")
 
-    run_func = _load_country_run_function(country_name)
+    run_func = _load_country_run_function(country_name, excel_suffix)
     return run_func(
         browser=config["browser"],
         viewport=config["viewport"],
@@ -85,7 +85,12 @@ def _run_country(country_name, environment, headless=False, enviar_email=True, i
     )
 
 
-def _run_autonomous():
+def _run_autonomous(once=False):
+    if once:
+        from autonomous_runner import run_once
+
+        return run_once()
+
     from autonomous_runner import main as autonomous_main
 
     return autonomous_main()
@@ -119,6 +124,14 @@ def _run_lambdatest(lt_type, pais, build_name=""):
 def _parse_args():
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--autonomous", action="store_true", help="Ejecuta el planificador autónomo")
+    parser.add_argument("--once", action="store_true",
+                        help="Con --autonomous: ejecuta la programación guardada una sola vez y termina "
+                             "(pensado para el Programador de tareas de Windows)")
+    parser.add_argument("--autostart-leads", action="store_true",
+                        help="Abre la app y dispara solo el envío de leads programado "
+                             "(lo usa el Programador de tareas de Windows)")
+    parser.add_argument("--excel-suffix", dest="excel_suffix", default="",
+                        help="Variante del Excel del mercado (ej. _T3 para formularios 2.0 de AEM)")
     parser.add_argument("--run-country", dest="country_name", help="Ejecuta un país puntual sin abrir la UI")
     parser.add_argument("--environment", default="chrome_desktop", choices=sorted(ENVIRONMENTS.keys()))
     parser.add_argument("--no-email", action="store_true", help="No envía email al finalizar")
@@ -139,7 +152,7 @@ if __name__ == "__main__":
     _ensure_runtime_dirs()
     args = _parse_args()
     if args.autonomous:
-        _run_autonomous()
+        _run_autonomous(once=args.once)
     elif args.lt_type:
         if not args.lt_pais:
             print("Error: --run-lambdatest requiere también --pais <nombre_país>")
@@ -152,9 +165,10 @@ if __name__ == "__main__":
             headless=False,
             enviar_email=not args.no_email,
             is_scheduled=args.scheduled,
+            excel_suffix=args.excel_suffix,
         )
     else:
-        iniciar_interfaz()
+        iniciar_interfaz(autostart_leads=args.autostart_leads)
     #python "E:\Ariel\Scripts\Form GDCP\Form_Automation_Project\run.py"
     
     # venv   cd "E:\Ariel\Scripts\Form GDCP\Form_Automation_Project"

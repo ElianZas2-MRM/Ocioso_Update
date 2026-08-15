@@ -43,6 +43,7 @@ build_output*.log
 
 # Config local de Claude Code - no versionar
 CLAUDE.md
+.atl/
 
 # Logs de ejecucion - se regeneran solos
 debug_run.log

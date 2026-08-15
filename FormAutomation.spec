@@ -36,7 +36,6 @@ a = Analysis(
         'utils.excel_layout',
         'interface.main_interface',
         'interface.helpers_interface',
-        'interface.weekly_scheduler',
         'interface.field_validation_ui',
         'interface.console_widget',
         'interface.dealer_comparator_ui',
