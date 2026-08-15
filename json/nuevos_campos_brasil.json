@@ -1,6 +1,6 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-07-28T17:11:27",
+  "ultima_deteccion": "2026-08-15T02:56:57",
   "campos_nuevos": [
     {
       "id": "categories",
@@ -109,6 +109,24 @@
       "type": "textarea",
       "required": false,
       "label": " "
+    },
+    {
+      "id": "guideContainer-rootPanel-panel-guidetextbox_copy___widget",
+      "type": "text",
+      "required": true,
+      "label": "Sobrenome:"
+    },
+    {
+      "id": "guideContainer-rootPanel-panel-guideemail___widget",
+      "type": "text",
+      "required": true,
+      "label": "E-mail:"
+    },
+    {
+      "id": "guideContainer-rootPanel-panel-guidetelephone___widget",
+      "type": "text",
+      "required": true,
+      "label": "Telefone:"
     }
   ]
 }

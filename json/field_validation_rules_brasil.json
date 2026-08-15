@@ -697,6 +697,66 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL-GUIDETEXTBOX_COPY___WIDGET": {
+      "descripcion": "Sobrenome:",
+      "campo": "guideContainer-rootPanel-panel-guidetextbox_copy___widget",
+      "element_id": "guideContainer-rootPanel-panel-guidetextbox_copy___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL-GUIDEEMAIL___WIDGET": {
+      "descripcion": "E-mail:",
+      "campo": "guideContainer-rootPanel-panel-guideemail___widget",
+      "element_id": "guideContainer-rootPanel-panel-guideemail___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GUIDECONTAINER-ROOTPANEL-PANEL-GUIDETELEPHONE___WIDGET": {
+      "descripcion": "Telefone:",
+      "campo": "guideContainer-rootPanel-panel-guidetelephone___widget",
+      "element_id": "guideContainer-rootPanel-panel-guidetelephone___widget",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }
