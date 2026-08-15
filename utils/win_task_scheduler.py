@@ -118,18 +118,34 @@ def registrar(horarios, abrir_app=False):
         return False, "No hay horarios válidos para registrar."
 
     exe, args = _launch_parts(abrir_app)
+    comando = _launch_command(abrir_app)
     creadas, errores = [], []
+    degradadas = []  # creadas con schtasks: sin despertar la máquina suspendida
     for hora in horas:
         nombre = task_name_for(hora)
         res = _registrar_ps(nombre, hora, exe, args)
         if res.returncode == 0:
             creadas.append(f"{nombre} ({hora})")
+            continue
+        # PowerShell puede estar restringido por politicas corporativas (AppLocker,
+        # ConstrainedLanguage, modulo bloqueado). schtasks casi siempre sobrevive:
+        # se pierde WakeToRun/StartWhenAvailable, pero la tarea diaria queda creada.
+        res2 = _run(["schtasks", "/Create", "/TN", nombre, "/TR", comando,
+                     "/SC", "DAILY", "/ST", hora, "/F"])
+        if res2.returncode == 0:
+            creadas.append(f"{nombre} ({hora})")
+            degradadas.append(nombre)
         else:
-            errores.append(f"{nombre}: {(res.stderr or res.stdout or '').strip()[:200]}")
+            errores.append(f"{nombre}: {(res.stderr or res.stdout or '').strip()[:150]}")
 
     if errores and not creadas:
         return False, "No se pudo registrar ninguna tarea:\n" + "\n".join(errores)
     msg = "Tareas registradas en Windows:\n" + "\n".join("• " + c for c in creadas)
+    if degradadas:
+        msg += ("\n\n⚠ PowerShell está restringido en esta PC, así que estas tareas se "
+                "crearon en modo básico:\n" + "\n".join("• " + d for d in degradadas)
+                + "\n\nSe ejecutan igual a horario, pero NO despiertan la computadora si "
+                  "está suspendida ni recuperan un disparo perdido.")
     if errores:
         msg += "\n\nCon errores:\n" + "\n".join("• " + e for e in errores)
     return True, msg
