@@ -93,6 +93,16 @@ def _t3_tag(t3):
     return "_T3" if t3 else ""
 
 
+# Marca de los formularios T3 en los reportes/emails. En el mail no se habla de "T3"
+# (no le dice nada a quien lo lee): se nombra la marca, que es lo que distingue.
+_T3_ETIQUETAS = {"Brasil": "CADILLAC BR"}
+
+
+def _etiqueta_t3(pais):
+    """Nombre con el que aparece el formulario T3 de ese mercado en el email."""
+    return _T3_ETIQUETAS.get(pais, f"{pais} T3")
+
+
 def _lead_excel_name(pais, suffix, t3=False):
     """Nombre de archivo Excel de leads: …_{Pais}_{Dispositivo}[_T3].xlsx."""
     return f"Lead_information_Formulario_{pais}_{suffix}{_t3_tag(t3)}.xlsx"
@@ -3069,6 +3079,9 @@ def iniciar_interfaz(autostart_leads=False):
                 e = dict(s)
                 e["excel"] = t3_path
                 e["device"] = f"{s['device']}·T3"
+                # Nombre propio en el email: si va como "Brasil" se fusiona con el
+                # mercado normal y el resultado del T3 desaparece del reporte.
+                e["email_label"] = _etiqueta_t3(s["pais"])
                 extra.append(e)
             return extra
 
@@ -3843,7 +3856,8 @@ def iniciar_interfaz(autostart_leads=False):
                         rp = getattr(form, "RESULTADOS_PATH", None)
                         sd = getattr(form, "SCREENSHOT_DIR", None)
                         if rp:
-                            _entry = {"pais": pais, "navegador": browser, "viewport": "fullscreen",
+                            _entry = {"pais": sess.get("email_label") or pais,
+                                      "navegador": browser, "viewport": "fullscreen",
                                       "estado": "completado", "excel_path": rp, "screenshots_dir": sd}
                             with _email_lock:
                                 _email_results.append(_entry)
