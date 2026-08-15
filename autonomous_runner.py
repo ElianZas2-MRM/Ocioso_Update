@@ -194,6 +194,15 @@ def _build_country_command(pais_nombre, env_param, excel_suffix=""):
             "--environment", env_param, "--scheduled"] + extra
 
 
+# En el email no se habla de "T3": se nombra la marca, que es lo que distingue.
+_T3_ETIQUETAS = {"Brasil": "CADILLAC BR"}
+
+
+def _etiqueta_t3(pais):
+    """Nombre con el que aparece el formulario T3 de ese mercado en el email."""
+    return _T3_ETIQUETAS.get(pais, f"{pais} T3")
+
+
 def _t3_excel_existe(pais_nombre, navegador):
     """True si el mercado tiene Excel de formulario T3 2.0 (AEM) para ese browser."""
     dev = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}.get(navegador, "Chrome")
@@ -333,7 +342,8 @@ def ejecutar_tests(programacion):
                         excel_file = os.path.join(RESULTS_DIR, f"{base_excel}{num_nuevo_excel}.xlsx")
                         screenshots_dir = os.path.join(RESULTS_DIR, f"{base_ss}{num_nuevo_excel}")
                         resultado = {
-                            "pais": pais_nombre + (" (T3)" if excel_suffix else ""), "navegador": navegador,
+                            "pais": _etiqueta_t3(pais_nombre) if excel_suffix else pais_nombre,
+                            "navegador": navegador,
                             "viewport": viewport_nombres.get(viewport, viewport),
                             "estado": "completado" if result.returncode == 0 else "con_errores",
                             "excel_path": excel_file, "screenshots_dir": screenshots_dir,
