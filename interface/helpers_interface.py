@@ -33,7 +33,7 @@ os.makedirs(TEMPORALES_DIR, exist_ok=True)
 os.makedirs(JSON_DIR, exist_ok=True)
 
 GLOBAL_CONFIG_PATH = os.path.join(JSON_DIR, "config_global.json")
-DEFAULT_EMAIL_DESTINATARIO = "ariel.melgratti@mrm.com"
+DEFAULT_EMAIL_DESTINATARIO = "test@mrm.com"
 
 # === COLA DE ENVÍO DE EMAILS ===
 _cola_emails = queue.Queue()
