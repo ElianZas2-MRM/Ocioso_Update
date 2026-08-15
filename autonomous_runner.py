@@ -104,6 +104,10 @@ def _build_subprocess_env():
     env = os.environ.copy()
     if getattr(sys, 'frozen', False):
         env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    # Los runners imprimen emojis. Con capture_output el hijo escribe a un pipe con
+    # el encoding local (cp1252 en Windows) y muere con UnicodeEncodeError antes de
+    # enviar el lead. Forzar UTF-8 evita ese fallo en toda la ruta headless.
+    env["PYTHONIOENCODING"] = "utf-8"
     return env
 
 
@@ -143,36 +147,55 @@ def log_mensaje(mensaje):
         pass
 
 
-def obtener_numero_mayor_existente(pais, tipo="excel"):
-    """Obtiene el número mayor para archivos existentes de un país."""
+def _basenames_resultados(pais, navegador):
+    """Prefijos reales de los archivos de una corrida PROGRAMADA.
+
+    base_form_filler usa el prefijo "Automatizacion_" (no "resultados_") cuando
+    is_scheduled=True, y agrega el dispositivo: Automatizacion_<Pais>_<Dev><N>.xlsx.
+    Buscar con el prefijo equivocado hacía que el ejecutor nunca detectara los
+    resultados y, por lo tanto, nunca enviara el email consolidado.
+    """
+    dev = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}.get(navegador, "Chrome")
+    return f"Automatizacion_{pais}_{dev}", f"Automatizacion_screenshots_{pais}_{dev}"
+
+
+def obtener_numero_mayor_existente(pais, tipo="excel", basename=None):
+    """Obtiene el número de corrida más alto ya existente para ese prefijo."""
     try:
-        if tipo == "excel":
-            pattern = os.path.join(RESULTS_DIR, f"resultados_{pais}*.xlsx")
-        else:
-            pattern = os.path.join(RESULTS_DIR, f"screenshots_{pais}*/")
+        base = basename or (f"resultados_{pais}" if tipo == "excel" else f"screenshots_{pais}")
+        pattern = os.path.join(RESULTS_DIR, f"{base}*.xlsx" if tipo == "excel" else f"{base}*/")
 
         matches = glob.glob(pattern)
         max_num = 0
         for match in matches:
             try:
                 if tipo == "excel":
-                    base = os.path.basename(match).replace(f"resultados_{pais}", "").replace(".xlsx", "")
+                    sufijo = os.path.basename(match).replace(base, "").replace(".xlsx", "")
                 else:
-                    base = os.path.basename(match.rstrip("/\\")).replace(f"screenshots_{pais}", "")
-                if base.isdigit():
-                    max_num = max(max_num, int(base))
+                    sufijo = os.path.basename(match.rstrip("/\\")).replace(base, "")
+                if sufijo.isdigit():
+                    max_num = max(max_num, int(sufijo))
             except Exception:
                 pass
         return max_num
     except Exception as exc:
-        log_mensaje(f"❌ Error obteniendo número máximo para {pais} ({tipo}): {exc}")
+        log_mensaje(f"Error obteniendo número máximo para {pais} ({tipo}): {exc}")
         return 0
 
 
-def _build_country_command(pais_nombre, env_param):
+def _build_country_command(pais_nombre, env_param, excel_suffix=""):
+    extra = ["--excel-suffix", excel_suffix] if excel_suffix else []
     if getattr(sys, 'frozen', False):
-        return [sys.executable, "--run-country", pais_nombre, "--environment", env_param, "--scheduled"]
-    return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), "--run-country", pais_nombre, "--environment", env_param, "--scheduled"]
+        return [sys.executable, "--run-country", pais_nombre, "--environment", env_param, "--scheduled"] + extra
+    return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), "--run-country", pais_nombre,
+            "--environment", env_param, "--scheduled"] + extra
+
+
+def _t3_excel_existe(pais_nombre, navegador):
+    """True si el mercado tiene Excel de formulario T3 2.0 (AEM) para ese browser."""
+    dev = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}.get(navegador, "Chrome")
+    return os.path.isfile(os.path.join(
+        PROJECT_ROOT, "data", f"Lead_information_Formulario_{pais_nombre}_{dev}_T3.xlsx"))
 
 
 def _build_lambdatest_command(lt_type, pais_nombre):
@@ -203,6 +226,7 @@ def ejecutar_tests(programacion):
         total_scripts = 0
 
         _LT_TYPES = ("lambdatest_mac", "lambdatest_android")
+        _corre_t3 = bool(programacion.get("t3_also"))
 
         for pais_nombre in programacion["paises"]:
             for navegador in programacion["navegadores"]:
@@ -211,6 +235,8 @@ def ejecutar_tests(programacion):
                 else:
                     for _ in programacion["viewports"]:
                         total_scripts += 1
+                        if _corre_t3 and _t3_excel_existe(pais_nombre, navegador):
+                            total_scripts += 1
 
         viewport_nombres = {
             "fullscreen": "desktop",
@@ -235,7 +261,7 @@ def ejecutar_tests(programacion):
             try:
                 result = subprocess.run(
                     _build_lambdatest_command(lt_type, pais_nombre),
-                    check=False, capture_output=True, text=True, timeout=600,
+                    check=False, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600,
                     cwd=PROJECT_ROOT, env=_build_subprocess_env(),
                 )
                 if result.returncode == 0:
@@ -269,56 +295,65 @@ def ejecutar_tests(programacion):
             # La detección de Excel es por país (glob resultados_{pais}*), por lo
             # que distintos países pueden correr en paralelo sin colisionar.
             nonlocal total_ejecutados
+
+            def _run_uno(navegador, viewport, excel_suffix=""):
+                nonlocal total_ejecutados
+                with _lock:
+                    total_ejecutados += 1
+                    _idx = total_ejecutados
+                env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
+                runner_name = f"Formulario_{pais_nombre}_Main{excel_suffix}"
+                log_mensaje(f" Ejecutando {_idx}/{total_scripts}: {runner_name} ({env_param})")
+
+                base_excel, base_ss = _basenames_resultados(pais_nombre, navegador)
+                num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel)
+                num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots", base_ss)
+                log_mensaje(f"    Números previos - Excel: {num_anterior_excel}, Screenshots: {num_anterior_screenshots}")
+
+                try:
+                    result = subprocess.run(
+                        _build_country_command(pais_nombre, env_param, excel_suffix),
+                        check=False, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+                        cwd=PROJECT_ROOT, env=_build_subprocess_env(),
+                    )
+                    if result.returncode == 0:
+                        log_mensaje(f" Completado: {runner_name}")
+                    else:
+                        log_mensaje(f" Script con errores: {runner_name}")
+                        if result.stderr:
+                            log_mensaje(f"   Error: {result.stderr.strip()}")
+
+                    num_nuevo_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel)
+                    log_mensaje(f"    📊 Números después - Excel: {num_nuevo_excel}")
+
+                    if num_nuevo_excel > num_anterior_excel:
+                        excel_file = os.path.join(RESULTS_DIR, f"{base_excel}{num_nuevo_excel}.xlsx")
+                        screenshots_dir = os.path.join(RESULTS_DIR, f"{base_ss}{num_nuevo_excel}")
+                        resultado = {
+                            "pais": pais_nombre + (" (T3)" if excel_suffix else ""), "navegador": navegador,
+                            "viewport": viewport_nombres.get(viewport, viewport),
+                            "estado": "completado" if result.returncode == 0 else "con_errores",
+                            "excel_path": excel_file, "screenshots_dir": screenshots_dir,
+                        }
+                        with _lock:
+                            resultados_ejecucion.append(resultado)
+                        log_mensaje(f"    ✅ Resultado registrado: {os.path.basename(excel_file)}")
+                    elif result.returncode == 0:
+                        log_mensaje(f"    ⚠️ No se detectó nuevo Excel (anterior: {num_anterior_excel}, actual: {num_nuevo_excel})")
+                except subprocess.TimeoutExpired:
+                    log_mensaje(f"⏰ Timeout: {runner_name}")
+                except Exception as exc:
+                    log_mensaje(f" Error ejecutando {runner_name}: {exc}")
+                time.sleep(2)
+
             for navegador in programacion["navegadores"]:
                 if navegador in _LT_TYPES:
                     continue
                 for viewport in programacion["viewports"]:
-                    with _lock:
-                        total_ejecutados += 1
-                        _idx = total_ejecutados
-                    env_param = f"{navegador}_{'desktop' if viewport == 'fullscreen' else 'mobile'}"
-                    runner_name = f"Formulario_{pais_nombre}_Main"
-                    log_mensaje(f" Ejecutando {_idx}/{total_scripts}: {runner_name} ({env_param})")
-
-                    num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel")
-                    num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots")
-                    log_mensaje(f"    Números previos - Excel: {num_anterior_excel}, Screenshots: {num_anterior_screenshots}")
-
-                    try:
-                        result = subprocess.run(
-                            _build_country_command(pais_nombre, env_param),
-                            check=False, capture_output=True, text=True, timeout=300,
-                            cwd=PROJECT_ROOT, env=_build_subprocess_env(),
-                        )
-                        if result.returncode == 0:
-                            log_mensaje(f" Completado: {runner_name}")
-                        else:
-                            log_mensaje(f" Script con errores: {runner_name}")
-                            if result.stderr:
-                                log_mensaje(f"   Error: {result.stderr.strip()}")
-
-                        num_nuevo_excel = obtener_numero_mayor_existente(pais_nombre, "excel")
-                        log_mensaje(f"    📊 Números después - Excel: {num_nuevo_excel}")
-
-                        if num_nuevo_excel > num_anterior_excel:
-                            excel_file = os.path.join(RESULTS_DIR, f"resultados_{pais_nombre}{num_nuevo_excel}.xlsx")
-                            screenshots_dir = os.path.join(RESULTS_DIR, f"screenshots_{pais_nombre}{num_nuevo_excel}")
-                            resultado = {
-                                "pais": pais_nombre, "navegador": navegador,
-                                "viewport": viewport_nombres.get(viewport, viewport),
-                                "estado": "completado" if result.returncode == 0 else "con_errores",
-                                "excel_path": excel_file, "screenshots_dir": screenshots_dir,
-                            }
-                            with _lock:
-                                resultados_ejecucion.append(resultado)
-                            log_mensaje(f"    ✅ Resultado registrado: {os.path.basename(excel_file)}")
-                        elif result.returncode == 0:
-                            log_mensaje(f"    ⚠️ No se detectó nuevo Excel (anterior: {num_anterior_excel}, actual: {num_nuevo_excel})")
-                    except subprocess.TimeoutExpired:
-                        log_mensaje(f"⏰ Timeout: {runner_name}")
-                    except Exception as exc:
-                        log_mensaje(f" Error ejecutando {runner_name}: {exc}")
-                    time.sleep(2)
+                    _run_uno(navegador, viewport)
+                    # "Correr también T3": segunda pasada con el Excel …_T3.xlsx del mercado.
+                    if _corre_t3 and _t3_excel_existe(pais_nombre, navegador):
+                        _run_uno(navegador, viewport, "_T3")
 
         def _run_mercado_completo(pais_nombre):
             """Corre LambdaTest + browsers locales para un país.
@@ -401,6 +436,59 @@ def ejecutar_masivo_autonomo(programacion):
     except Exception as exc:
         log_mensaje(f" Error en revisión masiva autónoma: {exc}")
         return False
+
+
+def _cargar_programacion_leads():
+    """Programación de Envío de Leads: la que escribe la app (programacion_leads.json).
+    Cae al archivo legado programacion_test.json para instalaciones viejas."""
+    prog = cargar_programacion("programacion_leads.json")
+    if prog and prog.get("tipo") == "semanal":
+        return prog
+    prog = cargar_programacion("programacion_test.json")
+    if prog and prog.get("tipo") == "semanal" and prog.get("modo_tarea", "leads") != "masivo":
+        return prog
+    return None
+
+
+def run_once():
+    """Ejecuta la programación guardada UNA sola vez y termina.
+
+    Pensado para el Programador de tareas de Windows: el disparo horario lo pone
+    Windows, así que acá no hay loop de espera ni control de slots — si la tarea
+    corrió, se ejecuta. Devuelve 0 si ejecutó algo, 1 si no había nada que hacer.
+    """
+    if not acquire_autonomous_lock():
+        log_mensaje("⚠️ Ya hay una ejecución autónoma en curso. Se cancela este disparo.")
+        return 1
+
+    programacion = _cargar_programacion_leads()
+    if not programacion:
+        log_mensaje("⚠️ No hay programación de leads guardada (json/programacion_leads.json). Nada que ejecutar.")
+        return 1
+    if not programacion.get("paises"):
+        log_mensaje("⚠️ La programación no tiene mercados seleccionados. Nada que ejecutar.")
+        return 1
+
+    log_mensaje("▶ Disparo del Programador de Windows — ejecución única de Envío de Leads")
+    resultados = ejecutar_tests(programacion)
+
+    if resultados:
+        log_mensaje(f" ✅ {len(resultados)} ejecuciones completadas")
+        log_mensaje(" 📧 INICIANDO ENVÍO DE EMAIL CONSOLIDADO...")
+        try:
+            if enviar_email_resultados_consolidados(resultados):
+                log_mensaje(" ✅ Email enviado exitosamente")
+            else:
+                log_mensaje(" ⚠️ Proceso de email devolvió False")
+        except Exception as exc:
+            import traceback
+            log_mensaje(f" ❌ Excepción al enviar email: {exc}")
+            log_mensaje(traceback.format_exc())
+    else:
+        log_mensaje(" ⚠️ La ejecución no produjo resultados.")
+
+    log_mensaje(" Ejecución única finalizada.")
+    return 0
 
 
 def main():
