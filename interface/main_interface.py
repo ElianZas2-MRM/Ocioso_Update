@@ -2365,6 +2365,18 @@ def iniciar_interfaz(autostart_leads=False):
             scheduler_cfg_leads["navegadores"] = ex_leads.get("navegadores", ["chrome"])
             var_sched_t3.set(bool(ex_leads.get("t3_also", False)))
             prog_state_leads["mode"] = "activado"
+            # Reflejar en las pastillas los mercados realmente programados. Sin esto
+            # arrancaban SIEMPRE todas tildadas (selected_countries parte en True), la
+            # tarjeta mentía sobre qué hay programado y, peor, al volver a tocar
+            # "Programar" se guardaban los 9 mercados pisando los que habías elegido.
+            _paises_prog = [p for p in ex_leads.get("paises", []) if p in selected_countries]
+            if _paises_prog:
+                for _p in paises_list:
+                    selected_countries[_p] = (_p in _paises_prog)
+                try:
+                    refresh_all_country_ui()
+                except Exception:
+                    pass
     except Exception:
         pass
 
