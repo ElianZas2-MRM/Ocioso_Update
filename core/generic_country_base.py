@@ -14,7 +14,7 @@ class GenericCountryBase(BaseFormFiller):
     Reemplaza los 9 archivos Formulario_*_Base.py individuales.
     """
 
-    def __init__(self, country_name: str, browser="chrome", viewport="fullscreen", headless=False, background=True, is_scheduled=False, pausar_autenticacion=False, preview_visible_browser=False):
+    def __init__(self, country_name: str, browser="chrome", viewport="fullscreen", headless=False, background=True, is_scheduled=False, pausar_autenticacion=False, preview_visible_browser=False, excel_suffix=""):
         base_config = get_country_config(country_name)
         config = copy.deepcopy(base_config)
         config['browser'] = browser
@@ -31,6 +31,8 @@ class GenericCountryBase(BaseFormFiller):
             dev_name = "Firefox"
         elif browser == "edge":
             dev_name = "Edge"
-        config['excel_file'] = f"Lead_information_Formulario_{country_name}_{dev_name}.xlsx"
+        # excel_suffix permite apuntar a una variante del mismo mercado sin duplicar
+        # configuración (hoy sólo "_T3", los formularios 2.0 de Adobe AEM).
+        config['excel_file'] = f"Lead_information_Formulario_{country_name}_{dev_name}{excel_suffix or ''}.xlsx"
 
         super().__init__(config)
