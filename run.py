@@ -127,6 +127,9 @@ def _parse_args():
     parser.add_argument("--once", action="store_true",
                         help="Con --autonomous: ejecuta la programación guardada una sola vez y termina "
                              "(pensado para el Programador de tareas de Windows)")
+    parser.add_argument("--autostart-leads", action="store_true",
+                        help="Abre la app y dispara solo el envío de leads programado "
+                             "(lo usa el Programador de tareas de Windows)")
     parser.add_argument("--excel-suffix", dest="excel_suffix", default="",
                         help="Variante del Excel del mercado (ej. _T3 para formularios 2.0 de AEM)")
     parser.add_argument("--run-country", dest="country_name", help="Ejecuta un país puntual sin abrir la UI")
@@ -165,7 +168,7 @@ if __name__ == "__main__":
             excel_suffix=args.excel_suffix,
         )
     else:
-        iniciar_interfaz()
+        iniciar_interfaz(autostart_leads=args.autostart_leads)
     #python "E:\Ariel\Scripts\Form GDCP\Form_Automation_Project\run.py"
     
     # venv   cd "E:\Ariel\Scripts\Form GDCP\Form_Automation_Project"

@@ -796,7 +796,10 @@ if os.name == 'nt':
 else:
     SysTrayIcon = None
 
-def iniciar_interfaz():
+def iniciar_interfaz(autostart_leads=False):
+    """autostart_leads: la app se abrió sola desde el Programador de tareas de
+    Windows. Arranca normal y, apenas termina de construirse la UI, dispara el
+    envío de leads programado sin que nadie toque un botón."""
     # AppUserModelID propio: evita que Windows agrupe la app bajo el ícono de python.exe en la barra de tareas
     if os.name == 'nt':
         try:
@@ -1462,6 +1465,8 @@ def iniciar_interfaz():
                 cfg["ui_prefs"]["t3"] = bool(var_t3.get())
             if 'var_t3_also' in globals() or 'var_t3_also' in locals():
                 cfg["ui_prefs"]["t3_also"] = bool(var_t3_also.get())
+            if 'var_win_abrir_app' in globals() or 'var_win_abrir_app' in locals():
+                cfg["ui_prefs"]["win_task_abrir_app"] = bool(var_win_abrir_app.get())
             
             # Email fields (in both root and ui_prefs)
             enviar_mail = bool(var_enviar_email.get())
@@ -2443,6 +2448,9 @@ def iniciar_interfaz():
             win_task_lbl.config(text="🗓 Windows: sin tareas registradas", fg=TEXT_SECONDARY)
             btn_win_task_del.pack_forget()
 
+    # Modo de la tarea de Windows: silenciosa (nada visible) o abriendo la app.
+    var_win_abrir_app = tk.BooleanVar(value=bool(_ui_prefs.get("win_task_abrir_app", False)))
+
     def cmd_registrar_win_task():
         horas = _horas_programadas_leads()
         if not horas:
@@ -2454,16 +2462,20 @@ def iniciar_interfaz():
                                    "Primero tocá 'Programar test automático' para guardar la programación.\n\n"
                                    "Windows lee esa configuración cuando dispara la tarea.")
             return
+        abrir_app = bool(var_win_abrir_app.get())
+        _modo_txt = ("Se va a ABRIR la app sola a esa hora y va a arrancar el envío"
+                     if abrir_app else
+                     "El envío corre en segundo plano, sin abrir nada (no vas a ver ninguna ventana)")
         if not messagebox.askyesno(
                 "Programador de Windows",
                 "Se van a crear tareas diarias de Windows en estos horarios:\n\n"
                 + "\n".join("• " + h for h in horas)
-                + "\n\nEjecutan el envío de leads aunque Osocio esté cerrado "
+                + f"\n\n{_modo_txt}.\n\nFunciona aunque Osocio esté cerrado "
                   "(requiere que la sesión de Windows esté iniciada).\n\n¿Continuar?"):
             return
         try:
             from utils.win_task_scheduler import registrar
-            ok, msg = registrar(horas)
+            ok, msg = registrar(horas, abrir_app=abrir_app)
         except Exception as e:
             ok, msg = False, str(e)
         log_message(("[SUCCESS] " if ok else "[ERROR] ") + msg.replace("\n", " | "))
@@ -2496,9 +2508,16 @@ def iniciar_interfaz():
                                  relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
                                  padx=14, pady=6, cursor="hand2", command=cmd_quitar_win_task)
 
-    win_task_lbl = tk.Label(ctrl_card_leads, text="", font=("Segoe UI", 8, "italic"),
+    win_task_row = tk.Frame(ctrl_card_leads, bg=CARD_BG_COLOR)
+    win_task_row.pack(anchor="w", pady=(2, 0))
+    win_task_lbl = tk.Label(win_task_row, text="", font=("Segoe UI", 8, "italic"),
                             bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
-    win_task_lbl.pack(anchor="w", pady=(2, 0))
+    win_task_lbl.pack(side="left")
+    tk.Checkbutton(win_task_row, text="🪟 Abrir la app al ejecutar (si no, corre invisible)",
+                   variable=var_win_abrir_app, command=_save_ui_prefs,
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2").pack(side="left", padx=(14, 0))
     _refresh_win_task_lbl()
 
     def view_results_dialog_leads():
@@ -5315,6 +5334,22 @@ def iniciar_interfaz():
         _refresh_deact_btn()
     except Exception:
         pass
+
+    # Arranque automático (la abrió el Programador de tareas de Windows).
+    if autostart_leads:
+        def _autostart():
+            try:
+                switch_tab("scheduler")
+            except Exception:
+                pass
+            log_message("[INFO] La app se abrió automáticamente por el Programador de tareas: "
+                        "iniciando el envío de leads programado...")
+            try:
+                execute_send_leads(scheduled=True)
+            except Exception as e:
+                log_message(f"[ERROR] No se pudo iniciar el envío automático: {e}")
+        # Un respiro para que la ventana termine de dibujarse antes de abrir el modal.
+        root.after(2500, _autostart)
 
     root.mainloop()
 
