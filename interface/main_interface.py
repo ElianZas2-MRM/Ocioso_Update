@@ -3335,9 +3335,32 @@ def iniciar_interfaz(autostart_leads=False):
         MODAL_BG = "#231830"
         MODAL_PILL_BG = "#38234D"
         
-        # Centrar relativo a la app
+        # Si la corrida es automática y la app está minimizada (o en la bandeja), hay que
+        # traerla de vuelta: si no, Windows reporta la posición de la ventana en -32000 y
+        # el modal se crea FUERA DE PANTALLA — parecía que no aparecía nunca.
+        if scheduled:
+            try:
+                if root.state() in ("iconic", "withdrawn") or not root.winfo_viewable():
+                    try:
+                        # Si estaba en la bandeja del sistema hay que sacarla de ahí
+                        # (además de restaurarla) o el ícono queda huérfano.
+                        _restore_from_tray()
+                    except Exception:
+                        root.deiconify()
+                        root.state("normal")
+                    root.lift()
+                    root.update_idletasks()
+            except Exception:
+                pass
+
+        # Centrar relativo a la app; si sus coordenadas no son válidas (minimizada), se
+        # centra sobre la pantalla para que el modal siempre quede visible.
         px = root.winfo_rootx() + (root.winfo_width() - modal_width) // 2
         py = root.winfo_rooty() + (root.winfo_height() - modal_height) // 2
+        _sw, _sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        if not (0 <= px <= _sw - 50) or not (0 <= py <= _sh - 50):
+            px = max(0, (_sw - modal_width) // 2)
+            py = max(0, (_sh - modal_height) // 2)
         modal.geometry(f"{modal_width}x{modal_height}+{px}+{py}")
         modal.configure(bg=MODAL_BG, bd=1, highlightthickness=1, highlightbackground=BORDER_COLOR)
 
