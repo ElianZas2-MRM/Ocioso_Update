@@ -34,6 +34,7 @@ a = Analysis(
         'utils.ty_cta',
         'utils.url_status',
         'utils.excel_layout',
+        'utils.win_task_scheduler',
         'interface.main_interface',
         'interface.helpers_interface',
         'interface.field_validation_ui',
