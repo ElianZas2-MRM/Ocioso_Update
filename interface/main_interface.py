@@ -1073,9 +1073,11 @@ def iniciar_interfaz(autostart_leads=False):
     email_entry.config(state="disabled")  # Habilitado sólo al activar "Enviar mail"
 
     # Variables de control para las opciones de email
-    # "Enviar mail" nunca se restaura tildado al abrir la app (para evitar envíos
-    # accidentales) aunque haya quedado guardado en una sesión anterior.
-    var_enviar_email = tk.BooleanVar(value=False)
+    # "Enviar mail" recuerda lo último que dejó configurado el usuario. Antes se forzaba
+    # a False en cada arranque para evitar envíos accidentales, pero eso hacía que las
+    # corridas automáticas (app abierta por el Programador de tareas) nunca mandaran el
+    # mail: no hay nadie ahí para tildar el check.
+    var_enviar_email = tk.BooleanVar(value=bool(_cfg.get("enviar_mail", False)))
     var_adjuntar_res = tk.BooleanVar(value=bool(_cfg.get("adjuntar_resultados", False)))
     var_adjuntar_ss = tk.BooleanVar(value=bool(_cfg.get("adjuntar_screenshots", False)))
     var_modo_email = tk.StringVar(value=_cfg.get("email_modo", "consolidado"))
@@ -1123,6 +1125,9 @@ def iniciar_interfaz(autostart_leads=False):
                                activebackground=APP_BG_COLOR, activeforeground="white",
                                font=("Segoe UI", 9, "bold"), cursor="hand2", command=toggle_email_options)
     cb_enviar.pack(side="left", padx=(10, 0))
+    # Sincronizar el estado inicial: como "Enviar mail" ahora puede arrancar tildado
+    # desde la config, el campo de destinatario y las opciones tienen que reflejarlo.
+    toggle_email_options()
 
     # ==========================================
     # 3. TABS BAR
