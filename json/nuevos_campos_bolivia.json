@@ -1,0 +1,12 @@
+{
+  "pais": "Bolivia",
+  "ultima_deteccion": "2026-08-15T02:55:42",
+  "campos_nuevos": [
+    {
+      "id": "payment-method",
+      "type": "select",
+      "required": true,
+      "label": "payment-method"
+    }
+  ]
+}
