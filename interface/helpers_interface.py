@@ -74,6 +74,8 @@ _PAIS_ABREV = {
     "Argentina": "AR", "Bolivia": "BO", "Brasil": "BR",
     "Chile": "CL", "Colombia": "CO", "Ecuador": "EC",
     "Paraguay": "PY", "Peru": "PE", "Uruguay": "UY",
+    # Formularios T3 (Adobe AEM): van como mercado propio en el reporte.
+    "CADILLAC BR": "CAD BR",
 }
 
 def _abrev_paises(lista):
@@ -199,8 +201,17 @@ def _worker_envio_emails():
                     _to = mail.To
                     _subject = mail.Subject
                     mail.Send()
+                    # mail.Send() sólo deja el mail en la Bandeja de salida: quien lo
+                    # transmite es el ciclo de envío/recepción de Outlook. Si la máquina
+                    # se despertó sólo para la tarea programada y vuelve a suspenderse,
+                    # el mail se queda ahí hasta el próximo arranque de Outlook. Forzar
+                    # el envío/recepción lo empuja ahora, mientras hay red.
+                    try:
+                        _outlook_instance.Session.SendAndReceive(False)
+                    except Exception as _sr_err:
+                        _safe_print(f"      [WARN] No se pudo forzar envío/recepción de Outlook: {_sr_err}")
                     _safe_print(f"[SUCCESS] Email enviado (Outlook) a: {_to} | Asunto: {_subject}")
-                    time.sleep(0.5)
+                    time.sleep(2)
 
                     if _callback:
                         try:
