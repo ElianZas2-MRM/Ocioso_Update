@@ -525,6 +525,38 @@ def _select_model(driver, field_id, model_text):
     return True
 
 
+_LEVEL_RETRY_ATTEMPTS = 2  # reintentos EXTRA además del primer intento (total: 1 + esto)
+_LEVEL_RETRY_PAUSE = 0.5
+
+
+def _select_level_with_retries(driver, select_id, target_text, log, level_label,
+                                retrigger_fn=None, skip=False):
+    """Selecciona una opción por texto, reintentando ante un "no encontrado" antes de
+    darlo por real. Contra el form real (probado con LambdaTest y sitios de producción
+    lentos/con red inestable) un dropdown dependiente a veces no termina de repoblarse en
+    el primer intento — sobre todo justo después de cambiar de modelo o de nivel padre — y
+    sin reintentar eso se reportaba como FAIL aunque el dealer/ciudad/región sí estuviera:
+    la misma corrida, contra los mismos datos, daba resultados distintos cada vez.
+    `retrigger_fn` (opcional) re-dispara el 'change' del nivel padre entre reintentos —
+    algunos forms sólo repueblan el hijo al recibir ese evento de nuevo, así que reintentar
+    sobre el mismo <select> sin re-disparar el padre no alcanza.
+    `skip=True` (modo exclusión con "no encontrado" esperado) evita reintentar de más.
+    Devuelve (found, text, disclaimer)."""
+    found, text, disclaimer = _select_by_text_robust(driver, select_id, target_text, wait_for_option=True)
+    attempt = 1
+    while not found and not skip and attempt <= _LEVEL_RETRY_ATTEMPTS:
+        log(f"  {level_label} '{target_text}' no encontrado (intento {attempt}), reintentando...", "warn")
+        if retrigger_fn:
+            retrigger_fn()
+        # Backoff creciente: si la primera espera corta no alcanzó, probablemente la
+        # llamada que puebla el dropdown va lenta de verdad (no solo "todavía no llegó"),
+        # así que el segundo reintento le da más margen en vez de repetir el mismo tiempo.
+        time.sleep(_LEVEL_RETRY_PAUSE * attempt)
+        found, text, disclaimer = _select_by_text_robust(driver, select_id, target_text, wait_for_option=True)
+        attempt += 1
+    return found, text, disclaimer
+
+
 def _check_stop(stop_flag):
     if stop_flag is not None and stop_flag.is_set():
         raise StopRequested()
@@ -1030,6 +1062,17 @@ def compare_dealers(
                 log(f"  Modelo '{model_text}' no encontrado en el form, se omite", "warn")
                 counter += len(rows)
                 continue
+            # Cambiar de modelo suele repoblar TODA la cascada región→ciudad→dealer (algunos
+            # forms limitan qué dealers venden qué modelo). Un sleep fijo corto alcanzaba para
+            # el primer modelo (ya viene con la cascada cargada) pero no siempre para el
+            # siguiente: se medía en pruebas reales contra el form real que, sin esperar a que
+            # el nivel ancla tenga opciones de verdad, la primera tanda de filas del modelo
+            # nuevo arrancaba a comparar contra un select todavía vacío/a medio poblar y daba
+            # FAIL falso. Se espera activamente (con tope) a que el nivel ancla tenga opciones.
+            anchor_id = level_ids.get("region") if has_region else (
+                level_ids.get("city") if has_city else level_ids.get("dealer"))
+            if anchor_id:
+                _wait_options_loaded_once(driver, anchor_id, timeout=DEPENDENT_SELECT_TIMEOUT)
             time.sleep(0.3)
 
         # Estado de navegación: qué región/ciudad están seleccionadas ahora mismo en el
@@ -1086,7 +1129,9 @@ def compare_dealers(
                         cur_region = None
                         cur_city = None
                     else:
-                        region_found, _, _ = _select_by_text_robust(driver, level_ids["region"], region_text)
+                        region_found, _, _ = _select_level_with_retries(
+                            driver, level_ids["region"], region_text, log, "Región",
+                            skip=expect_absent)
                         cur_city = None  # cambió la región → el select de ciudad se repuebla
                         if region_found:
                             cur_region = region_text
@@ -1100,8 +1145,13 @@ def compare_dealers(
                     if city_text == cur_city:
                         city_found = True  # ya seleccionada (misma región y ciudad que la fila previa)
                     else:
-                        city_found, _, _ = _select_by_text_robust(
-                            driver, level_ids["city"], city_text, wait_for_option=True)
+                        _retrigger_region = (
+                            (lambda: _select_by_text_robust(driver, level_ids["region"], region_text, wait_for_option=True))
+                            if (has_region and region_text) else None
+                        )
+                        city_found, _, _ = _select_level_with_retries(
+                            driver, level_ids["city"], city_text, log, "Ciudad",
+                            retrigger_fn=_retrigger_region, skip=expect_absent)
                         if city_found:
                             cur_city = city_text
                             log(f"  Ciudad: {city_text}", "ok")
@@ -1112,8 +1162,17 @@ def compare_dealers(
 
                 ready_for_dealer = (region_found or not has_region) and (city_found or not has_city)
                 if has_dealer and dealer_text and ready_for_dealer:
-                    dealer_found, _, name_disclaimer = _select_by_text_robust(
-                        driver, level_ids["dealer"], dealer_text, wait_for_option=True)
+                    if has_city and city_text:
+                        _retrigger_parent = (
+                            lambda: _select_by_text_robust(driver, level_ids["city"], city_text, wait_for_option=True))
+                    elif has_region and region_text:
+                        _retrigger_parent = (
+                            lambda: _select_by_text_robust(driver, level_ids["region"], region_text, wait_for_option=True))
+                    else:
+                        _retrigger_parent = None
+                    dealer_found, _, name_disclaimer = _select_level_with_retries(
+                        driver, level_ids["dealer"], dealer_text, log, "Dealer",
+                        retrigger_fn=_retrigger_parent, skip=expect_absent)
                     if dealer_found:
                         log(f"  Dealer: {dealer_text}"
                             + (f"  ⚠ {name_disclaimer}" if name_disclaimer else ""), "ok")
@@ -1808,10 +1867,97 @@ def zip_screenshots(screenshot_paths, output_zip_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Export a Excel (PASS verde / FAIL rojo / EXTRA amarillo / MISSING violeta)
 # ──────────────────────────────────────────────────────────────────────────────
+_RESULTS_HEADERS = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Dealer",
+                    "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
+
+_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 14, 9: 10, 10: 50, 11: 55, 12: 10}
+
+_STATUS_FILL_BY_NAME = {
+    "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
+    "MISSING": _MISSING_FILL, "DUPLICADO": _DUPLICATE_FILL, "NOTA": _NOTA_FILL,
+    "OCULTO": _OCULTO_FILL,
+}
+
+_INVALID_SHEET_CHARS = re.compile(r"[\\/*?:\[\]]")
+
+
+def _safe_sheet_name(name, taken):
+    """Nombre de hoja Excel válido (sin \\/*?:[], máx 31 caracteres) y sin colisión con
+    los ya usados en `taken` (se le agrega un sufijo numérico si hace falta)."""
+    base = _INVALID_SHEET_CHARS.sub(" ", str(name or "").strip()) or "Modelo"
+    base = re.sub(r"\s+", " ", base).strip()[:31] or "Modelo"
+    candidate = base
+    n = 2
+    while candidate.lower() in taken:
+        suffix = f" ({n})"
+        candidate = base[: 31 - len(suffix)] + suffix
+        n += 1
+    taken.add(candidate.lower())
+    return candidate
+
+
+def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_border):
+    """Escribe una hoja de resultados (mismo formato que antes, factorizado para poder
+    repetirlo una vez por modelo cuando el form tiene selector de Modelo)."""
+    from openpyxl.styles import Alignment
+
+    ws = wb.create_sheet(sheet_name)
+    ws.append(_RESULTS_HEADERS)
+    for cell in ws[1]:
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.border = header_border
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for r in sheet_results:
+        ws.append([
+            r.get("status", ""),
+            r.get("url_landing", ""),
+            r.get("url_form", ""),
+            r.get("modelo", ""),
+            r.get("region", ""),
+            r.get("city", ""),
+            r.get("dealer", ""),
+            r.get("bac_excel", ""),
+            {True: "OK", False: "MISMATCH", None: ""}.get(r.get("bac_ok")),
+            " | ".join(r.get("fails", [])) if r.get("fails") else (r.get("detalle_info") or ""),
+            r.get("name_disclaimer", "") or "",
+            r.get("fila", ""),
+        ])
+        row_idx = ws.max_row
+        fill = _STATUS_FILL_BY_NAME.get(r.get("status"))
+        # Todo lo relacionado con filas OCULTAS del Excel va en naranja, pise lo que pise
+        if r.get("hidden_in_excel"):
+            fill = _OCULTO_FILL
+        for cell in ws[row_idx]:
+            cell.border = thin_border
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            if fill:
+                cell.fill = fill
+        # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
+        # confundir con FAIL, ya que el dealer sí se encontró.
+        if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel"):
+            ws.cell(row=row_idx, column=11).fill = _NOTA_FILL
+
+    for col_idx, width in _RESULTS_COL_WIDTHS.items():
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = width
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    return ws
+
+
 def export_results_excel(results, output_path=None, pais="", hidden_rows=None, hidden_columns=None):
     """hidden_rows / hidden_columns: filas y columnas OCULTAS del Excel de dealers de ORIGEN
     (detect_hidden_rows / detect_hidden_columns). Se listan en el Resumen, y todo resultado
-    relacionado con filas ocultas se pinta de NARANJA (estado OCULTO o flag hidden_in_excel)."""
+    relacionado con filas ocultas se pinta de NARANJA (estado OCULTO o flag hidden_in_excel).
+
+    Si `results` trae más de un Modelo distinto (form con selector de Modelo, comparado
+    contra varios), se separa en UNA HOJA POR MODELO en vez de una sola hoja mezclada —
+    así no hay que filtrar la columna Modelo a mano para ver el detalle de cada uno. Los
+    forms SIN selector de Modelo (o comparados contra uno solo) siguen igual que antes:
+    una única hoja "Resultados"."""
     if output_path is None:
         results_dir = os.path.join(RESULTS_DIR, "dealer_comparator")
         os.makedirs(results_dir, exist_ok=True)
@@ -1833,66 +1979,33 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         bottom=Side(style="medium", color="7D4E9F"),
     )
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Resultados"
-
-    headers = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Dealer",
-               "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
-    ws.append(headers)
-    for cell in ws[1]:
-        cell.fill = _HEADER_FILL
-        cell.font = _HEADER_FONT
-        cell.border = header_border
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    fill_by_status = {
-        "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
-        "MISSING": _MISSING_FILL, "DUPLICADO": _DUPLICATE_FILL, "NOTA": _NOTA_FILL,
-        "OCULTO": _OCULTO_FILL,
-    }
-
+    # Modelos distintos presentes (orden de primera aparición). Los resultados de
+    # find_extra_dealers no traen "modelo" (todavía no es multi-modelo) — quedan con "".
+    modelos_orden = []
     for r in results:
-        ws.append([
-            r.get("status", ""),
-            r.get("url_landing", ""),
-            r.get("url_form", ""),
-            r.get("modelo", ""),
-            r.get("region", ""),
-            r.get("city", ""),
-            r.get("dealer", ""),
-            r.get("bac_excel", ""),
-            {True: "OK", False: "MISMATCH", None: ""}.get(r.get("bac_ok")),
-            " | ".join(r.get("fails", [])) if r.get("fails") else (r.get("detalle_info") or ""),
-            r.get("name_disclaimer", "") or "",
-            r.get("fila", ""),
-        ])
-        row_idx = ws.max_row
-        fill = fill_by_status.get(r.get("status"))
-        # Todo lo relacionado con filas OCULTAS del Excel va en naranja, pise lo que pise
-        if r.get("hidden_in_excel"):
-            fill = _OCULTO_FILL
-        for cell in ws[row_idx]:
-            cell.border = thin_border
-            cell.alignment = Alignment(vertical="center", wrap_text=True)
-            if fill:
-                cell.fill = fill
-        # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
-        # confundir con FAIL, ya que el dealer sí se encontró.
-        if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel"):
-            ws.cell(row=row_idx, column=11).fill = _NOTA_FILL
+        m = (r.get("modelo") or "").strip()
+        if m and m not in modelos_orden:
+            modelos_orden.append(m)
+    multi_modelo = len(modelos_orden) > 1
 
-    # Auto-fit column widths (basado en contenido, con mínimos y máximos razonables)
-    col_widths = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 14, 9: 10, 10: 50, 11: 55, 12: 10}
-    for col_idx, width in col_widths.items():
-        col_letter = ws.cell(row=1, column=col_idx).column_letter
-        ws.column_dimensions[col_letter].width = width
+    wb = Workbook()
+    wb.remove(wb.active)  # se crean las hojas explícitamente abajo, en el orden deseado
 
-    # Fijar encabezado (freeze panes)
-    ws.freeze_panes = "A2"
-
-    # Autofiltro
-    ws.auto_filter.ref = ws.dimensions
+    if multi_modelo:
+        taken_names = set()
+        for modelo in modelos_orden:
+            sheet_results = [r for r in results if (r.get("modelo") or "").strip() == modelo]
+            sheet_name = _safe_sheet_name(modelo, taken_names)
+            _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_border)
+        # Resultados sin modelo asociado (ej. EXTRA/DUPLICADO de find_extra_dealers, que
+        # no depende de qué modelo esté seleccionado): hoja aparte, no se pierden ni se
+        # mezclan arbitrariamente con el primer modelo.
+        sin_modelo = [r for r in results if not (r.get("modelo") or "").strip()]
+        if sin_modelo:
+            sheet_name = _safe_sheet_name("Extras", taken_names)
+            _write_results_sheet(wb, sheet_name, sin_modelo, thin_border, header_border)
+    else:
+        _write_results_sheet(wb, "Resultados", results, thin_border, header_border)
 
     # ── Hoja Resumen ──
     total = len(results)
@@ -1901,7 +2014,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         counts[r.get("status", "FAIL")] = counts.get(r.get("status", "FAIL"), 0) + 1
     disclaimer_count = sum(1 for r in results if r.get("name_disclaimer"))
 
-    summary_ws = wb.create_sheet("Resumen")
+    summary_ws = wb.create_sheet("Resumen", 0)  # primera hoja: es lo primero que se quiere ver
     summary_data = [
         ["País", pais],
         ["Fecha", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
@@ -1917,6 +2030,22 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         ["🔷 NOTA (dealer del form no está en el Excel, solo difiere en nombre)", counts.get("NOTA", 0)],
         ["⚠ PASS con nombre distinto en detalles menores", disclaimer_count],
     ]
+
+    # Desglose por modelo: mismo resumen PASS/FAIL/etc. pero por modelo, para ver de un
+    # vistazo si algún modelo en particular tiene más problemas que otro — sin esto había
+    # que abrir cada pestaña y contar a mano.
+    if multi_modelo:
+        summary_data.append(["", ""])
+        summary_data.append(["Desglose por Modelo", ""])
+        for modelo in modelos_orden:
+            m_results = [r for r in results if (r.get("modelo") or "").strip() == modelo]
+            m_counts = {}
+            for r in m_results:
+                m_counts[r.get("status", "FAIL")] = m_counts.get(r.get("status", "FAIL"), 0) + 1
+            resumen_txt = " · ".join(
+                f"{k}={v}" for k, v in m_counts.items() if v
+            ) or "(sin resultados)"
+            summary_data.append([f"  {modelo}", f"{len(m_results)} chequeados — {resumen_txt}"])
 
     # Agregar URLs únicas usadas
     urls_form = sorted(set(r.get("url_form", "") for r in results if r.get("url_form")))
@@ -1956,7 +2085,7 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
         summary_ws.append(row_data)
 
     # Formato básico de la hoja resumen
-    summary_ws.column_dimensions["A"].width = 22
+    summary_ws.column_dimensions["A"].width = 30
     summary_ws.column_dimensions["B"].width = 60
     for row in summary_ws.iter_rows(min_row=1, max_row=summary_ws.max_row, max_col=2):
         for cell in row:

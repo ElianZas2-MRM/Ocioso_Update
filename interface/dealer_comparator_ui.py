@@ -1608,6 +1608,14 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     def _shot(result, _form_url=form_url, _landing_url=landing_url,
                               _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
                         combo_parts = []
+                        # El modelo va PRIMERO en el nombre de archivo: sin esto, dos modelos
+                        # distintos que dan el mismo resultado (mismo estado/región/ciudad/
+                        # dealer — el caso más común, la mayoría de las filas son PASS en
+                        # ambos) generaban el MISMO filename y la captura del segundo modelo
+                        # pisaba en disco la del primero. El usuario terminaba viendo la mitad
+                        # de las capturas esperadas, como si solo se hubiera corrido 1 modelo.
+                        if result.get("modelo"):
+                            combo_parts.append(result["modelo"])
                         if has_region_var.get() and result.get("region"):
                             combo_parts.append(result["region"])
                         if has_city_var.get() and result.get("city"):
