@@ -1309,7 +1309,15 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
 
     is_empty = not value or not value.strip() or _is_placeholder(value)
 
-    for attempt in range(1, _DEP_RETRIES + 1):
+    # Cuando el Excel pide un valor concreto, no alcanza con un único intento: en
+    # sesiones remotas (LambdaTest) y navegadores más lentos, las opciones de un
+    # dropdown pueden seguir llegando de forma asíncrona después de este primer JS
+    # call. _SELECT_JS ya cae al azar si no encuentra match EN ESE INSTANTE — sin
+    # reintentar acá, ese azar pisaba lo que el usuario puso en el Excel por una
+    # simple carrera contra el JS del sitio, no porque el valor no existiera.
+    max_attempts = _DEP_RETRIES if is_empty else max(_DEP_RETRIES, 6)
+
+    for attempt in range(1, max_attempts + 1):
         try:
             try:
                 el_select = driver.find_element(By.ID, select_id)
@@ -1322,27 +1330,33 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
                 return False
             r = res.get("r", "")
             if r == "noopts":
-                if attempt < _DEP_RETRIES:
+                if attempt < max_attempts:
                     time.sleep(0.1 if not is_dependent else 0.3)
                     continue
                 return False
             if r in ("notfound", "hidden"):
                 return False
             if res.get("ok"):
+                if not is_empty and not res.get("matched") and attempt < max_attempts:
+                    # Todavía puede aparecer la opción pedida: reintentar antes de
+                    # aceptar la elección al azar que _SELECT_JS ya hizo en el DOM.
+                    time.sleep(0.3)
+                    continue
                 txt = res.get("text", value or "?")
                 if not is_empty and not res.get("matched"):
-                    # El Excel pidió un valor concreto y el dropdown no lo tiene: se eligió
-                    # uno al azar. Se avisa acá además de quedar en "Datos vs Excel", para
-                    # que se vea en el log por qué el resultado no coincide con lo pedido.
+                    # El Excel pidió un valor concreto y, tras reintentar, el dropdown
+                    # sigue sin tenerlo: se eligió uno al azar. Se avisa acá además de
+                    # quedar en "Datos vs Excel", para que se vea en el log por qué el
+                    # resultado no coincide con lo pedido.
                     log(f"  ⚠ {field_name}: el Excel pide '{value}' pero el dropdown no "
-                        f"ofrece esa opción → quedó '{txt}' (aleatorio)")
+                        f"ofrece esa opción (tras {attempt} intento(s)) → quedó '{txt}' (aleatorio)")
                 else:
                     log(f"  {'🎲' if is_empty else '✓'} {field_name} = '{txt}'")
                 if _out is not None:
                     _out.append(txt)
                 return True
         except Exception as e:
-            if attempt < _DEP_RETRIES:
+            if attempt < max_attempts:
                 time.sleep(0.05)
             else:
                 log(f"  ✗ Error select '{field_name}': {e}")

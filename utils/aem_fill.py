@@ -273,9 +273,17 @@ def _scroll_into_view(driver, el):
 
 
 def _select_option_js(driver, sel, chosen):
+    """Setea el <select> por el setter nativo del prototipo, no por asignación directa
+    de .value. AEM Adaptive Forms trackea el value por componente (React-like); una
+    asignación directa no pasa por ese tracker y el widget puede revertir la UI al
+    placeholder ("Selecione"/"Selecionar") en el próximo re-render, aunque el 'change'
+    se haya disparado. Mismo patrón ya usado para inputs de texto (native setter +
+    dispatchEvent) en el resto del código."""
     _scroll_into_view(driver, sel)
     driver.execute_script(
-        "var s=arguments[0];s.value=arguments[1];"
+        "var s=arguments[0],v=arguments[1];"
+        "try{var d=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value');"
+        "if(d&&d.set){d.set.call(s,v);}else{s.value=v;}}catch(e){s.value=v;}"
         "s.dispatchEvent(new Event('input',{bubbles:true}));"
         "s.dispatchEvent(new Event('change',{bubbles:true}));"
         "s.dispatchEvent(new Event('blur',{bubbles:true}));",
