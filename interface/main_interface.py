@@ -824,6 +824,40 @@ def iniciar_interfaz(autostart_leads=False):
     root.minsize(1100, 600)
     root.configure(bg=APP_BG_COLOR)
 
+    def _forzar_foreground(win):
+        """Trae `win` al frente de VERDAD, aunque nadie haya tocado la app.
+
+        Windows bloquea SetForegroundWindow para procesos que no tuvieron el
+        último input del usuario (foreground lock): root.lift()/deiconify() solos
+        no alcanzan cuando quien restaura la ventana es una corrida programada
+        (el usuario está haciendo otra cosa) o el Programador de tareas. El
+        "rebote" de -topmost True→False sí funciona siempre: es sólo un cambio
+        de Z-order (SetWindowPos), no requiere el permiso de foreground.
+        """
+        try:
+            win.deiconify()
+        except Exception:
+            pass
+        try:
+            win.attributes("-topmost", True)
+            win.lift()
+            win.after(200, lambda: win.attributes("-topmost", False) if win.winfo_exists() else None)
+        except Exception:
+            pass
+        if os.name == "nt":
+            try:
+                import ctypes
+                win.update_idletasks()
+                hwnd = ctypes.windll.user32.GetParent(win.winfo_id()) or win.winfo_id()
+                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+        try:
+            win.focus_force()
+        except Exception:
+            pass
+
     # Establecer el icono del oso de Ocioso.
     # iconbitmap(default=...) lo aplica a la ventana Y a las Toplevel; sin default= el .exe
     # empaquetado se queda con el icono genérico de Tk en la barra de tareas.
@@ -1077,7 +1111,11 @@ def iniciar_interfaz(autostart_leads=False):
                            disabledbackground=BUTTON_INACTIVE, disabledforeground=TEXT_SECONDARY)
     email_entry.pack(side="left", ipady=3)
     try:
-        email_entry.insert(0, obtener_email_destinatario() or "")
+        # obtener_email_destinatario() devuelve una LISTA (soporta varios emails
+        # separados por coma). Insertarla directo en el Entry le pasa un objeto no-string
+        # a Tk, que lo serializa como lista Tcl: pierde las comas (quedan espacios) y
+        # aparece envuelta en llaves "{...}" al releer. Hay que unirla en un string.
+        email_entry.insert(0, ", ".join(obtener_email_destinatario()))
     except Exception:
         pass
     email_entry.config(state="disabled")  # Habilitado sólo al activar "Enviar mail"
@@ -3174,7 +3212,10 @@ def iniciar_interfaz(autostart_leads=False):
 
         total_sessions = sum(len(js) for _, js in market_jobs)
         if total_sessions == 0:
-            messagebox.showwarning("Ejecutar", "No hay Excels para ejecutar. Generá datos o seleccioná un dispositivo.")
+            if scheduled:
+                log_message("[WARN] Ejecución programada sin dispositivos/Excels configurados. Se cancela.")
+            else:
+                messagebox.showwarning("Ejecutar", "No hay Excels para ejecutar. Generá datos o seleccioná un dispositivo.")
             return
 
         # Modo "una sesión por URL": expande cada fila de cada Excel en su propia sesión
@@ -3227,6 +3268,7 @@ def iniciar_interfaz(autostart_leads=False):
         # debe tener su propio Excel. Si falta alguno, avisar y no ejecutar (sin modal).
         faltantes = []
         faltantes_sessions = []  # sesiones con Excel inexistente (para poder crearlos vacíos)
+        invalidas_ids = set()    # id() de TODAS las sesiones con Excel faltante o vacío
         for s in active_sessions_list:
             _ex = s["excel"]
             _nombre = os.path.basename(_ex) if _ex else \
@@ -3234,6 +3276,7 @@ def iniciar_interfaz(autostart_leads=False):
             if not _ex or not os.path.exists(_ex):
                 faltantes.append(f"• {s['pais']} · {s['device']}: {_nombre} (no existe)")
                 faltantes_sessions.append(s)
+                invalidas_ids.add(id(s))
                 continue
             # El Excel existe: validar que tenga al menos una fila con datos (no arrancar vacío).
             try:
@@ -3246,42 +3289,55 @@ def iniciar_interfaz(autostart_leads=False):
                 _tiene = True  # si no se pudo leer (abierto/corrupto), no bloquear por esto
             if not _tiene:
                 faltantes.append(f"• {s['pais']} · {s['device']}: {_nombre} (vacío / sin leads)")
+                invalidas_ids.add(id(s))
         if faltantes:
-            # Dos opciones: crear los Excel vacíos con las columnas del país (respeta el path
-            # _T3 si corresponde), o cerrar. Solo se pueden crear los que NO existen.
-            _creables = []
-            _seen_paths = set()
-            for s in faltantes_sessions:
-                _p = s.get("excel")
-                if _p and _p not in _seen_paths and "temporales" not in _p:
-                    _seen_paths.add(_p)
-                    _creables.append(s)
             _msg = ("No se encontró un Excel válido (inexistente o vacío) para el/los dispositivo(s) seleccionado(s):\n\n"
                     + "\n".join(faltantes))
-            if _creables:
-                _msg += ("\n\n¿Querés CREAR el/los Excel vacío(s) con las columnas del país (para completarlos a mano)?\n\n"
-                         "Sí = crear los Excel vacíos    ·    No = cerrar")
-                if messagebox.askyesno("Error Excel", _msg):
-                    _creados = []
-                    for s in _creables:
-                        try:
-                            _cols = build_excel_columns_for_country(s["pais"])
-                            import pandas as _pd
-                            os.makedirs(os.path.dirname(s["excel"]) or DATA_DIR, exist_ok=True)
-                            _pd.DataFrame(columns=_cols).to_excel(s["excel"], index=False)
-                            _creados.append(os.path.basename(s["excel"]))
-                        except Exception as _ce:
-                            log_message(f"[ERROR] No se pudo crear {s.get('excel')}: {_ce}")
-                    if _creados:
-                        messagebox.showinfo(
-                            "Excel creados",
-                            "Se crearon vacíos (solo encabezados). Completá al menos un lead "
-                            "(o generá datos) y volvé a ejecutar:\n\n"
-                            + "\n".join("• " + n for n in _creados))
+            if scheduled:
+                # Corrida desatendida: nadie va a estar para responder un messagebox.
+                # Un askyesno/showerror acá bloquea el mainloop de Tk para SIEMPRE
+                # (la app queda "colgada" sin ejecutar nada ni avisar por mail). En vez
+                # de preguntar, se descartan las sesiones con Excel faltante/vacío y se
+                # sigue con las que sí tienen datos.
+                log_message("[WARN] Ejecución programada con Excel(s) faltante(s)/vacío(s), se omiten:\n" + _msg)
+                active_sessions_list = [s for s in active_sessions_list if id(s) not in invalidas_ids]
+                if not active_sessions_list:
+                    log_message("[WARN] Ninguna sesión tiene Excel válido. Se cancela la corrida programada.")
+                    return
             else:
-                messagebox.showerror("Error Excel", _msg
-                                     + "\n\nGenerá los datos (con al menos un lead) antes de ejecutar.")
-            return
+                # Dos opciones: crear los Excel vacíos con las columnas del país (respeta el path
+                # _T3 si corresponde), o cerrar. Solo se pueden crear los que NO existen.
+                _creables = []
+                _seen_paths = set()
+                for s in faltantes_sessions:
+                    _p = s.get("excel")
+                    if _p and _p not in _seen_paths and "temporales" not in _p:
+                        _seen_paths.add(_p)
+                        _creables.append(s)
+                if _creables:
+                    _msg += ("\n\n¿Querés CREAR el/los Excel vacío(s) con las columnas del país (para completarlos a mano)?\n\n"
+                             "Sí = crear los Excel vacíos    ·    No = cerrar")
+                    if messagebox.askyesno("Error Excel", _msg):
+                        _creados = []
+                        for s in _creables:
+                            try:
+                                _cols = build_excel_columns_for_country(s["pais"])
+                                import pandas as _pd
+                                os.makedirs(os.path.dirname(s["excel"]) or DATA_DIR, exist_ok=True)
+                                _pd.DataFrame(columns=_cols).to_excel(s["excel"], index=False)
+                                _creados.append(os.path.basename(s["excel"]))
+                            except Exception as _ce:
+                                log_message(f"[ERROR] No se pudo crear {s.get('excel')}: {_ce}")
+                        if _creados:
+                            messagebox.showinfo(
+                                "Excel creados",
+                                "Se crearon vacíos (solo encabezados). Completá al menos un lead "
+                                "(o generá datos) y volvé a ejecutar:\n\n"
+                                + "\n".join("• " + n for n in _creados))
+                else:
+                    messagebox.showerror("Error Excel", _msg
+                                         + "\n\nGenerá los datos (con al menos un lead) antes de ejecutar.")
+                return
 
         import pandas as pd
         total_leads = 0
@@ -3319,7 +3375,7 @@ def iniciar_interfaz(autostart_leads=False):
         if not scheduled:
             btn_enviar.config(state="disabled", text=" EN CURSO...", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
         log_message(f"[INFO] Iniciando ejecución {'programada' if scheduled else 'manual'}: "
-                    f"{len(market_jobs)} mercado(s) · {total_sessions} sesión(es) · "
+                    f"{len(market_jobs)} mercado(s) · {len(active_sessions_list)} sesión(es) · "
                     f"mercados={'paralelo' if mercados_par else 'consecutivo'} · "
                     f"excels={'paralelo' if excels_par else 'consecutivo'}.")
 
@@ -3348,7 +3404,7 @@ def iniciar_interfaz(autostart_leads=False):
                     except Exception:
                         root.deiconify()
                         root.state("normal")
-                    root.lift()
+                        _forzar_foreground(root)
                     root.update_idletasks()
             except Exception:
                 pass
@@ -3383,8 +3439,14 @@ def iniciar_interfaz(autostart_leads=False):
 
         # Modal real: bloquea la interacción con la interfaz de atrás mientras se ejecuta
         modal.transient(root)
-        modal.attributes("-topmost", False)
-        modal.lift()
+        if scheduled:
+            # Corrida desatendida: nadie clickeó nada para "ganarse" el foreground de
+            # Windows, así que un simple lift()/transient() puede dejar el modal
+            # perfectamente creado pero tapado por cualquier otra ventana. Se fuerza.
+            _forzar_foreground(modal)
+        else:
+            modal.attributes("-topmost", False)
+            modal.lift()
         # No usamos grab_set() para permitir que el usuario minimice o cierre la ventana principal desde la barra de título de Windows.
         # En su lugar, deshabilitamos la interacción con el área cliente del main window agregando BlockTag a sus widgets.
         try:
@@ -5314,9 +5376,8 @@ def iniciar_interfaz(autostart_leads=False):
     switch_tab("leads")
 
     def _restore_from_tray():
-        root.deiconify()
         root.state("normal")
-        root.focus_force()
+        _forzar_foreground(root)
         global _tray_instance
         if _tray_instance:
             try:
@@ -5459,6 +5520,10 @@ def iniciar_interfaz(autostart_leads=False):
                 switch_tab("scheduler")
             except Exception:
                 pass
+            # El Programador de tareas abre la app sin que nadie haya hecho click en nada:
+            # sin esto, Windows puede dejar la ventana dibujada pero detrás de otras
+            # (foreground lock), y después el modal "Ejecutando" hereda el mismo problema.
+            _forzar_foreground(root)
             log_message("[INFO] La app se abrió automáticamente por el Programador de tareas: "
                         "iniciando el envío de leads programado...")
             try:

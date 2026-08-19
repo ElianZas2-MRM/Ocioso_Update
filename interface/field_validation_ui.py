@@ -284,7 +284,9 @@ def build_field_validation_tab(parent, palette, shared_config=None):
     email_var = (
         shared_config.get("email_var")
         if shared_config and shared_config.get("email_var")
-        else StringVar(value=obtener_email_destinatario())
+        # obtener_email_destinatario() devuelve una LISTA; pasarla directo a StringVar
+        # la serializa como lista Tcl (pierde las comas, aparecen llaves "{...}").
+        else StringVar(value=", ".join(obtener_email_destinatario()))
     )
 
     cfg_global = cargar_config_global()
@@ -2219,7 +2221,7 @@ def build_field_validation_tab(parent, palette, shared_config=None):
             else:
                 _create_validation_urls_excel_if_missing()
                 _reload_urls_preview_from_excel()
-            email_var.set(obtener_email_destinatario())
+            email_var.set(", ".join(obtener_email_destinatario()))
 
             cfg = cargar_config_global()
             enviar_mail_var.set(bool(cfg.get("enviar_mail", False)))
