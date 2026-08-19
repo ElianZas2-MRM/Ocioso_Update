@@ -1515,6 +1515,19 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
                     _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total}: {label_txt}")
 
+                def _reload_cb(_landing=landing_url, _form=form_url, _mode=current_url_mode):
+                    # Recuperación para cuando un dropdown queda efectivamente vacío (sin
+                    # ninguna opción real): recarga la página del form y vuelve a avanzar
+                    # hasta los dropdowns, igual que al arrancar este form — más confiable
+                    # que reintentar sobre una página que puede haber quedado rota.
+                    open_target(driver, _mode, _landing, _form)
+                    advance_to_selects(
+                        driver, level_ids=DEFAULT_SELECT_IDS,
+                        has_region=has_region_var.get(), has_city=has_city_var.get(),
+                        has_dealer=has_dealer_var.get(), log_cb=lambda *_a, **_k: None,
+                        stop_flag=state["stop_event"],
+                    )
+
                 if model_missing_msg:
                     ui_log(model_missing_msg, "warn")
                     pair_results = [{
@@ -1535,6 +1548,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
                         screenshot_cb=None,
                         expect_absent=expect_absent,
+                        reload_cb=_reload_cb,
                     )
                 _hidden_filas = state.get("hidden_rows") or {}
                 for r in pair_results:
@@ -1558,6 +1572,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         log_cb=ui_log, progress_cb=_extras_progress_cb, stop_flag=state["stop_event"],
                         has_dealer=has_dealer_var.get(),
                         hidden_rows_data=state.get("hidden_filtered") or [],
+                        model_field_id=model_field_id, models=models_to_run,
                     )
                     for r in extras:
                         r["url_form"] = form_url
@@ -1677,6 +1692,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         log_cb=lambda *_a: None, progress_cb=_capture_progress_cb, stop_flag=state["stop_event"],
                         screenshot_cb=_shot,
                         expect_absent=expect_absent,
+                        reload_cb=_reload_cb,
                     )
 
                 # --- Email por form: usa el flag global de la barra superior ---
