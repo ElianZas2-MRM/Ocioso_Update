@@ -11,6 +11,7 @@ import shutil
 import unicodedata
 import random
 import json
+import threading
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
@@ -41,6 +42,7 @@ builtins.print = _safe_global_print
 # Importar directamente
 from browser_manager import BrowserManager
 from screenshot_manager import ScreenshotManager
+from browser.browser_actions import BrowserActions
 
 from utils.field_id_aliases import VISID_ID_ALIASES
 
@@ -1261,7 +1263,8 @@ class BaseFormFiller:
             background=self.config.get('background', True),
         )
         self.screenshot_manager = ScreenshotManager(self.driver, self.SCREENSHOT_DIR)
-        
+        self.actions = BrowserActions(self.driver)
+
         # Monkey patch find_element and find_elements to support name & CSS fallback for By.ID
         from selenium.webdriver.common.by import By
         original_find_element = self.driver.find_element
@@ -4382,18 +4385,39 @@ class BaseFormFiller:
                 excel_val = self._excel_value_for_field_id(elem_real_id, select_id)
                 if excel_val and not self._is_placeholder_text(excel_val):
                     exp = self._normalize_text(excel_val)
-                    chosen_option = next(
-                        (o for o in valid_options if self._normalize_text(o.text) == exp), None)
-                    if chosen_option is None:
-                        chosen_option = next(
-                            (o for o in valid_options if exp and exp in self._normalize_text(o.text)), None)
-                    if chosen_option is None:
-                        chosen_option = next(
-                            (o for o in valid_options
-                             if self._normalize_text(o.get_attribute("value") or "") == exp), None)
+
+                    def _match_excel_option():
+                        try:
+                            current_valid = self._get_valid_select_options(select_element)
+                        except Exception:
+                            current_valid = valid_options
+                        found = next(
+                            (o for o in current_valid if self._normalize_text(o.text) == exp), None)
+                        if found is None:
+                            found = next(
+                                (o for o in current_valid if exp and exp in self._normalize_text(o.text)), None)
+                        if found is None:
+                            found = next(
+                                (o for o in current_valid
+                                 if self._normalize_text(o.get_attribute("value") or "") == exp), None)
+                        return found, current_valid
+
+                    # No rendirse al primer chequeo: en navegadores/dispositivos más lentos
+                    # (Firefox, Edge, LambdaTest) las opciones de un dropdown dependiente
+                    # pueden seguir cargando de forma asíncrona. Sin esta espera, la opción
+                    # pedida en el Excel todavía no estaba en el DOM cuando se comparaba y
+                    # el código caía al azar aunque el Excel sí tuviera el dato correcto.
+                    chosen_option, _latest_valid = _match_excel_option()
+                    _deadline = time.time() + 4.0
+                    while chosen_option is None and time.time() < _deadline:
+                        time.sleep(0.3)
+                        chosen_option, _latest_valid = _match_excel_option()
+                    if _latest_valid:
+                        valid_options = _latest_valid
+
                     if chosen_option is None:
                         print(f"⚠️ Select '{select_id}': el Excel pide '{excel_val}' pero el "
-                              f"dropdown no ofrece esa opción → se elige una al azar")
+                              f"dropdown no ofrece esa opción (tras esperar) → se elige una al azar")
                     else:
                         from_excel = True
 
@@ -6533,4 +6557,30 @@ class BaseFormFiller:
     def cleanup(self):
         """Limpia recursos"""
         if self.driver:
-            self.driver.quit()
+            self._quit_driver_with_timeout(self.driver, timeout=15)
+            self.driver = None
+
+    @staticmethod
+    def _quit_driver_with_timeout(driver, timeout=15):
+        """driver.quit() puede quedar colgado si el navegador/webdriver dejó de
+        responder (proceso zombie, crash a medias, etc.). Sin límite, eso bloquea
+        para siempre al hilo que está corriendo la ejecución — y con él, el modal
+        de resultados nunca llega a mostrarse: la app queda "congelada" para el
+        usuario aunque el mainloop de Tk siga vivo. Se corre el quit() en un hilo
+        aparte y, si no vuelve a tiempo, se sigue igual (el proceso del navegador
+        queda huérfano, pero se puede matar aparte; no vale la pena colgar toda
+        la app por eso)."""
+        done = threading.Event()
+
+        def _do_quit():
+            try:
+                driver.quit()
+            except Exception as e:
+                print(f"Aviso: error cerrando el navegador: {e}")
+            finally:
+                done.set()
+
+        threading.Thread(target=_do_quit, daemon=True).start()
+        if not done.wait(timeout):
+            print(f"⚠️ El navegador no respondió a quit() en {timeout}s — "
+                  f"se continúa sin esperarlo (puede quedar un proceso huérfano).")
