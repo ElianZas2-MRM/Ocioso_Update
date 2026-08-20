@@ -9,6 +9,12 @@ import threading
 import subprocess
 from selenium import webdriver
 
+try:
+    from utils.popup_logger import popup_log
+except Exception:
+    def popup_log(title, message, level="ERROR"):
+        print(f"[{level}] {title}: {message}")
+
 # ── Registro de PIDs de drivers activos ───────────────────────────────────────
 _active_pids: list = []
 _pids_lock = threading.Lock()
@@ -215,10 +221,12 @@ def _resolve_driver(local_name, drivers_dir):
     local = os.path.join(drivers_dir, local_name)
     if os.path.exists(local):
         return local
-    raise FileNotFoundError(
+    message = (
         f"No se encontró el driver '{local_name}' en la carpeta /drivers/. "
         "Descargá el driver manualmente desde el sitio oficial y colocálo en /drivers/."
     )
+    popup_log(f"Driver faltante: {local_name}", message, level="ERROR")
+    raise FileNotFoundError(message)
 
 
 class BrowserManager:
@@ -273,21 +281,31 @@ class BrowserManager:
 
     @staticmethod
     def _create_driver_with_message(create_fn, driver_name):
-        """Crea el driver y traduce errores comunes de versión a mensajes claros"""
+        """Crea el driver y traduce errores comunes de versión a mensajes claros, avisando
+        con un popup además de re-lanzar la excepción (mismo criterio que los errores de
+        Excel: que el usuario lo vea en el momento, no sólo en el log)."""
         try:
             return create_fn()
         except Exception as e:
             error_text = str(e).lower()
             if "expected browser binary location" in error_text or "no 'moz:firefoxoptions.binary' capability provided" in error_text:
-                raise Exception(
+                message = (
                     "Firefox no encontrado en esta PC.\n"
                     "Instalá Mozilla Firefox o configurá la variable FIREFOX_BINARY con la ruta de firefox.exe"
-                ) from e
-            if "session not created" in str(e).lower():
-                raise Exception(
+                )
+                popup_log("Firefox no encontrado", message, level="ERROR")
+                raise Exception(message) from e
+            # "session not created" cubre Chrome/Edge ("This version of *Driver only supports
+            # * version X"); "only supports" es un respaldo por si el mensaje exacto cambia
+            # entre versiones de Selenium/driver y no trae ese primer texto.
+            if "session not created" in error_text or "only supports" in error_text:
+                message = (
                     f"Driver desactualizado para {driver_name}.\n"
-                    "Descargá la versión correcta del driver y reemplazálo en la carpeta /drivers/."
-                ) from e
+                    "Descargá la versión correcta del driver y reemplazálo en la carpeta /drivers/.\n\n"
+                    f"Detalle: {e}"
+                )
+                popup_log(f"Driver desactualizado: {driver_name}", message, level="ERROR")
+                raise Exception(message) from e
             raise
 
     @staticmethod
@@ -417,9 +435,9 @@ class BrowserManager:
         if firefox_binary:
             options.binary_location = firefox_binary
         elif os.name == "nt":
-            raise FileNotFoundError(
-                "No se encontró Firefox en esta PC. Instalá Mozilla Firefox o definí FIREFOX_BINARY con la ruta de firefox.exe"
-            )
+            message = "No se encontró Firefox en esta PC. Instalá Mozilla Firefox o definí FIREFOX_BINARY con la ruta de firefox.exe"
+            popup_log("Firefox no encontrado", message, level="ERROR")
+            raise FileNotFoundError(message)
 
         if headless:
             options.add_argument("--headless")
