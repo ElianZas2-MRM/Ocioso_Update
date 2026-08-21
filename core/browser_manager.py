@@ -217,13 +217,19 @@ def reapply_background_no_activate(driver):
 
 
 def _resolve_driver(local_name, drivers_dir):
-    """Busca el driver en la carpeta local /drivers/. No descarga nada de internet."""
+    """Busca el driver en la carpeta local /drivers/.
+
+    La descarga la maneja utils/driver_updater.py al abrir la app (y antes de cada corrida
+    autónoma), no esta función: acá solo se resuelve la ruta del que ya está en disco. Si falta,
+    es porque la actualización automática no pudo correr — normalmente, sin internet.
+    """
     local = os.path.join(drivers_dir, local_name)
     if os.path.exists(local):
         return local
     message = (
-        f"No se encontró el driver '{local_name}' en la carpeta /drivers/. "
-        "Descargá el driver manualmente desde el sitio oficial y colocálo en /drivers/."
+        f"No se encontró el driver '{local_name}' en la carpeta /drivers/.\n"
+        "Osocio lo descarga solo al abrir la app: cerrá y volvé a abrirla con internet.\n"
+        "Si el problema sigue, descargálo del sitio oficial y dejálo en /drivers/."
     )
     popup_log(f"Driver faltante: {local_name}", message, level="ERROR")
     raise FileNotFoundError(message)
@@ -299,9 +305,12 @@ class BrowserManager:
             # * version X"); "only supports" es un respaldo por si el mensaje exacto cambia
             # entre versiones de Selenium/driver y no trae ese primer texto.
             if "session not created" in error_text or "only supports" in error_text:
+                # Los drivers se actualizan al abrir la app. Si igual salta acá es porque el
+                # navegador se actualizó con la app ya abierta: reabrirla dispara la descarga.
                 message = (
                     f"Driver desactualizado para {driver_name}.\n"
-                    "Descargá la versión correcta del driver y reemplazálo en la carpeta /drivers/.\n\n"
+                    "El navegador se actualizó después de abrir Osocio. Cerrá y volvé a abrir la "
+                    "app: el driver correcto se descarga solo al iniciar.\n\n"
                     f"Detalle: {e}"
                 )
                 popup_log(f"Driver desactualizado: {driver_name}", message, level="ERROR")

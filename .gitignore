@@ -63,3 +63,9 @@ data/FormsBolivia_TDP_test_data.xlsx
 
 # Indice generado por CodeGraph (base SQLite + estado del daemon) - se regenera solo
 .codegraph/
+
+# Drivers de navegador - los descarga y actualiza la app sola al iniciar
+# (utils/driver_updater.py). Antes se versionaban aca: ~86 MB de binarios que ademas quedaban
+# desfasados cada vez que Chrome/Edge se autoactualizaban y habia que reemplazar a mano.
+drivers/
+json/driver_check.json
