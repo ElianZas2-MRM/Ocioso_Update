@@ -3211,7 +3211,20 @@ class BaseFormFiller:
                 By.XPATH,
                 "//*[contains(@class,'error') or contains(@style,'red') or contains(@class,'invalid')]"
             )
-            errores_visibles = [e for e in errores if e.is_displayed() and e.text.strip()]
+            # El selector es muy amplio a propósito (cubre mensajes de error de forms muy
+            # distintos entre países), pero eso mismo hace que agarre falsos positivos SIN
+            # texto real: el asterisco rojo que marca un campo obligatorio (siempre presente,
+            # haya o no error), separadores, íconos con una sola letra, etc. Un mensaje de
+            # error de verdad siempre tiene una palabra de al menos 3 letras — un símbolo
+            # suelto no. Esto pasaba sobre todo en corridas con muchos leads seguidos: el
+            # sitio se pone más lento, la espera de la confirmación (TY) se agota en un envío
+            # que en realidad iba a terminar bien, y entonces este chequeo corría y encontraba
+            # el asterisco de "obligatorio" en vez de un error real.
+            _tiene_texto_real = re.compile(r"[A-Za-zÀ-ÿ]{3,}")
+            errores_visibles = [
+                e for e in errores
+                if e.is_displayed() and e.text.strip() and _tiene_texto_real.search(e.text)
+            ]
         except Exception:
             return ""
         if not errores_visibles:

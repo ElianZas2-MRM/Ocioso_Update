@@ -1623,16 +1623,18 @@ def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
         c = counts or {}
         pass_n = int(c.get("PASS", 0))
         fail_n = int(c.get("FAIL", 0))
+        missing_n = int(c.get("MISSING", 0))
         extra_n = int(c.get("EXTRA", 0))
         dup_n = int(c.get("DUPLICADO", 0))
         oculto_n = int(c.get("OCULTO", 0))
         nota_n = int(c.get("NOTA", 0))
 
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
-        estado = "PASS" if fail_n == 0 else "FAILED"
-        icono = "✅" if fail_n == 0 else "❌"
+        hay_problemas = (fail_n + missing_n) > 0
+        estado = "PASS" if not hay_problemas else "FAILED"
+        icono = "✅" if not hay_problemas else "❌"
         asunto = (f"[{estado}] Comparador Dealers {_PAIS_ABREV.get(pais, pais)} {fecha_actual} — "
-                  f"{pass_n} OK / {fail_n} FAIL")
+                  f"{pass_n} OK / {fail_n} FAIL / {missing_n} MISSING")
 
         cuerpo = f"{icono} Comparador de Dealers — {pais}\nFecha: {fecha_actual}\n"
         if form_url:
@@ -1642,7 +1644,8 @@ def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
         cuerpo += (
             f"\nResumen:\n"
             f"  🟢 PASS: {pass_n}\n"
-            f"  🔴 FAIL: {fail_n}\n"
+            f"  🔴 FAIL (está en el form pero algo no coincide): {fail_n}\n"
+            f"  🟣 MISSING (declarado en el Excel pero no está en el form): {missing_n}\n"
             f"  🟡 EXTRA (en el form, no en el Excel): {extra_n}\n"
             f"  🔵 DUPLICADO (repetido en el dropdown): {dup_n}\n"
             f"  🟠 OCULTO (solo en filas ocultas del Excel): {oculto_n}\n"
