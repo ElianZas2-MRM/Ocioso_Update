@@ -199,9 +199,15 @@ if exist ".\data\Field_Validation_URLs.xlsx" (
     copy /y ".\data\Field_Validation_URLs.xlsx" "%PORTABLE_DIR%\data\Field_Validation_URLs.xlsx" >nul
 )
 
-REM drivers/ si viaja: son los chromedriver/geckodriver pineados que necesita el portable
+REM drivers/ si viaja, pero ya NO se versionan en el repo: los baja la app sola. Antes de
+REM empaquetar se refrescan para que el portable salga con los que corresponden a los
+REM navegadores de esta PC. Si no hay internet se usa lo que haya en .\drivers y, en el peor
+REM caso, el portable los descarga solo en el primer arranque.
+echo Verificando drivers de navegador...
+%PY% -c "import truststore; truststore.inject_into_ssl(); from utils.driver_updater import ensure_drivers_ready; ensure_drivers_ready()"
+
 if exist ".\drivers" (
-    robocopy ".\drivers" "%PORTABLE_DIR%\drivers" /E /NFL /NDL /NJH /NJS /NC /NS >nul
+    robocopy ".\drivers" "%PORTABLE_DIR%\drivers" /E /XD ".tmp_update" /NFL /NDL /NJH /NJS /NC /NS >nul
     if errorlevel 8 goto :error
 ) else (
     mkdir "%PORTABLE_DIR%\drivers"
