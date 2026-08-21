@@ -2213,7 +2213,10 @@ def build_field_validation_tab(parent, palette, shared_config=None):
             except Exception:
                 existing_excel_pairs = []
 
-            payload_pairs = list(zip(landing_urls, form_urls))
+            # _set_url_pairs_in_widget espera tripletas (país, landing, form) — el país no
+            # se persiste en el JSON de reglas (_save_rules_from_ui solo guarda landing_urls/
+            # form_urls), así que se reconstruye con país vacío en vez de perderlo silenciosamente.
+            payload_pairs = [("", landing, form) for landing, form in zip(landing_urls, form_urls)]
             if existing_excel_pairs:
                 _reload_urls_preview_from_excel()
             elif payload_pairs:
