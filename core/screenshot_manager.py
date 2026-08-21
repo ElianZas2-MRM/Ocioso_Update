@@ -181,6 +181,94 @@ class ScreenshotManager:
         except Exception as e:
             print(f"Error restaurando elementos: {e}")
 
+    def _force_paint_pass(self):
+        """Scrollea la página de punta a punta (y vuelve) para forzar a Chrome a pintar TODO
+        el contenido al menos una vez antes del capture CDP. captureBeyondViewport devuelve
+        lo que el compositor ya tenga pintado — contenido que nunca se scrolleó a la vista
+        (ej. bajo carga, en corridas largas) puede salir en blanco si no se lo "despierta"
+        así primero. No hace falta en el scroll+merge de respaldo: ese método scrollea
+        de por sí en cada sección."""
+        try:
+            total_height, viewport_height = self.driver.execute_script(
+                "return [document.body.parentNode.scrollHeight, window.innerHeight];"
+            )
+            pos = 0
+            while pos < total_height:
+                self.driver.execute_script(f"window.scrollTo(0, {pos});")
+                pos += viewport_height
+                time.sleep(0.08)
+            self.driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(0.15)
+        except Exception:
+            pass
+
+    def _looks_blank(self, screenshot_path):
+        """True si una fracción sospechosamente alta de la imagen son franjas horizontales
+        sin variación de píxeles — señal de que Chrome no había pintado esa parte cuando se
+        pidió el capture CDP. Se mide por franjas, no como total contiguo, porque un ícono o
+        link suelto en medio del área en blanco (pasa en la práctica) corta la racha sin que
+        la imagen deje de estar mayormente vacía. Calibrado con capturas reales: las buenas
+        rondan ~24% de franjas casi lisas (fondos blancos normales de cualquier form), las
+        que salieron en blanco de verdad rondan ~44% — el corte en 35% separa bien ambos casos
+        con margen."""
+        try:
+            from PIL import ImageStat
+            with Image.open(screenshot_path) as img:
+                gray = img.convert("L")
+                w, h = gray.size
+                strip_h = max(1, h // 40)
+                total = blank = 0
+                for top in range(0, h, strip_h):
+                    box = (0, top, w, min(top + strip_h, h))
+                    stat = ImageStat.Stat(gray.crop(box))
+                    total += 1
+                    if stat.stddev[0] < 2:
+                        blank += 1
+                return total > 0 and (blank / total) > 0.35
+        except Exception:
+            return False  # si no se puede analizar, no bloquear el capture por las dudas
+
+    def _capture_full_page_cdp(self, screenshot_path):
+        """Full-page screenshot con un solo capture vía Chrome DevTools Protocol (Page.
+        captureScreenshot + captureBeyondViewport), en vez de ir scrolleando y pegando
+        secciones. Solo Chrome/Edge (Chromium) exponen execute_cdp_cmd. Devuelve False ante
+        cualquier error (o si el resultado sale en blanco tras forzar el pintado y reintentar)
+        para que el caller siga con el método de scroll+merge de respaldo."""
+        import base64
+
+        def _shoot():
+            metrics = self.driver.execute_cdp_cmd("Page.getLayoutMetrics", {})
+            content_size = metrics.get("cssContentSize") or metrics.get("contentSize")
+            if not content_size:
+                return False
+            width = max(1, min(int(content_size["width"]), 16000))
+            height = max(1, min(int(content_size["height"]), 16000))
+            result = self.driver.execute_cdp_cmd("Page.captureScreenshot", {
+                "format": "png",
+                "captureBeyondViewport": True,
+                "clip": {"x": 0, "y": 0, "width": width, "height": height, "scale": 1},
+            })
+            with open(screenshot_path, "wb") as f:
+                f.write(base64.b64decode(result["data"]))
+            return True
+
+        try:
+            self._force_paint_pass()
+            if not _shoot():
+                return False
+            if self._looks_blank(screenshot_path):
+                # Todavía en blanco pese al scroll de "despertar": un segundo intento
+                # completo antes de resignarse al método más lento de scroll+merge.
+                self._force_paint_pass()
+                time.sleep(0.3)
+                if not _shoot() or self._looks_blank(screenshot_path):
+                    print("Captura CDP salió en blanco tras reintentar, se usa el método de scroll+merge.")
+                    return False
+            return True
+        except Exception as e:
+            print(f"Captura CDP full-page falló, se usa el método de scroll+merge: {e}")
+            return False
+
     def take_full_page_screenshot(self, filename):
         """Toma screenshot completa de toda la página uniendo múltiples capturas"""
         screenshot_path = os.path.join(self.screenshot_dir, filename)
@@ -232,6 +320,38 @@ class ScreenshotManager:
 
             # Neutralizar nav/chat/cookie fijos ANTES de medir, para que no se arrastren.
             self._neutralize_fixed_elements()
+
+            # Chrome/Edge (Chromium): probar primero un solo capture vía CDP en vez del
+            # scroll+merge de abajo. El scroll+merge pega secciones capturadas en distintas
+            # posiciones de scroll una debajo de la otra — en steppers/carousels que dejan los
+            # pasos "hermanos" fuera de pantalla pero presentes en el documento (con scrollHeight
+            # inflado), eso terminaba duplicando visualmente el mismo bloque de campos en la
+            # imagen final. CDP renderiza la página completa de una sola vez, como la ve el
+            # browser, así que no tiene ese problema.
+            # PERO: si el form vive en un iframe (modo landing), CDP con captureBeyondViewport
+            # deja en blanco el área del iframe que nunca se scrolleó a la vista — Chrome no
+            # pinta contenido de iframe fuera de viewport para ese capture. Ahí conviene el
+            # scroll+merge de siempre, que sí fuerza el pintado real al scrollear de verdad.
+            # (self.current_frame no sirve acá: el Comparador de Dealers arma un
+            # ScreenshotManager nuevo por captura y nunca lo setea, así que se chequea el DOM
+            # directamente en vez de confiar en ese tracking.)
+            try:
+                # Solo cuenta un iframe VISIBLE y de tamaño real (el del form) — un iframe
+                # chiquito/oculto de chat o tracking no debería tirar abajo el capture CDP.
+                page_has_iframe = bool(self.driver.execute_script("""
+                    var frames = document.getElementsByTagName('iframe');
+                    for (var i = 0; i < frames.length; i++) {
+                        var r = frames[i].getBoundingClientRect();
+                        if (r.width > 200 && r.height > 150) return true;
+                    }
+                    return false;
+                """))
+            except Exception:
+                page_has_iframe = False
+            if self.browser_name in ("chrome", "msedge", "microsoftedge") and not in_iframe and not page_has_iframe:
+                if self._capture_full_page_cdp(screenshot_path):
+                    print(f"Captura completa (CDP) guardada: {filename}")
+                    return True
 
             total_width = self.driver.execute_script("return document.body.scrollWidth")
             total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
