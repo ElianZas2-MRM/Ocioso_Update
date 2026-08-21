@@ -3108,13 +3108,118 @@ def iniciar_interfaz(autostart_leads=False):
             pass
 
     # Estado de ejecución (para que la X minimice en vez de cerrar mientras corre).
-    _exec_state = {"running": False}
+    _exec_state = {"running": False, "last_fails": {}}
+
+    # Sufijos de dispositivo (copia estática de la tabla que usa execute_send_leads)
+    # — la necesitan tanto el botón de reintento (fuera de execute_send_leads) como
+    # _build_retry_market_jobs (adentro), y es una lista fija que no depende de
+    # ningún estado de UI, así que se define una sola vez acá. Incluye Mac/Android LT:
+    # lt_runner.py / lt_android_runner.py ya reportan fail_rows con detalle de fila,
+    # igual que base_form_filler.py para desktop.
+    _RETRY_DEVICE_SUFFIX = [
+        ("Chrome", "desktop", "chrome", "chrome"),
+        ("Firefox", "desktop", "firefox", "firefox"),
+        ("Edge", "desktop", "edge", "edge"),
+        ("Mac", "mac", None, "mac lt"),
+        ("Android", "android", None, "android lt"),
+    ]
+
+    def _build_retry_excel(original_excel, fail_row_numbers, tmp_dir, pais, device):
+        """Arma un Excel temporal con SOLO las filas que fallaron en la última corrida.
+        fail_row_numbers = números de fila FÍSICOS del Excel original (1-indexado, fila 1 =
+        encabezado, igual que las "fila N" que ya se muestran en el modal de resultados).
+        Devuelve (ruta_temp, row_map): row_map traduce fila física del archivo temporal ->
+        fila física del Excel original, para poder re-registrar los fails de ESTE reintento
+        contra la fila real (y no contra la numeración 1..N del temporal) — así un segundo
+        reintento sólo vuelve a tomar lo que sigue fallando, no el set original completo.
+        Filas que ya no existen en el Excel original (se borró/achicó desde la corrida) se
+        descartan en silencio. Devuelve (None, {}) si no queda ninguna fila válida."""
+        import pandas as pd
+        if not fail_row_numbers or not original_excel or not os.path.exists(original_excel):
+            return None, {}
+        try:
+            df = pd.read_excel(original_excel, dtype=str).fillna("")
+        except Exception:
+            return None, {}
+        if df.empty:
+            return None, {}
+        valid_positions = []
+        for row_num in sorted({int(r) for r in fail_row_numbers if str(r).strip().lstrip("-").isdigit()}):
+            pos = row_num - 2  # fila física 2 = primera fila de datos (fila 1 = encabezado)
+            if 0 <= pos < len(df):
+                valid_positions.append(pos)
+        if not valid_positions:
+            return None, {}
+        os.makedirs(tmp_dir, exist_ok=True)
+        tmp_path = os.path.join(tmp_dir, f"_retry_{pais}_{device}.xlsx")
+        try:
+            df.iloc[valid_positions].to_excel(tmp_path, index=False)
+        except Exception:
+            return None, {}
+        row_map = {temp_idx + 2: pos + 2 for temp_idx, pos in enumerate(valid_positions)}
+        return tmp_path, row_map
+
+    def _eligible_retry_targets(sel_countries, sel_disp, last_fails, device_suffix_table):
+        """Combos (país, dispositivo) tildados AHORA MISMO en la pantalla — igual que si se
+        fuera a correr por primera vez — que además tienen fails guardados de la última
+        corrida MANUAL. Todos los dispositivos con detalle de fila por fila (desktop y
+        Mac/Android LT)."""
+        suffix_to_key = {suffix: key for suffix, _dtype, _browser, key in device_suffix_table}
+        targets = {}
+        for (pais, device_label), info in (last_fails or {}).items():
+            if not sel_countries.get(pais):
+                continue
+            base_device = device_label[:-len("·T3")] if device_label.endswith("·T3") else device_label
+            disp_key = suffix_to_key.get(base_device)
+            if disp_key is None or not sel_disp.get(disp_key):
+                continue
+            rows = info.get("rows") or []
+            if not rows:
+                continue
+            targets[(pais, device_label)] = list(rows)
+        return targets
 
     # Ejecución real de leads (desktop + LambdaTest) con el modal de progreso
-    def execute_send_leads(scheduled=False):
+    def execute_send_leads(scheduled=False, retry_only=None):
         if not BACKEND_OK:
             messagebox.showerror("Ejecutar", f"El backend no está disponible.\n{_BACKEND_IMPORT_ERROR}")
             return
+        if scheduled:
+            # El reintento es una acción manual (la elige la persona tildando países/
+            # dispositivos en pantalla) — no tiene sentido en una corrida desatendida.
+            retry_only = None
+
+        def _build_retry_market_jobs(retry_only):
+            """market_jobs para un reintento: una sesión por (país, dispositivo) presente
+            en retry_only, apuntando a un Excel temporal armado SOLO con las filas que
+            fallaron la última vez. No pasa por _sessions_for/T3/"sesión por URL": cada
+            entrada de retry_only ya identifica exactamente qué (país, dispositivo —
+            incluye el sufijo ·T3 si corresponde) hay que re-correr."""
+            tmpdir = os.path.join(_APP_BASE, "temporales")
+            by_pais = {}
+            for (r_pais, device_label), fail_rows in retry_only.items():
+                info = _exec_state.get("last_fails", {}).get((r_pais, device_label))
+                if not info:
+                    continue
+                original_excel = info.get("excel")
+                base_device = device_label[:-len("·T3")] if device_label.endswith("·T3") else device_label
+                match = next((row for row in _RETRY_DEVICE_SUFFIX if row[0] == base_device), None)
+                if not match:
+                    continue
+                _suffix, r_dtype, r_browser, _key = match
+                tmp_path, row_map = _build_retry_excel(original_excel, fail_rows, tmpdir, r_pais, device_label)
+                if not tmp_path:
+                    continue
+                by_pais.setdefault(r_pais, []).append({
+                    "pais": r_pais, "dtype": r_dtype, "browser": r_browser, "device": device_label,
+                    "excel": tmp_path,
+                    # Mismo criterio que _t3_extra_sessions: sin esto, el T3 se fusiona
+                    # con el mercado normal en el email y su resultado desaparece.
+                    "email_label": _etiqueta_t3(r_pais) if device_label.endswith("·T3") else None,
+                    "_retry_source_excel": original_excel,
+                    "_retry_row_map": row_map,
+                })
+            return list(by_pais.items())
 
         # Sufijos de dispositivo ↔ tipo de ejecución (para localizar los Excels generados)
         # (suffix Excel, dtype, browser, key en selected_disp)
@@ -3200,13 +3305,17 @@ def iniciar_interfaz(autostart_leads=False):
                 
             mercados_par = (p_mode == "paralelo") and (len(market_jobs) > 1)
             excels_par = (p_mode == "paralelo")
+        elif retry_only:
+            market_jobs = _build_retry_market_jobs(retry_only)
+            mercados_par = (mercados_mode[0] == "paralelo") and (len(market_jobs) > 1)
+            excels_par = (excels_mode[0] == "paralelo")
         else:
             if not any(selected_disp.values()):
                 messagebox.showwarning("Ejecutar", "Seleccioná al menos un dispositivo / navegador antes de ejecutar.")
                 return
             paises_run = [p for p in paises_list if selected_countries.get(p)] or [active_p_tab[0]]
             market_jobs = [(p, _sessions_for(p)) for p in paises_run]
-            
+
             mercados_par = (mercados_mode[0] == "paralelo") and (len(market_jobs) > 1)
             excels_par = (excels_mode[0] == "paralelo")
 
@@ -3214,12 +3323,17 @@ def iniciar_interfaz(autostart_leads=False):
         if total_sessions == 0:
             if scheduled:
                 log_message("[WARN] Ejecución programada sin dispositivos/Excels configurados. Se cancela.")
+            elif retry_only:
+                messagebox.showwarning("Reintentar fallidos", "No quedan filas válidas para reintentar "
+                                        "(puede que el Excel original haya cambiado desde la última corrida).")
             else:
                 messagebox.showwarning("Ejecutar", "No hay Excels para ejecutar. Generá datos o seleccioná un dispositivo.")
             return
 
         # Modo "una sesión por URL": expande cada fila de cada Excel en su propia sesión
-        url_par = (not scheduled) and bool(var_url_parallel.get())
+        # (un reintento ya corre sólo sobre las filas que fallaron — no tiene sentido
+        # volver a fragmentarlas una por URL).
+        url_par = (not scheduled) and (not retry_only) and bool(var_url_parallel.get())
         try:
             url_max = max(1, min(20, int(url_max_var.get())))
         except Exception:
@@ -3374,6 +3488,10 @@ def iniciar_interfaz(autostart_leads=False):
 
         if not scheduled:
             btn_enviar.config(state="disabled", text=" EN CURSO...", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
+            try:
+                btn_retry_leads.config(state="disabled", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, cursor="arrow")
+            except Exception:
+                pass
         log_message(f"[INFO] Iniciando ejecución {'programada' if scheduled else 'manual'}: "
                     f"{len(market_jobs)} mercado(s) · {len(active_sessions_list)} sesión(es) · "
                     f"mercados={'paralelo' if mercados_par else 'consecutivo'} · "
@@ -3428,6 +3546,7 @@ def iniciar_interfaz(autostart_leads=False):
                 btn_enviar.config(state="normal", text=" EJECUTAR ENVÍO",
                                   bg=EXECUTE_BG, fg=EXECUTE_FG, cursor="hand2")
                 refresh_execute_state()
+                btn_retry_leads.config(state="normal", bg="#3D2E1A", fg="#F8C471", cursor="hand2")
             except Exception:
                 pass
         modal.bind("<Destroy>", lambda e: _reset_exec_btn() if str(e.widget) == str(modal) else None, add="+")
@@ -3922,6 +4041,30 @@ def iniciar_interfaz(autostart_leads=False):
                     _paint_pais(pais)
             _ui(_u)
 
+        def _record_retry_fails(pais, device, sess, excel, scheduled, frows):
+            """Guarda/actualiza el estado para 'REINTENTAR FALLIDOS' de esta sesión —
+            mismo criterio que ya usa la rama desktop: sólo corridas manuales, no las
+            sub-sesiones de 'una sesión por URL', traduce fila-temporal -> fila-original
+            vía _retry_row_map cuando el reintento vino de un reintento anterior."""
+            if scheduled or "·URL" in device:
+                return
+            _orig_excel = sess.get("_retry_source_excel") or excel
+            _row_map = sess.get("_retry_row_map") or {}
+            _orig_rows = set()
+            for _fr in frows:
+                _rn = _fr.get("row") if isinstance(_fr, dict) else _fr
+                try:
+                    _rn = int(_rn)
+                except (TypeError, ValueError):
+                    continue
+                _orig_rows.add(_row_map.get(_rn, _rn))
+            with _lock:
+                _lf = _exec_state.setdefault("last_fails", {})
+                if _orig_rows:
+                    _lf[(pais, device)] = {"excel": _orig_excel, "rows": sorted(_orig_rows)}
+                else:
+                    _lf.pop((pais, device), None)
+
         def _collect_lt_email(pais, navegador, viewport, summary):
             """Registra el resultado LT para email y, si es modo por país, lo envía ya."""
             if not (enviar_mail and not stop_event.is_set()):
@@ -4000,6 +4143,7 @@ def iniciar_interfaz(autostart_leads=False):
                         # Excel sin filas procesadas: contar la sesión como 1 form OK para no romper totales.
                         _ok = int(sess.get("rows_count", 1) or 1)
                     _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_frows)
+                    _record_retry_fails(pais, device, sess, excel, scheduled, _frows)
                 elif dtype == "mac":
                     sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_mac"))
                     import lt_controller  # type: ignore
@@ -4008,10 +4152,12 @@ def iniciar_interfaz(autostart_leads=False):
                     _collect_lt_email(pais, "lambdatest_mac", "mac", summary)
                     _err = summary.get("error")
                     _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
+                    _lt_frows = list(summary.get("fail_rows", []) or [])
                     if _err and _ok == 0 and _fail == 0:
                         _bump(pais, _sid, fail=1, err=str(_err)[:200])
                     else:
-                        _bump(pais, _sid, ok=_ok, fail=_fail)
+                        _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_lt_frows)
+                    _record_retry_fails(pais, device, sess, excel, scheduled, _lt_frows)
                 elif dtype == "android":
                     sys.path.insert(0, os.path.join(_APP_BASE, "lambdatest_android"))
                     import lt_android_controller  # type: ignore
@@ -4023,10 +4169,12 @@ def iniciar_interfaz(autostart_leads=False):
                     _collect_lt_email(pais, "lambdatest_android", "android", summary)
                     _err = summary.get("error")
                     _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
+                    _lt_frows = list(summary.get("fail_rows", []) or [])
                     if _err and _ok == 0 and _fail == 0:
                         _bump(pais, _sid, fail=1, err=str(_err)[:200])
                     else:
-                        _bump(pais, _sid, ok=_ok, fail=_fail)
+                        _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_lt_frows)
+                    _record_retry_fails(pais, device, sess, excel, scheduled, _lt_frows)
             except Exception as e:
                 log_message(f"[ERROR] {pais}/{device}: {e}")
                 # Crash de la sesión: contar como fallidos todos sus formularios.
@@ -4117,6 +4265,43 @@ def iniciar_interfaz(autostart_leads=False):
     btn_enviar.pack(side="right", padx=(6, 0))
     btn_enviar.bind("<Enter>", lambda e: btn_enviar.config(bg=EXECUTE_HOVER) if btn_enviar['state'] == "normal" else None)
     btn_enviar.bind("<Leave>", lambda e: btn_enviar.config(bg=EXECUTE_BG) if btn_enviar['state'] == "normal" else None)
+
+    def _retry_failed_leads():
+        """Reintenta SOLO las filas que fallaron la última corrida manual, para los
+        países/dispositivos que estén tildados ahora mismo (desktop y Mac/Android LT) —
+        igual criterio de selección que un envío normal. Genera su propio Excel de
+        resultados (no pisa el de la corrida original)."""
+        if _exec_state.get("running"):
+            return
+        targets = _eligible_retry_targets(selected_countries, selected_disp,
+                                           _exec_state.get("last_fails", {}), _RETRY_DEVICE_SUFFIX)
+        if not targets:
+            messagebox.showinfo(
+                "Reintentar fallidos",
+                "No hay fails guardados para reintentar en los países/dispositivos tildados "
+                "ahora mismo (o todavía no corriste un envío manual en esta sesión).",
+            )
+            return
+        total_rows = sum(len(rows) for rows in targets.values())
+        detalle = "\n".join(f"• {p} · {d}: {len(rows)} fila(s)"
+                             for (p, d), rows in sorted(targets.items()))
+        if not messagebox.askyesno(
+            "Reintentar fallidos",
+            f"Se van a reintentar {total_rows} fila(s) en {len(targets)} combinación(es) "
+            f"país/dispositivo:\n\n{detalle}\n\n"
+            "Se genera un Excel de resultados NUEVO para el reintento (no se pisa el original). "
+            "¿Continuar?",
+        ):
+            return
+        execute_send_leads(retry_only=targets)
+
+    btn_retry_leads = tk.Button(d_header, text=" REINTENTAR FALLIDOS", compound="left",
+                                 font=("Segoe UI", 9, "bold"), bg="#3D2E1A", fg="#F8C471",
+                                 relief="flat", bd=0, activebackground="#5A431F", activeforeground="#F8C471",
+                                 padx=18, pady=6, cursor="hand2", command=_retry_failed_leads)
+    btn_retry_leads.pack(side="right", padx=(6, 0))
+    btn_retry_leads.bind("<Enter>", lambda e: btn_retry_leads.config(bg="#5A431F") if btn_retry_leads['state'] == "normal" else None)
+    btn_retry_leads.bind("<Leave>", lambda e: btn_retry_leads.config(bg="#3D2E1A") if btn_retry_leads['state'] == "normal" else None)
 
     def refresh_execute_state():
         if any(selected_countries.values()):
