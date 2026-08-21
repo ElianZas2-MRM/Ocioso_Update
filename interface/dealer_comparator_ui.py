@@ -30,6 +30,7 @@ from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     MODEL_FIELD_ID_ALIASES,
     StopRequested,
+    _get_select,
     _locate_form_iframe,
     advance_to_selects,
     banner_lines_for_result,
@@ -199,6 +200,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         "field_check_widgets": [],
         "modal": None,
         "expect_absent": False,
+        # form_url -> {"pair_dir", "export_path", "landing_url", "url_mode"} de la última
+        # corrida completa, para que "Reintentar fallidos" sepa dónde escribir sin repetir
+        # toda la corrida.
+        "pair_info": {},
     }
 
     # ── Barra de acciones fija (solo Borrar URLs + Ejecutar), siempre visible ──
@@ -532,11 +537,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     col_region_var = StringVar(value="REGION")
     col_city_var = StringVar(value="CIUDAD")
     col_dealer_var = StringVar(value="NOMBRE")
-    col_bac_var = StringVar(value="BAC")
     _e_region = labeled_entry(cols_row, "Columna Región", col_region_var)
     _e_city = labeled_entry(cols_row, "Columna Ciudad", col_city_var)
     _e_dealer = labeled_entry(cols_row, "Columna Dealer", col_dealer_var)
-    _e_bac = labeled_entry(cols_row, "Columna BAC", col_bac_var)
 
     # Cuando un nivel se DESELECCIONA, su "Columna X" se bloquea y muestra "No aplica"
     # (así no se pide ni valida esa columna). Al reactivarlo, se restaura el valor real.
@@ -562,15 +565,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     _sync_col_entry("city", col_city_var, _e_city, has_city_var.get())
     _sync_col_entry("dealer", col_dealer_var, _e_dealer, has_dealer_var.get())
 
-    opts_row = Frame(columns_card, bg=CARD_BG)
-    opts_row.pack(fill="x", padx=15, pady=(0, 4))
-    chk_bac_var = BooleanVar(value=False)
-    Checkbutton(opts_row, text="Verificar BAC (opcional — muchos forms no exponen data-bac en el HTML)",
-                variable=chk_bac_var, bg=CARD_BG, fg=TEXT_S, selectcolor=ENTRY_BG,
-                activebackground=CARD_BG, wraplength=340, justify="left").pack(anchor="w")
-    # La "Columna BAC" se bloquea a "No aplica" mientras "Verificar BAC" esté destildado.
-    chk_bac_var.trace_add("write", lambda *_a: _sync_col_entry("bac", col_bac_var, _e_bac, chk_bac_var.get()))
-    _sync_col_entry("bac", col_bac_var, _e_bac, chk_bac_var.get())
     # Extras y duplicados se buscan SIEMPRE (integrado en el flujo normal)
     find_extras_var = BooleanVar(value=True)
 
@@ -857,13 +851,11 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         col_region_var.set(cfg.get("col_region", "REGION"))
         col_city_var.set(cfg.get("col_city", "CIUDAD"))
         col_dealer_var.set(cfg.get("col_dealer", "NOMBRE"))
-        col_bac_var.set(cfg.get("col_bac", "BAC"))
         _col_shadow.update({"region": col_region_var.get(), "city": col_city_var.get(),
-                            "dealer": col_dealer_var.get(), "bac": col_bac_var.get()})
+                            "dealer": col_dealer_var.get()})
         has_region_var.set(bool(cfg.get("has_region", True)))
         has_city_var.set(bool(cfg.get("has_city", True)))
         has_dealer_var.set(bool(cfg.get("has_dealer", True)))
-        chk_bac_var.set(bool(cfg.get("chk_bac", False)))
         find_extras_var.set(True)  # Siempre True (extras se buscan siempre)
         has_models_var.set(bool(cfg.get("has_models", False)))
         models_field_id_var.set(cfg.get("models_field_id", "models"))
@@ -908,8 +900,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "col_region": _col_real("region", col_region_var, has_region_var.get()),
             "col_city": _col_real("city", col_city_var, has_city_var.get()),
             "col_dealer": _col_real("dealer", col_dealer_var, has_dealer_var.get()),
-            "col_bac": _col_real("bac", col_bac_var, chk_bac_var.get()),
-            "chk_bac": chk_bac_var.get(),
             "find_extras": find_extras_var.get(),
             "has_models": has_models_var.get(),
             "models_field_id": models_field_id_var.get(),
@@ -944,6 +934,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         state["pais"] = pais
         _refresh_pais_cards()
         _apply_country_settings(pais)
+        refresh_execute_state()
 
     _refresh_preset_combo()
 
@@ -954,7 +945,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "region": resolve_column(headers, col_region_var.get()) if has_region_var.get() else None,
             "city": resolve_column(headers, col_city_var.get()) if has_city_var.get() else None,
             "dealer": resolve_column(headers, col_dealer_var.get()) if has_dealer_var.get() else None,
-            "bac": resolve_column(headers, col_bac_var.get()) if chk_bac_var.get() else None,
         }
 
     def _field_checks_resolved():
@@ -1259,7 +1249,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 status_lbl.config(text=f"{cur}/{total} — {label_txt}")
             root.after(0, _apply)
 
-        def _set_complete(ok, counts, detenido=False, error_msg=None):
+        def _set_complete(ok, counts, detenido=False, error_msg=None, load_error_count=0):
             def _apply():
                 if not modal.winfo_exists():
                     return
@@ -1302,6 +1292,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     if not detenido and not error_msg:
                         resumen += ("   —   ✓ Todo OK" if not counts.get("FAIL")
                                     else f"   —   ⚠ {counts.get('FAIL', 0)} con problemas, revisá el Excel")
+                    if load_error_count:
+                        # El form tiró su pantalla de error de carga durante la corrida — ya se
+                        # reintentó una vez y se omitieron estas filas para no colgar el resto
+                        # del análisis. Se avisa acá porque son FAIL "artificiales" (del sitio,
+                        # no del dealer) que con un segundo intento capaz sí pasan.
+                        resumen += (f"\n⚠ {load_error_count} fila(s) se omitieron por el error de "
+                                    f"carga del form — probá 'Reintentar fallidos' en unos minutos.")
                     summary_lbl.config(text=resumen, justify="left")
                 except Exception as ui_err:  # noqa: BLE001
                     LOGGER.warning("Error actualizando modal de resultados: %s", ui_err)
@@ -1322,13 +1319,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         if running:
             btn_run.config(text="  EJECUCIÓN EN CURSO", image="", bg=BTN_INACTIVE, fg="#8A7E9E",
                            disabledforeground="#8A7E9E", state="disabled", cursor="arrow")
+            btn_retry_failed.config(state="disabled", cursor="arrow")
         else:
             btn_run.config(text=" EJECUTAR", image=get_button_icon("play_green.png"), state="normal", cursor="hand2")
+            btn_retry_failed.config(state="normal", cursor="hand2")
             refresh_execute_state()
 
     def _tiene_datos_minimos():
-        """Chequeo rápido de lo mínimo para poder ejecutar: Excel de dealers elegido,
-        columna Dealer definida (solo si está activo), y Excel de URLs cargado."""
+        """Chequeo rápido de lo mínimo para poder ejecutar: país seleccionado, Excel de
+        dealers elegido, columna Dealer definida (solo si está activo), y Excel de URLs
+        cargado."""
+        if not state.get("pais"):
+            return False
         if not excel_path_var.get().strip():
             return False
         if has_dealer_var.get() and not col_dealer_var.get().strip():
@@ -1446,9 +1448,12 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     ui_log(f"    Landing: {landing_url}", "info")
 
                 pair_dir = _pair_output_dir(form_url, stamp)
+                state["pair_info"][form_url] = {
+                    "pair_dir": pair_dir, "landing_url": landing_url, "url_mode": current_url_mode,
+                }
 
                 # --- FASE 1: comparación rápida (sin capturas) ---
-                open_target(driver, current_url_mode, landing_url, form_url)
+                open_target(driver, current_url_mode, landing_url, form_url, log_cb=ui_log)
 
                 if pair_idx == 1 and _pausar_auth:
                     from tkinter import messagebox
@@ -1477,19 +1482,17 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         driver.switch_to.frame(iframe)
                         ui_log("Contexto cambiado al iframe del formulario.", "info")
 
-                # Forms multi-paso: avanzar hasta el paso donde están los dropdowns
-                # region/city/dealer (en los de 1 paso los encuentra al instante).
-                advance_to_selects(
-                    driver, level_ids=DEFAULT_SELECT_IDS,
-                    has_region=has_region_var.get(), has_city=has_city_var.get(),
-                    has_dealer=has_dealer_var.get(), log_cb=ui_log, stop_flag=state["stop_event"],
-                )
-
                 model_field_id = None
                 models_to_run = None
                 # Si el usuario marcó que el form TIENE selector de Modelo y no aparece con
                 # ninguno de los ids conocidos, el form no se compara: se reporta FAIL. Sin
                 # esto la corrida seguía sin filtrar por modelo y el reporte parecía válido.
+                # IMPORTANTE: esto se resuelve ANTES de avanzar de paso — en forms multi-paso
+                # donde el selector de Modelo vive en el paso 1 y región/ciudad/dealer en un
+                # paso posterior (ej. testdrive-onix, pda-carpages), advance_to_selects ya
+                # pasa de largo el paso del modelo, y buscarlo DESPUÉS de avanzar siempre daba
+                # "no encontrado" aunque el form sí lo tuviera — la corrida quedaba en FAIL
+                # sin comparar ninguna fila.
                 model_missing_msg = None
                 if has_models_var.get():
                     model_field_id = resolve_model_field_id(
@@ -1509,8 +1512,43 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         models_to_run = list_model_options(driver, model_field_id)
                         ui_log(f"Modelos detectados en el form: {', '.join(models_to_run) or '(ninguno)'}", "info")
 
+                # Forms multi-paso: avanzar hasta el paso donde están los dropdowns
+                # region/city/dealer (en los de 1 paso los encuentra al instante).
+                advance_ok = advance_to_selects(
+                    driver, level_ids=DEFAULT_SELECT_IDS,
+                    has_region=has_region_var.get(), has_city=has_city_var.get(),
+                    has_dealer=has_dealer_var.get(), log_cb=ui_log, stop_flag=state["stop_event"],
+                )
+                advance_fail_msg = None
+                if not advance_ok:
+                    # Antes esto se ignoraba y compare_dealers arrancaba igual, moliendo un
+                    # timeout corto por cada una de las filas del Excel contra una página que
+                    # nunca llegó a los dropdowns — minutos "colgado" sin ningún aviso claro.
+                    advance_fail_msg = (
+                        "No se pudo avanzar hasta el paso con los dropdowns de región/ciudad/"
+                        "dealer (revisá el form manualmente: puede que el botón 'Siguiente' no "
+                        "haya respondido o el paso no haya cargado bien) — no se comparó ninguna fila."
+                    )
+
+                if model_field_id and _get_select(driver, model_field_id, timeout=1) is None:
+                    # El selector de Modelo quedó en un paso ANTERIOR al de región/ciudad/
+                    # dealer — no se puede re-seleccionar modelo a mitad de la comparación sin
+                    # recargar y volver a avanzar todos los pasos. Se compara una sola vez (con
+                    # el modelo que ya quedó elegido al avanzar) en vez de repetir por modelo o
+                    # de intentar re-seleccionarlo en una página donde ya no existe ese select.
+                    cant = len(models_to_run) if models_to_run else 1
+                    ui_log(
+                        f"El selector de Modelo está en un paso anterior al de dealer (no se "
+                        f"puede re-seleccionar en este form) — se compara una sola vez"
+                        + (f", no una por cada uno de los {cant} modelos detectados." if cant > 1 else "."),
+                        "warn",
+                    )
+                    model_field_id = None
+
+                _fase_label = "Comparando y capturando" if output_mode == "caps" else "Comparando"
+
                 def _compare_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Comparando {cur}/{total}: {label_txt}")
+                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] {_fase_label} {cur}/{total}: {label_txt}")
 
                 def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
                     _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total}: {label_txt}")
@@ -1520,7 +1558,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     # ninguna opción real): recarga la página del form y vuelve a avanzar
                     # hasta los dropdowns, igual que al arrancar este form — más confiable
                     # que reintentar sobre una página que puede haber quedado rota.
-                    open_target(driver, _mode, _landing, _form)
+                    open_target(driver, _mode, _landing, _form, log_cb=ui_log)
                     advance_to_selects(
                         driver, level_ids=DEFAULT_SELECT_IDS,
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
@@ -1528,14 +1566,74 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         stop_flag=state["stop_event"],
                     )
 
-                if model_missing_msg:
-                    ui_log(model_missing_msg, "warn")
+                def _shot(result, _form_url=form_url, _landing_url=landing_url,
+                          _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
+                    import re
+                    # Con selector de Modelo, cada modelo tiene su PROPIA subcarpeta dentro
+                    # de la carpeta del form (ej. .../Spark_EUV/, .../Captiva_EV/) — antes
+                    # todas las capturas de todos los modelos caían mezcladas en la misma
+                    # carpeta, distinguibles solo por el nombre de archivo.
+                    modelo_slug = _slug(result.get("modelo")) if result.get("modelo") else ""
+                    shot_dir = os.path.join(_pair_dir, modelo_slug) if modelo_slug else _pair_dir
+                    os.makedirs(shot_dir, exist_ok=True)
+
+                    combo_parts = []
+                    if has_region_var.get() and result.get("region"):
+                        combo_parts.append(result["region"])
+                    if has_city_var.get() and result.get("city"):
+                        combo_parts.append(result["city"])
+                    if has_dealer_var.get() and result.get("dealer"):
+                        combo_parts.append(result["dealer"])
+                    if not combo_parts:
+                        combo_parts.append("dealer")
+
+                    safe_parts = []
+                    for part in combo_parts:
+                        clean = re.sub(r"[^\w\s\.-]+", "", str(part)).strip()
+                        clean = re.sub(r"\s+", "_", clean)
+                        if clean:
+                            safe_parts.append(clean)
+                    combo_name = "_".join(safe_parts)[:60]
+                    filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
+                    shot_landing = _landing_url if _url_mode == "landing_form" else ""
+                    banner_extra = banner_lines_for_result(
+                        result, has_region=has_region_var.get(),
+                        has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+                    )
+
+                    if expect_absent:
+                        # Evidencia de exclusión: se despliega el PRIMER nivel de la cadena
+                        # región→ciudad→dealer que no se encontró (si la región no está,
+                        # tampoco pueden estar su ciudad ni su dealer). El <select> nativo
+                        # no es fotografiable, así que se clona la lista completa de
+                        # opciones arriba del form, resaltando el buscado si aparece.
+                        nivel, sel_key, buscado, found = evidence_level_for_result(
+                            result, has_region=has_region_var.get(),
+                            has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+                        )
+                        capture_dropdown_evidence(
+                            driver, DEFAULT_SELECT_IDS[sel_key], shot_dir, filename,
+                            title=f"Dropdown {nivel} desplegado", searched_text=buscado,
+                            found=found,
+                            form_url=_form_url, landing_url=shot_landing,
+                            extra_lines=banner_extra,
+                        )
+                    else:
+                        capture_result_screenshot(
+                            driver, shot_dir, filename,
+                            form_url=_form_url, landing_url=shot_landing,
+                            extra_lines=banner_extra,
+                        )
+
+                skip_msg = advance_fail_msg or model_missing_msg
+                if skip_msg:
+                    ui_log(skip_msg, "warn")
                     pair_results = [{
                         "status": "FAIL",
                         "region": "",
                         "city": "",
                         "dealer": "",
-                        "fails": [model_missing_msg],
+                        "fails": [skip_msg],
                     }]
                 else:
                     pair_results = compare_dealers(
@@ -1543,10 +1641,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         level_ids=DEFAULT_SELECT_IDS,
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
                         has_dealer=has_dealer_var.get(),
-                        chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
+                        chk_bac=False, field_checks=_field_checks_resolved(),
                         model_field_id=model_field_id, models=models_to_run,
                         log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
-                        screenshot_cb=None,
+                        screenshot_cb=(_shot if output_mode == "caps" else None),
                         expect_absent=expect_absent,
                         reload_cb=_reload_cb,
                     )
@@ -1564,7 +1662,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                             f"⚠ La fila del Excel está {'FILTRADA (AutoFilter)' if _tipo == 'filtrada' else 'OCULTA (a mano)'}"
                         )
 
-                if _should_find_extras() and not expect_absent and not model_missing_msg:
+                if _should_find_extras() and not expect_absent and not skip_msg:
                     ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
                     extras = find_extra_dealers(
                         driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
@@ -1591,109 +1689,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     f"DUPLICADO={sum(1 for r in pair_results if r['status']=='DUPLICADO')}", "ok",
                 )
 
-                # --- Exportar el reporte de ESTE form ANTES de las capturas (la comparación
-                # rápida ya terminó; así el Excel queda disponible aunque las capturas tarden
-                # o se detengan a mitad de camino) ---
+                # --- Exportar el reporte de ESTE form. En modo "Excel + Capturas" la
+                # comparación y la captura de cada fila ya pasaron por el MISMO compare_dealers
+                # de arriba (busca dealer, saca captura, busca el siguiente...) — no dos
+                # pasadas completas separadas por todo el Excel. ---
                 excel_filename = os.path.basename(pair_dir) + ".xlsx"
                 export_path = export_results_excel(
                     pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
                     hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
                 )
                 report_paths.append(export_path)
+                state["pair_info"][form_url]["export_path"] = export_path
                 ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
-
-                # --- FASE 2 (opcional): capturas — mismo form, misma carpeta que el Excel ---
-                if output_mode == "caps" and not state["stop_event"].is_set() and not model_missing_msg:
-                    ui_log(f"Generando capturas para Form {pair_idx}/{total_pairs}...", "info")
-                    open_target(driver, current_url_mode, landing_url, form_url)
-                    if pair_idx == 1 and _pausar_auth:
-                        driver.switch_to.default_content()
-                        iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
-                        if iframe is not None:
-                            driver.switch_to.frame(iframe)
-
-                    # Mismo avance de pasos que en Fase 1, para llegar a los dropdowns
-                    advance_to_selects(
-                        driver, level_ids=DEFAULT_SELECT_IDS,
-                        has_region=has_region_var.get(), has_city=has_city_var.get(),
-                        has_dealer=has_dealer_var.get(), log_cb=lambda *_a, **_k: None,
-                        stop_flag=state["stop_event"],
-                    )
-
-                    def _shot(result, _form_url=form_url, _landing_url=landing_url,
-                              _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
-                        combo_parts = []
-                        # El modelo va PRIMERO en el nombre de archivo: sin esto, dos modelos
-                        # distintos que dan el mismo resultado (mismo estado/región/ciudad/
-                        # dealer — el caso más común, la mayoría de las filas son PASS en
-                        # ambos) generaban el MISMO filename y la captura del segundo modelo
-                        # pisaba en disco la del primero. El usuario terminaba viendo la mitad
-                        # de las capturas esperadas, como si solo se hubiera corrido 1 modelo.
-                        if result.get("modelo"):
-                            combo_parts.append(result["modelo"])
-                        if has_region_var.get() and result.get("region"):
-                            combo_parts.append(result["region"])
-                        if has_city_var.get() and result.get("city"):
-                            combo_parts.append(result["city"])
-                        if has_dealer_var.get() and result.get("dealer"):
-                            combo_parts.append(result["dealer"])
-                        if not combo_parts:
-                            combo_parts.append("dealer")
-
-                        import re
-                        safe_parts = []
-                        for part in combo_parts:
-                            clean = re.sub(r"[^\w\s\.-]+", "", str(part)).strip()
-                            clean = re.sub(r"\s+", "_", clean)
-                            if clean:
-                                safe_parts.append(clean)
-                        combo_name = "_".join(safe_parts)[:60]
-                        filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
-                        shot_landing = _landing_url if _url_mode == "landing_form" else ""
-                        banner_extra = banner_lines_for_result(
-                            result, has_region=has_region_var.get(),
-                            has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
-                        )
-
-                        if expect_absent:
-                            # Evidencia de exclusión: se despliega el PRIMER nivel de la cadena
-                            # región→ciudad→dealer que no se encontró (si la región no está,
-                            # tampoco pueden estar su ciudad ni su dealer). El <select> nativo
-                            # no es fotografiable, así que se clona la lista completa de
-                            # opciones arriba del form, resaltando el buscado si aparece.
-                            nivel, sel_key, buscado, found = evidence_level_for_result(
-                                result, has_region=has_region_var.get(),
-                                has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
-                            )
-                            capture_dropdown_evidence(
-                                driver, DEFAULT_SELECT_IDS[sel_key], _pair_dir, filename,
-                                title=f"Dropdown {nivel} desplegado", searched_text=buscado,
-                                found=found,
-                                form_url=_form_url, landing_url=shot_landing,
-                                extra_lines=banner_extra,
-                            )
-                        else:
-                            capture_result_screenshot(
-                                driver, _pair_dir, filename,
-                                form_url=_form_url, landing_url=shot_landing,
-                                extra_lines=banner_extra,
-                            )
-
-                    def _capture_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                        _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Capturando {cur}/{total}: {label_txt}")
-
-                    compare_dealers(
-                        driver, filtered_rows, column_map,
-                        level_ids=DEFAULT_SELECT_IDS,
-                        has_region=has_region_var.get(), has_city=has_city_var.get(),
-                        has_dealer=has_dealer_var.get(),
-                        chk_bac=chk_bac_var.get(), field_checks=_field_checks_resolved(),
-                        model_field_id=model_field_id, models=models_to_run,
-                        log_cb=lambda *_a: None, progress_cb=_capture_progress_cb, stop_flag=state["stop_event"],
-                        screenshot_cb=_shot,
-                        expect_absent=expect_absent,
-                        reload_cb=_reload_cb,
-                    )
 
                 # --- Email por form: usa el flag global de la barra superior ---
                 from .helpers_interface import cargar_config_global as _cfg_g
@@ -1733,8 +1740,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             state["driver"] = None
             modal = state.get("modal")
             if modal:
+                load_error_count = sum(1 for r in state.get("results", []) if r.get("load_error_skip"))
                 modal["set_complete"](not error_msg, counts, detenido=state["stop_event"].is_set(),
-                                       error_msg=error_msg)
+                                       error_msg=error_msg, load_error_count=load_error_count)
             root.after(0, lambda: _set_running(False))
 
     def _run_or_stop():
@@ -1758,7 +1766,244 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             target=_worker_run, args=(filtered_rows, column_map, url_pairs), daemon=True
         ).start()
 
+    def _worker_retry(fail_groups, total_to_retry):
+        """Vuelve a chequear SOLO las filas en FAIL de la última corrida (agrupadas por
+        form y, dentro de cada form, por modelo — un form con selector de Modelo necesita
+        el modelo correcto seleccionado antes de comparar esas filas). Pisa el mismo Excel
+        de reporte y reemplaza las capturas de esas filas, en vez de generar una entrega
+        aparte."""
+        driver = None
+        error_msg = None
 
+        _ver_navegador = False
+        try:
+            from .helpers_interface import cargar_config_global
+            _ver_navegador = bool(cargar_config_global().get("ui_prefs", {}).get("visible_browser", False))
+        except Exception:
+            pass
+
+        done_counter = {"n": 0}
+
+        try:
+            driver = BrowserManager.create_browser(
+                browser_type=browser_var.get(), viewport=viewport_var.get(),
+                headless=False, background=not _ver_navegador,
+            )
+            state["driver"] = driver
+
+            rows_by_fila = {r.get("__row__"): r for r in (state.get("filtered_rows") or [])}
+            column_map = _column_map()
+
+            for form_url, group in fail_groups.items():
+                if state["stop_event"].is_set():
+                    raise StopRequested()
+                info = state["pair_info"].get(form_url) or {}
+                pair_dir = info.get("pair_dir")
+                export_path = info.get("export_path")
+                if not pair_dir or not export_path:
+                    ui_log(f"No tengo la carpeta/reporte original de {form_url}, se omite.", "warn")
+                    continue
+                landing_url = info.get("landing_url", "")
+                url_mode = info.get("url_mode", url_mode_var.get())
+
+                ui_log(f"\n=== Reintentando {len(group)} fila(s) fallida(s) de {form_url} ===", "info")
+                open_target(driver, url_mode, landing_url, form_url, log_cb=ui_log)
+
+                # Resolver el selector de Modelo ANTES de avanzar de paso — en forms
+                # multi-paso (modelo en el paso 1, dealer en un paso posterior)
+                # advance_to_selects ya lo pasa de largo y buscarlo después siempre daba
+                # "no encontrado" aunque el form sí lo tuviera.
+                model_field_id = None
+                if has_models_var.get():
+                    model_field_id = resolve_model_field_id(
+                        driver, models_field_id_var.get().strip() or "models")
+
+                advance_ok = advance_to_selects(
+                    driver, level_ids=DEFAULT_SELECT_IDS,
+                    has_region=has_region_var.get(), has_city=has_city_var.get(),
+                    has_dealer=has_dealer_var.get(), log_cb=ui_log, stop_flag=state["stop_event"],
+                )
+                if not advance_ok:
+                    # No moler cada fila contra una página que nunca llegó al paso de
+                    # región/ciudad/dealer (mismo fix que en la corrida completa).
+                    ui_log(
+                        f"No se pudo avanzar hasta los dropdowns en {form_url} — se omite el "
+                        f"reintento de estas {len(group)} fila(s).", "warn",
+                    )
+                    continue
+
+                def _reload_cb(_landing=landing_url, _form=form_url, _mode=url_mode):
+                    open_target(driver, _mode, _landing, _form, log_cb=ui_log)
+                    advance_to_selects(
+                        driver, level_ids=DEFAULT_SELECT_IDS,
+                        has_region=has_region_var.get(), has_city=has_city_var.get(),
+                        has_dealer=has_dealer_var.get(), log_cb=lambda *_a, **_k: None,
+                        stop_flag=state["stop_event"],
+                    )
+
+                by_model = {}
+                for r in group:
+                    by_model.setdefault(r.get("modelo") or None, []).append(r)
+
+                if model_field_id and _get_select(driver, model_field_id, timeout=1) is None:
+                    # Mismo caso que en la corrida completa: el selector de Modelo quedó en
+                    # un paso anterior — no se puede re-seleccionar por cada modelo acá, así
+                    # que se reintentan todas las filas juntas, una sola vez.
+                    ui_log(
+                        "El selector de Modelo está en un paso anterior al de dealer — se "
+                        "reintenta una sola vez para todas las filas, sin distinguir por modelo.",
+                        "warn",
+                    )
+                    by_model = {None: group}
+                    model_field_id = None
+
+                pair_new_by_fila = {}
+
+                def _shot(result, _pair_dir=pair_dir, _form_url=form_url, _landing_url=landing_url,
+                          _url_mode=url_mode):
+                    import re, glob as _glob
+                    # Misma subcarpeta por modelo que usa la corrida normal (ej. .../Spark_EUV/)
+                    # — así el reintento pisa la captura vieja en el mismo lugar en vez de
+                    # dejarla mezclada en la carpeta raíz del form.
+                    modelo_slug = _slug(result.get("modelo")) if result.get("modelo") else ""
+                    shot_dir = os.path.join(_pair_dir, modelo_slug) if modelo_slug else _pair_dir
+                    os.makedirs(shot_dir, exist_ok=True)
+
+                    combo_parts = []
+                    if has_region_var.get() and result.get("region"):
+                        combo_parts.append(result["region"])
+                    if has_city_var.get() and result.get("city"):
+                        combo_parts.append(result["city"])
+                    if has_dealer_var.get() and result.get("dealer"):
+                        combo_parts.append(result["dealer"])
+                    if not combo_parts:
+                        combo_parts.append("dealer")
+                    safe_parts = []
+                    for part in combo_parts:
+                        clean = re.sub(r"[^\w\s\.-]+", "", str(part)).strip()
+                        clean = re.sub(r"\s+", "_", clean)
+                        if clean:
+                            safe_parts.append(clean)
+                    combo_name = "_".join(safe_parts)[:60]
+                    filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
+                    # La corrida anterior puede haber dejado una captura de OTRO estado para
+                    # esta misma fila (ej. era FAIL y ahora pasa a PASS) — se borra antes de
+                    # escribir la nueva para no dejar dos capturas contradictorias en la carpeta.
+                    for old in _glob.glob(os.path.join(shot_dir, f"*_fila{result.get('fila')}_*.png")):
+                        try:
+                            os.remove(old)
+                        except Exception:
+                            pass
+                    shot_landing = _landing_url if _url_mode == "landing_form" else ""
+                    banner_extra = banner_lines_for_result(
+                        result, has_region=has_region_var.get(),
+                        has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+                    )
+                    capture_result_screenshot(
+                        driver, shot_dir, filename,
+                        form_url=_form_url, landing_url=shot_landing,
+                        extra_lines=banner_extra,
+                    )
+
+                def _progress(cur, total, label_txt):
+                    done_counter["n"] += 1
+                    _progress_cb(done_counter["n"], total_to_retry, f"Reintentando: {label_txt}")
+
+                for modelo, rs in by_model.items():
+                    filas = [r.get("fila") for r in rs]
+                    rows_subset = [rows_by_fila[f] for f in filas if f in rows_by_fila]
+                    faltantes = [f for f in filas if f not in rows_by_fila]
+                    if faltantes:
+                        ui_log(f"  No encontré en el Excel filtrado la(s) fila(s) {faltantes} "
+                               f"(¿cambió el Excel o el filtro?), se omiten.", "warn")
+                    if not rows_subset:
+                        continue
+                    results = compare_dealers(
+                        driver, rows_subset, column_map,
+                        level_ids=DEFAULT_SELECT_IDS,
+                        has_region=has_region_var.get(), has_city=has_city_var.get(),
+                        has_dealer=has_dealer_var.get(),
+                        chk_bac=False, field_checks=_field_checks_resolved(),
+                        model_field_id=model_field_id, models=[modelo] if modelo else None,
+                        log_cb=ui_log, progress_cb=_progress, stop_flag=state["stop_event"],
+                        screenshot_cb=_shot,
+                        reload_cb=_reload_cb,
+                    )
+                    for r in results:
+                        r["url_form"] = form_url
+                        r["url_landing"] = landing_url if url_mode == "landing_form" else ""
+                        pair_new_by_fila[r.get("fila")] = r
+
+                # Mergear con los resultados existentes de ESTE form (en memoria, de la
+                # última corrida) y re-exportar el mismo Excel pisándolo — no una entrega aparte.
+                existing = {r.get("fila"): r for r in state["results"] if r.get("url_form") == form_url}
+                existing.update(pair_new_by_fila)
+                merged_pair_results = [existing[k] for k in sorted(existing.keys(), key=lambda x: (x is None, x))]
+                export_results_excel(
+                    merged_pair_results, output_path=export_path, pais=state["pais"],
+                    hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
+                )
+                ui_log(f"Reporte de {form_url} actualizado: {export_path}", "ok")
+
+                state["results"] = [r for r in state["results"] if r.get("url_form") != form_url] + merged_pair_results
+
+        except StopRequested:
+            ui_log("Reintento detenido por el usuario.", "warn")
+        except Exception as e:  # noqa: BLE001
+            LOGGER.exception("Error reintentando fallidos en Comparador Dealers")
+            error_msg = str(e)
+            ui_log(f"Error: {e}", "err")
+        finally:
+            if driver is not None:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+            state["driver"] = None
+            counts = {}
+            for r in state["results"]:
+                counts[r.get("status")] = counts.get(r.get("status"), 0) + 1
+            modal = state.get("modal")
+            if modal:
+                load_error_count = sum(1 for r in state["results"] if r.get("load_error_skip"))
+                modal["set_complete"](not error_msg, counts, detenido=state["stop_event"].is_set(),
+                                       error_msg=error_msg, load_error_count=load_error_count)
+            root.after(0, lambda: _set_running(False))
+
+    def _retry_failed():
+        if state["running"]:
+            return
+        # MISSING (no se encontró en el form) es, para efectos de reintento, otro sabor de
+        # fallo — se reintenta junto con FAIL.
+        fails = [r for r in state.get("results", []) if r.get("status") in ("FAIL", "MISSING")]
+        if not fails:
+            messagebox.showinfo(
+                "Comparador Dealers",
+                "No hay filas en FAIL/MISSING para reintentar (o todavía no corriste una comparación en esta sesión).",
+            )
+            return
+        con_carpeta = [r for r in fails if state["pair_info"].get(r.get("url_form"), {}).get("export_path")]
+        if not con_carpeta:
+            messagebox.showwarning(
+                "Comparador Dealers",
+                "No tengo la carpeta/reporte de la corrida original en esta sesión — "
+                "volvé a correr la comparación completa antes de reintentar.",
+            )
+            return
+        fail_groups = {}
+        for r in con_carpeta:
+            fail_groups.setdefault(r.get("url_form"), []).append(r)
+        total_to_retry = len(con_carpeta)
+        if not messagebox.askyesno(
+            "Reintentar fallidos",
+            f"Se van a volver a chequear {total_to_retry} fila(s) en FAIL/MISSING y se va a actualizar "
+            "el reporte y las capturas existentes. ¿Continuar?",
+        ):
+            return
+        state["stop_event"].clear()
+        _set_running(True)
+        _open_run_modal()
+        threading.Thread(target=_worker_retry, args=(fail_groups, total_to_retry), daemon=True).start()
 
     btn_run = Button(footer_btns, text=" EJECUTAR", image=get_button_icon("play_green.png"), compound="left",
                       font=("Segoe UI", 9, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
@@ -1767,6 +2012,14 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     btn_run.pack(side="left", padx=6)
     btn_run.bind("<Enter>", lambda e: btn_run.config(bg=EXECUTE_HOVER) if btn_run["state"] == "normal" else None)
     btn_run.bind("<Leave>", lambda e: btn_run.config(bg=EXECUTE_BG) if btn_run["state"] == "normal" else None)
+
+    btn_retry_failed = Button(footer_btns, text=" REINTENTAR FALLIDOS", compound="left",
+                               font=("Segoe UI", 9, "bold"), bg="#3D2E1A", fg="#F8C471",
+                               relief="flat", bd=0, activebackground="#5A431F", activeforeground="#F8C471",
+                               padx=18, pady=6, cursor="hand2", command=_retry_failed)
+    btn_retry_failed.pack(side="left", padx=6)
+    btn_retry_failed.bind("<Enter>", lambda e: btn_retry_failed.config(bg="#5A431F") if btn_retry_failed["state"] == "normal" else None)
+    btn_retry_failed.bind("<Leave>", lambda e: btn_retry_failed.config(bg="#3D2E1A") if btn_retry_failed["state"] == "normal" else None)
 
     # Habilitar/deshabilitar EJECUTAR en vivo, apenas cambian los datos mínimos necesarios
     excel_path_var.trace_add("write", lambda *_a: refresh_execute_state())
