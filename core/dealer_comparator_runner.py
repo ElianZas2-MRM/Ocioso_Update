@@ -451,6 +451,27 @@ def _dealer_option_position(driver, dealer_id):
     return None
 
 
+def _city_option_position(driver, city_id):
+    """Posición (1-indexada) de la <option> de ciudad actualmente seleccionada dentro del
+    listado de opciones VÁLIDAS del <select> (sin contar el placeholder "Seleccione..."),
+    tal como aparece hoy en el dropdown real — mismo criterio que `_dealer_option_position`,
+    para poder ordenar el reporte según el orden real de aparición de las ciudades.
+    None si no se pudo determinar."""
+    for _ in range(3):
+        try:
+            el = _get_select(driver, city_id, timeout=0.5)
+            if el is None:
+                return None
+            selected_value = (Select(el).first_selected_option.get_attribute("value") or "")
+            for idx, opt in enumerate(_valid_options(el), start=1):
+                if opt.get_attribute("value") == selected_value:
+                    return idx
+            return None
+        except StaleElementReferenceException:
+            time.sleep(0.1)
+    return None
+
+
 FAST_TIMEOUT = 0.6  # primer intento: rápido, alcanza en la gran mayoría de los forms
 MAX_TIMEOUT = 1.2    # segundo intento (solo si el primero no alcanzó): tope máximo
 DEPENDENT_SELECT_TIMEOUT = 5.0  # espera máxima a que aparezca la opción buscada en un
@@ -1239,6 +1260,7 @@ def compare_dealers(
                         "city": city_text,
                         "dealer": dealer_text,
                         "dealer_position": None,
+                        "city_position": None,
                         "bac_excel": row.get(bac_key, "") if chk_bac and bac_key else "",
                         "bac_ok": None,
                         "extra_results": {},
@@ -1273,6 +1295,7 @@ def compare_dealers(
             city_found = not has_city
             dealer_found = False
             dealer_position = None
+            city_position = None
             bac_ok = None
             extra_results = {}
             name_disclaimer = None
@@ -1349,6 +1372,8 @@ def compare_dealers(
                             fails.append(f"Ciudad '{city_text}' no encontrada")
                             not_found = True
                             log(f"  Ciudad no encontrada: {city_text}", "warn")
+                    if city_found:
+                        city_position = _city_option_position(driver, level_ids["city"])
 
                 ready_for_dealer = (region_found or not has_region) and (city_found or not has_city)
                 if has_dealer and dealer_text and ready_for_dealer:
@@ -1460,6 +1485,7 @@ def compare_dealers(
                 "city": city_text,
                 "dealer": dealer_text,
                 "dealer_position": dealer_position,
+                "city_position": city_position,
                 "bac_excel": bac_excel,
                 "bac_ok": bac_ok,
                 "extra_results": extra_results,
@@ -2111,10 +2137,10 @@ def zip_screenshots(screenshot_paths, output_zip_path):
 # ──────────────────────────────────────────────────────────────────────────────
 # Export a Excel (PASS verde / FAIL rojo / EXTRA amarillo / MISSING violeta)
 # ──────────────────────────────────────────────────────────────────────────────
-_RESULTS_HEADERS = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Dealer",
-                    "Posición en Form", "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
+_RESULTS_HEADERS = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Posición Ciudad",
+                    "Dealer", "Posición Dealer", "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
 
-_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 16, 9: 14, 10: 10, 11: 50, 12: 55, 13: 10}
+_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 16, 8: 30, 9: 16, 10: 14, 11: 10, 12: 50, 13: 55, 14: 10}
 
 _STATUS_FILL_BY_NAME = {
     "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
@@ -2140,6 +2166,27 @@ def _safe_sheet_name(name, taken):
     return candidate
 
 
+def _sorted_by_real_city_order(sheet_results):
+    """Reordena las filas para que sigan el orden real de aparición de las Ciudades en el
+    dropdown (city_position) en vez del orden del Excel de origen — así el reporte queda
+    ordenado tal cual se ve el form. Las regiones se agrupan respetando el orden en que
+    aparecen por primera vez en `sheet_results` (no se les calcula posición real, no hace
+    falta). Las filas sin city_position (ciudad no encontrada, EXTRA/DUPLICADO/OCULTO de
+    región, etc.) quedan al final de su región, y el sort es estable: dentro de una misma
+    ciudad se conserva el orden relativo original (ej. el de los dealers)."""
+    region_order = {}
+    for r in sheet_results:
+        reg = r.get("region", "")
+        if reg not in region_order:
+            region_order[reg] = len(region_order)
+
+    def _key(r):
+        pos = r.get("city_position")
+        return (region_order.get(r.get("region", ""), 0), pos if pos is not None else float("inf"))
+
+    return sorted(sheet_results, key=_key)
+
+
 def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_border):
     """Escribe una hoja de resultados (mismo formato que antes, factorizado para poder
     repetirlo una vez por modelo cuando el form tiene selector de Modelo)."""
@@ -2153,6 +2200,8 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
         cell.border = header_border
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
+    sheet_results = _sorted_by_real_city_order(sheet_results)
+
     for r in sheet_results:
         ws.append([
             r.get("status", ""),
@@ -2161,6 +2210,7 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
             r.get("modelo", ""),
             r.get("region", ""),
             r.get("city", ""),
+            r.get("city_position") if r.get("city_position") is not None else "",
             r.get("dealer", ""),
             r.get("dealer_position") if r.get("dealer_position") is not None else "",
             r.get("bac_excel", ""),
@@ -2182,7 +2232,7 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
         # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
         # confundir con FAIL, ya que el dealer sí se encontró.
         if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel"):
-            ws.cell(row=row_idx, column=12).fill = _NOTA_FILL
+            ws.cell(row=row_idx, column=13).fill = _NOTA_FILL
 
     for col_idx, width in _RESULTS_COL_WIDTHS.items():
         col_letter = ws.cell(row=1, column=col_idx).column_letter
