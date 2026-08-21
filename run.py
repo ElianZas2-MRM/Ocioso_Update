@@ -180,6 +180,14 @@ def _ensure_drivers(show_ui=True):
 if __name__ == "__main__":
     _ensure_runtime_dirs()
     args = _parse_args()
+    # Marcar la corrida como desatendida ANTES de cualquier cosa que pueda avisar por popup:
+    # con --autonomous no hay nadie que pueda cerrar un modal y la corrida quedaría colgada.
+    if args.autonomous:
+        try:
+            from utils.popup_logger import set_unattended
+            set_unattended(True)
+        except Exception:
+            pass
     # LambdaTest corre en la nube: no usa los drivers locales, no tiene sentido chequearlos.
     if not args.lt_type:
         _ensure_drivers(show_ui=not (args.autonomous or args.country_name))
