@@ -1065,6 +1065,33 @@ def iniciar_interfaz(autostart_leads=False):
     top_bar = tk.Frame(root, bg=APP_BG_COLOR)
     top_bar.pack(fill="x", padx=20, pady=(6, 4))
 
+    # Chequeo manual de drivers. Normalmente no hace falta: se verifican solos al abrir la app.
+    # Sirve para el caso que el arranque no puede cubrir — que el navegador se autoactualice con
+    # Osocio YA abierto — para no tener que cerrar y volver a abrir antes de correr algo.
+    def _actualizar_drivers():
+        btn_drivers.config(state="disabled")
+        try:
+            from interface.driver_update_ui import ensure_drivers_with_ui
+            # force=True: la ventana se muestra siempre y contesta aunque no haya nada que
+            # actualizar. Si alguien aprieta el botón, algo tiene que pasar en pantalla.
+            ensure_drivers_with_ui(force=True, parent=root)
+        except Exception as exc:
+            messagebox.showerror("Drivers", f"No se pudieron verificar los drivers:\n{exc}")
+        finally:
+            try:
+                btn_drivers.config(state="normal")
+            except Exception:
+                pass
+
+    btn_drivers = tk.Button(top_bar, text=" Actualizar drivers",
+                            image=get_button_icon("refresh_lavender.png"), compound="left",
+                            command=_actualizar_drivers,
+                            bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                            activebackground=BUTTON_HOVER, activeforeground=TEXT_PRIMARY,
+                            relief="flat", bd=0, font=("Segoe UI", 9), cursor="hand2",
+                            padx=10, pady=4)
+    btn_drivers.pack(side="left")
+
     _cfg = {}
     try:
         _cfg = cargar_config_global()

@@ -15,7 +15,7 @@ App de escritorio (Windows, Python + Tkinter + Selenium) para automatizar el lle
    ```powershell
    pip install -r requirements.txt
    ```
-4. Colocar los drivers de navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`) dentro de `drivers/` — la app no los descarga automáticamente, solo usa los locales.
+4. Nada más: los drivers de navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`) los descarga la app sola la primera vez que la abrís, y los mantiene al día en cada arranque. Ver [Drivers de navegador](#drivers-de-navegador-se-actualizan-solos).
 
 ## Cómo correr la app
 
@@ -442,7 +442,7 @@ mercado (`resultadoMasivo_<País>/`) con las columnas:
 - `interface/`: UI de administración (una pestaña por archivo) y utilidades de soporte.
 - `lambdatest_mac/` y `lambdatest_android/`: runners y controllers específicos para correr los formularios sobre LambdaTest (Mac y Android).
 - `data/`: archivos Excel de entrada (datos de prueba por país/dispositivo). **No se versionan**: los generás vos desde la pestaña "Generar Excels con Datos".
-- `drivers/`: drivers locales del navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`).
+- `drivers/`: drivers del navegador (`chromedriver.exe`, `geckodriver.exe`, `msedgedriver.exe`). **No se versionan**: los descarga y actualiza sola la app (`utils/driver_updater.py`).
 - `resultados/`: resultados y capturas de "Envío de Leads" / LambdaTest.
 - `cta_evidence/`: capturas del chequeo de CTA / links rotos de la Thank You page.
 - `Dealerscheck_resultados/`: reportes y capturas del Comparador Dealers.
@@ -473,9 +473,35 @@ Es la memoria de la app: sin esta carpeta, la app abre pero **no sabe cómo llen
 | `dealer_comparator_settings.json` | Los presets guardados del Comparador de Dealers, por país. |
 | `ejecutor_autonomo.log` | Log del modo autónomo (`python run.py --autonomous`). Basura regenerable. |
 
-## Drivers locales (sin descargas automáticas)
+## Drivers de navegador (se actualizan solos)
 
-La app usa exclusivamente drivers locales desde `drivers/` (junto al proyecto, o junto al `.exe` al compilar). Si el navegador se actualiza y el driver queda desfasado, reemplazá el `.exe` correspondiente ahí adentro.
+Los drivers viven en `drivers/` (junto al proyecto, o junto al `.exe` al compilar), pero **no se versionan en el repo ni se reemplazan a mano**: los gestiona `utils/driver_updater.py`.
+
+**Qué pasa al abrir la app:**
+
+1. Compara el major del navegador instalado contra el `--version` del driver que está en `drivers/`. Es un chequeo **offline** y cacheado contra el `mtime` del `.exe`, así que en el caso normal cuesta ~1 ms y no toca la red.
+2. Si el driver está al día, la app abre derecho: no aparece ninguna ventana extra.
+3. Si quedó desfasado o falta, se abre una ventana de progreso con una fila por driver (versión, estado y barra de descarga) y se baja el correcto. Al terminar se cierra sola.
+
+**Botón "Actualizar drivers" (barra superior):** fuerza el chequeo en el momento. A diferencia del arranque, la ventana se muestra **siempre** y **siempre contesta**: si no había nada que hacer dice *"Todo al día: no había nada que actualizar"*, y si actualizó algo dice qué. También ignora el caché semanal de geckodriver: si alguien aprieta el botón espera un chequeo de verdad, no la respuesta guardada de hace tres días. Sirve sobre todo para el caso que el arranque no puede cubrir — que el navegador se autoactualice con Osocio ya abierto — sin tener que cerrar y volver a abrir.
+
+**De dónde sale cada driver:**
+
+| Driver | Fuente | Criterio |
+|---|---|---|
+| `chromedriver.exe` | Chrome for Testing | La build de Chrome instalada; si esa build puntual no está publicada, la última del mismo major |
+| `msedgedriver.exe` | `msedgedriver.microsoft.com` | `LATEST_RELEASE_<major>` del Edge instalado |
+| `geckodriver.exe` | Releases de `mozilla/geckodriver` | Último release (geckodriver versiona aparte de Firefox) |
+
+**Detalles que importan:**
+
+- Solo se gestionan los drivers de los navegadores **realmente instalados**. Si no hay Firefox en la PC, no se baja geckodriver.
+- geckodriver no se puede deducir de la versión de Firefox, así que se consulta a lo sumo **una vez por semana**. El resultado queda cacheado en `json/driver_check.json` (no se versiona).
+- Las **corridas autónomas** (`run.py --autonomous`, las que dispara el Programador de tareas) hacen el mismo chequeo **sin ventana**: se actualiza en silencio y queda en `temporales/runtime.log`. Antes, un salto de major de Chrome dejaba fallando todas las corridas programadas hasta que alguien lo notaba.
+- **Nada de esto puede romper el arranque.** Sin internet, con el proxy bloqueando o con el driver en uso, se loguea el error y la app abre igual con el driver que ya tenía. La ventana además tiene un botón "Omitir y abrir la app".
+- La verificación TLS va **activada**: `run.py` inyecta `truststore`, así que en oficinas con proxy que inspecciona TLS (Netskope/Zscaler) Python confía en el mismo certificado que ya confía Windows. No hay ningún `verify=False`.
+
+> Si el navegador se actualiza **con Osocio ya abierto**, la corrida puede fallar con "Driver desactualizado". Apretá **Actualizar drivers** en la barra superior (o cerrá y volvé a abrir la app).
 
 ## Build portable
 
@@ -494,7 +520,7 @@ Genera **solo la carpeta portable**:
 - **Ningún resultado, captura ni reporte** de la PC donde se compiló: `resultados/`, `temporales/`, `Dealerscheck_resultados/` y las de LambdaTest se crean **vacías**.
 - El estado local del scheduler (`programacion_test/leads/masivo.json`, `scheduler_triggered.json`), `dealer_comparator_settings.json` y `config_global.json`.
 
-Los **drivers sí viajan** (`chromedriver`, `geckodriver`, `msedgedriver`): el portable los tiene pineados.
+Los **drivers sí viajan** (`chromedriver`, `geckodriver`, `msedgedriver`): `build.bat` los actualiza justo antes de empaquetar, así el portable sale con los que corresponden. Si igual quedan desfasados en la PC de destino, el portable los actualiza solo al abrirse.
 
 ### Un solo `.exe` (modo onefile)
 
@@ -515,7 +541,7 @@ lado. Lo que se entrega es la carpeta portable (o su `.zip`), no el `.exe` suelt
 
 `lambdatest_mac/` y `lambdatest_android/` van empaquetados por PyInstaller **adentro del `.exe`**, no como carpetas sueltas al lado — no hace falta copiarlos a mano.
 
-El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email del destinatario de la PC donde se compiló). Los drivers deben seguir distribuyéndose manualmente dentro de `drivers/`.
+El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email del destinatario de la PC donde se compiló).
 
 ## Seguridad — credenciales
 
