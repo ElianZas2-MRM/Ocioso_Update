@@ -93,7 +93,11 @@ La lógica central está concentrada en cuatro zonas:
 - `core/base_form_filler.py`
   Motor común reutilizado por todos los países.
 - `core/browser_manager.py`
-  Crea el WebDriver correcto usando drivers locales.
+  Crea el WebDriver correcto usando los drivers de `drivers/`.
+- `utils/driver_updater.py`
+  Verifica al iniciar que el driver coincida con el navegador instalado y descarga el correcto si quedó desfasado.
+- `interface/driver_update_ui.py`
+  Ventana de progreso de esa descarga. Solo aparece cuando hay algo que bajar.
 - `core/screenshot_manager.py`
   Genera las capturas del flujo.
 
@@ -285,10 +289,18 @@ Se listan solo las piezas que cambian realmente el comportamiento del sistema o 
 ### `create_browser`
 
 - Archivo: `core/browser_manager.py`
-- Qué hace: crea el WebDriver correcto según navegador, viewport y modo headless usando drivers locales.
+- Qué hace: crea el WebDriver correcto según navegador, viewport y modo headless usando los drivers de `drivers/` (que `utils/driver_updater.py` ya dejó al día al iniciar la app).
 - Inputs: `browser_type`, `viewport`, `headless`.
 - Outputs: instancia de Selenium WebDriver.
 - Por qué es importante: abstrae la infraestructura del navegador y evita acoplar cada runner a Selenium puro.
+
+### `ensure_drivers_ready`
+
+- Archivo: `utils/driver_updater.py`
+- Qué hace: compara el major del navegador instalado contra el driver local y, si no coinciden, descarga el correcto (Chrome for Testing / msedgedriver.microsoft.com / releases de geckodriver) y lo deja en `drivers/`.
+- Inputs: callbacks opcionales `on_status`, `on_progress` y `should_cancel`.
+- Outputs: lista de `DriverStatus`. No lanza excepciones.
+- Por qué es importante: Chrome y Edge se autoactualizan solos cada pocas semanas. Sin este chequeo, cada salto de major dejaba fallando todas las corridas —incluidas las programadas sin nadie mirando— hasta que alguien reemplazaba el `.exe` a mano.
 
 ### `run_field_validations`
 

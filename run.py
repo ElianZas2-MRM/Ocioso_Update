@@ -148,9 +148,41 @@ def _ensure_runtime_dirs():
     for folder_name in ("drivers", "resultados", "data", "json", "temporales"):
         os.makedirs(os.path.join(BASE_DIR, folder_name), exist_ok=True)
 
+
+def _ensure_drivers(show_ui=True):
+    """Verifica los drivers antes de que arranque nada que necesite un navegador.
+
+    Chrome/Edge se autoactualizan solos, asi que el driver pineado queda desfasado cada pocas
+    semanas y la corrida falla entera. Chequear aca sale gratis: la comparacion es local y solo
+    se sale a internet si hay algo para bajar.
+
+    show_ui=False para las ejecuciones sin interfaz (--autonomous del Programador de tareas,
+    --run-country): ahi no hay nadie mirando, se actualiza en silencio y queda en runtime.log.
+    Es justamente el caso que mas se rompia, porque nadie se enteraba hasta el dia siguiente.
+    """
+    try:
+        if show_ui:
+            from interface.driver_update_ui import ensure_drivers_with_ui
+            ensure_drivers_with_ui()
+        else:
+            from utils.driver_updater import ensure_drivers_ready
+            ensure_drivers_ready()
+    except Exception as exc:
+        # Un fallo actualizando drivers no puede impedir que la app abra ni que corra el
+        # scheduler: si el driver que ya estaba sirve, la ejecucion sigue funcionando igual.
+        try:
+            from utils.popup_logger import log_runtime
+            log_runtime(f"No se pudo verificar los drivers al iniciar: {exc}", level="ERROR")
+        except Exception:
+            print(f"[ERROR] No se pudo verificar los drivers al iniciar: {exc}")
+
+
 if __name__ == "__main__":
     _ensure_runtime_dirs()
     args = _parse_args()
+    # LambdaTest corre en la nube: no usa los drivers locales, no tiene sentido chequearlos.
+    if not args.lt_type:
+        _ensure_drivers(show_ui=not (args.autonomous or args.country_name))
     if args.autonomous:
         _run_autonomous(once=args.once)
     elif args.lt_type:
