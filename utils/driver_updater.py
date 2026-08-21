@@ -555,7 +555,8 @@ def needs_network(statuses=None):
     return False
 
 
-def ensure_drivers_ready(on_status=None, on_progress=None, should_cancel=None):
+def ensure_drivers_ready(on_status=None, on_progress=None, should_cancel=None,
+                         force_check=False):
     """Verifica y, si hace falta, descarga los drivers de los navegadores instalados.
 
     on_status(status)        -> se llama cada vez que cambia el estado de un driver.
@@ -564,6 +565,9 @@ def ensure_drivers_ready(on_status=None, on_progress=None, should_cancel=None):
     should_cancel()          -> si devuelve True se corta antes del proximo driver; lo usa el
                                 boton "Omitir" de la UI para que el arranque nunca quede
                                 atrapado esperando a la red.
+    force_check              -> ignora el cache semanal de geckodriver. Lo usa el boton
+                                "Actualizar drivers": si alguien lo aprieta a mano espera un
+                                chequeo de verdad, no la respuesta guardada de hace tres dias.
 
     Devuelve la lista de DriverStatus. Nunca lanza: los errores quedan en status.error.
     """
@@ -591,7 +595,8 @@ def ensure_drivers_ready(on_status=None, on_progress=None, should_cancel=None):
             # geckodriver: hay que preguntar cual es el ultimo release, pero como mucho una vez
             # por semana. Si el cache dice que ya estamos al dia, no se toca la red.
             if status.key == "firefox" and status.state == OK:
-                cached = _checked_recently(state, status.driver_name, _GECKO_CHECK_EVERY_DAYS)
+                cached = (None if force_check else
+                          _checked_recently(state, status.driver_name, _GECKO_CHECK_EVERY_DAYS))
                 if cached is not None:
                     if _version_tuple(cached) <= _version_tuple(status.local_version or "0"):
                         continue
