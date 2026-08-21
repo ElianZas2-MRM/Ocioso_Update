@@ -483,6 +483,8 @@ Los drivers viven en `drivers/` (junto al proyecto, o junto al `.exe` al compila
 2. Si el driver está al día, la app abre derecho: no aparece ninguna ventana extra.
 3. Si quedó desfasado o falta, se abre una ventana de progreso con una fila por driver (versión, estado y barra de descarga) y se baja el correcto. Al terminar se cierra sola.
 
+**Botón "Actualizar drivers" (barra superior):** fuerza el chequeo en el momento. A diferencia del arranque, la ventana se muestra **siempre** y **siempre contesta**: si no había nada que hacer dice *"Todo al día: no había nada que actualizar"*, y si actualizó algo dice qué. También ignora el caché semanal de geckodriver: si alguien aprieta el botón espera un chequeo de verdad, no la respuesta guardada de hace tres días. Sirve sobre todo para el caso que el arranque no puede cubrir — que el navegador se autoactualice con Osocio ya abierto — sin tener que cerrar y volver a abrir.
+
 **De dónde sale cada driver:**
 
 | Driver | Fuente | Criterio |
@@ -499,7 +501,7 @@ Los drivers viven en `drivers/` (junto al proyecto, o junto al `.exe` al compila
 - **Nada de esto puede romper el arranque.** Sin internet, con el proxy bloqueando o con el driver en uso, se loguea el error y la app abre igual con el driver que ya tenía. La ventana además tiene un botón "Omitir y abrir la app".
 - La verificación TLS va **activada**: `run.py` inyecta `truststore`, así que en oficinas con proxy que inspecciona TLS (Netskope/Zscaler) Python confía en el mismo certificado que ya confía Windows. No hay ningún `verify=False`.
 
-> Si el navegador se actualiza **con Osocio ya abierto**, la corrida puede fallar con "Driver desactualizado". Cerrá y volvé a abrir la app: el driver correcto se descarga al iniciar.
+> Si el navegador se actualiza **con Osocio ya abierto**, la corrida puede fallar con "Driver desactualizado". Apretá **Actualizar drivers** en la barra superior (o cerrá y volvé a abrir la app).
 
 ## Build portable
 
