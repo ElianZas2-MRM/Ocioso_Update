@@ -431,6 +431,26 @@ def _selected_dealer_option_attr(driver, dealer_id, attr):
     return ""
 
 
+def _dealer_option_position(driver, dealer_id):
+    """Posición (1-indexada) de la <option> de dealer actualmente seleccionada dentro del
+    listado de opciones VÁLIDAS del <select> (sin contar el placeholder "Seleccione..."),
+    tal como aparece hoy en el dropdown real — para poder comparar a mano ese orden contra
+    el orden del Excel, que sigue otro criterio. None si no se pudo determinar."""
+    for _ in range(3):
+        try:
+            el = _get_select(driver, dealer_id, timeout=0.5)
+            if el is None:
+                return None
+            selected_value = (Select(el).first_selected_option.get_attribute("value") or "")
+            for idx, opt in enumerate(_valid_options(el), start=1):
+                if opt.get_attribute("value") == selected_value:
+                    return idx
+            return None
+        except StaleElementReferenceException:
+            time.sleep(0.1)
+    return None
+
+
 FAST_TIMEOUT = 0.6  # primer intento: rápido, alcanza en la gran mayoría de los forms
 MAX_TIMEOUT = 1.2    # segundo intento (solo si el primero no alcanzó): tope máximo
 DEPENDENT_SELECT_TIMEOUT = 5.0  # espera máxima a que aparezca la opción buscada en un
@@ -702,7 +722,25 @@ def handle_cookie_popups(driver):
     return False
 
 
-def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeout=30):
+_LOAD_ERROR_KEYWORDS = (
+    "ERROR AL CARGAR EL FORMULARIO", "ERRO AO CARREGAR O FORMULARIO", "ERROR LOADING THE FORM",
+)
+_LOAD_ERROR_MAX_RETRIES = 2  # tope acotado: recargar de más no es gratis (vuelve a pisar los pasos ya avanzados)
+
+
+def _page_shows_load_error(driver):
+    """True si la página o iframe actual muestra un mensaje de error de carga del form
+    (ej. el widget de AEM que no terminó de inicializar). No suele pasar, pero cuando pasa
+    conviene recargar en vez de reportar FAIL directamente."""
+    try:
+        text = driver.find_element(By.TAG_NAME, "body").text
+    except Exception:
+        return False
+    normalized = normalize_text(text)
+    return any(k in normalized for k in _LOAD_ERROR_KEYWORDS)
+
+
+def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeout=30, log_cb=None):
     """Abre el form real, igual criterio que 'Envío de Leads':
     - url_mode='landing_form': abre la landing y hace el chequeo DENTRO de ella — espera
       activamente a que aparezca el iframe del form (con reintento + pre-scroll para
@@ -712,36 +750,52 @@ def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeou
     - url_mode='solo_forms': abre form_url directamente (sin landing) — para cuando la URL
       configurada es la del formulario suelto (secure/stage/revise).
     En ambos casos cierra popups de cookies antes y después de entrar al form.
+    Si la página/iframe muestra un mensaje de error de carga del form, recarga y reintenta
+    hasta _LOAD_ERROR_MAX_RETRIES veces antes de darlo por perdido.
     Devuelve True si terminó sobre el contexto del form (o su iframe)."""
+    log = log_cb or (lambda *_a, **_k: None)
+
     def _same_url(a, b):
         return (a or "").strip().rstrip("/").lower() == (b or "").strip().rstrip("/").lower()
 
-    # Form suelto: modo explícito, sin landing, o la misma URL repetida en las dos columnas.
-    # Este último caso es el de los forms .../gm_frontend/chevrolet/t3/<pais>/form/<slug>,
-    # que son una página entera; si se tratara como landing, el fallback "cualquier iframe
-    # visible" podría meterse en un iframe de tracking y no encontrar ningún campo.
-    if url_mode == "solo_forms" or not landing_url or _same_url(landing_url, form_url):
-        driver.get(form_url or landing_url)
+    def _open_once():
+        # Form suelto: modo explícito, sin landing, o la misma URL repetida en las dos columnas.
+        # Este último caso es el de los forms .../gm_frontend/chevrolet/t3/<pais>/form/<slug>,
+        # que son una página entera; si se tratara como landing, el fallback "cualquier iframe
+        # visible" podría meterse en un iframe de tracking y no encontrar ningún campo.
+        if url_mode == "solo_forms" or not landing_url or _same_url(landing_url, form_url):
+            driver.get(form_url or landing_url)
+            _wait_document_ready(driver, page_ready_timeout)
+            handle_cookie_popups(driver)
+            return
+
+        driver.get(landing_url)
         _wait_document_ready(driver, page_ready_timeout)
         handle_cookie_popups(driver)
-        return True
 
-    driver.get(landing_url)
-    _wait_document_ready(driver, page_ready_timeout)
-    handle_cookie_popups(driver)
-
-    iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
-    if iframe is None:
-        # Iframe embebido con lazy-loading: activar con scroll y reintentar una vez más
-        # antes de asumir que el form no vive en un iframe.
-        _pre_scroll_for_dynamic_content(driver)
-        handle_cookie_popups(driver)
         iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
+        if iframe is None:
+            # Iframe embebido con lazy-loading: activar con scroll y reintentar una vez más
+            # antes de asumir que el form no vive en un iframe.
+            _pre_scroll_for_dynamic_content(driver)
+            handle_cookie_popups(driver)
+            iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
 
-    if iframe is not None:
-        driver.switch_to.frame(iframe)
-        handle_cookie_popups(driver)
+        if iframe is not None:
+            driver.switch_to.frame(iframe)
+            handle_cookie_popups(driver)
 
+    for attempt in range(_LOAD_ERROR_MAX_RETRIES + 1):
+        _open_once()
+        if not _page_shows_load_error(driver):
+            return True
+        if attempt < _LOAD_ERROR_MAX_RETRIES:
+            # Pausa creciente (4s, 8s): una caída del sitio de un par de segundos no
+            # alcanzaba a resolverse con 1.5s fijos entre reintentos.
+            pausa = 4 * (attempt + 1)
+            log(f"  El form mostró un error de carga, recargando en {pausa}s (intento {attempt + 2}/{_LOAD_ERROR_MAX_RETRIES + 1})...", "warn")
+            driver.switch_to.default_content()
+            time.sleep(pausa)
     return True
 
 
@@ -978,6 +1032,21 @@ def advance_to_selects(driver, level_ids=None, has_region=True, has_city=True, h
         _fill_step_for_advance(driver, level_ids, log=log)
         time.sleep(0.4)
         btn = _find_next_button(driver)
+        if not btn and step == 0:
+            # Paso 0 recién llegado del open_target: _wait_document_ready ya dio por
+            # cargada la página, pero en forms SPA (ej. el select de Modelo del paso 1)
+            # el <select>/botón todavía puede estar hidratando unos segundos más. Sin
+            # este reintento se reportaba "no se pudo avanzar" de entrada, aun cuando
+            # el form terminaba de renderizar un instante después.
+            deadline = time.time() + 6.0
+            while time.time() < deadline and not btn:
+                _check_stop(stop_flag)
+                time.sleep(0.5)
+                if _any_level_select_present(driver, level_ids, has_region, has_city, has_dealer):
+                    log("  Dropdowns de dealer encontrados tras esperar la carga del form.", "ok")
+                    return True
+                _fill_step_for_advance(driver, level_ids, log=log)
+                btn = _find_next_button(driver)
         if not btn:
             log("  No se ven los dropdowns region/city/dealer y no hay botón 'Siguiente'.", "warn")
             return False
@@ -1078,6 +1147,11 @@ def compare_dealers(
     models_to_run = list(models) if (model_field_id and models) else [None]
     total = len(rows) * len(models_to_run)
     counter = 0
+    # Presupuesto de hasta 2 reload+retomar por corrida ante el error de carga del form
+    # (no por fila): cada vez que aparece, mientras queden intentos, se recarga y se sigue
+    # con el mismo dealer (no se salta ninguno); agotado el presupuesto, si vuelve a
+    # aparecer más adelante esa fila se omite y se sigue hasta el final.
+    load_error_reload_attempts_left = _LOAD_ERROR_MAX_RETRIES
 
     for model_text in models_to_run:
         if model_text:
@@ -1129,12 +1203,76 @@ def compare_dealers(
                 label = " · ".join(_partes) or f"Fila {row.get('__row__')}"
                 progress_cb(counter, total, f"Modelo {model_text} · {label}" if model_text else label)
 
+            if _page_shows_load_error(driver):
+                if load_error_reload_attempts_left > 0:
+                    # Todavía queda presupuesto de reload en esta corrida: se recarga y se
+                    # retoma desde este mismo dealer (no se salta ninguno) — el resto del
+                    # cuerpo del loop sigue de largo y procesa esta fila normalmente. Si el
+                    # error vuelve a aparecer más adelante, se gasta otro intento del mismo
+                    # presupuesto (hasta _LOAD_ERROR_MAX_RETRIES en total para toda la corrida).
+                    load_error_reload_attempts_left -= 1
+                    log(f"  El form mostró el error de carga durante la comparación — "
+                        f"recargando y retomando desde este dealer... "
+                        f"(quedan {load_error_reload_attempts_left} intento(s) en esta corrida)", "warn")
+                    if reload_cb:
+                        try:
+                            reload_cb()
+                            if model_text:
+                                _select_model(driver, model_field_id, model_text)
+                        except StopRequested:
+                            raise
+                        except Exception as e:  # noqa: BLE001
+                            log(f"  No se pudo recargar el form: {e}", "err")
+                        cur_region = None
+                        cur_city = None
+                else:
+                    # Ya se gastaron los reintentos de esta corrida: esta fila se omite
+                    # (queda en FAIL) y se sigue con las siguientes hasta terminar el análisis,
+                    # en vez de recargar una y otra vez. "Reintentar fallidos" la vuelve a
+                    # tomar sola más adelante.
+                    log(f"  El form volvió a mostrar el error de carga — se omite esta fila "
+                        f"(Fila {row.get('__row__')}) y se sigue con las demás.", "warn")
+                    result = {
+                        "status": "FAIL",
+                        "modelo": model_text or "",
+                        "region": region_text,
+                        "city": city_text,
+                        "dealer": dealer_text,
+                        "dealer_position": None,
+                        "bac_excel": row.get(bac_key, "") if chk_bac and bac_key else "",
+                        "bac_ok": None,
+                        "extra_results": {},
+                        "fails": ["Error de carga del formulario — fila omitida (reintentá con "
+                                  "'Reintentar fallidos')"],
+                        "fila": row.get("__row__"),
+                        "name_disclaimer": None,
+                        "detalle_info": "",
+                        "region_found": False,
+                        "city_found": False,
+                        "dealer_found": False,
+                        "load_error_skip": True,
+                    }
+                    if screenshot_cb is not None:
+                        try:
+                            screenshot_cb(result)
+                        except StopRequested:
+                            raise
+                        except Exception as e:  # noqa: BLE001
+                            log(f"  Error tomando captura: {e}", "err")
+                    results.append(result)
+                    continue
+
             bac_excel = row.get(bac_key, "") if chk_bac and bac_key else ""
 
             fails = []
+            # True si el fallo es "esto no está en el form" (región/ciudad/dealer no
+            # encontrado) — esas filas van a status MISSING en vez de FAIL genérico, para
+            # distinguirlas de un problema real del form (BAC/campo que no coincide).
+            not_found = False
             region_found = not has_region
             city_found = not has_city
             dealer_found = False
+            dealer_position = None
             bac_ok = None
             extra_results = {}
             name_disclaimer = None
@@ -1151,6 +1289,7 @@ def compare_dealers(
                         region_found = True  # ya seleccionada de una fila previa
                     elif _get_select(driver, level_ids["region"], timeout=2) is None:
                         fails.append(f"Select de región '{level_ids['region']}' no encontrado en el form")
+                        not_found = True
                         cur_region = None
                         cur_city = None
                     else:
@@ -1168,9 +1307,13 @@ def compare_dealers(
                         if region_found:
                             cur_region = region_text
                             log(f"  Región: {region_text}", "ok")
+                            # Respiro antes de tocar el select de ciudad: le da tiempo al form
+                            # a terminar de repoblarlo tras el cambio de región.
+                            time.sleep(0.5)
                         else:
                             cur_region = None
                             fails.append(f"Región '{region_text}' no encontrada")
+                            not_found = True
                             log(f"  Región no encontrada: {region_text}", "warn")
 
                 if has_city and city_text and (region_found or not has_region):
@@ -1198,9 +1341,13 @@ def compare_dealers(
                         if city_found:
                             cur_city = city_text
                             log(f"  Ciudad: {city_text}", "ok")
+                            # Respiro antes de tocar el select de dealer: le da tiempo al form
+                            # a terminar de repoblarlo tras el cambio de ciudad.
+                            time.sleep(0.5)
                         else:
                             cur_city = None
                             fails.append(f"Ciudad '{city_text}' no encontrada")
+                            not_found = True
                             log(f"  Ciudad no encontrada: {city_text}", "warn")
 
                 ready_for_dealer = (region_found or not has_region) and (city_found or not has_city)
@@ -1234,8 +1381,10 @@ def compare_dealers(
                         log(f"  Dealer: {dealer_text}"
                             + (f"  ⚠ {name_disclaimer}" if name_disclaimer else ""), "ok")
                         time.sleep(0.2)
+                        dealer_position = _dealer_option_position(driver, level_ids["dealer"])
                     elif not expect_absent:
                         fails.append(f"Dealer '{dealer_text}' no encontrado")
+                        not_found = True
                         log(f"  Dealer no encontrado: {dealer_text}", "warn")
 
                 if expect_absent:
@@ -1287,7 +1436,15 @@ def compare_dealers(
                                 f"Campo '{check['field_id']}' no coincide (excel='{excel_val}' form='{form_val}')"
                             )
 
-                status = "PASS" if not fails else "FAIL"
+                if not fails:
+                    status = "PASS"
+                elif not_found and not expect_absent:
+                    # Estaba en el Excel pero no se encontró en el form (región/ciudad/dealer):
+                    # MISSING, para distinguirlo de un dato que sí está pero no coincide (BAC,
+                    # campos adicionales) — eso sigue siendo FAIL.
+                    status = "MISSING"
+                else:
+                    status = "FAIL"
 
             except StopRequested:
                 raise
@@ -1302,6 +1459,7 @@ def compare_dealers(
                 "region": region_text,
                 "city": city_text,
                 "dealer": dealer_text,
+                "dealer_position": dealer_position,
                 "bac_excel": bac_excel,
                 "bac_ok": bac_ok,
                 "extra_results": extra_results,
@@ -1325,6 +1483,12 @@ def compare_dealers(
                     log(f"  Error tomando captura: {e}", "err")
 
             results.append(result)
+            # Pequeño respiro entre fila y fila: sin esto, FASE 1 (sin capturas, mucho más
+            # rápida que FASE 2) encadenaba selects dependientes región→ciudad→dealer sin
+            # pausa alguna entre filas, y el form no siempre llegaba a repoblar a tiempo —
+            # daba más falsos FAIL que FASE 2, que de rebote le da ese respiro al tomar
+            # capturas entre fila y fila.
+            time.sleep(0.4)
 
     return results
 
@@ -1948,9 +2112,9 @@ def zip_screenshots(screenshot_paths, output_zip_path):
 # Export a Excel (PASS verde / FAIL rojo / EXTRA amarillo / MISSING violeta)
 # ──────────────────────────────────────────────────────────────────────────────
 _RESULTS_HEADERS = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Dealer",
-                    "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
+                    "Posición en Form", "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
 
-_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 14, 9: 10, 10: 50, 11: 55, 12: 10}
+_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 30, 8: 16, 9: 14, 10: 10, 11: 50, 12: 55, 13: 10}
 
 _STATUS_FILL_BY_NAME = {
     "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
@@ -1998,6 +2162,7 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
             r.get("region", ""),
             r.get("city", ""),
             r.get("dealer", ""),
+            r.get("dealer_position") if r.get("dealer_position") is not None else "",
             r.get("bac_excel", ""),
             {True: "OK", False: "MISMATCH", None: ""}.get(r.get("bac_ok")),
             " | ".join(r.get("fails", [])) if r.get("fails") else (r.get("detalle_info") or ""),
@@ -2017,7 +2182,7 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
         # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
         # confundir con FAIL, ya que el dealer sí se encontró.
         if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel"):
-            ws.cell(row=row_idx, column=11).fill = _NOTA_FILL
+            ws.cell(row=row_idx, column=12).fill = _NOTA_FILL
 
     for col_idx, width in _RESULTS_COL_WIDTHS.items():
         col_letter = ws.cell(row=1, column=col_idx).column_letter
@@ -2071,52 +2236,79 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
     wb = Workbook()
     wb.remove(wb.active)  # se crean las hojas explícitamente abajo, en el orden deseado
 
+    # OCULTO (status propio, o cualquier fila marcada hidden_in_excel) es data-hygiene del
+    # Excel de ORIGEN — algo que SÍ está declarado, pero solo en una fila oculta/filtrada,
+    # no un resultado de comparación PASS/FAIL/EXTRA. Se separa a su propia pestaña para no
+    # mezclarlo con lo demás; sigue contando en los totales del Resumen igual que antes.
+    hidden_related = [r for r in results if r.get("status") == "OCULTO" or r.get("hidden_in_excel")]
+    hidden_ids = {id(r) for r in hidden_related}
+    sheet_results_all = [r for r in results if id(r) not in hidden_ids]
+
     if multi_modelo:
         taken_names = set()
         for modelo in modelos_orden:
-            sheet_results = [r for r in results if (r.get("modelo") or "").strip() == modelo]
+            sheet_results = [r for r in sheet_results_all if (r.get("modelo") or "").strip() == modelo]
             sheet_name = _safe_sheet_name(modelo, taken_names)
             _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_border)
         # Resultados sin modelo asociado (ej. EXTRA/DUPLICADO de find_extra_dealers, que
         # no depende de qué modelo esté seleccionado): hoja aparte, no se pierden ni se
         # mezclan arbitrariamente con el primer modelo.
-        sin_modelo = [r for r in results if not (r.get("modelo") or "").strip()]
+        sin_modelo = [r for r in sheet_results_all if not (r.get("modelo") or "").strip()]
         if sin_modelo:
             sheet_name = _safe_sheet_name("Extras", taken_names)
             _write_results_sheet(wb, sheet_name, sin_modelo, thin_border, header_border)
     else:
-        _write_results_sheet(wb, "Resultados", results, thin_border, header_border)
+        _write_results_sheet(wb, "Resultados", sheet_results_all, thin_border, header_border)
+
+    if hidden_related:
+        _write_results_sheet(wb, "Ocultos", hidden_related, thin_border, header_border)
 
     # ── Hoja Resumen ──
     total = len(results)
+    # "Fila" solo lo trae un resultado de la comparación PRINCIPAL (una fila real del
+    # Excel de dealers) — EXTRA/DUPLICADO/NOTA/OCULTO de find_extra_dealers no tienen
+    # fila propia, salieron de recorrer el form, no el Excel. Con esto se puede separar
+    # "cuántas filas de MI Excel se chequearon" de "cuánto se recorrió en total".
+    dealers_excel_revisados = sum(1 for r in results if r.get("fila"))
     counts = {"PASS": 0, "FAIL": 0, "EXTRA": 0, "MISSING": 0, "DUPLICADO": 0, "NOTA": 0, "OCULTO": 0}
     for r in results:
         counts[r.get("status", "FAIL")] = counts.get(r.get("status", "FAIL"), 0) + 1
     disclaimer_count = sum(1 for r in results if r.get("name_disclaimer"))
 
     summary_ws = wb.create_sheet("Resumen", 0)  # primera hoja: es lo primero que se quiere ver
-    summary_data = [
-        ["País", pais],
-        ["Fecha", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-        ["", ""],
-        ["Total chequeados", total],
-        ["", ""],
-        ["🟢 PASS", counts.get("PASS", 0)],
-        ["🔴 FAIL", counts.get("FAIL", 0)],
-        ["🟡 EXTRA (en el form, no declarado en el Excel)", counts.get("EXTRA", 0)],
-        ["🔵 DUPLICADO (repetido en el dropdown del form)", counts.get("DUPLICADO", 0)],
-        ["🟠 OCULTO (en el form, pero declarado solo en filas que no se ven (ocultas/filtradas))", counts.get("OCULTO", 0)],
-        ["🟣 MISSING", counts.get("MISSING", 0)],
-        ["🔷 NOTA (dealer del form no está en el Excel, solo difiere en nombre)", counts.get("NOTA", 0)],
-        ["⚠ PASS con nombre distinto en detalles menores", disclaimer_count],
-    ]
+
+    # Cada fila del resumen sabe su propio "tipo" de estilo (título / sección / fila de
+    # estado coloreada / texto plano) — así el formato se aplica en un solo lugar después
+    # de escribir todo, en vez de ir acordándose de índices de fila a mano.
+    summary_rows = []  # (label, value, kind) — kind: title|section|status:<STATUS>|plain
+
+    def _add(label="", value="", kind="plain"):
+        summary_rows.append((label, value, kind))
+
+    _add("Comparador de Dealers vs Form", "", "title")
+    _add("País", pais, "plain")
+    _add("Fecha", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "plain")
+    _add()
+    _add("TOTALES", "", "section")
+    _add("Total Dealers Excel revisados", dealers_excel_revisados, "plain")
+    _add("Total general (+ extras/duplicados/nota/oculto)", total, "plain")
+    _add()
+    _add("RESULTADOS", "", "section")
+    _add("🟢 PASS — coincide con el Excel", counts.get("PASS", 0), "status:PASS")
+    _add("🔴 FAIL — está en el form pero algo no coincide (BAC, campos)", counts.get("FAIL", 0), "status:FAIL")
+    _add("🟣 MISSING — declarado en el Excel pero no está en el form", counts.get("MISSING", 0), "status:MISSING")
+    _add("🟡 EXTRA — está en el form, no declarado en el Excel", counts.get("EXTRA", 0), "status:EXTRA")
+    _add("🔵 DUPLICADO — repetido en el dropdown del form", counts.get("DUPLICADO", 0), "status:DUPLICADO")
+    _add("🟠 OCULTO — declarado solo en filas que no se ven (ver hoja 'Ocultos')", len(hidden_related), "status:OCULTO")
+    _add("🔷 NOTA — dealer del form no está en el Excel, solo difiere en nombre", counts.get("NOTA", 0), "status:NOTA")
+    _add("⚠ PASS con nombre distinto en detalles menores", disclaimer_count, "plain")
 
     # Desglose por modelo: mismo resumen PASS/FAIL/etc. pero por modelo, para ver de un
     # vistazo si algún modelo en particular tiene más problemas que otro — sin esto había
     # que abrir cada pestaña y contar a mano.
     if multi_modelo:
-        summary_data.append(["", ""])
-        summary_data.append(["Desglose por Modelo", ""])
+        _add()
+        _add("DESGLOSE POR MODELO", "", "section")
         for modelo in modelos_orden:
             m_results = [r for r in results if (r.get("modelo") or "").strip() == modelo]
             m_counts = {}
@@ -2125,18 +2317,18 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
             resumen_txt = " · ".join(
                 f"{k}={v}" for k, v in m_counts.items() if v
             ) or "(sin resultados)"
-            summary_data.append([f"  {modelo}", f"{len(m_results)} chequeados — {resumen_txt}"])
+            _add(f"  {modelo}", f"{len(m_results)} chequeados — {resumen_txt}")
 
     # Agregar URLs únicas usadas
     urls_form = sorted(set(r.get("url_form", "") for r in results if r.get("url_form")))
     urls_landing = sorted(set(r.get("url_landing", "") for r in results if r.get("url_landing")))
     if urls_form or urls_landing:
-        summary_data.append(["", ""])
-        summary_data.append(["URLs procesadas", ""])
+        _add()
+        _add("URLs PROCESADAS", "", "section")
         for url in urls_landing:
-            summary_data.append(["  Landing", url])
+            _add("  Landing", url)
         for url in urls_form:
-            summary_data.append(["  Form", url])
+            _add("  Form", url)
 
     # Avisos de calidad de datos del Excel de dealers (no afectan la comparación en sí).
     # hidden_rows es un dict {nº fila: 'filtrada'|'oculta'} (o, por compatibilidad, un set).
@@ -2146,35 +2338,63 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
             ocultas = sorted(r for r, tipo in hidden_rows.items() if tipo != "filtrada")
         else:
             filtradas, ocultas = [], sorted(hidden_rows)
-        summary_data.append(["", ""])
-        summary_data.append(["⚠ Filas del Excel que no se ven", len(filtradas) + len(ocultas)])
+        _add()
+        _add("⚠ FILAS DEL EXCEL QUE NO SE VEN", len(filtradas) + len(ocultas), "section")
         if filtradas:
-            summary_data.append(["  🔎 Filtradas por AutoFilter", len(filtradas)])
-            summary_data.append(["     Número de fila(s)", ", ".join(str(r) for r in filtradas)])
+            _add("  🔎 Filtradas por AutoFilter", len(filtradas))
+            _add("     Número de fila(s)", ", ".join(str(r) for r in filtradas))
         if ocultas:
-            summary_data.append(["  🙈 Ocultas a mano", len(ocultas)])
-            summary_data.append(["     Número de fila(s)", ", ".join(str(r) for r in ocultas)])
+            _add("  🙈 Ocultas a mano", len(ocultas))
+            _add("     Número de fila(s)", ", ".join(str(r) for r in ocultas))
     if hidden_columns:
-        summary_data.append(["", ""])
-        summary_data.append(["⚠ Columnas OCULTAS en el Excel de dealers", len(hidden_columns)])
+        _add()
+        _add("⚠ COLUMNAS OCULTAS EN EL EXCEL DE DEALERS", len(hidden_columns), "section")
         for hc in hidden_columns:
             label = f"  Columna {hc['column']}" + (f" ({hc['header']})" if hc.get("header") else "")
-            summary_data.append([label, ""])
+            _add(label)
 
-    for row_data in summary_data:
-        summary_ws.append(row_data)
+    for label, value, _kind in summary_rows:
+        summary_ws.append([label, value])
 
-    # Formato básico de la hoja resumen
-    summary_ws.column_dimensions["A"].width = 30
+    # Formato de la hoja resumen: título grande arriba, secciones en negrita con banda de
+    # color propia, y cada fila de estado (PASS/FAIL/MISSING/...) pintada con el MISMO
+    # color que usa en la hoja de Resultados — de un vistazo se asocia el número con su
+    # color en la hoja de detalle, sin tener que memorizar la leyenda.
+    summary_ws.column_dimensions["A"].width = 46
     summary_ws.column_dimensions["B"].width = 60
-    for row in summary_ws.iter_rows(min_row=1, max_row=summary_ws.max_row, max_col=2):
-        for cell in row:
+    _SECTION_FILL = PatternFill(fill_type="solid", fgColor="00E4D9F5")
+    _TITLE_FILL = _HEADER_FILL
+    for idx, (label, value, kind) in enumerate(summary_rows, start=1):
+        cell_a = summary_ws.cell(idx, 1)
+        cell_b = summary_ws.cell(idx, 2)
+        summary_ws.row_dimensions[idx].height = 26 if kind in ("title", "section") else 18
+        for cell in (cell_a, cell_b):
             cell.border = thin_border
-            cell.alignment = Alignment(vertical="center")
-    # Encabezados en negrita
-    for cell in [summary_ws.cell(1, 1), summary_ws.cell(1, 2),
-                 summary_ws.cell(4, 1), summary_ws.cell(4, 2)]:
-        cell.font = Font(bold=True)
+            # Sin wrap: una etiqueta larga en columna A se desborda visualmente sobre la
+            # celda vacía de al lado en vez de partirse en 2 líneas y pisar la fila de
+            # abajo (con el alto de fila fijo de acá, el wrap quedaba cortado feo).
+            cell.alignment = Alignment(vertical="center", wrap_text=False)
+        if kind == "title":
+            summary_ws.merge_cells(start_row=idx, start_column=1, end_row=idx, end_column=2)
+            cell_a.font = Font(bold=True, size=14, color="FFFFFF")
+            cell_a.fill = _TITLE_FILL
+            cell_a.alignment = Alignment(horizontal="center", vertical="center")
+        elif kind == "section":
+            cell_a.font = Font(bold=True, color="4B2E73")
+            cell_b.font = Font(bold=True, color="4B2E73")
+            cell_a.fill = _SECTION_FILL
+            cell_b.fill = _SECTION_FILL
+        elif kind.startswith("status:"):
+            status_name = kind.split(":", 1)[1]
+            fill = _STATUS_FILL_BY_NAME.get(status_name)
+            if fill:
+                cell_a.fill = fill
+                cell_b.fill = fill
+            cell_b.font = Font(bold=True)
+            cell_b.alignment = Alignment(horizontal="center", vertical="center")
+        elif label in ("País", "Fecha", "Total Dealers Excel revisados",
+                       "Total general (+ extras/duplicados/nota/oculto)"):
+            cell_a.font = Font(bold=True)
 
     wb.save(output_path)
     return output_path
