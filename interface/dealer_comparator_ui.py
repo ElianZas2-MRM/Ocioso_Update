@@ -1443,282 +1443,297 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             for pair_idx, (landing_url, form_url) in enumerate(url_pairs, start=1):
                 if state["stop_event"].is_set():
                     raise StopRequested()
-                ui_log(f"\n=== Form {pair_idx}/{total_pairs}: {form_url} ===", "info")
-                if landing_url:
-                    ui_log(f"    Landing: {landing_url}", "info")
+                try:
+                    ui_log(f"\n=== Form {pair_idx}/{total_pairs}: {form_url} ===", "info")
+                    if landing_url:
+                        ui_log(f"    Landing: {landing_url}", "info")
 
-                pair_dir = _pair_output_dir(form_url, stamp)
-                state["pair_info"][form_url] = {
-                    "pair_dir": pair_dir, "landing_url": landing_url, "url_mode": current_url_mode,
-                }
+                    pair_dir = _pair_output_dir(form_url, stamp)
+                    state["pair_info"][form_url] = {
+                        "pair_dir": pair_dir, "landing_url": landing_url, "url_mode": current_url_mode,
+                    }
 
-                # --- FASE 1: comparación rápida (sin capturas) ---
-                open_target(driver, current_url_mode, landing_url, form_url, log_cb=ui_log)
+                    # --- FASE 1: comparación rápida (sin capturas) ---
+                    open_target(driver, current_url_mode, landing_url, form_url, log_cb=ui_log)
 
-                if pair_idx == 1 and _pausar_auth:
-                    from tkinter import messagebox
-                    ui_log("PAUSA DE AUTENTICACIÓN: Esperando que el usuario inicie sesión...", "info")
-                    res = messagebox.askokcancel(
-                        "Ocioso — Autenticación Manual",
-                        "Se ha pausado la comparación de dealers antes del primer formulario para que puedas iniciar sesión.\n\n"
-                        "1. Completá la autenticación / login en la ventana del navegador.\n"
-                        "2. Asegurate de estar en la página del formulario.\n"
-                        "3. Hacé click en 'Aceptar' para continuar con la comparación, o 'Cancelar' para detener el proceso.",
-                        parent=None
-                    )
-                    if not res:
-                        raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación.")
-
-                    ui_log("Resumiendo comparación. Buscando contexto del formulario...", "info")
-                    # Ya autenticado: mandar el navegador fuera de pantalla para que la
-                    # comparación siga en segundo plano y no le robe el foco al usuario.
-                    try:
-                        driver.set_window_position(10000, 0)
-                    except Exception:
-                        pass
-                    driver.switch_to.default_content()
-                    iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
-                    if iframe is not None:
-                        driver.switch_to.frame(iframe)
-                        ui_log("Contexto cambiado al iframe del formulario.", "info")
-
-                model_field_id = None
-                models_to_run = None
-                # Si el usuario marcó que el form TIENE selector de Modelo y no aparece con
-                # ninguno de los ids conocidos, el form no se compara: se reporta FAIL. Sin
-                # esto la corrida seguía sin filtrar por modelo y el reporte parecía válido.
-                # IMPORTANTE: esto se resuelve ANTES de avanzar de paso — en forms multi-paso
-                # donde el selector de Modelo vive en el paso 1 y región/ciudad/dealer en un
-                # paso posterior (ej. testdrive-onix, pda-carpages), advance_to_selects ya
-                # pasa de largo el paso del modelo, y buscarlo DESPUÉS de avanzar siempre daba
-                # "no encontrado" aunque el form sí lo tuviera — la corrida quedaba en FAIL
-                # sin comparar ninguna fila.
-                model_missing_msg = None
-                if has_models_var.get():
-                    model_field_id = resolve_model_field_id(
-                        driver, models_field_id_var.get().strip() or "models")
-                    if model_field_id is None:
-                        model_missing_msg = (
-                            "Selector de Modelo no encontrado en el form (se buscaron los ids "
-                            + " / ".join(f'"{alias}"' for alias in MODEL_FIELD_ID_ALIASES)
-                            + "). Marcaste que este form tiene selector de Modelo, así que no "
-                              "se comparó ninguna fila."
+                    if pair_idx == 1 and _pausar_auth:
+                        from tkinter import messagebox
+                        ui_log("PAUSA DE AUTENTICACIÓN: Esperando que el usuario inicie sesión...", "info")
+                        res = messagebox.askokcancel(
+                            "Ocioso — Autenticación Manual",
+                            "Se ha pausado la comparación de dealers antes del primer formulario para que puedas iniciar sesión.\n\n"
+                            "1. Completá la autenticación / login en la ventana del navegador.\n"
+                            "2. Asegurate de estar en la página del formulario.\n"
+                            "3. Hacé click en 'Aceptar' para continuar con la comparación, o 'Cancelar' para detener el proceso.",
+                            parent=None
                         )
-                    elif models_mode_var.get() == "specific":
-                        models_to_run = [m.strip() for m in models_list_var.get().split(",") if m.strip()]
-                        if not models_to_run:
-                            ui_log("No ingresaste ningún modelo específico, se omite el filtro por modelo.", "warn")
-                    else:
-                        models_to_run = list_model_options(driver, model_field_id)
-                        ui_log(f"Modelos detectados en el form: {', '.join(models_to_run) or '(ninguno)'}", "info")
+                        if not res:
+                            raise StopRequested("Ejecución cancelada por el usuario durante la pausa de autenticación.")
 
-                # Forms multi-paso: avanzar hasta el paso donde están los dropdowns
-                # region/city/dealer (en los de 1 paso los encuentra al instante).
-                advance_ok = advance_to_selects(
-                    driver, level_ids=DEFAULT_SELECT_IDS,
-                    has_region=has_region_var.get(), has_city=has_city_var.get(),
-                    has_dealer=has_dealer_var.get(), log_cb=ui_log, stop_flag=state["stop_event"],
-                )
-                advance_fail_msg = None
-                if not advance_ok:
-                    # Antes esto se ignoraba y compare_dealers arrancaba igual, moliendo un
-                    # timeout corto por cada una de las filas del Excel contra una página que
-                    # nunca llegó a los dropdowns — minutos "colgado" sin ningún aviso claro.
-                    advance_fail_msg = (
-                        "No se pudo avanzar hasta el paso con los dropdowns de región/ciudad/"
-                        "dealer (revisá el form manualmente: puede que el botón 'Siguiente' no "
-                        "haya respondido o el paso no haya cargado bien) — no se comparó ninguna fila."
-                    )
+                        ui_log("Resumiendo comparación. Buscando contexto del formulario...", "info")
+                        # Ya autenticado: mandar el navegador fuera de pantalla para que la
+                        # comparación siga en segundo plano y no le robe el foco al usuario.
+                        try:
+                            driver.set_window_position(10000, 0)
+                        except Exception:
+                            pass
+                        driver.switch_to.default_content()
+                        iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
+                        if iframe is not None:
+                            driver.switch_to.frame(iframe)
+                            ui_log("Contexto cambiado al iframe del formulario.", "info")
 
-                if model_field_id and _get_select(driver, model_field_id, timeout=1) is None:
-                    # El selector de Modelo quedó en un paso ANTERIOR al de región/ciudad/
-                    # dealer — no se puede re-seleccionar modelo a mitad de la comparación sin
-                    # recargar y volver a avanzar todos los pasos. Se compara una sola vez (con
-                    # el modelo que ya quedó elegido al avanzar) en vez de repetir por modelo o
-                    # de intentar re-seleccionarlo en una página donde ya no existe ese select.
-                    cant = len(models_to_run) if models_to_run else 1
-                    ui_log(
-                        f"El selector de Modelo está en un paso anterior al de dealer (no se "
-                        f"puede re-seleccionar en este form) — se compara una sola vez"
-                        + (f", no una por cada uno de los {cant} modelos detectados." if cant > 1 else "."),
-                        "warn",
-                    )
                     model_field_id = None
+                    models_to_run = None
+                    # Si el usuario marcó que el form TIENE selector de Modelo y no aparece con
+                    # ninguno de los ids conocidos, el form no se compara: se reporta FAIL. Sin
+                    # esto la corrida seguía sin filtrar por modelo y el reporte parecía válido.
+                    # IMPORTANTE: esto se resuelve ANTES de avanzar de paso — en forms multi-paso
+                    # donde el selector de Modelo vive en el paso 1 y región/ciudad/dealer en un
+                    # paso posterior (ej. testdrive-onix, pda-carpages), advance_to_selects ya
+                    # pasa de largo el paso del modelo, y buscarlo DESPUÉS de avanzar siempre daba
+                    # "no encontrado" aunque el form sí lo tuviera — la corrida quedaba en FAIL
+                    # sin comparar ninguna fila.
+                    model_missing_msg = None
+                    if has_models_var.get():
+                        model_field_id = resolve_model_field_id(
+                            driver, models_field_id_var.get().strip() or "models")
+                        if model_field_id is None:
+                            model_missing_msg = (
+                                "Selector de Modelo no encontrado en el form (se buscaron los ids "
+                                + " / ".join(f'"{alias}"' for alias in MODEL_FIELD_ID_ALIASES)
+                                + "). Marcaste que este form tiene selector de Modelo, así que no "
+                                  "se comparó ninguna fila."
+                            )
+                        elif models_mode_var.get() == "specific":
+                            models_to_run = [m.strip() for m in models_list_var.get().split(",") if m.strip()]
+                            if not models_to_run:
+                                ui_log("No ingresaste ningún modelo específico, se omite el filtro por modelo.", "warn")
+                        else:
+                            models_to_run = list_model_options(driver, model_field_id)
+                            ui_log(f"Modelos detectados en el form: {', '.join(models_to_run) or '(ninguno)'}", "info")
 
-                _fase_label = "Comparando y capturando" if output_mode == "caps" else "Comparando"
-
-                def _compare_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] {_fase_label} {cur}/{total}: {label_txt}")
-
-                def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
-                    _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total}: {label_txt}")
-
-                def _reload_cb(_landing=landing_url, _form=form_url, _mode=current_url_mode):
-                    # Recuperación para cuando un dropdown queda efectivamente vacío (sin
-                    # ninguna opción real): recarga la página del form y vuelve a avanzar
-                    # hasta los dropdowns, igual que al arrancar este form — más confiable
-                    # que reintentar sobre una página que puede haber quedado rota.
-                    open_target(driver, _mode, _landing, _form, log_cb=ui_log)
-                    advance_to_selects(
+                    # Forms multi-paso: avanzar hasta el paso donde están los dropdowns
+                    # region/city/dealer (en los de 1 paso los encuentra al instante).
+                    advance_ok = advance_to_selects(
                         driver, level_ids=DEFAULT_SELECT_IDS,
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
-                        has_dealer=has_dealer_var.get(), log_cb=lambda *_a, **_k: None,
-                        stop_flag=state["stop_event"],
+                        has_dealer=has_dealer_var.get(), log_cb=ui_log, stop_flag=state["stop_event"],
                     )
+                    advance_fail_msg = None
+                    if not advance_ok:
+                        # Antes esto se ignoraba y compare_dealers arrancaba igual, moliendo un
+                        # timeout corto por cada una de las filas del Excel contra una página que
+                        # nunca llegó a los dropdowns — minutos "colgado" sin ningún aviso claro.
+                        advance_fail_msg = (
+                            "No se pudo avanzar hasta el paso con los dropdowns de región/ciudad/"
+                            "dealer (revisá el form manualmente: puede que el botón 'Siguiente' no "
+                            "haya respondido o el paso no haya cargado bien) — no se comparó ninguna fila."
+                        )
 
-                def _shot(result, _form_url=form_url, _landing_url=landing_url,
-                          _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
-                    import re
-                    # Con selector de Modelo, cada modelo tiene su PROPIA subcarpeta dentro
-                    # de la carpeta del form (ej. .../Spark_EUV/, .../Captiva_EV/) — antes
-                    # todas las capturas de todos los modelos caían mezcladas en la misma
-                    # carpeta, distinguibles solo por el nombre de archivo.
-                    modelo_slug = _slug(result.get("modelo")) if result.get("modelo") else ""
-                    shot_dir = os.path.join(_pair_dir, modelo_slug) if modelo_slug else _pair_dir
-                    os.makedirs(shot_dir, exist_ok=True)
+                    if model_field_id and _get_select(driver, model_field_id, timeout=1) is None:
+                        # El selector de Modelo quedó en un paso ANTERIOR al de región/ciudad/
+                        # dealer — no se puede re-seleccionar modelo a mitad de la comparación sin
+                        # recargar y volver a avanzar todos los pasos. Se compara una sola vez (con
+                        # el modelo que ya quedó elegido al avanzar) en vez de repetir por modelo o
+                        # de intentar re-seleccionarlo en una página donde ya no existe ese select.
+                        cant = len(models_to_run) if models_to_run else 1
+                        ui_log(
+                            f"El selector de Modelo está en un paso anterior al de dealer (no se "
+                            f"puede re-seleccionar en este form) — se compara una sola vez"
+                            + (f", no una por cada uno de los {cant} modelos detectados." if cant > 1 else "."),
+                            "warn",
+                        )
+                        model_field_id = None
 
-                    combo_parts = []
-                    if has_region_var.get() and result.get("region"):
-                        combo_parts.append(result["region"])
-                    if has_city_var.get() and result.get("city"):
-                        combo_parts.append(result["city"])
-                    if has_dealer_var.get() and result.get("dealer"):
-                        combo_parts.append(result["dealer"])
-                    if not combo_parts:
-                        combo_parts.append("dealer")
+                    _fase_label = "Comparando y capturando" if output_mode == "caps" else "Comparando"
 
-                    safe_parts = []
-                    for part in combo_parts:
-                        clean = re.sub(r"[^\w\s\.-]+", "", str(part)).strip()
-                        clean = re.sub(r"\s+", "_", clean)
-                        if clean:
-                            safe_parts.append(clean)
-                    combo_name = "_".join(safe_parts)[:60]
-                    filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
-                    shot_landing = _landing_url if _url_mode == "landing_form" else ""
-                    banner_extra = banner_lines_for_result(
-                        result, has_region=has_region_var.get(),
-                        has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
-                    )
+                    def _compare_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
+                        _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] {_fase_label} {cur}/{total}: {label_txt}")
 
-                    if expect_absent:
-                        # Evidencia de exclusión: se despliega el PRIMER nivel de la cadena
-                        # región→ciudad→dealer que no se encontró (si la región no está,
-                        # tampoco pueden estar su ciudad ni su dealer). El <select> nativo
-                        # no es fotografiable, así que se clona la lista completa de
-                        # opciones arriba del form, resaltando el buscado si aparece.
-                        nivel, sel_key, buscado, found = evidence_level_for_result(
+                    def _extras_progress_cb(cur, total, label_txt, _pair_idx=pair_idx):
+                        _progress_cb(cur, total, f"[Form {_pair_idx}/{total_pairs}] Buscando extras {cur}/{total}: {label_txt}")
+
+                    def _reload_cb(_landing=landing_url, _form=form_url, _mode=current_url_mode):
+                        # Recuperación para cuando un dropdown queda efectivamente vacío (sin
+                        # ninguna opción real): recarga la página del form y vuelve a avanzar
+                        # hasta los dropdowns, igual que al arrancar este form — más confiable
+                        # que reintentar sobre una página que puede haber quedado rota.
+                        open_target(driver, _mode, _landing, _form, log_cb=ui_log)
+                        advance_to_selects(
+                            driver, level_ids=DEFAULT_SELECT_IDS,
+                            has_region=has_region_var.get(), has_city=has_city_var.get(),
+                            has_dealer=has_dealer_var.get(), log_cb=lambda *_a, **_k: None,
+                            stop_flag=state["stop_event"],
+                        )
+
+                    def _shot(result, _form_url=form_url, _landing_url=landing_url,
+                              _url_mode=current_url_mode, _pair_dir=pair_dir, _pair_idx=pair_idx):
+                        import re
+                        # Con selector de Modelo, cada modelo tiene su PROPIA subcarpeta dentro
+                        # de la carpeta del form (ej. .../Spark_EUV/, .../Captiva_EV/) — antes
+                        # todas las capturas de todos los modelos caían mezcladas en la misma
+                        # carpeta, distinguibles solo por el nombre de archivo.
+                        modelo_slug = _slug(result.get("modelo")) if result.get("modelo") else ""
+                        shot_dir = os.path.join(_pair_dir, modelo_slug) if modelo_slug else _pair_dir
+                        os.makedirs(shot_dir, exist_ok=True)
+
+                        combo_parts = []
+                        if has_region_var.get() and result.get("region"):
+                            combo_parts.append(result["region"])
+                        if has_city_var.get() and result.get("city"):
+                            combo_parts.append(result["city"])
+                        if has_dealer_var.get() and result.get("dealer"):
+                            combo_parts.append(result["dealer"])
+                        if not combo_parts:
+                            combo_parts.append("dealer")
+
+                        safe_parts = []
+                        for part in combo_parts:
+                            clean = re.sub(r"[^\w\s\.-]+", "", str(part)).strip()
+                            clean = re.sub(r"\s+", "_", clean)
+                            if clean:
+                                safe_parts.append(clean)
+                        combo_name = "_".join(safe_parts)[:60]
+                        filename = f"{result['status']}_fila{result.get('fila') or 'x'}_{combo_name}.png"
+                        shot_landing = _landing_url if _url_mode == "landing_form" else ""
+                        banner_extra = banner_lines_for_result(
                             result, has_region=has_region_var.get(),
                             has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
                         )
-                        capture_dropdown_evidence(
-                            driver, DEFAULT_SELECT_IDS[sel_key], shot_dir, filename,
-                            title=f"Dropdown {nivel} desplegado", searched_text=buscado,
-                            found=found,
-                            form_url=_form_url, landing_url=shot_landing,
-                            extra_lines=banner_extra,
-                        )
+
+                        if expect_absent:
+                            # Evidencia de exclusión: se despliega el PRIMER nivel de la cadena
+                            # región→ciudad→dealer que no se encontró (si la región no está,
+                            # tampoco pueden estar su ciudad ni su dealer). El <select> nativo
+                            # no es fotografiable, así que se clona la lista completa de
+                            # opciones arriba del form, resaltando el buscado si aparece.
+                            nivel, sel_key, buscado, found = evidence_level_for_result(
+                                result, has_region=has_region_var.get(),
+                                has_city=has_city_var.get(), has_dealer=has_dealer_var.get(),
+                            )
+                            capture_dropdown_evidence(
+                                driver, DEFAULT_SELECT_IDS[sel_key], shot_dir, filename,
+                                title=f"Dropdown {nivel} desplegado", searched_text=buscado,
+                                found=found,
+                                form_url=_form_url, landing_url=shot_landing,
+                                extra_lines=banner_extra,
+                            )
+                        else:
+                            capture_result_screenshot(
+                                driver, shot_dir, filename,
+                                form_url=_form_url, landing_url=shot_landing,
+                                extra_lines=banner_extra,
+                            )
+
+                    skip_msg = advance_fail_msg or model_missing_msg
+                    if skip_msg:
+                        ui_log(skip_msg, "warn")
+                        pair_results = [{
+                            "status": "FAIL",
+                            "region": "",
+                            "city": "",
+                            "dealer": "",
+                            "fails": [skip_msg],
+                        }]
                     else:
-                        capture_result_screenshot(
-                            driver, shot_dir, filename,
-                            form_url=_form_url, landing_url=shot_landing,
-                            extra_lines=banner_extra,
+                        pair_results = compare_dealers(
+                            driver, filtered_rows, column_map,
+                            level_ids=DEFAULT_SELECT_IDS,
+                            has_region=has_region_var.get(), has_city=has_city_var.get(),
+                            has_dealer=has_dealer_var.get(),
+                            chk_bac=False, field_checks=_field_checks_resolved(),
+                            model_field_id=model_field_id, models=models_to_run,
+                            log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
+                            screenshot_cb=(_shot if output_mode == "caps" else None),
+                            expect_absent=expect_absent,
+                            reload_cb=_reload_cb,
                         )
-
-                skip_msg = advance_fail_msg or model_missing_msg
-                if skip_msg:
-                    ui_log(skip_msg, "warn")
-                    pair_results = [{
-                        "status": "FAIL",
-                        "region": "",
-                        "city": "",
-                        "dealer": "",
-                        "fails": [skip_msg],
-                    }]
-                else:
-                    pair_results = compare_dealers(
-                        driver, filtered_rows, column_map,
-                        level_ids=DEFAULT_SELECT_IDS,
-                        has_region=has_region_var.get(), has_city=has_city_var.get(),
-                        has_dealer=has_dealer_var.get(),
-                        chk_bac=False, field_checks=_field_checks_resolved(),
-                        model_field_id=model_field_id, models=models_to_run,
-                        log_cb=ui_log, progress_cb=_compare_progress_cb, stop_flag=state["stop_event"],
-                        screenshot_cb=(_shot if output_mode == "caps" else None),
-                        expect_absent=expect_absent,
-                        reload_cb=_reload_cb,
-                    )
-                _hidden_filas = state.get("hidden_rows") or {}
-                for r in pair_results:
-                    r["url_form"] = form_url
-                    r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
-                    # Resultados de filas no visibles del Excel (modo Excluir): naranja en el
-                    # reporte, distinguiendo filtrada (AutoFilter) vs oculta (a mano).
-                    if r.get("fila") in _hidden_filas:
-                        r["hidden_in_excel"] = True
-                        _tipo = _hidden_filas.get(r.get("fila"), "oculta")
-                        r["hidden_kind"] = _tipo
-                        r.setdefault("fails", []).append(
-                            f"⚠ La fila del Excel está {'FILTRADA (AutoFilter)' if _tipo == 'filtrada' else 'OCULTA (a mano)'}"
-                        )
-
-                if _should_find_extras() and not expect_absent and not skip_msg:
-                    ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
-                    extras = find_extra_dealers(
-                        driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
-                        has_region=has_region_var.get(), has_city=has_city_var.get(),
-                        log_cb=ui_log, progress_cb=_extras_progress_cb, stop_flag=state["stop_event"],
-                        has_dealer=has_dealer_var.get(),
-                        hidden_rows_data=state.get("hidden_filtered") or [],
-                        model_field_id=model_field_id, models=models_to_run,
-                    )
-                    for r in extras:
+                    _hidden_filas = state.get("hidden_rows") or {}
+                    for r in pair_results:
                         r["url_form"] = form_url
                         r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
-                    pair_results = pair_results + extras
+                        # Resultados de filas no visibles del Excel (modo Excluir): naranja en el
+                        # reporte, distinguiendo filtrada (AutoFilter) vs oculta (a mano).
+                        if r.get("fila") in _hidden_filas:
+                            r["hidden_in_excel"] = True
+                            _tipo = _hidden_filas.get(r.get("fila"), "oculta")
+                            r["hidden_kind"] = _tipo
+                            r.setdefault("fails", []).append(
+                                f"⚠ La fila del Excel está {'FILTRADA (AutoFilter)' if _tipo == 'filtrada' else 'OCULTA (a mano)'}"
+                            )
 
-                for r in pair_results:
-                    counts[r["status"]] = counts.get(r["status"], 0) + 1
-                all_results_all_pairs.extend(pair_results)
-                state["results"] = all_results_all_pairs
-                ui_log(
-                    f"Form {pair_idx}/{total_pairs} comparado: "
-                    f"PASS={sum(1 for r in pair_results if r['status']=='PASS')} "
-                    f"FAIL={sum(1 for r in pair_results if r['status']=='FAIL')} "
-                    f"EXTRA={sum(1 for r in pair_results if r['status']=='EXTRA')} "
-                    f"DUPLICADO={sum(1 for r in pair_results if r['status']=='DUPLICADO')}", "ok",
-                )
-
-                # --- Exportar el reporte de ESTE form. En modo "Excel + Capturas" la
-                # comparación y la captura de cada fila ya pasaron por el MISMO compare_dealers
-                # de arriba (busca dealer, saca captura, busca el siguiente...) — no dos
-                # pasadas completas separadas por todo el Excel. ---
-                excel_filename = os.path.basename(pair_dir) + ".xlsx"
-                export_path = export_results_excel(
-                    pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
-                    hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
-                )
-                report_paths.append(export_path)
-                state["pair_info"][form_url]["export_path"] = export_path
-                ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
-
-                # --- Email por form: usa el flag global de la barra superior ---
-                from .helpers_interface import cargar_config_global as _cfg_g
-                if bool(_cfg_g().get("enviar_mail", False)):
-                    try:
-                        from .helpers_interface import enviar_email_comparador_dealers
-                        _pair_counts = {}
-                        for r in pair_results:
-                            _pair_counts[r["status"]] = _pair_counts.get(r["status"], 0) + 1
-                        enviado = enviar_email_comparador_dealers(
-                            state["pais"], pair_dir, export_path, _pair_counts,
-                            form_url=form_url, landing_url=landing_url,
-                            incluir_capturas=(output_mode == "caps"),
+                    if _should_find_extras() and not expect_absent and not skip_msg:
+                        ui_log("Buscando EXTRAS y DUPLICADOS en el form...", "info")
+                        extras = find_extra_dealers(
+                            driver, filtered_rows, column_map, level_ids=DEFAULT_SELECT_IDS,
+                            has_region=has_region_var.get(), has_city=has_city_var.get(),
+                            log_cb=ui_log, progress_cb=_extras_progress_cb, stop_flag=state["stop_event"],
+                            has_dealer=has_dealer_var.get(),
+                            hidden_rows_data=state.get("hidden_filtered") or [],
+                            model_field_id=model_field_id, models=models_to_run,
                         )
-                        ui_log(f"Email {'encolado' if enviado else 'NO enviado'} para Form {pair_idx}/{total_pairs}.",
-                               "ok" if enviado else "warn")
-                    except Exception as _mail_err:  # noqa: BLE001
-                        ui_log(f"No se pudo enviar el email del Form {pair_idx}: {_mail_err}", "err")
+                        for r in extras:
+                            r["url_form"] = form_url
+                            r["url_landing"] = landing_url if current_url_mode == "landing_form" else ""
+                        pair_results = pair_results + extras
+
+                    for r in pair_results:
+                        counts[r["status"]] = counts.get(r["status"], 0) + 1
+                    all_results_all_pairs.extend(pair_results)
+                    state["results"] = all_results_all_pairs
+                    ui_log(
+                        f"Form {pair_idx}/{total_pairs} comparado: "
+                        f"PASS={sum(1 for r in pair_results if r['status']=='PASS')} "
+                        f"FAIL={sum(1 for r in pair_results if r['status']=='FAIL')} "
+                        f"EXTRA={sum(1 for r in pair_results if r['status']=='EXTRA')} "
+                        f"DUPLICADO={sum(1 for r in pair_results if r['status']=='DUPLICADO')}", "ok",
+                    )
+
+                    # --- Exportar el reporte de ESTE form. En modo "Excel + Capturas" la
+                    # comparación y la captura de cada fila ya pasaron por el MISMO compare_dealers
+                    # de arriba (busca dealer, saca captura, busca el siguiente...) — no dos
+                    # pasadas completas separadas por todo el Excel. ---
+                    excel_filename = os.path.basename(pair_dir) + ".xlsx"
+                    export_path = export_results_excel(
+                        pair_results, output_path=os.path.join(pair_dir, excel_filename), pais=state["pais"],
+                        hidden_rows=state.get("hidden_rows"), hidden_columns=state.get("hidden_columns"),
+                    )
+                    report_paths.append(export_path)
+                    state["pair_info"][form_url]["export_path"] = export_path
+                    ui_log(f"Reporte Form {pair_idx}/{total_pairs}: {export_path}", "ok")
+
+                    # --- Email por form: usa el flag global de la barra superior ---
+                    from .helpers_interface import cargar_config_global as _cfg_g
+                    if bool(_cfg_g().get("enviar_mail", False)):
+                        try:
+                            from .helpers_interface import enviar_email_comparador_dealers
+                            _pair_counts = {}
+                            for r in pair_results:
+                                _pair_counts[r["status"]] = _pair_counts.get(r["status"], 0) + 1
+                            enviado = enviar_email_comparador_dealers(
+                                state["pais"], pair_dir, export_path, _pair_counts,
+                                form_url=form_url, landing_url=landing_url,
+                                incluir_capturas=(output_mode == "caps"),
+                            )
+                            ui_log(f"Email {'encolado' if enviado else 'NO enviado'} para Form {pair_idx}/{total_pairs}.",
+                                   "ok" if enviado else "warn")
+                        except Exception as _mail_err:  # noqa: BLE001
+                            ui_log(f"No se pudo enviar el email del Form {pair_idx}: {_mail_err}", "err")
+                except StopRequested:
+                    raise
+                except Exception as e:  # noqa: BLE001
+                    LOGGER.exception(f"Error procesando Form {pair_idx}/{total_pairs}")
+                    ui_log(f"Error procesando Form {pair_idx}/{total_pairs} ({form_url}): {e}", "err")
+                    all_results_all_pairs.append({
+                        "status": "FAIL", "region": "", "city": "", "dealer": "",
+                        "fails": [f"Error inesperado procesando este form: {e}"],
+                        "url_form": form_url,
+                        "url_landing": landing_url if current_url_mode == "landing_form" else "",
+                    })
+                    state["results"] = all_results_all_pairs
+                    counts["FAIL"] = counts.get("FAIL", 0) + 1
+                    continue
 
             ui_log(
                 f"\nTodos los forms procesados. Reportes generados: {len(report_paths)}\n" +
