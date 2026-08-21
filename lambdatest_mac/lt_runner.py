@@ -4791,7 +4791,7 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
     summary = {
         "pais": opts.pais, "results_excel": None,
         "session_id": None, "total": 0, "ok": 0, "failed": 0,
-        "error": None, "video_url": "",
+        "error": None, "video_url": "", "fail_rows": [],
     }
     driver     = None
     session_id = None
@@ -4897,6 +4897,10 @@ def run_lt_batch(opts: LTRunOptions, log: Callable = print,
                 summary["ok"] += 1
             else:
                 summary["failed"] += 1
+                # Fila física + motivo, para poder aislar y reintentar sólo esta fila
+                # más tarde (mismo criterio que fail_rows en base_form_filler.py).
+                summary["fail_rows"].append({"row": row_num, "reason": result["result_text"],
+                                              "url": lead.public_url or lead.secure_url or ""})
 
     except Exception as e:
         summary["error"] = str(e)
