@@ -208,6 +208,18 @@ Después de enviar el lead, la app no se queda solo con la captura de la TY page
 
 Las capturas de este chequeo se guardan aparte, en `cta_evidence/`. En LambdaTest (Mac/Android) el CTA se reporta igual en el Excel, pero **sin** captura de evidencia.
 
+### 🔁 Reintentar Fallidos
+
+Al lado de **EJECUTAR ENVÍO** está el botón **REINTENTAR FALLIDOS**. Sirve para volver a correr únicamente las filas que fallaron en la última corrida manual, sin tener que mandar de nuevo el lote completo.
+
+- Solo tiene sentido **después de correr un envío manual en esta misma sesión** de la app — la app recuerda, país por país y dispositivo por dispositivo, qué filas exactas fallaron (no solo cuántas).
+- Al apretarlo, cruza los países/dispositivos que tenés **tildados en pantalla ahora mismo** con los que tuvieron fallas en la última corrida, y te muestra un resumen (ej. *"Argentina · Chrome: 5 fila(s)"*) antes de arrancar.
+- Arma un Excel temporal solo con esas filas y corre el envío real apuntando a él — no vuelve a tocar los leads que ya salieron bien.
+- El resultado va a un **Excel nuevo, separado** del original, así conservás la evidencia de ambas corridas.
+- Si reintentás dos veces seguidas, la segunda vez **solo toma lo que sigue fallando**, no vuelve sobre lo que ya se arregló.
+- Cubre los tres navegadores locales (Chrome/Firefox/Edge) y también **Mac LT / Android LT**.
+- Es una acción manual: no aplica a los envíos programados/desatendidos (ahí no hay nadie tildando pantalla).
+
 **La app recuerda tu configuración:** todo lo que elegís en esta pestaña (dispositivos tildados, modo Mercados/Excels, "enviar en paralelo por URL" + su máximo, "T3 2.0", y toda la config de email) se guarda solo, apenas lo cambiás, en `json/config_global.json`. Si cerrás la app y la volvés a abrir, la encontrás tal cual la dejaste — no hace falta volver a tildar todo de nuevo.
 
 ---
@@ -333,9 +345,8 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
 ![Comparar Dealers — filtro, columnas, salida, email y presets](Asset/screenshots/31_dealers_tab_mid.png)
 
 5. **⑤ COLUMNAS DEL EXCEL** — las píldoras **region / city / dealer** son los **ids reales del `<select>` en el HTML** del form (no cambian de país a país, aunque el texto visible sí: "Provincia" en AR sigue siendo `region`). Desmarcá el nivel que tu form no tenga (ej. sin `dealer`, valida solo región+ciudad). Debajo mapeás qué **columna de tu Excel** es cada nivel (Región=`PROVINCIA`, Ciudad=`CIUDAD`, Dealer=`NOMBRE`, etc.).
-   - **Verificar BAC**: opcional (muchos forms no exponen `data-bac`).
    - **Columnas adicionales a comprobar**: agregás cualquier campo extra (columna del Excel → id del form, ej. `CEP` → `customer-cep`); quedan como píldoras-checkbox activables. Todo se guarda por país.
-6. **Modelos** (opcional) — tildá **"Tiene selector de Modelo"** **solo si la lista de dealers cambia según el modelo** (solo T1 con id `models`). Elegís "Todos los modelos" o "Modelo(s) específico(s)": el comparador repite la revisión de dealers **para cada modelo**. Si los dealers son los mismos sin importar el modelo, **dejalo destildado** — al avanzar el form, si hay un dropdown de modelo, el comparador elige la primera opción válida solo para pasar de paso (si ya viene uno preseleccionado, lo respeta).
+6. **Modelos** (opcional) — tildá **"Tiene selector de Modelo"** **solo si la lista de dealers cambia según el modelo**. El bot prueba tanto el id `models` como `model` (según cómo esté armado el form); si tildaste esta opción y el form no tiene ninguno de los dos, esa fila da **FAIL** en vez de compararse mal en silencio. Elegís "Todos los modelos" o "Modelo(s) específico(s)": el comparador repite la revisión de dealers **para cada modelo**. Si los dealers son los mismos sin importar el modelo, **dejalo destildado** — al avanzar el form, si hay un dropdown de modelo, el comparador elige la primera opción válida solo para pasar de paso (si ya viene uno preseleccionado, lo respeta). Con capturas activadas, cada modelo guarda las suyas en su **propia subcarpeta** (`.../Spark_EUV/`, `.../Captiva_EV/`, …) dentro de la carpeta del form, para que no se mezclen ni se pisen entre sí.
 7. **📦 MODO DE SALIDA** — **"Solo Excel"** o **"Excel + Capturas"**. Con capturas, quedan como PNG sueltos **junto al Excel dentro de la misma carpeta** del form (sin ZIP; lo comprimís vos si querés).
 8. **Envío por email** — no hay configuración de mail dentro de esta pestaña: se controla **solo desde la barra superior de la app** (campo **Email destinatario** + checkbox **Enviar mail**), igual que para el resto de las pestañas. Si al ejecutar el Comparador tenés "Enviar mail" tildado, al terminar **cada form** se manda un mail con su reporte: adjunta la **carpeta completa (Excel + capturas) en un ZIP** si elegiste "Excel + Capturas", o **solo el Excel** si elegiste "Solo Excel". El cuerpo trae el resumen PASS/FAIL/EXTRA/DUPLICADO/OCULTO/NOTA.
 
@@ -361,10 +372,15 @@ La parte de abajo de la pestaña, con los presets guardados y la barra de EJECUT
 |---|---|---|
 | **PASS** | verde | El dealer/combinación está como debe (o correctamente ausente en modo Excluir). |
 | **FAIL** | rojo | No está cuando debía (Incluir) o está cuando no debía (Excluir). |
+| **MISSING** | violeta | Está declarado en tu Excel pero **no se encontró en el form** — a diferencia de FAIL (que sí está, pero algo no coincide), acá directamente no apareció. |
 | **EXTRA** | amarillo | Aparece en el form pero **no está declarado en el Excel** (por su combinación región/ciudad). |
 | **DUPLICADO** | naranja claro | Aparece **más de una vez** en el mismo dropdown del form. |
 | **OCULTO** | naranja | Está en el form pero declarado **solo en filas que no se ven** del Excel (ocultas o filtradas) — todo lo relacionado con filas/columnas no visibles se marca en naranja. |
 | **NOTA** | celeste | Mismo dealer, el nombre difiere solo en **detalles menores** (mayúsculas, apóstrofes/comillas, guiones, paréntesis, sufijos tipo `(1000km)`). Cuenta como OK, con el disclaimer en la columna **"Nota Nombre"**. |
+
+> **Columnas "Posición Dealer" / "Posición Ciudad".** El reporte no solo dice si el dealer/ciudad está bien cargado: también anota en qué lugar del `<select>` real aparece (1º, 2º, 3º…), para comparar contra el orden que esperabas en el Excel. Y el reporte en sí se ordena por el **orden real en que las ciudades aparecen en el dropdown del form** (agrupadas por región), no por el orden de las filas del Excel de origen — queda mucho más fácil de leer.
+
+> **Reintento automático si el form no cargó bien.** Si al abrir el form aparece un mensaje de error de carga (el widget no terminó de inicializar), la app recarga y reintenta hasta 2 veces (esperando 4s y después 8s) antes de dar la fila por perdida; si sigue sin cargar, la omite y lo avisa en el reporte.
 
 > **Nombres con caracteres especiales.** El matching tolera diferencias de puntuación y espaciado: `DANTE D'AMICO S.A. - MATADEROS` matchea con `DANTE D AMICO S.A. – MATADEROS`, y `HCH S.A. - RPM` con `HCH S.A. (RPM)`. Cuentan como PASS con **NOTA**. Lo que **sí** da error es contenido de más o de menos (ej. "Pepito" vs "Pepito Hernández").
 
@@ -391,6 +407,14 @@ La comparación corre dentro de un modal que bloquea la ventana de atrás:
 Mientras corre, la ventana de atrás queda bloqueada (igual que en Envío de Leads):
 
 ![Modal del Comparador sobre la app](Asset/screenshots/19_modal_comparador_sobre_app.png)
+
+### 🔁 Reintentar Fallidos
+
+Al lado de **EJECUTAR** está el botón **REINTENTAR FALLIDOS**: re-chequea únicamente las filas que quedaron en **FAIL** o **MISSING** en la última corrida, sin correr todo el Excel de nuevo.
+
+- Solo funciona sobre la corrida que acabás de hacer en esta misma sesión — necesita la carpeta/reporte original en memoria; si cerraste y volviste a abrir la app, corré la comparación completa de nuevo.
+- Actualiza el **mismo Excel** de resultados (no genera uno aparte) y reemplaza solo las capturas de las filas reintentadas.
+- Trata FAIL y MISSING como el mismo tipo de fallo a los fines del reintento: cualquiera de los dos entra.
 
 ---
 
