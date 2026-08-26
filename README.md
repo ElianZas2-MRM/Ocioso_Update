@@ -4,6 +4,21 @@ App de escritorio (Windows, Python + Tkinter + Selenium) para automatizar el lle
 
 > El historial de cambios detallado de versiones anteriores quedó guardado en `README_HISTORIAL_ANTERIOR.md` (no se perdió, solo se sacó de este archivo para dejar una guía limpia).
 
+## Arquitectura
+
+Mapa de alto nivel de cómo está armada la app — quién dispara qué y a dónde van los resultados:
+
+![Arquitectura de la app](Asset/screenshots/00_arquitectura.png)
+
+- **Punto de entrada** (`run.py`): el único arranque de la app. Según cómo lo llames, abre la **interfaz gráfica**, arranca el **programador autónomo**, o corre un país puntual directo por consola (`--run-country`), sin abrir ninguna ventana.
+- **Interfaz gráfica** (`interface/main_interface.py`): la ventana con las pestañas de este README — desde ahí configurás y disparás manualmente el Envío de Leads, la Revisión Masiva y el Comparador de Dealers.
+- **Programador autónomo** (`autonomous_runner.py`): corre en background según el calendario semanal armado en "Programación de Tests" (o el Programador de tareas de Windows), sin que nadie tenga que abrir la app.
+- **Motor de formularios** (`core/base_form_filler.py`): el corazón de la automatización — abre el navegador, detecta el formulario paso a paso, lo completa con los datos del Excel y lo envía. Es al que llegan tanto la GUI como el programador autónomo.
+- **LambdaTest** (`lambdatest_mac/`, `lambdatest_android/`): cuando el envío programado incluye Mac LT o Android LT, corre sobre dispositivos reales en la nube en vez de un navegador local.
+- **Validación & QA** (`validation/`, `core/dealer_comparator_runner.py`): agrupa la pestaña de Validación de Campos y el Comparador de Dealers — ambos abren el navegador para chequear reglas o dealers **sin llegar a enviar un lead real**.
+- **Configuración** (Excels de `data/` + JSON de `json/`): los datos de prueba y el mapeo de campos por país que el motor necesita para saber qué escribir y en qué campo.
+- **Resultados** (`resultados/`): el Excel de resultados, las capturas de cada lead y el mail final consolidado.
+
 ## Instalación
 
 1. Python 3.10+ (o el que ya tengas en `venv/`).
