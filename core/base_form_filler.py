@@ -1083,21 +1083,24 @@ class BaseFormFiller:
             normalized[key] = values[idx] if idx < len(values) else ""
 
         # Mapeo explícito por ID (sin depender de nombre/descripción de columna).
+        # La columna de cada campo se resuelve vía effective_data_keys (mismo criterio
+        # deduplicado que usa _get_sheet_column_index_for_data_key para escribir el Excel).
+        # Antes se indexaba por la posición del field_config tras ordenar el mapping: si dos
+        # ids alias (ej. "models"/"model") apuntaban al mismo data_index, esa posición corrida
+        # NO se deduplicaba y todos los campos siguientes en el orden terminaban leyendo el
+        # valor de la columna equivocada (se notaba sobre todo en selects: el Excel traía dato
+        # pero el campo se sorteaba al azar).
         id_values = {}
-        ordered_mapping = []
-        for pos, field_config in enumerate(self.field_mapping or []):
+        for field_config in self.field_mapping or []:
             if not isinstance(field_config, dict):
                 continue
-            requested_idx = field_config.get("requested_data_index")
-            data_idx = field_config.get("data_index")
-            if not isinstance(requested_idx, int) or requested_idx < 0:
-                requested_idx = data_idx if isinstance(data_idx, int) and data_idx >= 0 else pos
-            if not isinstance(data_idx, int) or data_idx < 0:
-                data_idx = requested_idx
-            ordered_mapping.append((requested_idx, data_idx, pos, field_config))
-
-        ordered_mapping.sort(key=lambda item: (item[0], item[1], item[2]))
-        for col_idx, (_, _, _, field_config) in enumerate(ordered_mapping):
+            data_key = self._resolve_data_key_from_field_config(field_config)
+            if not data_key:
+                continue
+            try:
+                col_idx = self.effective_data_keys.index(data_key)
+            except ValueError:
+                continue
             value = values[col_idx] if col_idx < len(values) else ""
             field_id = field_config.get("id")
             field_ids = field_id if isinstance(field_id, list) else [field_id]
@@ -4283,18 +4286,22 @@ class BaseFormFiller:
     # Columnas del Excel que corresponden a campos de elección cuyo <select> puede quedar
     # FUERA del field_mapping (el id real cambia según la versión del form). Sin esto, un
     # valor que el usuario cargó a mano en el Excel se ignoraba y el campo se sorteaba.
+    # OJO: form_data/normalized casi siempre está indexado por la clave CANÓNICA en inglés
+    # de DATA_COLUMNS (ej. "purchase_date"), no por el texto de columna en español — sólo
+    # coincide con el header en español cuando ambos normalizan igual (ej. "región"→"region").
+    # Cada entrada tiene que incluir esa clave canónica o la búsqueda nunca la encuentra.
     _ID_TO_EXCEL_HEADERS = {
-        "estimated-date-purchase": ["fecha estimada", "fecha estimada de compra", "fecha de compra"],
-        "estimated-day":           ["fecha estimada", "fecha estimada de compra", "fecha de compra"],
-        "estimated-date":          ["fecha estimada", "fecha estimada de compra", "fecha de compra"],
+        "estimated-date-purchase": ["purchase_date", "fecha estimada", "fecha estimada de compra", "fecha de compra"],
+        "estimated-day":           ["purchase_date", "fecha estimada", "fecha estimada de compra", "fecha de compra"],
+        "estimated-date":          ["purchase_date", "fecha estimada", "fecha estimada de compra", "fecha de compra"],
         "region":        ["region", "región"],
         "state":         ["region", "región"],
         "city":          ["ciudad"],
         "dealer":        ["concesionario"],
         "event":         ["evento"],
-        "event-name":    ["evento"],
-        "document-type": ["tipo de documento", "tipo de documento (perú)"],
-        "models":        ["modelo"],
+        "event-name":    ["event", "evento"],
+        "document-type": ["doc_type", "tipo de documento", "tipo de documento (perú)"],
+        "models":        ["model", "modelo"],
         "model":         ["modelo"],
         "color":         ["color"],
         "kit":           ["kit"],
