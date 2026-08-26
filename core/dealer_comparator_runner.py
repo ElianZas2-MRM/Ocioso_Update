@@ -39,6 +39,19 @@ DEFAULT_SELECT_IDS = {"region": "region", "city": "city", "dealer": "dealer"}
 # Se prueba el id pedido primero y luego el resto como fallback.
 MODEL_FIELD_ID_ALIASES = ("models", "model")
 
+# Campo "¿Cómo deseas realizar la compra?" (id "buy_pda"), por ahora solo en los forms de
+# Argentina. No es un campo más: GATEA toda la cascada región→ciudad→dealer — hasta que no
+# se elige una opción, los tres <select> vienen con disabled=true (región ya trae sus
+# opciones en el DOM, city y dealer solo el placeholder). Y además cambiarlo REPUEBLA la
+# cascada, porque las listas difieren entre una opción y la otra (ej. en CABA "LINIERS" y
+# su dealer solo existen con Plan de ahorro). Por eso se elige ANTES que el modelo y que
+# cualquier nivel: es el primer campo del form, y aplica igual aunque el form no tenga
+# selector de Modelo.
+PURCHASE_FIELD_ID = "buy_pda"
+PURCHASE_FIELD_ID_ALIASES = ("buy_pda",)
+PURCHASE_MODE_OPTIONS = ("Compra al contado/Financiación", "Plan de ahorro")
+PURCHASE_FIELD_COUNTRIES = ("Argentina",)
+
 _PASS_FILL = PatternFill(fill_type="solid", fgColor="00C6EFCE")
 _FAIL_FILL = PatternFill(fill_type="solid", fgColor="00FFC7CE")
 _EXTRA_FILL = PatternFill(fill_type="solid", fgColor="00FFEB9C")
@@ -372,14 +385,29 @@ def _select_by_text_robust(driver, select_id, target_text, wait_for_option=False
                     text = opt.text.strip()
                     try:
                         _select_option(driver, el, opt)
+                        return True, text, disclaimer
                     except Exception as sel_err:
-                        # La opción EXISTE (dealer presente en el form) pero está
-                        # deshabilitada / no seleccionable: a los fines de la comparación
-                        # (¿está el dealer en el form?) cuenta como encontrado.
-                        if "disabled" in str(sel_err).lower():
+                        if "disabled" not in str(sel_err).lower():
+                            raise
+                        # La opción existe pero no se pudo seleccionar. Son dos casos muy
+                        # distintos y hay que separarlos:
+                        #  a) La <option> puntual está deshabilitada dentro de un <select>
+                        #     habilitado → el dealer SÍ está en el form; a los fines de la
+                        #     comparación (¿está el dealer?) cuenta como encontrado.
+                        #  b) El <select> ENTERO está deshabilitado porque el form gatea la
+                        #     cascada detrás de otro campo (ej. "¿Cómo deseas realizar la
+                        #     compra?" en Argentina) → no se seleccionó nada. Antes esto caía
+                        #     en (a) y devolvía "encontrado": Región quedaba en PASS falso sin
+                        #     haber seleccionado nada y el FAIL aterrizaba en Ciudad, que es un
+                        #     nivel más abajo y no era el problema real.
+                        try:
+                            select_deshabilitado = not el.is_enabled()
+                        except Exception:
+                            select_deshabilitado = False
+                        if not select_deshabilitado:
                             return True, text, disclaimer
-                        raise
-                    return True, text, disclaimer
+                        # Caso (b): se sigue reintentando hasta el deadline por si el form
+                        # termina de habilitarlo solo (se puebla async tras el campo padre).
         except StaleElementReferenceException:
             pass
         if time.time() >= deadline:
@@ -564,6 +592,82 @@ def _select_model(driver, field_id, model_text):
         return False
     _select_option(driver, el, opt)
     return True
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Campo previo "¿Cómo deseas realizar la compra?" (buy_pda) — ver PURCHASE_FIELD_ID
+# ──────────────────────────────────────────────────────────────────────────────
+def _wait_select_enabled(driver, select_id, timeout=None):
+    """Espera a que un <select> deje de estar deshabilitado. Corta apenas se habilita.
+    Devuelve True si llegó a habilitarse dentro del tope."""
+    if timeout is None:
+        timeout = DEPENDENT_SELECT_TIMEOUT
+    deadline = time.time() + timeout
+    while True:
+        try:
+            el = _get_select(driver, select_id, timeout=0.5)
+            if el is not None and el.is_enabled():
+                return True
+        except StaleElementReferenceException:
+            pass
+        if time.time() >= deadline:
+            return False
+        time.sleep(0.1)
+
+
+def resolve_purchase_field_id(driver, field_id=None):
+    """Devuelve el id real del <select> de forma de compra en el form actual (mismo criterio
+    que resolve_model_field_id, con sus alias). None si el form no lo tiene."""
+    candidates = [field_id] if field_id else []
+    candidates += [alias for alias in PURCHASE_FIELD_ID_ALIASES if alias != field_id]
+    for idx, candidate in enumerate(candidates):
+        if _get_select(driver, candidate, timeout=10 if idx == 0 else 2) is not None:
+            return candidate
+    return None
+
+
+def select_purchase_mode(driver, value, field_id=None, anchor_id=None, log_cb=None):
+    """Elige una opción en el <select> "¿Cómo deseas realizar la compra?" y espera a que la
+    cascada quede destrabada antes de devolver.
+
+    Se llama justo después de abrir el form y ANTES de resolver/elegir el modelo y de
+    `advance_to_selects` — si no, region/city/dealer siguen deshabilitados y el avance de
+    pasos los da por presentes igual (`_select_visible` mira `is_displayed()`, y vienen
+    visibles aunque bloqueados), con lo cual el campo no se tocaría nunca.
+
+    `anchor_id`: el <select> del nivel más alto que se va a comparar (normalmente "region").
+    Se espera activamente a que se habilite Y tenga opciones reales — el form las repuebla
+    async al cambiar la forma de compra, y arrancar a comparar contra un select a medio
+    poblar da FAIL falsos (mismo motivo que la espera tras cambiar de modelo).
+
+    Devuelve (ok: bool, error_msg: str|None).
+    """
+    log = log_cb or (lambda *_a, **_k: None)
+    resolved = resolve_purchase_field_id(driver, field_id or PURCHASE_FIELD_ID)
+    if resolved is None:
+        return False, (
+            'Selector de Forma de compra no encontrado en el form (se buscó el id '
+            + " / ".join(f'"{a}"' for a in PURCHASE_FIELD_ID_ALIASES)
+            + '). Marcaste que este form tiene "¿Cómo deseas realizar la compra?", así que '
+              "no se comparó ninguna fila."
+        )
+
+    found, texto, _ = _select_by_text_robust(driver, resolved, value, wait_for_option=True)
+    if not found:
+        disponibles = _read_valid_option_texts(driver, resolved, wait_nonempty=False)
+        return False, (
+            f"La opción '{value}' no está en el selector de Forma de compra del form"
+            + (f" (opciones disponibles: {', '.join(disponibles)})" if disponibles else "")
+            + ". No se comparó ninguna fila."
+        )
+
+    log(f"  Forma de compra: {texto}", "ok")
+    if anchor_id:
+        if not _wait_select_enabled(driver, anchor_id, DEPENDENT_SELECT_TIMEOUT):
+            log(f"  El dropdown '{anchor_id}' sigue bloqueado tras elegir la forma de compra.", "warn")
+        _wait_options_loaded_once(driver, anchor_id, timeout=DEPENDENT_SELECT_TIMEOUT)
+    time.sleep(0.3)
+    return True, None
 
 
 _LEVEL_RETRY_PAUSE = 0.6
