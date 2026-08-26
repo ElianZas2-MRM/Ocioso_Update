@@ -445,19 +445,6 @@ def _read_valid_option_texts(driver, select_id, wait_nonempty=True, timeout=None
         time.sleep(0.1)
 
 
-def _selected_dealer_option_attr(driver, dealer_id, attr):
-    """Lee un atributo (ej. data-bac) de la <option> de dealer actualmente seleccionada,
-    re-buscándola fresca (stale-safe)."""
-    for _ in range(3):
-        try:
-            el = _get_select(driver, dealer_id, timeout=0.5)
-            if el is None:
-                return ""
-            return (Select(el).first_selected_option.get_attribute(attr) or "").strip()
-        except StaleElementReferenceException:
-            time.sleep(0.1)
-    return ""
-
 
 def _dealer_option_position(driver, dealer_id):
     """Posición (1-indexada) de la <option> de dealer actualmente seleccionada dentro del
@@ -1212,8 +1199,6 @@ def compare_dealers(
     level_ids=None,
     has_region=True,
     has_city=True,
-    chk_bac=True,
-    extra_validations=None,
     field_checks=None,
     model_field_id=None,
     models=None,
@@ -1227,7 +1212,7 @@ def compare_dealers(
 ):
     """
     rows: filas del Excel ya filtradas (dicts, ver read_excel_rows/filter_rows).
-    column_map: {"region": <col_key>, "city": <col_key>, "dealer": <col_key>, "bac": <col_key>}
+    column_map: {"region": <col_key>, "city": <col_key>, "dealer": <col_key>}
     level_ids: ids de los <select> del form, default DEFAULT_SELECT_IDS (region/city/dealer).
     reload_cb: callable sin argumentos que deja al driver de vuelta en la página del form,
                recién navegada (mismo criterio que el `open_target` + `advance_to_selects`
@@ -1236,8 +1221,6 @@ def compare_dealers(
                opción real, sólo el placeholder) — más confiable que reintentar sobre una
                página que puede haber quedado en un estado roto. Sin reload_cb, ese caso
                cae al reintento liviano normal (re-disparar el nivel padre).
-    extra_validations: lista de {"attr": "lat", "label": "Latitud", "column": <col_key>}
-                       — compara data-<attr> del <option> de dealer contra la columna del Excel.
     field_checks: lista de {"column": <col_key>, "field_id": "id-del-campo"} — compara el valor
                   actual de cualquier campo del form (input o select, por id) contra una columna
                   del Excel. Se corre por fila, independientemente de si el dealer fue encontrado.
@@ -1248,11 +1231,10 @@ def compare_dealers(
     Los tiempos de espera de los selects dependientes son fijos e internos (FAST_TIMEOUT/MAX_TIMEOUT,
     con reintento automático) — no son configurables desde afuera.
 
-    Devuelve una lista de dicts de resultado: status, region, city, dealer, modelo, bac_excel, bac_form,
+    Devuelve una lista de dicts de resultado: status, region, city, dealer, modelo,
     fails (lista de strings), fila (número de fila en el Excel original).
     """
     level_ids = level_ids or DEFAULT_SELECT_IDS
-    extra_validations = extra_validations or []
     field_checks = field_checks or []
     _log_raw = log_cb or (lambda *_a, **_k: None)
     def log(msg, *a, **k):
@@ -1266,7 +1248,6 @@ def compare_dealers(
     region_key = column_map.get("region")
     city_key = column_map.get("city")
     dealer_key = column_map.get("dealer") if has_dealer else None
-    bac_key = column_map.get("bac")
 
     results = []
     models_to_run = list(models) if (model_field_id and models) else [None]
@@ -1365,8 +1346,6 @@ def compare_dealers(
                         "dealer": dealer_text,
                         "dealer_position": None,
                         "city_position": None,
-                        "bac_excel": row.get(bac_key, "") if chk_bac and bac_key else "",
-                        "bac_ok": None,
                         "extra_results": {},
                         "fails": ["Error de carga del formulario — fila omitida (reintentá con "
                                   "'Reintentar fallidos')"],
@@ -1388,19 +1367,17 @@ def compare_dealers(
                     results.append(result)
                     continue
 
-            bac_excel = row.get(bac_key, "") if chk_bac and bac_key else ""
-
             fails = []
             # True si el fallo es "esto no está en el form" (región/ciudad/dealer no
-            # encontrado) — esas filas van a status MISSING en vez de FAIL genérico, para
-            # distinguirlas de un problema real del form (BAC/campo que no coincide).
+            # encontrado) — esas filas van a status MISSING en vez de FAIL genérico. Los dos
+            # cuentan como fallo (ver _FAIL_STATUSES), pero distinguirlos dice qué mirar:
+            # MISSING = falta en el form; FAIL = está, pero un campo no coincide.
             not_found = False
             region_found = not has_region
             city_found = not has_city
             dealer_found = False
             dealer_position = None
             city_position = None
-            bac_ok = None
             extra_results = {}
             name_disclaimer = None
             detalle_info = ""
@@ -1536,21 +1513,6 @@ def compare_dealers(
                         else:
                             detalle_info = f"Correctamente ausente: '{dealer_text}' no aparece en el dropdown de dealers"
                         log(f"  ✓ '{dealer_text}' correctamente ausente del form", "ok")
-                elif dealer_found:
-                    if chk_bac and bac_key and bac_excel:
-                        bac_form = _selected_dealer_option_attr(driver, level_ids["dealer"], "data-bac")
-                        bac_ok = normalize_text(bac_excel) == normalize_text(bac_form)
-                        if not bac_ok:
-                            fails.append(f"BAC no coincide (excel='{bac_excel}' form='{bac_form}')")
-                    for extra in extra_validations:
-                        excel_val = row.get(extra["column"], "")
-                        if not excel_val:
-                            continue
-                        form_val = _selected_dealer_option_attr(driver, level_ids["dealer"], f"data-{extra['attr']}")
-                        ok = normalize_text(excel_val) == normalize_text(form_val)
-                        extra_results[extra["label"]] = {"ok": ok, "excel": excel_val, "form": form_val}
-                        if not ok:
-                            fails.append(f"{extra['label']} no coincide (excel='{excel_val}' form='{form_val}')")
 
                 if not expect_absent:
                     for check in field_checks:
@@ -1590,8 +1552,6 @@ def compare_dealers(
                 "dealer": dealer_text,
                 "dealer_position": dealer_position,
                 "city_position": city_position,
-                "bac_excel": bac_excel,
-                "bac_ok": bac_ok,
                 "extra_results": extra_results,
                 "fails": fails,
                 "fila": row.get("__row__"),
@@ -2242,9 +2202,17 @@ def zip_screenshots(screenshot_paths, output_zip_path):
 # Export a Excel (PASS verde / FAIL rojo / EXTRA amarillo / MISSING violeta)
 # ──────────────────────────────────────────────────────────────────────────────
 _RESULTS_HEADERS = ["Estado", "URL Landing", "URL Form", "Modelo", "Región", "Ciudad", "Posición Ciudad",
-                    "Dealer", "Posición Dealer", "BAC Excel", "BAC OK", "Detalle", "Nota Nombre", "Fila Excel"]
+                    "Dealer", "Posición Dealer", "Detalle", "Nota Nombre", "Fila Excel"]
 
-_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 16, 8: 30, 9: 16, 10: 14, 11: 10, 12: 50, 13: 55, 14: 10}
+_RESULTS_COL_WIDTHS = {1: 10, 2: 45, 3: 45, 4: 16, 5: 22, 6: 22, 7: 16, 8: 30, 9: 16, 10: 50, 11: 55, 12: 10}
+
+# Estados que cuentan como FALLO del chequeo. MISSING/EXTRA/DUPLICADO no son categorías
+# aparte de FAIL: los tres significan "el form no coincide con el Excel". Se mantienen como
+# etiqueta y color propios en la hoja de resultados (dicen QUÉ tipo de fallo es), pero suman
+# a un único total de FAIL. OCULTO y NOTA quedan afuera a propósito: el primero es un
+# problema del Excel (fila oculta/filtrada) y el segundo un dealer que sí está, solo escrito
+# distinto en detalles menores.
+_FAIL_STATUSES = ("FAIL", "MISSING", "EXTRA", "DUPLICADO")
 
 _STATUS_FILL_BY_NAME = {
     "PASS": _PASS_FILL, "FAIL": _FAIL_FILL, "EXTRA": _EXTRA_FILL,
@@ -2317,8 +2285,6 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
             r.get("city_position") if r.get("city_position") is not None else "",
             r.get("dealer", ""),
             r.get("dealer_position") if r.get("dealer_position") is not None else "",
-            r.get("bac_excel", ""),
-            {True: "OK", False: "MISMATCH", None: ""}.get(r.get("bac_ok")),
             " | ".join(r.get("fails", [])) if r.get("fails") else (r.get("detalle_info") or ""),
             r.get("name_disclaimer", "") or "",
             r.get("fila", ""),
@@ -2336,7 +2302,7 @@ def _write_results_sheet(wb, sheet_name, sheet_results, thin_border, header_bord
         # Nota de nombre presente en fila PASS: resaltar solo esa celda para no
         # confundir con FAIL, ya que el dealer sí se encontró.
         if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel"):
-            ws.cell(row=row_idx, column=13).fill = _NOTA_FILL
+            ws.cell(row=row_idx, column=11).fill = _NOTA_FILL
 
     for col_idx, width in _RESULTS_COL_WIDTHS.items():
         col_letter = ws.cell(row=1, column=col_idx).column_letter
@@ -2428,6 +2394,8 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
     for r in results:
         counts[r.get("status", "FAIL")] = counts.get(r.get("status", "FAIL"), 0) + 1
     disclaimer_count = sum(1 for r in results if r.get("name_disclaimer"))
+    # Estados que cuentan como fallo del chequeo (ver comentario en la hoja Resumen)
+    total_fail = sum(counts.get(k, 0) for k in _FAIL_STATUSES)
 
     summary_ws = wb.create_sheet("Resumen", 0)  # primera hoja: es lo primero que se quiere ver
 
@@ -2449,10 +2417,21 @@ def export_results_excel(results, output_path=None, pais="", hidden_rows=None, h
     _add()
     _add("RESULTADOS", "", "section")
     _add("🟢 PASS — coincide con el Excel", counts.get("PASS", 0), "status:PASS")
-    _add("🔴 FAIL — está en el form pero algo no coincide (BAC, campos)", counts.get("FAIL", 0), "status:FAIL")
-    _add("🟣 MISSING — declarado en el Excel pero no está en el form", counts.get("MISSING", 0), "status:MISSING")
-    _add("🟡 EXTRA — está en el form, no declarado en el Excel", counts.get("EXTRA", 0), "status:EXTRA")
-    _add("🔵 DUPLICADO — repetido en el dropdown del form", counts.get("DUPLICADO", 0), "status:DUPLICADO")
+    # MISSING, EXTRA y DUPLICADO son fallos del chequeo, no categorías aparte: los tres
+    # significan que el form NO coincide con lo declarado en el Excel. Se suman en un total
+    # de FAIL para que se lea de una si la corrida está bien o mal, pero cada fila conserva
+    # su etiqueta y su color en la hoja de resultados — el tipo de fallo es justo lo que
+    # dice qué hay que ir a mirar (falta un dealer / sobra / está repetido).
+    # OCULTO y NOTA quedan FUERA del total: no son fallos del form. OCULTO es un dealer
+    # correcto cuya fila del Excel está oculta o filtrada (problema del Excel), y NOTA es
+    # un dealer que SÍ está, solo con el nombre escrito distinto en detalles menores.
+    _add("🔴 FAIL (total) — todo lo que no coincide", total_fail, "status:FAIL")
+    _add("     🔴 FAIL — está en el form pero algo no coincide", counts.get("FAIL", 0), "status:FAIL")
+    _add("     🟣 MISSING — declarado en el Excel pero no está en el form", counts.get("MISSING", 0), "status:MISSING")
+    _add("     🟡 EXTRA — está en el form, no declarado en el Excel", counts.get("EXTRA", 0), "status:EXTRA")
+    _add("     🔵 DUPLICADO — repetido en el dropdown del form", counts.get("DUPLICADO", 0), "status:DUPLICADO")
+    _add()
+    _add("No cuentan como fallo del form:", "", "plain")
     _add("🟠 OCULTO — declarado solo en filas que no se ven (ver hoja 'Ocultos')", len(hidden_related), "status:OCULTO")
     _add("🔷 NOTA — dealer del form no está en el Excel, solo difiere en nombre", counts.get("NOTA", 0), "status:NOTA")
     _add("⚠ PASS con nombre distinto en detalles menores", disclaimer_count, "plain")
