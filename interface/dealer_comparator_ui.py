@@ -29,6 +29,9 @@ from core.browser_manager import BrowserManager
 from core.dealer_comparator_runner import (
     DEFAULT_SELECT_IDS,
     MODEL_FIELD_ID_ALIASES,
+    PURCHASE_FIELD_COUNTRIES,
+    PURCHASE_FIELD_ID,
+    PURCHASE_MODE_OPTIONS,
     StopRequested,
     _get_select,
     _locate_form_iframe,
@@ -49,6 +52,7 @@ from core.dealer_comparator_runner import (
     read_excel_rows,
     resolve_column,
     resolve_model_field_id,
+    select_purchase_mode,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -140,6 +144,11 @@ def _default_country_settings(pais):
         "models_field_id": "models",
         "models_mode": "all",
         "models_list": "",
+        # Forma de compra ("¿Cómo deseas realizar la compra?"): hoy solo la tienen los forms
+        # de Argentina, pero se guarda para todos los países igual — la card solo se muestra
+        # en los mercados de PURCHASE_FIELD_COUNTRIES y la ejecución revalida el país.
+        "has_purchase": False,
+        "purchase_value": PURCHASE_MODE_OPTIONS[0],
         "url_mode": "landing_form",
         "url_excel_path": "",
         "browser": "chrome",
@@ -713,6 +722,77 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     has_models_var.trace_add("write", _update_models_section_state)
     _update_models_section_state()
 
+    # ── 4c. Forma de compra (4ta columna del bloque A) — SOLO Argentina ─────────
+    # Es un campo aparte del de Modelo, no una variante suya: en los forms de Argentina
+    # (ej. .../form/pda-raq) "¿Cómo deseas realizar la compra?" GATEA toda la cascada
+    # región→ciudad→dealer, y encima las listas de ciudades y dealers cambian según la
+    # opción elegida. Por eso se elige primero, y aplica igual aunque el form no tenga
+    # selector de Modelo (o aunque lo tenga: entonces va antes que él).
+    purchase_card = card("💳 FORMA DE COMPRA", parent=blockA, side="left", expand=True, subtitle_wrap=200)
+    mini_guide(purchase_card, "Solo Argentina. Si el form tiene \"¿Cómo deseas realizar la compra?\" "
+                              f"(id \"{PURCHASE_FIELD_ID}\"), elegí con cuál de las dos opciones se "
+                              "chequean los dealers.")
+    has_purchase_var = BooleanVar(value=False)
+    purchase_toggle_row = Frame(purchase_card, bg=CARD_BG)
+    purchase_toggle_row.pack(fill="x", padx=15, pady=(0, 4))
+    _purchase_toggle_btn, _purchase_toggle_refresh = make_toggle_pill(
+        purchase_toggle_row, "💳  Tiene ¿Cómo deseas realizar la compra?", has_purchase_var)
+    Label(purchase_card,
+          text="⚠ Los dealers cambian según la opción — hacé una corrida por cada una.",
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=320,
+          justify="left").pack(anchor="w", padx=15, pady=(0, 4))
+
+    purchase_body = Frame(purchase_card, bg=CARD_BG)
+    purchase_body.pack(fill="x", padx=15, pady=(0, 6))
+    purchase_value_var = StringVar(value=PURCHASE_MODE_OPTIONS[0])
+    purchase_mode_row = Frame(purchase_body, bg=CARD_BG)
+    purchase_mode_row.pack(fill="x", pady=(0, 4))
+    Label(purchase_mode_row, text="Opción:", font=("Segoe UI", 8), bg=CARD_BG, fg=TEXT_S).pack(side="left")
+    select_purchase_value = make_single_select(
+        purchase_mode_row, [(v, v) for v in PURCHASE_MODE_OPTIONS],
+        purchase_value_var, default=PURCHASE_MODE_OPTIONS[0],
+    )
+
+    def _update_purchase_section_state(*_a):
+        """Las pills de opción solo se pueden tocar con el toggle prendido (un Button en
+        state='disabled' no dispara su command, así que alcanza con esto para bloquearlas)."""
+        habilitado = has_purchase_var.get()
+        # make_toggle_pill solo se repinta al clickearla, así que al cargar una configuración
+        # guardada (que setea la var a mano) hay que repintarla desde acá o la pill queda
+        # apagada mostrando un estado que no es el real.
+        _purchase_toggle_refresh()
+        for child in purchase_mode_row.winfo_children():
+            if not isinstance(child, Button):
+                continue
+            if habilitado:
+                child.config(state="normal", cursor="hand2")
+                if purchase_value_var.get() == child.cget("text"):
+                    child.config(bg=BTN_ACTIVE, fg="white")
+                else:
+                    child.config(bg=BTN_INACTIVE, fg=TEXT_S)
+            else:
+                child.config(state="disabled", cursor="arrow", bg=BTN_INACTIVE, fg="#7D6695")
+
+    has_purchase_var.trace_add("write", _update_purchase_section_state)
+    purchase_value_var.trace_add("write", _update_purchase_section_state)
+    _update_purchase_section_state()
+
+    def _refresh_purchase_card_visibility():
+        """La card aparece únicamente con un mercado de PURCHASE_FIELD_COUNTRIES seleccionado
+        (hoy, Argentina) — en el resto el form no tiene el campo y mostrarlo solo confunde."""
+        if state["pais"] in PURCHASE_FIELD_COUNTRIES:
+            if not purchase_card.winfo_ismapped():
+                purchase_card.pack(side="left", fill="both", expand=True,
+                                   padx=(0, 8), pady=(0, 8), ipady=5)
+        else:
+            purchase_card.pack_forget()
+
+    def _purchase_enabled():
+        """True si hay que elegir la forma de compra antes de navegar la cascada. Revalida el
+        país además del toggle: una configuración guardada o un preset de Argentina no debe
+        arrastrar este campo a otro mercado, donde el form no lo tiene."""
+        return bool(has_purchase_var.get()) and state["pais"] in PURCHASE_FIELD_COUNTRIES
+
     # ── 5. Modo de salida ─────────────────────────────────────────────────────
     output_card = card("📦 MODO DE SALIDA")
     output_mode_var = StringVar(value="excel")
@@ -861,6 +941,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         models_field_id_var.set(cfg.get("models_field_id", "models"))
         select_models_mode(cfg.get("models_mode", "all"))
         models_list_var.set(cfg.get("models_list", ""))
+        # Primero la opción y DESPUÉS el toggle: así el valor guardado se restaura aunque el
+        # toggle venga apagado (queda listo para cuando lo prendan) y el trace del toggle
+        # corre al final, dejando las pills con el color correcto según esté prendido o no.
+        _val_compra = cfg.get("purchase_value", PURCHASE_MODE_OPTIONS[0])
+        select_purchase_value(_val_compra if _val_compra in PURCHASE_MODE_OPTIONS
+                              else PURCHASE_MODE_OPTIONS[0])
+        has_purchase_var.set(bool(cfg.get("has_purchase", False)))
         url_mode_var.set(cfg.get("url_mode", "landing_form"))
         switch_url_mode(url_mode_var.get())
         url_excel_path_var.set(cfg.get("url_excel_path", ""))
@@ -905,6 +992,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             "models_field_id": models_field_id_var.get(),
             "models_mode": models_mode_var.get(),
             "models_list": models_list_var.get(),
+            "has_purchase": has_purchase_var.get(),
+            "purchase_value": purchase_value_var.get(),
             "url_mode": url_mode_var.get(),
             "url_excel_path": url_excel_path_var.get(),
             "browser": browser_var.get(),
@@ -934,6 +1023,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         state["pais"] = pais
         _refresh_pais_cards()
         _apply_country_settings(pais)
+        _refresh_purchase_card_visibility()
         refresh_execute_state()
 
     _refresh_preset_combo()
@@ -958,6 +1048,28 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             if field_id and col_key:
                 out.append({"field_id": field_id, "column": col_key})
         return out
+
+    def _apply_purchase_mode(driver, log=None):
+        """Elige "¿Cómo deseas realizar la compra?" en el form recién abierto.
+
+        Va SIEMPRE antes de resolver/elegir el modelo y antes de advance_to_selects: hasta
+        que no se elige una opción, region/city/dealer están deshabilitados y city/dealer
+        vacíos, y advance_to_selects los da por presentes igual (mira is_displayed(), y
+        vienen visibles aunque bloqueados) — o sea que si se llamara después, este campo no
+        se tocaría nunca y la comparación correría contra la cascada trabada.
+
+        Devuelve None si está todo bien (o si no aplica), o el mensaje de error si el form
+        no tiene el campo / no tiene la opción elegida."""
+        if not _purchase_enabled():
+            return None
+        anchor = (DEFAULT_SELECT_IDS["region"] if has_region_var.get() else
+                  DEFAULT_SELECT_IDS["city"] if has_city_var.get() else
+                  DEFAULT_SELECT_IDS["dealer"])
+        ok, msg = select_purchase_mode(
+            driver, purchase_value_var.get(), field_id=PURCHASE_FIELD_ID,
+            anchor_id=anchor, log_cb=log or ui_log,
+        )
+        return None if ok else msg
 
     def _load_and_filter_excel():
         excel_path = excel_path_var.get().strip()
@@ -1483,6 +1595,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                             driver.switch_to.frame(iframe)
                             ui_log("Contexto cambiado al iframe del formulario.", "info")
 
+                    # Forma de compra: primer campo del form, antes que el modelo y que la
+                    # cascada (ver _apply_purchase_mode). Si el usuario lo marcó y el form no
+                    # lo tiene —o no tiene la opción elegida— el form no se compara y se
+                    # reporta FAIL, mismo criterio que con el selector de Modelo: sin el campo
+                    # elegido, region/city/dealer quedan trabados y el reporte no valdría nada.
+                    purchase_missing_msg = _apply_purchase_mode(driver, log=ui_log)
+
                     model_field_id = None
                     models_to_run = None
                     # Si el usuario marcó que el form TIENE selector de Modelo y no aparece con
@@ -1495,7 +1614,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     # "no encontrado" aunque el form sí lo tuviera — la corrida quedaba en FAIL
                     # sin comparar ninguna fila.
                     model_missing_msg = None
-                    if has_models_var.get():
+                    if has_models_var.get() and not purchase_missing_msg:
                         model_field_id = resolve_model_field_id(
                             driver, models_field_id_var.get().strip() or "models")
                         if model_field_id is None:
@@ -1560,6 +1679,9 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         # hasta los dropdowns, igual que al arrancar este form — más confiable
                         # que reintentar sobre una página que puede haber quedado rota.
                         open_target(driver, _mode, _landing, _form, log_cb=ui_log)
+                        # Tras recargar hay que volver a elegir la forma de compra ANTES de
+                        # avanzar: la página vuelve al estado inicial, con la cascada trabada.
+                        _apply_purchase_mode(driver, log=lambda *_a, **_k: None)
                         advance_to_selects(
                             driver, level_ids=DEFAULT_SELECT_IDS,
                             has_region=has_region_var.get(), has_city=has_city_var.get(),
@@ -1626,7 +1748,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                                 extra_lines=banner_extra,
                             )
 
-                    skip_msg = advance_fail_msg or model_missing_msg
+                    skip_msg = purchase_missing_msg or advance_fail_msg or model_missing_msg
                     if skip_msg:
                         ui_log(skip_msg, "warn")
                         pair_results = [{
@@ -1824,6 +1946,15 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 ui_log(f"\n=== Reintentando {len(group)} fila(s) fallida(s) de {form_url} ===", "info")
                 open_target(driver, url_mode, landing_url, form_url, log_cb=ui_log)
 
+                # Forma de compra primero, igual que en la corrida completa: sin esto el
+                # reintento correría contra la cascada trabada y todas las filas volverían
+                # a fallar, dando la falsa impresión de que el problema es del form.
+                purchase_missing_msg = _apply_purchase_mode(driver, log=ui_log)
+                if purchase_missing_msg:
+                    ui_log(f"{purchase_missing_msg} Se omite el reintento de "
+                           f"{len(group)} fila(s) de {form_url}.", "warn")
+                    continue
+
                 # Resolver el selector de Modelo ANTES de avanzar de paso — en forms
                 # multi-paso (modelo en el paso 1, dealer en un paso posterior)
                 # advance_to_selects ya lo pasa de largo y buscarlo después siempre daba
@@ -1849,6 +1980,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
                 def _reload_cb(_landing=landing_url, _form=form_url, _mode=url_mode):
                     open_target(driver, _mode, _landing, _form, log_cb=ui_log)
+                    _apply_purchase_mode(driver, log=lambda *_a, **_k: None)
                     advance_to_selects(
                         driver, level_ids=DEFAULT_SELECT_IDS,
                         has_region=has_region_var.get(), has_city=has_city_var.get(),
@@ -2044,5 +2176,6 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     # No pre-seleccionar ningún país para no confundir al usuario
     _refresh_pais_cards()
+    _refresh_purchase_card_visibility()  # arranca oculta: todavía no hay mercado elegido
     refresh_execute_state()
     return root_frame
