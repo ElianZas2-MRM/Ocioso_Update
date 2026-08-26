@@ -398,6 +398,10 @@ La parte de abajo de la pestaña, con los presets guardados y la barra de EJECUT
 | **OCULTO** | naranja | Está en el form pero declarado **solo en filas que no se ven** del Excel (ocultas o filtradas) — todo lo relacionado con filas/columnas no visibles se marca en naranja. |
 | **NOTA** | celeste | Mismo dealer, el nombre difiere solo en **detalles menores** (mayúsculas, apóstrofes/comillas, guiones, paréntesis, sufijos tipo `(1000km)`). Cuenta como OK, con el disclaimer en la columna **"Nota Nombre"**. |
 
+> **FAIL, MISSING, EXTRA y DUPLICADO son todos fallos del chequeo**: los cuatro significan que el form no coincide con lo declarado en el Excel. El Resumen los suma en un único **`🔴 FAIL (total)`** para que se lea de una si la corrida está bien o mal, con el desglose por tipo indentado abajo. Cada fila conserva igual su etiqueta y su color en la hoja de resultados, porque el tipo de fallo es justo lo que te dice qué ir a mirar (falta / sobra / está repetido).
+>
+> **OCULTO y NOTA quedan fuera de ese total**, en una sección aparte del Resumen ("No cuentan como fallo del form"): OCULTO es un dealer correcto cuya fila del Excel está oculta o filtrada —o sea, un problema del Excel, no del form— y NOTA es un dealer que **sí está**, solo escrito distinto en detalles menores.
+
 > **Columnas "Posición Dealer" / "Posición Ciudad".** El reporte no solo dice si el dealer/ciudad está bien cargado: también anota en qué lugar del `<select>` real aparece (1º, 2º, 3º…), para comparar contra el orden que esperabas en el Excel. Y el reporte en sí se ordena por el **orden real en que las ciudades aparecen en el dropdown del form** (agrupadas por región), no por el orden de las filas del Excel de origen — queda mucho más fácil de leer.
 
 > **Reintento automático si el form no cargó bien.** Si al abrir el form aparece un mensaje de error de carga (el widget no terminó de inicializar), la app recarga y reintenta hasta 2 veces (esperando 4s y después 8s) antes de dar la fila por perdida; si sigue sin cargar, la omite y lo avisa en el reporte.
