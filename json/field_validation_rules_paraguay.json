@@ -386,6 +386,409 @@
         "min_length",
         "max_length"
       ]
+    },
+    "NOMBRE": {
+      "descripcion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu nombre."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "APELLIDO": {
+      "descripcion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu apellido."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "CELULAR": {
+      "descripcion": "Hasta 10 dígitos numéricos. No permite ingresar el mismo dígito más de 4 veces seguidas. No acepta unicodigo. No permite caracteres especiales.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu celular.",
+        "Completa 10 números.",
+        "No puede ingresar el mismo dígito más de 4 veces seguidas."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "E-MAIL": {
+      "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "MODELOS": {
+      "descripcion": "Despliega los vehículos asignados al form.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un modelo."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "CIUDAD": {
+      "descripcion": "Despliega las ciudades asignadas al form. Tiene anclado el campo \"Concesionario\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una ciudad."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "DÓNDE COMPRAR": {
+      "descripcion": "Despliega los concesionarios asignados al form. Se desbloquea cuando el campo \"Ciudad\" está completo.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un concesionario."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "FECHA ESTIMADA DE COMPRA": {
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona la fecha estimada de compra."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "PLACA": {
+      "descripcion": "Hasta 50 caracteres alfanuméricos. Admite al menos uno.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa la matrícula de tu vehículo.",
+        "La matrícula ingresada no parece válida."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "OCUPACIÓN": {
+      "descripcion": "Despliega diferentes profesiones.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una ocupación."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "KILOMETRAJE ESTIMADO": {
+      "descripcion": "Despliega opciones desde 5 mil km hasta 50 mil km.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?": {
+      "descripcion": "Despliega sólo opciones de \"Sí\" y \"No\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "QUIERO COTIZAR LA BATERÍA": {
+      "descripcion": "Muestra sólo la opción \"Quiero cotizar la batería\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?": {
+      "descripcion": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
+    },
+    "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO)?": {
+      "descripcion": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Paraguay"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.762579"
     }
   }
 }

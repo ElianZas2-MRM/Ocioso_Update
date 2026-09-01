@@ -1,0 +1,357 @@
+{
+  "pais": "Brasil",
+  "fecha_importacion": "2026-09-01T01:40:07.976453",
+  "hoja_excel": "Brasil",
+  "resumen": {
+    "faltantes": 0,
+    "incompletos": 11,
+    "ok": 24
+  },
+  "faltantes": [],
+  "incompletos": [
+    {
+      "nombre_campo": "NOME",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 20 caracteres alfabético",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "SOBRENOME",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 30 caracteres alfabético.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CEP",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "8 caracteres numéricos",
+      "mensajes_error": [
+        "Formato inválido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CPF",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "14 caracteres numéricos (Usar el generador de CPF)",
+      "mensajes_error": [
+        "O CPF não é válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CNPJ",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "14 caracteres numéricos (Usar el generador de CNPJ)",
+      "mensajes_error": [
+        "Insira 14 dígitos.",
+        "O CNPJ não é válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CNPJ/CPF",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "minimo 11, maximo 14 caracteres numericos",
+      "mensajes_error": [
+        "Insira 11/14 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CELULAR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Maximo 11 caracteres numericos",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "mensajes_error": [
+        "E-mail inválido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "ANO E MODELO DO VEÍCULO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Maximo 50 caracteres alfanumericos",
+      "mensajes_error": [
+        "Digite o ano e modelo."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "VIN/CHASSI",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "17 caracteres alfanumericos",
+      "mensajes_error": [
+        "Digite 17 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "INSIRA SUA OPINÃO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "minimo 5, maximo 300 caracteres",
+      "mensajes_error": [
+        "Descreva melhor sua opinião"
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    }
+  ],
+  "ok": [
+    {
+      "nombre_campo": "PLACA",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Máximo 36 caracteres alfanumericos.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CÓD. CONFIRMACIÓN",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "17 caracteres alfanumericos",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MENSAGEM",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Maximo 400 caracteres alfarnumericos",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DESCRIÇÃO DA NECESSIDADE",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Máximo 400 caracteres alfanumericos.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "ESTADO",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [
+        "Selecione um estado."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIDADE",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [
+        "Selecione uma cidade."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CONCESSIONÁRIA",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [
+        "Selecione uma concessionária."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DATA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [
+        "Selecione data estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [
+        "Esse campo é obrigatório."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "COR",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "COR",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "KILOMETRAJE ESTIMADO",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "OCUPACIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "NOME DO EVENTO",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "QUIERO COTIZAR LA BATERÍA",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "ESTADO (APPROVED/REJECTED/OTHERS)",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "COMO PODEMOS TE AJUDAR",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PREFERÊNCIA DE CONTATO",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PRIMEIRO CONTATO SOBRE O ASSUNTO?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MARQUE AQUI SE PRECISAR DE FINANCIAMENTO",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MARQUE AQUI SE VAI OFERECER USADO NA TROCA",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": "FALTA ACTUALIZAR",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    }
+  ]
+}

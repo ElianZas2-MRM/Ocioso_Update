@@ -528,6 +528,1140 @@
         "min_length",
         "max_length"
       ]
+    },
+    "APELLIDO": {
+      "descripcion": "Hasta 50 caracteres. Solo se debe permitir letras, la \"ñ\" y espacios.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu apellido."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "RUT": {
+      "descripcion": "Posee un algoritmo, no permitir que se ingresen todos los dígitos iguales.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresar al menos 8 dígitos.",
+        "El RUT ingresado no parece válido.",
+        "Ingresa tu RUT"
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "N° DE DOCUMENTO": {
+      "descripcion": "Depende del campo \"Tipo de Documento\". Requiere en cada caso:",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "X"
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "CELULAR": {
+      "descripcion": "Hastar 9 caracteres númericos. No permite símbolos especiales. No acepta unificado. No puede comenzar con 0.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu celular.",
+        "El  número no puede empezar con 0.",
+        "Completar 9 números."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "E-MAIL": {
+      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu e-mail.",
+        "El email ingresado no parece válido."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "PATENTE": {
+      "descripcion": "Debe permitir 6 dígitos alfanuméricos.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Completa la patente.",
+        "Ingresa la patente en uno de los siguientes formatos: AA1111 o AAAA11.",
+        "Ingresa 6 caracteres."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "EDAD": {
+      "descripcion": "2 caracteres numéricos máximo. Debe permitir del 18 al 99.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu edad en números.",
+        "La edad ingresada no parece válida.",
+        "Debes ser mayor de 18 años."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "AÑO MODELO DE SU VEHÍCULO": {
+      "descripcion": "Máximo 4 caracteres numéricos. No debe permitir caracteres especiales. El año mínimo es 1925.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa el Año Modelo de tu vehículo.",
+        "Ingresa sólo números.",
+        "El año ingresado no es válido."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "VERSIÓN": {
+      "descripcion": "Máximo 30 caracteres alfanuméricos. No debe permitir carácteres especiales.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa la versión de tu vehículo.",
+        "Ingresa sólo caracteres alfanuméricos."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "COLOR": {
+      "descripcion": "Máximo 30 caracteres alfabéticos. No debe permitir carácteres especiales.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Escribe el color de tu vehículo.",
+        "Ingresa sólo caracteres alfanuméricos."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "TU INSTAGRAM": {
+      "descripcion": "Máximo 30 caracteres alfanuméricos. El campo ya tiene la “@” añadida en copy. Permite “_”. No permite espacios ni otros caracteres especiales.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Ingresa tu usuario de Instagram.",
+        "El usuario ingresado no parece válido."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿CUÁLES SON TUS PASATIEMPOS?": {
+      "descripcion": "Dropdown con múltiples opciones seleccionables.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Elige al menos una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "TIPO DE DOCUMENTO": {
+      "descripcion": "Despliega tres opciones: RUR Jurídico, RUT Natural y Pasaporte. Está ligado al campo \"N° de Documento\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un tipo de documento."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "MODELOS": {
+      "descripcion": "Despliega los vehículos elegidos para el form.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un modelo."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "CIUDAD": {
+      "descripcion": "Despliega las ciudades del form. Depende del campo Región. Tiene anclado el campo Concesionarios.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione una ciudad."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "CONCESIONARIO": {
+      "descripcion": "Despliega los concesionarios elegidos para el form. Depende de los campos: Región y Ciudad.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un concesionario."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "FECHA ESTIMADA DE COMPRA": {
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona la fecha estimada de compra."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "TIPO DE EMPRESA": {
+      "descripcion": "Muestra 12 opciones de tipo de empresa para que el cliente escoja. No es un seleccionador múltiple.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione un tipo de empresa."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "TAMAÑO DE LA FLOTA ACTUAL": {
+      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione el tamaño de su flota."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "FECHA DE COMPRA": {
+      "descripcion": "Muestra 3 opciones de cantidad de días.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione una fecha de compra."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "REQUERIMIENTO DE COMPRA": {
+      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione cuánta cantidad requiere comprar."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "KILOMETRAJE ESTIMADO": {
+      "descripcion": "Despliega opciones a partir de 5 mil km a 50 mil km.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un kilometraje."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "OCUPACIÓN": {
+      "descripcion": "Despliega diferentes profesiones.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una ocupación."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "GÉNERO": {
+      "descripcion": "Despliega varios tipos de género.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Elige una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "NORMATIVA": {
+      "descripcion": "Despliega dos opciones: EURO V y EURO VI. Está enlazado al campo Modelos. Dependiendo de la opción elegida, muestra cierto grupo de modelos. No podemos reemplazar el grupo de modelos porque sino afectamos el funcionamiento del campo.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una normativa."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "EVENTO": {
+      "descripcion": "Despliega eventos agregados directamente desde DEV.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona un evento."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "PREFERENCIA DE CONTACTO": {
+      "descripcion": "Muestra tres opciones: E-mail; Llamada telefónica; WhatsApp. Se puede seleccionar más de una opción.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione al menos una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "MARCA AQUÍ SI NECESITAS FINANCIAMIENTO": {
+      "descripcion": "Funciona sólo para seleccionar la opción.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "MARCA AQUÍ SI OFRECERÁS TU AUTO USADO COMO PARTE DE PAGO": {
+      "descripcion": "Funciona sólo para seleccionar la opción.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "SELECCIONE UNA OPCIÓN": {
+      "descripcion": "No tiene título. Cuenta con dos opciones: \"Quiero información\" y \"Quiero comprar\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?": {
+      "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿CUENTA CON UN CHEVROLET?": {
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿QUIERES HACER UN TEST DRIVE?": {
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Se requiere el campo \"¿Quieres hacer un Test Drive?\""
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿QUIERES COTIZAR LA BATERÍA?": {
+      "descripcion": "Muestra sólo la opción \"Sí\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿QUIERES COTIZAR LAS LLANTAS?": {
+      "descripcion": "Muestra sólo la opción \"Sí\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿ERES EMPRENDEDOR?": {
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Marca una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.": {
+      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?": {
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO)?": {
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Selecciona una opción."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "COMENTARIOS": {
+      "descripcion": "Máximo 120 caracteres. Permite letras, la \"ñ\", números, caracteres especiales y espacios. Debe llegar al campo comentarios del cliente en Salesforce.",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Por favor ingrese sus comentarios."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "ME GUSTARÍA RECIBIR INFORMACIÓN DE LOS PRODUCTOS": {
+      "descripcion": "Copy mostrado: Me gustaría recibir información de los productos.\nDebe llegar al campo comentarios del cliente en Salesforce como \"Recibe info de Productos: Sí\".",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": true,
+      "mensajes_error_excel": [
+        "Seleccione el checkbox."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "NOMBRE DEL CAMPO": {
+      "descripcion": "Ingrese validaciones y/o condiciones",
+      "campo": "",
+      "element_id": "",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": [],
+      "obligatorio_excel": false,
+      "mensajes_error_excel": [
+        "Ingrese mensaje de error 1.",
+        "Ingrese mensaje de error 2.",
+        "Ingrese mensaje de error 3."
+      ],
+      "pendiente_regex": true,
+      "origen": "crm_excel_import",
+      "fecha_importacion": "2026-09-01T01:37:35.749314"
     }
   }
 }

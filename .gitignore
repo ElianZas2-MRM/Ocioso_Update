@@ -31,6 +31,12 @@ config_global.json
 # Excels reales de clientes (rankings/listados de dealers) - no versionar
 *Ranking Dealers*.xls*
 
+# Excels externos del CRM colocados en la raiz del proyecto - contienen datos de
+# terceros, JAMAS versionar. Entradas especificas (no *.xlsx generico) porque
+# data/Field_Validation_URLs.xlsx si debe seguir trackeado.
+CRM - GMSA - Validaciones Formularios*.xlsx
+/GM Forms - 2026.xlsx
+
 # Excels de datos - se generan desde la app, no se versionan
 data/Lead_information_*.xls*
 data/Estado_Cidade_BR.xlsx

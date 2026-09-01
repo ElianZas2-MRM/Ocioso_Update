@@ -1,0 +1,243 @@
+{
+  "pais": "Argentina",
+  "ultima_deteccion": "2026-09-01T01:37:30",
+  "campos_nuevos": [
+    {
+      "id": "patent",
+      "type": "text",
+      "required": true,
+      "label": " "
+    },
+    {
+      "id": "CÓDIGO POSTAL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Sólo 4 caracteres numéricos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CUIT",
+      "type": "Rellenable",
+      "required": true,
+      "label": "11 caracteres numéricos. Se autorellena con guiones. Ejemplo: 01-12345678-9",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "RAZÓN SOCIAL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "De 1 a 100 caracteres alfanuméricos. Permite enviar sólo letras, sólo números; y mezclado. Permite caracteres especiales y espacios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "GRUPO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "De 1 a 4 caracteres numéricos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PREFIJO - CELULAR (SIN 15)",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Prefijo: de 2 a 4 caracteres numéricos. Celular: de 6 a 10 caracteres numéricos. No acepta unicodigo (ej. 00000000)",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TUS RESPUESTAS SON COMPLETAMENTE ANÓNIMAS",
+      "type": "Rellenable",
+      "required": true,
+      "label": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU CANCIÓN IDEAL PARA DESCUBRIR NUEVOS CAMINOS?",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Máximo 1.000 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "AÑO DE ADQUISICIÓN",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega opciones de años, desde \"Anterior\", y a partir de \"2006\" hasta \"2021\". No parece ser obligatorio. Está anclado al campo \"Modelos\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SEGMENTO EN EL CUAL TE ENCUENTRAS HOY",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega los segmentos de vehículos. No es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KITS DE MANTENIMIENTO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Está anclado al campo \"Modelos\". Despliega los kits asignados desde el administrador a cada uno de ellos. Es de selección múltiple. Al seleccionar 3 opciones, el copy dentro del iframe cambia por \"seleccionados\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SELECCIONÁ TU VERSIÓN",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Está anclado al campo \"Modelos\". Despliega las versiones asignadas desde el administrador. Es de única selección.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SERVICIO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Está anclado al campo \"Modelos\". Despliega los servicios asignados desde el administrador a cada uno de ellos. Es de única selección.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CONSULTORÍA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega consultoras específicas agregadas al iframe.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KILOMETRAJE ESTIMADO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega kilometrajes desde \"5.000 km\" y a apartir de 10.000km  asciende de 10mil hasta \"100.000 km o más\". Son números enteros. No es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OCUPACIÓN",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega diferentes profesiones. Es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TEST DRIVE DE INTERÉS",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega un grupo de modelos específico agregado al iframe. No es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "VEHÍCULO DE INTERÉS",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega un grupo de modelos específico agregado al iframe. No es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "EVENTO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega los eventos cargados específicamente en el iframe.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "HORARIO PREFERIDO DE ATENCIÓN",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las opciones de \"Mañana\" y \"Tarde\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CÓMO PREFERÍS CONSEGUIR TU MONTANA?",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las opciones de compra de Montana.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿POR QUÉ MOTIVO SOLICITÁS LA BAJA?",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las opciones de motivos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿POR QUÉ MOTIVO TE ARREPENTISTE DE LA COMPRA?",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las opciones de arrepentimiento.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿TU VEHÍCULO ES CHEVROLET?",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las opciones de \"Si\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega las opciones de \"Si\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿TENÉS PLANES PARA COMPRAR UN NUEVO AUTO?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega opciones afirmativas y negativas. No es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PREFIERO NO SER CONTACTADO POR UN CONCESIONARIO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Es como el checkbox de Términos y Condiciones. Aparece a la derecha del form.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIOS (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUENTA CON UN CHEVROLET?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Tiene las opciones de \"Sí\" y \"No\". Sólo puedes elegir uno. No se puede des-seleccionar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES COTIZAR LAS LLANTAS?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Tiene la opción de \"Sí\". Es des-seleccionable.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES COTIZAR LA BATERÍA?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Tiene la opción de \"Sí\". Es des-seleccionable.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUERÉS HACER UN TEST DRIVE?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Tiene las opciones de \"Si\" y \"No\". No es des-seleccionable.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "origen": "crm_excel_import"
+    }
+  ]
+}
