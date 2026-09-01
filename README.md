@@ -612,3 +612,77 @@ Las credenciales de LambdaTest se buscan **en este orden**:
    o cargalas directo desde la app (panel **CREDENCIALES LT** en la pestaña Envío de Leads, ver arriba).
 
 > Si usás el archivo, **no compartas la carpeta portable con el archivo lleno**: `build.bat` genera una plantilla vacía, pero si lo completaste ahí adentro viaja con la carpeta.
+
+---
+
+## Cómo colaborar (Git / Pull Requests)
+
+La rama `main` está **protegida**: nadie —ni el dueño— puede hacer `git push` directo a `main`. Todo cambio entra por **Pull Request**. Tampoco se puede hacer `force-push` ni borrar `main`.
+
+### Quién puede tocar el repo
+
+| Quién | Qué puede hacer |
+|---|---|
+| Colaboradores con acceso de escritura (los invita el dueño, uno por uno) | Crear ramas, pushear a esas ramas, abrir PRs y mergearlos |
+| Cualquier otra persona (repo público) | Forkear y abrir un PR **desde su fork**. No puede pushear ni mergear nada; el PR no toca `main` hasta que un colaborador le da merge |
+
+Ser colaborador no es automático: el dueño manda la invitación por usuario de GitHub y la persona la acepta. Nadie se agrega solo.
+
+### Flujo para un colaborador (tenés acceso de escritura)
+
+```bash
+# 1. Partí siempre de main actualizada
+git checkout main
+git pull
+
+# 2. Rama nueva con nombre descriptivo: tipo/descripcion-corta
+git checkout -b feat/nombre-del-cambio      # o fix/... , chore/... , docs/...
+
+# 3. Trabajás y commiteás (ver convención abajo)
+git add -A
+git commit -m "feat: descripción corta en imperativo"
+
+# 4. Subís la rama
+git push -u origin feat/nombre-del-cambio
+
+# 5. Abrís el PR contra main
+gh pr create --base main --fill        # o desde la web de GitHub
+
+# 6. Mergeás el PR (no hace falta aprobación de terceros)
+gh pr merge --squash --delete-branch   # o el botón "Merge" en la web
+
+# 7. Volvés a main y actualizás
+git checkout main
+git pull
+```
+
+### Flujo desde afuera (sin acceso de escritura)
+
+1. Fork del repo (botón *Fork* en GitHub).
+2. Cloná tu fork, hacé una rama, commiteá y pusheá a **tu** fork.
+3. Abrí un PR desde tu fork hacia `main` de este repo.
+4. Un colaborador lo revisa y, si está ok, le da merge.
+
+### Convención de commits
+
+- **Conventional commits**, en español, en imperativo:
+  `feat:` (funcionalidad nueva), `fix:` (bug), `chore:` (mantenimiento/config), `docs:` (documentación), `refactor:`, `test:`.
+- Un commit = un cambio con sentido propio. Si el PR mezcla cosas, partilo en varios commits.
+- **Sin** `Co-Authored-By` ni firmas de herramientas de IA.
+
+Ejemplos reales del repo:
+```
+feat: autovalores para campos detectados y marcado selectivo de checkboxes
+fix: dropdowns no ignoran el valor cargado en el Excel
+docs: actualiza README y capturas con reintento de fallidos y drivers
+```
+
+### Antes de abrir el PR
+
+```powershell
+.\venv\Scripts\activate
+pip install -r requirements-dev.txt   # solo la primera vez (trae pytest)
+python -m pytest                      # tiene que dar todo verde
+```
+
+Si tocaste lógica de llenado de formularios, además probá una corrida real chica (`python run.py`, un país, pocas filas del Excel de datos) antes de mergear.
