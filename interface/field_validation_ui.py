@@ -17,6 +17,8 @@ from tkinter import ttk
 
 from core.browser_manager import BrowserManager
 from interface.helpers_interface import DATA_DIR, cargar_config_global, guardar_config_global, obtener_email_destinatario
+from interface.ids_dinamicos_ui import registrar_campos_importados_desde_excel
+from utils.crm_excel_importer import CrmValidacionesImporter, construir_reporte, guardar_reporte
 from validation.selenium_validation_runner import run_field_validations
 from validation.validation_email import send_validation_report_email
 from validation.validation_exporter import export_validation_results
@@ -75,14 +77,13 @@ def _get_base_dir():
 
 
 def _get_rules_path(pais=None):
-    """Retorna la ruta del JSON de validación. Si pais está definido y existe el
-    archivo per-país, lo usa; si no, cae al archivo global."""
+    """Retorna la ruta del JSON de validación. Si pais está definido, SIEMPRE apunta al
+    archivo per-país (exista o no todavía) — nunca cae al global, porque _save_rules_file
+    lo crearía ahí y mezclaría campos de un país en el archivo compartido por los demás."""
     json_dir = os.path.join(_get_base_dir(), "json")
     if pais:
         pais_key = pais.lower().replace("é", "e").replace("ú", "u").replace("ó", "o")
-        per_country = os.path.join(json_dir, f"field_validation_rules_{pais_key}.json")
-        if os.path.exists(per_country):
-            return per_country
+        return os.path.join(json_dir, f"field_validation_rules_{pais_key}.json")
     return os.path.join(json_dir, "field_validation_rules.json")
 
 
@@ -101,8 +102,8 @@ def _get_results_dir():
     return os.path.join(_get_base_dir(), "resultados")
 
 
-def _load_rules_file():
-    rules_path = _get_rules_path()
+def _load_rules_file(pais=None):
+    rules_path = _get_rules_path(pais)
     if not os.path.exists(rules_path):
         return {
             "url": "",
@@ -121,8 +122,8 @@ def _load_rules_file():
         return json.load(file_handle)
 
 
-def _save_rules_file(payload):
-    rules_path = _get_rules_path()
+def _save_rules_file(payload, pais=None):
+    rules_path = _get_rules_path(pais)
     os.makedirs(os.path.dirname(rules_path), exist_ok=True)
     with open(rules_path, "w", encoding="utf-8") as file_handle:
         json.dump(payload, file_handle, indent=2, ensure_ascii=False)
@@ -747,6 +748,55 @@ def build_field_validation_tab(parent, palette, shared_config=None):
         pady=3,
     ).pack(side=RIGHT, padx=6)
 
+    # Import de validaciones desde el Excel externo del CRM (nunca versionado). Cruza
+    # contra field_validation_rules_<pais>.json — no contra el JSON global que usa el resto
+    # de esta pestaña — porque es el archivo que realmente lee el motor de detección/
+    # validación en runtime (core/base_form_filler.py, validation/selenium_validation_runner.py).
+    crm_import_frame = Frame(mapping_form_container, bg=section_bg)
+    crm_import_frame.pack(fill="x", pady=(0, 6))
+
+    crm_import_pais_var = StringVar(value=AVAILABLE_COUNTRIES[0])
+
+    Label(
+        crm_import_frame,
+        text="País (import Excel CRM):",
+        bg=section_bg,
+        fg=text_color,
+    ).pack(side=LEFT, padx=(0, 6))
+    ttk.Combobox(
+        crm_import_frame,
+        textvariable=crm_import_pais_var,
+        values=list(AVAILABLE_COUNTRIES),
+        state="readonly",
+        width=12,
+        style="ValidationRuleFilter.TCombobox",
+    ).pack(side=LEFT, padx=(0, 10))
+
+    Button(
+        crm_import_frame,
+        text="📥 Importar validaciones desde Excel CRM",
+        command=lambda: _importar_crm_excel_pais_actual(),
+        bg=button_bg,
+        fg=button_fg,
+        relief="flat",
+        font=("Segoe UI", 10, "bold"),
+        cursor="hand2",
+        padx=10,
+        pady=3,
+    ).pack(side=LEFT, padx=(0, 6))
+    Button(
+        crm_import_frame,
+        text="📥 Importar en TODOS los países",
+        command=lambda: _importar_crm_excel_todos_los_paises(),
+        bg=button_bg,
+        fg=button_fg,
+        relief="flat",
+        font=("Segoe UI", 10, "bold"),
+        cursor="hand2",
+        padx=10,
+        pady=3,
+    ).pack(side=LEFT)
+
     columns = ("element_id", "dropdown", "descripcion", "dependencies", "regex_full", "regex_char", "test_text", "paises", "teclado_mobile")
     mapping_tree_frame = Frame(mapping_paned, bg=section_bg)
 
@@ -776,6 +826,82 @@ def build_field_validation_tab(parent, palette, shared_config=None):
 
     mapping_paned.add(mapping_form_container, weight=2)
     mapping_paned.add(mapping_tree_frame, weight=3)
+
+    def _mostrar_resultado_import_crm(titulo, texto):
+        popup = Toplevel()
+        popup.title(titulo)
+        popup.configure(bg=app_bg)
+        resultado_widget = Text(popup, width=92, height=28, bg=entry_bg, fg=entry_fg, wrap="word")
+        resultado_widget.insert("1.0", texto)
+        resultado_widget.configure(state="disabled")
+        resultado_widget.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        Button(
+            popup, text="Cerrar", command=popup.destroy,
+            bg=button_bg, fg=button_fg, relief="flat", cursor="hand2", padx=10, pady=3,
+        ).pack(pady=(0, 10))
+
+    def _formatear_resumen_import_crm(pais, comparacion, cantidad_agregada):
+        return (
+            f"{pais}: {len(comparacion['faltantes'])} faltantes "
+            f"({cantidad_agregada} agregados al JSON), "
+            f"{len(comparacion['incompletos'])} incompletos (obligatorios sin regex — "
+            f"revisar a mano), {len(comparacion['ok'])} ya cubiertos."
+        )
+
+    def _importar_crm_para_pais(importer, pais):
+        """Compara y, si hace falta, guarda field_validation_rules_<pais>.json — nunca pisa
+        una entrada que ya exista (ver CrmValidacionesImporter.aplicar_merge)."""
+        reglas = _load_rules_file(pais=pais)
+        comparacion = importer.comparar(pais, reglas)
+        actualizado, cantidad_agregada = importer.aplicar_merge(pais, comparacion, reglas)
+        if cantidad_agregada:
+            _save_rules_file(actualizado, pais=pais)
+            registrar_campos_importados_desde_excel(pais, comparacion["faltantes"])
+        guardar_reporte(pais, construir_reporte(pais, pais, comparacion))
+        return comparacion, cantidad_agregada
+
+    def _importar_crm_excel_pais_actual():
+        importer = CrmValidacionesImporter()
+        disponible, info = importer.disponible()
+        if not disponible:
+            messagebox.showwarning("Importar validaciones desde Excel CRM", info)
+            return
+
+        pais = crm_import_pais_var.get()
+        try:
+            comparacion, cantidad_agregada = _importar_crm_para_pais(importer, pais)
+        except Exception as exc:
+            LOGGER.exception("Error importando validaciones del CRM para %s", pais)
+            messagebox.showerror("Importar validaciones desde Excel CRM", f"Error importando {pais}: {exc}")
+            return
+
+        _mostrar_resultado_import_crm(
+            "Importar validaciones desde Excel CRM",
+            _formatear_resumen_import_crm(pais, comparacion, cantidad_agregada),
+        )
+        status_var.set(f"Import Excel CRM ({pais}): {cantidad_agregada} campo(s) nuevo(s) agregados.")
+
+    def _importar_crm_excel_todos_los_paises():
+        importer = CrmValidacionesImporter()
+        disponible, info = importer.disponible()
+        if not disponible:
+            messagebox.showwarning("Importar en TODOS los países", info)
+            return
+
+        lineas = []
+        total_agregados = 0
+        for pais in AVAILABLE_COUNTRIES:
+            try:
+                comparacion, cantidad_agregada = _importar_crm_para_pais(importer, pais)
+            except Exception as exc:
+                LOGGER.exception("Error importando validaciones del CRM para %s", pais)
+                lineas.append(f"{pais}: ERROR — {exc}")
+                continue
+            total_agregados += cantidad_agregada
+            lineas.append(_formatear_resumen_import_crm(pais, comparacion, cantidad_agregada))
+
+        _mostrar_resultado_import_crm("Importar en TODOS los países", "\n".join(lineas))
+        status_var.set(f"Import Excel CRM (todos los países): {total_agregados} campo(s) nuevo(s) en total.")
 
     def _clear_form_inputs():
         field_name_var.set("")

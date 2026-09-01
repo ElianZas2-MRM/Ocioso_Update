@@ -1,6 +1,6 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-08-15T02:56:57",
+  "ultima_deteccion": "2026-09-01T01:37:35",
   "campos_nuevos": [
     {
       "id": "categories",
@@ -127,6 +127,223 @@
       "type": "text",
       "required": true,
       "label": "Telefone:"
+    },
+    {
+      "id": "NOME",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 20 caracteres alfabético",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SOBRENOME",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 30 caracteres alfabético.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CEP",
+      "type": "Rellenable",
+      "required": true,
+      "label": "8 caracteres numéricos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CPF",
+      "type": "Rellenable",
+      "required": true,
+      "label": "14 caracteres numéricos (Usar el generador de CPF)",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CNPJ",
+      "type": "Rellenable",
+      "required": true,
+      "label": "14 caracteres numéricos (Usar el generador de CNPJ)",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CNPJ/CPF",
+      "type": "Rellenable",
+      "required": true,
+      "label": "minimo 11, maximo 14 caracteres numericos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CELULAR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Maximo 11 caracteres numericos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "ANO E MODELO DO VEÍCULO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Maximo 50 caracteres alfanumericos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PLACA",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Máximo 36 caracteres alfanumericos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CÓD. CONFIRMACIÓN",
+      "type": "Rellenable",
+      "required": false,
+      "label": "17 caracteres alfanumericos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "VIN/CHASSI",
+      "type": "Rellenable",
+      "required": true,
+      "label": "17 caracteres alfanumericos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "INSIRA SUA OPINÃO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "minimo 5, maximo 300 caracteres",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MENSAGEM",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Maximo 400 caracteres alfarnumericos",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DESCRIÇÃO DA NECESSIDADE",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Máximo 400 caracteres alfanumericos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MODELOS",
+      "type": "Dropdown",
+      "required": false,
+      "label": "MODELOS",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "COR",
+      "type": "Dropdown",
+      "required": false,
+      "label": "COR",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "COR",
+      "type": "Dropdown",
+      "required": false,
+      "label": "COR",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KILOMETRAJE ESTIMADO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "KILOMETRAJE ESTIMADO",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OCUPACIÓN",
+      "type": "Dropdown",
+      "required": false,
+      "label": "OCUPACIÓN",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "NOME DO EVENTO",
+      "type": "Rellenable",
+      "required": false,
+      "label": "NOME DO EVENTO",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "QUIERO COTIZAR LA BATERÍA",
+      "type": "Dropdown",
+      "required": false,
+      "label": "QUIERO COTIZAR LA BATERÍA",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "ESTADO (APPROVED/REJECTED/OTHERS)",
+      "type": "Dropdown",
+      "required": false,
+      "label": "ESTADO (APPROVED/REJECTED/OTHERS)",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "COMO PODEMOS TE AJUDAR",
+      "type": "Dropdown",
+      "required": false,
+      "label": "COMO PODEMOS TE AJUDAR",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PREFERÊNCIA DE CONTATO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "PREFERÊNCIA DE CONTATO",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PRIMEIRO CONTATO SOBRE O ASSUNTO?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "PRIMEIRO CONTATO SOBRE O ASSUNTO?",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MARQUE AQUI SE PRECISAR DE FINANCIAMENTO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "MARQUE AQUI SE PRECISAR DE FINANCIAMENTO",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MARQUE AQUI SE VAI OFERECER USADO NA TROCA",
+      "type": "Checkbox",
+      "required": false,
+      "label": "MARQUE AQUI SE VAI OFERECER USADO NA TROCA",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "origen": "crm_excel_import"
     }
   ]
 }

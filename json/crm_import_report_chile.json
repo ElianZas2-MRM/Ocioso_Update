@@ -1,0 +1,499 @@
+{
+  "pais": "Chile",
+  "fecha_importacion": "2026-09-01T01:40:11.269575",
+  "hoja_excel": "Chile",
+  "resumen": {
+    "faltantes": 0,
+    "incompletos": 35,
+    "ok": 9
+  },
+  "faltantes": [],
+  "incompletos": [
+    {
+      "nombre_campo": "APELLIDO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 50 caracteres. Solo se debe permitir letras, la \"ñ\" y espacios.",
+      "mensajes_error": [
+        "Ingresa tu apellido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "RUT",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Posee un algoritmo, no permitir que se ingresen todos los dígitos iguales.",
+      "mensajes_error": [
+        "Ingresar al menos 8 dígitos.",
+        "El RUT ingresado no parece válido.",
+        "Ingresa tu RUT"
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "N° DE DOCUMENTO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Depende del campo \"Tipo de Documento\". Requiere en cada caso:",
+      "mensajes_error": [
+        "X"
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CELULAR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hastar 9 caracteres númericos. No permite símbolos especiales. No acepta unificado. No puede comenzar con 0.",
+      "mensajes_error": [
+        "Ingresa tu celular.",
+        "El  número no puede empezar con 0.",
+        "Completar 9 números."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "mensajes_error": [
+        "Ingresa tu e-mail.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PATENTE",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Debe permitir 6 dígitos alfanuméricos.",
+      "mensajes_error": [
+        "Completa la patente.",
+        "Ingresa la patente en uno de los siguientes formatos: AA1111 o AAAA11.",
+        "Ingresa 6 caracteres."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "EDAD",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "2 caracteres numéricos máximo. Debe permitir del 18 al 99.",
+      "mensajes_error": [
+        "Ingresa tu edad en números.",
+        "La edad ingresada no parece válida.",
+        "Debes ser mayor de 18 años."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "AÑO MODELO DE SU VEHÍCULO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 4 caracteres numéricos. No debe permitir caracteres especiales. El año mínimo es 1925.",
+      "mensajes_error": [
+        "Ingresa el Año Modelo de tu vehículo.",
+        "Ingresa sólo números.",
+        "El año ingresado no es válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "VERSIÓN",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 30 caracteres alfanuméricos. No debe permitir carácteres especiales.",
+      "mensajes_error": [
+        "Ingresa la versión de tu vehículo.",
+        "Ingresa sólo caracteres alfanuméricos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "COLOR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 30 caracteres alfabéticos. No debe permitir carácteres especiales.",
+      "mensajes_error": [
+        "Escribe el color de tu vehículo.",
+        "Ingresa sólo caracteres alfanuméricos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TU INSTAGRAM",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 30 caracteres alfanuméricos. El campo ya tiene la “@” añadida en copy. Permite “_”. No permite espacios ni otros caracteres especiales.",
+      "mensajes_error": [
+        "Ingresa tu usuario de Instagram.",
+        "El usuario ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁLES SON TUS PASATIEMPOS?",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Dropdown con múltiples opciones seleccionables.",
+      "mensajes_error": [
+        "Elige al menos una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TIPO DE DOCUMENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega tres opciones: RUR Jurídico, RUT Natural y Pasaporte. Está ligado al campo \"N° de Documento\".",
+      "mensajes_error": [
+        "Selecciona un tipo de documento."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los vehículos elegidos para el form.",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "REGIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las regiones del form. Tiene anclados los campos: Región y Concesionarios.",
+      "mensajes_error": [
+        "Selecciona una región."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las ciudades del form. Depende del campo Región. Tiene anclado el campo Concesionarios.",
+      "mensajes_error": [
+        "Seleccione una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CONCESIONARIO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los concesionarios elegidos para el form. Depende de los campos: Región y Ciudad.",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "mensajes_error": [
+        "Selecciona la fecha estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TIPO DE EMPRESA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 12 opciones de tipo de empresa para que el cliente escoja. No es un seleccionador múltiple.",
+      "mensajes_error": [
+        "Seleccione un tipo de empresa."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TAMAÑO DE LA FLOTA ACTUAL",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "mensajes_error": [
+        "Seleccione el tamaño de su flota."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 3 opciones de cantidad de días.",
+      "mensajes_error": [
+        "Seleccione una fecha de compra."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "REQUERIMIENTO DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "mensajes_error": [
+        "Seleccione cuánta cantidad requiere comprar."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "KILOMETRAJE ESTIMADO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega opciones a partir de 5 mil km a 50 mil km.",
+      "mensajes_error": [
+        "Selecciona un kilometraje."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "OCUPACIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes profesiones.",
+      "mensajes_error": [
+        "Selecciona una ocupación."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "GÉNERO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega varios tipos de género.",
+      "mensajes_error": [
+        "Elige una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "NORMATIVA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega dos opciones: EURO V y EURO VI. Está enlazado al campo Modelos. Dependiendo de la opción elegida, muestra cierto grupo de modelos. No podemos reemplazar el grupo de modelos porque sino afectamos el funcionamiento del campo.",
+      "mensajes_error": [
+        "Selecciona una normativa."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "EVENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega eventos agregados directamente desde DEV.",
+      "mensajes_error": [
+        "Selecciona un evento."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PREFERENCIA DE CONTACTO",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra tres opciones: E-mail; Llamada telefónica; WhatsApp. Se puede seleccionar más de una opción.",
+      "mensajes_error": [
+        "Seleccione al menos una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿QUIERES HACER UN TEST DRIVE?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [
+        "Se requiere el campo \"¿Quieres hacer un Test Drive?\""
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿ERES EMPRENDEDOR?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [
+        "Marca una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO)?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "COMENTARIOS",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 120 caracteres. Permite letras, la \"ñ\", números, caracteres especiales y espacios. Debe llegar al campo comentarios del cliente en Salesforce.",
+      "mensajes_error": [
+        "Por favor ingrese sus comentarios."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "ME GUSTARÍA RECIBIR INFORMACIÓN DE LOS PRODUCTOS",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Copy mostrado: Me gustaría recibir información de los productos.\nDebe llegar al campo comentarios del cliente en Salesforce como \"Recibe info de Productos: Sí\".",
+      "mensajes_error": [
+        "Seleccione el checkbox."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    }
+  ],
+  "ok": [
+    {
+      "nombre_campo": "NOMBRE / NAME",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 50 caracteres. Solo se debe permitir letras, la \"ñ\" y espacios.",
+      "mensajes_error": [
+        "Ingresa tu nombre."
+      ],
+      "ultimo_ajuste": "2026-06-30",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "MARCA AQUÍ SI NECESITAS FINANCIAMIENTO",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Funciona sólo para seleccionar la opción.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MARCA AQUÍ SI OFRECERÁS TU AUTO USADO COMO PARTE DE PAGO",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Funciona sólo para seleccionar la opción.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "SELECCIONE UNA OPCIÓN",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "No tiene título. Cuenta con dos opciones: \"Quiero información\" y \"Quiero comprar\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUENTA CON UN CHEVROLET?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿QUIERES COTIZAR LA BATERÍA?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra sólo la opción \"Sí\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿QUIERES COTIZAR LAS LLANTAS?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra sólo la opción \"Sí\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "NOMBRE DEL CAMPO",
+      "tipo": "TIPO DE CAMPO",
+      "obligatorio": false,
+      "descripcion": "Ingrese validaciones y/o condiciones",
+      "mensajes_error": [
+        "Ingrese mensaje de error 1.",
+        "Ingrese mensaje de error 2.",
+        "Ingrese mensaje de error 3."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    }
+  ]
+}

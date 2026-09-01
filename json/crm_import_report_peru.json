@@ -1,0 +1,510 @@
+{
+  "pais": "Peru",
+  "fecha_importacion": "2026-09-01T01:40:35.955058",
+  "hoja_excel": "Peru",
+  "resumen": {
+    "faltantes": 0,
+    "incompletos": 18,
+    "ok": 28
+  },
+  "faltantes": [],
+  "incompletos": [
+    {
+      "nombre_campo": "N° DE DOCUMENTO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Está anclado al campo \"Tipo de Documento\". Sus validaciones cambian dependiendo del documento seleccionado.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CELULAR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9 . No acepta unicodigo",
+      "mensajes_error": [
+        "Ingresa tu celular.",
+        "Completa 9 números comenzando con el 9",
+        "El celular ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TELÉFONO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9. No permite  unicódigo ni símbolos especiales.",
+      "mensajes_error": [
+        "Ingresa tu celular.",
+        "Completa 9 números.",
+        "El celular ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
+      "mensajes_error": [
+        "Ingresa tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PATENTE",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 15 caracteres alfanuméricos.",
+      "mensajes_error": [
+        "Ingresa la placa de tu vehículo."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TIPO DE DOCUMENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las opciones: \"DNI\"; \"RUC\";  \"Carné de Extranjería\"; \"Pasaporte\". Pero \"DNI\" y \"RUC\" son solo numéricos y, \"Carné de Extranjería\" y \"Pasaporte\" son alfanuméricos.",
+      "mensajes_error": [
+        "Seleccina un tipo de documento."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las ciudades del form. Tiene anclado el campo Concesionarios.",
+      "mensajes_error": [
+        "Seleccione una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CONCESIONARIO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra la fecha de hoy. Es obligatorio por default.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "mensajes_error": [
+        "Selecciona la fecha estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TIPO DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega dos opciones: \"Crédito\" o \"Contado\". Si se elige la opción de \"Contado\", aparece el siguiente copy: \"Para ofrecerle una mejor opción para el crédito vehicular, será necesario que usted tenga disponible el sustento de ingresos\".",
+      "mensajes_error": [
+        "Selecciona un tipo de compra."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "EVENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega eventos agregados directamente desde DEV. Todas las opciones llegan al campo comentario en Salesforce.",
+      "mensajes_error": [
+        "Selecciona un evento."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDIA EN EL CONCESIONARIO?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "ME GUSTARÍA RECIBIR INFORMACIÓN DE LOS PRODUCTOS",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Form ACDelco.",
+      "mensajes_error": [
+        "Seleccione el checkbox."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "COMENTARIOS",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Form ACDelco. Tiene un maximo de 120 caracteres alfanuméricos.",
+      "mensajes_error": [
+        "Por favor ingrese sus comentarios."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    }
+  ],
+  "ok": [
+    {
+      "nombre_campo": "NOMBRES",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 50 caracteres alfabeticos. Ya con ingresar uno funciona.",
+      "mensajes_error": [
+        "Ingresa tu nombre."
+      ],
+      "ultimo_ajuste": "2026-08-24",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "APELLIDOS",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 50 caracteres alfabeticos. Ya con ingresar uno funciona.",
+      "mensajes_error": [
+        "Ingresa tu apellido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "VIN",
+      "tipo": "Checkbox y Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 17 dígitos. Tiene un copy en el título que dice \"(Podrá encontrar el VIN en la esquina del parabrisas del vehículo)\". Tiene anclado un checkbox que dice \"No aplica si usted no ha adquirido un vehículo\". El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu VIN.",
+        "Ingresa 17 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega las opciones de vehículos asignadas al form.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "KILOMETRAJE ESTIMADO",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega opciones desde 5 mil km hasta 50 mil km.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "OCUPACIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega diferentes profesiones.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿QUIERES COTIZAR LA BATERIA?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra sólo la opción \"Sí\". Llega al campo comentario en Salesfore.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿QUIERES COTIZAR LAS LLANTAS?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra sólo la opción \"Sí\". Llega al campo comentario en Salesfore.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUENTA CON UN CHEVROLET?",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "VALIDACIONES FORMULARIO DE RECLAMACIONES",
+      "tipo": "",
+      "obligatorio": null,
+      "descripcion": "",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "NOMBRE Y APELLIDO",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 100 caracteres alfabeticos. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu nombre."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DOCUMENTO DE IDENTIDAD, RUC O PASAPORTE",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "De 8 a 12 caraceteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu Cédula de identidad / RUC o Pasaporte.",
+        "Ingresa al menos 8 caracteres.",
+        "Ingresa máximo 12 caracteres."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DOMICILIO",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 100 caracteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu domicilio."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "RECLAMO / QUEJA / PEDIDO",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 2000 caractéres alfanuméricos. Al seleccionar \"Reclamo\" o \"Queja\", se despliegan nuevos campos rellenables que requieren al menos un caracter alfanumérico. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa el detalle del reclamo.",
+        "Ingresa el detalle de la queja."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DETALLE DEL RECLAMO / QUEJA / PEDIDO",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 2000 caractéres alfanuméricos. El campo tiene un tamaño extenso.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MONTO DEL RECLAMO/QUEJA",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 9 caraceteres numéricos. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa el monto a reclamar."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TELÉFONO DEL TELEFONO",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9. El campo tiene tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu celular.",
+        "Completa 9 números.",
+        "El celular ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CORREO ELECTRÓNICO DEL RESPONSABLE",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DOMICILIO DEL RESPONSABLE",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 100 caracteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu domicilio."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "VIN",
+      "tipo": "Checkbox y Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 17 dígitos. Tiene un copy en el título que dice \"(Podrá encontrar el VIN en la esquina del parabrisas del vehículo)\". Tiene anclado un checkbox que dice \"No aplica si usted no ha adquirido un vehículo\". El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu VIN.",
+        "Ingresa 17 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "EN CASO DE MENORES DE EDAD",
+      "tipo": "Checkbox y Rellenable",
+      "obligatorio": false,
+      "descripcion": "Muestra sólo dos opciones: \"Soy menor de edad\" y \"Soy mayor de edad\". En caso de ser menor, despliega un campo rellenable. Para que este campo funcione, al menos se debe ingresar una letra.",
+      "mensajes_error": [
+        "Ingresa tu el nombre de tu Padre o Madre."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "VIN DEL RESPONSABLE",
+      "tipo": "Checkbox y Rellenable",
+      "obligatorio": false,
+      "descripcion": "Hasta 17 dígitos. Tiene un copy en el título que dice \"(Podrá encontrar el VIN en la esquina del parabrisas del vehículo)\". Tiene anclado un checkbox que dice \"No aplica si usted no ha adquirido un vehículo\". El campo tiene un tamaño extenso.",
+      "mensajes_error": [
+        "Ingresa tu VIN.",
+        "Ingresa 17 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "BIEN CONTRATADO",
+      "tipo": "Checkbox",
+      "obligatorio": false,
+      "descripcion": "Muestra sólo dos opciones: \"Producto\" o \"Servicio\".",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega las ciudades del form. Tiene anclado el campo Concesionarios.",
+      "mensajes_error": [
+        "Seleccione una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CONCESIONARIO",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "NOMBRE DE LA CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega las ciudades del form. Tiene anclado el campo Concesionarios.",
+      "mensajes_error": [
+        "Seleccione una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "NOMBRE DEL CONCESIONARIO",
+      "tipo": "Dropdown",
+      "obligatorio": false,
+      "descripcion": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "tiene_regex": false
+    }
+  ]
+}
