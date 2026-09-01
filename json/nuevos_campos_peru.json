@@ -1,6 +1,6 @@
 {
   "pais": "Peru",
-  "ultima_deteccion": "2026-07-31T13:41:47",
+  "ultima_deteccion": "2026-09-01T01:37:35",
   "campos_nuevos": [
     {
       "id": "cc_date",
@@ -79,6 +79,293 @@
       "type": "text",
       "required": false,
       "label": " "
+    },
+    {
+      "id": "N° DE DOCUMENTO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Está anclado al campo \"Tipo de Documento\". Sus validaciones cambian dependiendo del documento seleccionado.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CELULAR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9 . No acepta unicodigo",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TELÉFONO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9. No permite  unicódigo ni símbolos especiales.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PATENTE",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 15 caracteres alfanuméricos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CIUDAD",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las ciudades del form. Tiene anclado el campo Concesionarios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CONCESIONARIO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MODELOS",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega las opciones de vehículos asignadas al form.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Muestra la fecha de hoy. Es obligatorio por default.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA ESTIMADA DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KILOMETRAJE ESTIMADO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega opciones desde 5 mil km hasta 50 mil km.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OCUPACIÓN",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega diferentes profesiones.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TIPO DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega dos opciones: \"Crédito\" o \"Contado\". Si se elige la opción de \"Contado\", aparece el siguiente copy: \"Para ofrecerle una mejor opción para el crédito vehicular, será necesario que usted tenga disponible el sustento de ingresos\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "EVENTO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega eventos agregados directamente desde DEV. Todas las opciones llegan al campo comentario en Salesforce.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES COTIZAR LA BATERIA?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra sólo la opción \"Sí\". Llega al campo comentario en Salesfore.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES COTIZAR LAS LLANTAS?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra sólo la opción \"Sí\". Llega al campo comentario en Salesfore.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUENTA CON UN CHEVROLET?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDIA EN EL CONCESIONARIO?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "ME GUSTARÍA RECIBIR INFORMACIÓN DE LOS PRODUCTOS",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Form ACDelco.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "COMENTARIOS",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Form ACDelco. Tiene un maximo de 120 caracteres alfanuméricos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "VALIDACIONES FORMULARIO DE RECLAMACIONES",
+      "type": "text",
+      "required": false,
+      "label": "VALIDACIONES FORMULARIO DE RECLAMACIONES",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "NOMBRE Y APELLIDO",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 100 caracteres alfabeticos. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DOCUMENTO DE IDENTIDAD, RUC O PASAPORTE",
+      "type": "Rellenable",
+      "required": false,
+      "label": "De 8 a 12 caraceteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DOMICILIO",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 100 caracteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "RECLAMO / QUEJA / PEDIDO",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 2000 caractéres alfanuméricos. Al seleccionar \"Reclamo\" o \"Queja\", se despliegan nuevos campos rellenables que requieren al menos un caracter alfanumérico. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DETALLE DEL RECLAMO / QUEJA / PEDIDO",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 2000 caractéres alfanuméricos. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MONTO DEL RECLAMO/QUEJA",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 9 caraceteres numéricos. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TELÉFONO DEL TELEFONO",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9. El campo tiene tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CORREO ELECTRÓNICO DEL RESPONSABLE",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DOMICILIO DEL RESPONSABLE",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 100 caracteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "EN CASO DE MENORES DE EDAD",
+      "type": "Checkbox y Rellenable",
+      "required": false,
+      "label": "Muestra sólo dos opciones: \"Soy menor de edad\" y \"Soy mayor de edad\". En caso de ser menor, despliega un campo rellenable. Para que este campo funcione, al menos se debe ingresar una letra.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "VIN DEL RESPONSABLE",
+      "type": "Checkbox y Rellenable",
+      "required": false,
+      "label": "Hasta 17 dígitos. Tiene un copy en el título que dice \"(Podrá encontrar el VIN en la esquina del parabrisas del vehículo)\". Tiene anclado un checkbox que dice \"No aplica si usted no ha adquirido un vehículo\". El campo tiene un tamaño extenso.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "BIEN CONTRATADO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra sólo dos opciones: \"Producto\" o \"Servicio\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CIUDAD",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega las ciudades del form. Tiene anclado el campo Concesionarios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CONCESIONARIO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "NOMBRE DE LA CIUDAD",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega las ciudades del form. Tiene anclado el campo Concesionarios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "NOMBRE DEL CONCESIONARIO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
+      "origen": "crm_excel_import"
     }
   ]
 }

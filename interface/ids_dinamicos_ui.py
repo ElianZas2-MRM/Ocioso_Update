@@ -9,6 +9,7 @@ no mapeados desde la interfaz en lugar de editar el JSON a mano.
 import os
 import json
 import textwrap
+from datetime import datetime
 from tkinter import *
 from tkinter import ttk, messagebox
 from tkinter import StringVar, BooleanVar
@@ -1305,6 +1306,45 @@ def quitar_campo_detectado(pais, field_id):
         print(f"⚠️ No se pudo actualizar {os.path.basename(ruta)}: {e}")
 
 
+def registrar_campos_importados_desde_excel(pais, campos_faltantes):
+    """Agrega a json/nuevos_campos_<pais>.json los campos que el import del Excel CRM
+    (utils.crm_excel_importer) encontró documentados pero sin regla configurada, marcados
+    con origen='crm_excel_import' para distinguirlos en la UI de los detectados en vivo
+    por el motor de Selenium (origen='runtime_discovery', o ausente en entradas viejas).
+    No duplica contra lo que ya esté en el archivo. Devuelve cuántos agregó."""
+    existentes, _ = leer_campos_detectados(pais)
+    ids_existentes = {str(c.get("id") or "").strip() for c in existentes if isinstance(c, dict)}
+
+    nuevos = []
+    for campo in campos_faltantes:
+        field_id = str(campo.get("nombre_campo") or "").strip()
+        if not field_id or field_id in ids_existentes:
+            continue
+        nuevos.append({
+            "id": field_id,
+            "type": str(campo.get("tipo") or "text").strip() or "text",
+            "required": bool(campo.get("obligatorio")),
+            "label": str(campo.get("descripcion") or field_id).strip() or field_id,
+            "origen": "crm_excel_import",
+        })
+
+    if not nuevos:
+        return 0
+
+    ruta = os.path.join(JSON_DIR, f"nuevos_campos_{_pais_key(pais)}.json")
+    payload = {
+        "pais": pais,
+        "ultima_deteccion": datetime.now().isoformat(timespec="seconds"),
+        "campos_nuevos": existentes + nuevos,
+    }
+    os.makedirs(JSON_DIR, exist_ok=True)
+    tmp = ruta + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, ruta)
+    return len(nuevos)
+
+
 def consolidar_ids_dinamicos():
     """Fusiona entradas duplicadas (mismo ID + mismo alcance de países) en una sola
     con todos los valores. El backend ya las fusionaba al rellenar; esto alinea la UI."""
@@ -1558,6 +1598,9 @@ def _build_tab_campos_detectados(popup):
             label = str(campo.get("label") or campo.get("name") or field_id).strip() or field_id
             tipo = str(campo.get("type") or "text").strip()
             requerido = " · requerido" if campo.get("required") else ""
+            # Entradas sin "origen" son de antes de este campo — todas vinieron de la
+            # detección en vivo, así que el default es el mismo comportamiento de siempre.
+            origen_texto = " (desde Excel CRM)" if campo.get("origen", "runtime_discovery") == "crm_excel_import" else ""
 
             fila = Frame(frame_lista, bg=APP_BG_COLOR)
             fila.pack(fill="x", pady=(2, 8))
@@ -1565,7 +1608,7 @@ def _build_tab_campos_detectados(popup):
 
             Label(
                 fila,
-                text=f"{label}   [{tipo}{requerido}]",
+                text=f"{label}   [{tipo}{requerido}]{origen_texto}",
                 bg=APP_BG_COLOR, fg="white", font=("Segoe UI", 10, "bold"),
                 anchor="w", justify="left", wraplength=740,
             ).pack(anchor="w")

@@ -1,0 +1,5 @@
+# Dependencias solo para desarrollo (tests). build.bat NO instala este archivo:
+# solo requirements.txt entra en el venv que se empaqueta con el .exe.
+-r requirements.txt
+
+pytest~=9.1
