@@ -1,6 +1,6 @@
 {
   "pais": "Uruguay",
-  "ultima_deteccion": "2026-07-02T01:29:02",
+  "ultima_deteccion": "2026-09-01T01:37:35",
   "campos_nuevos": [
     {
       "id": "patent",
@@ -37,6 +37,132 @@
       "type": "select",
       "required": true,
       "label": "estimated-day"
+    },
+    {
+      "id": "NOMBRE",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 50 caracteres. Sólo debe permitir letras, la \"ñ\" y espacios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "APELLIDO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 50 caracteres. Sólo debe permitir letras, la \"ñ\" y espacios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CÉDULA",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Permite hasta 8 caracteres. Abre el teclado numérico. No permite el ingreso de otro tipo de caracteres (ej: especiales). No permite el input de dígitos iguales y/o consecutivos (12345678).",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CELULAR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Campo numérico de 9 dígitos. Debe comenzar con 09. No permite caracteres especiales ni unicódigo.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OTRAS CONSULTAS",
+      "type": "Rellenable",
+      "required": false,
+      "label": "Hasta 500 caracteres alfanuméricos. Es un campo expandible.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MODELOS",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los vehículos asignados al form.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CIUDAD",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las ciudades del form. Depende del campo Departamento. Tiene anclado el campo Concesionarios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CONCESIONARIO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los concesionarios elegidos para el form. Depende de los campos: Departamento y Ciudad.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA ESTIMADA DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KILOMETRAJE ESTIMADO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega opciones desde 5 mil km hasta 50 mil km.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OCUPACIÓN",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega diferentes profesiones.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "QUIERO COTIZAR LA BATERÍA",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra el mismo copy del título. Impacta en el campo Comentario.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUENTA CON UN CHEVROLET?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "origen": "crm_excel_import"
     }
   ]
 }

@@ -2042,6 +2042,14 @@ class BaseFormFiller:
         except Exception as _disc_err:
             print(f"Auto-discovery: error no crítico — {_disc_err}")
 
+        # Sembrar valores de prueba en IDs dinámicos para los campos recién detectados
+        # (regex de la regla de validación para inputs; opciones vivas para selects).
+        # El Excel siempre gana; nunca pisa lo que el usuario ya cargó a mano.
+        try:
+            self._sembrar_valores_campos_detectados()
+        except Exception as _seed_err:
+            print(f"Autovalores: error no crítico — {_seed_err}")
+
         # Formularios "2.0" (Adobe AEM Adaptive Form): IDs con panel volátil → se
         # llena por keyword semántico del id/label en vez de ID fijo del mapping.
         self._is_aem = self._is_aem_adaptive_form()
@@ -4139,6 +4147,7 @@ class BaseFormFiller:
                             "type": c["type"],
                             "required": c["required"],
                             "label": c.get("name", c["id"]),
+                            "origen": "runtime_discovery",
                         }
                         for c in campos_realmente_nuevos
                     ],
@@ -4150,6 +4159,49 @@ class BaseFormFiller:
                 print(f"Reporte de campos nuevos guardado: {os.path.basename(reporte_path)}")
         except Exception as e:
             print(f"No se pudo escribir reporte de campos nuevos: {e}")
+
+    def _sembrar_valores_campos_detectados(self):
+        """Genera valores de prueba para los campos recién auto-descubiertos y los
+        persiste en json/ids_dinamicos.json (scopeados al país). Para selects toma
+        opciones reales del DOM; para inputs, el regex_full de la regla de validación.
+        El Excel siempre tiene prioridad y nunca se pisa un valor cargado a mano."""
+        campos = list(getattr(self, "_campos_nuevos_detectados", []) or [])
+        pais = str(self.config.get("pais") or "").strip()
+        if not campos or not pais:
+            return
+
+        payload = []
+        for campo in campos:
+            fid = str(campo.get("id") or "").strip()
+            if not fid:
+                continue
+            tipo = str(campo.get("type") or "").strip().lower()
+            item = {
+                "id": fid,
+                "type": tipo,
+                "label": campo.get("name") or fid,
+                "valor_excel": self._excel_value_for_field_id(fid) or None,
+            }
+            if tipo == "select":
+                item["opciones"] = []
+                try:
+                    encontrados = (self.driver.find_elements(By.ID, fid)
+                                   or self.driver.find_elements(By.NAME, fid))
+                    if encontrados:
+                        item["opciones"] = [
+                            (o.text or "").strip()
+                            for o in self._get_valid_select_options(encontrados[0])
+                        ]
+                except Exception:
+                    pass
+            payload.append(item)
+
+        from utils.autovalores_campos_detectados import AutovaloresCamposDetectados
+
+        sembrados = AutovaloresCamposDetectados(pais).sembrar(payload)
+        if sembrados:
+            print(f"Autovalores: sembrados {len(sembrados)} campo(s) en IDs dinámicos "
+                  f"({pais}): {', '.join(sembrados)}")
 
     def _get_mapped_select_ids(self, field_mapping=None):
         """Obtiene IDs de campos que tienen un valor de datos asignado (data_index o data_key).
@@ -5007,6 +5059,27 @@ class BaseFormFiller:
         except Exception:
             return False
 
+    @staticmethod
+    def _decidir_marca_checkbox(*, is_known, is_required, pref, tiene_identificador):
+        """Qué hacer con un checkbox, en orden de prioridad (sin tocar el driver — testeable
+        sin navegador). `pref` es la preferencia explícita SI/NO (True/False) leída del Excel
+        o de IDs únicos por id o name (alguno de los dos siempre existe en un campo real);
+        None = nadie la pidió.
+
+        1) Excel/IDs únicos manda siempre, sea cual sea el estado del checkbox.
+        2) Sin preferencia explícita: sólo se marca si es requerido (HTML required/aria-required)
+           o es un checkbox de términos/privacidad conocido. Los opcionales se dejan como están
+           — antes se marcaba cualquier checkbox visible, lo que tildaba de más consentimientos
+           opcionales que nadie pidió.
+        """
+        if pref is False:
+            return "uncheck"
+        if pref is True:
+            return "mark"
+        if not tiene_identificador:
+            return "skip"
+        return "mark" if (is_known or is_required) else "skip"
+
     def _mark_required_checkboxes(self):
         known_names = {
             "terms",
@@ -5046,32 +5119,37 @@ class BaseFormFiller:
                 name_attr = (checkbox.get_attribute("name") or "").strip()
                 lower_name = name_attr.lower()
                 checkbox_id = (checkbox.get_attribute("id") or "").strip()
-                required_attr = checkbox.get_attribute("required")
+                is_html_required = bool(checkbox.get_attribute("required"))
+                is_aria_required = (checkbox.get_attribute("aria-required") or "").strip().lower() == "true"
                 data_dtm = (checkbox.get_attribute("data-dtm") or "").strip()
                 value_attr = (checkbox.get_attribute("value") or "").strip()
 
                 is_known = lower_name in known_names
-                is_html_required = bool(required_attr)
 
                 # El Excel manda: una columna con el name/id del checkbox y valor SI/NO
                 pref = self._checkbox_pref_for(lower_name, checkbox_id)
-                if pref is False:
+                accion = self._decidir_marca_checkbox(
+                    is_known=is_known,
+                    is_required=is_html_required or is_aria_required,
+                    pref=pref,
+                    tiene_identificador=bool(lower_name or checkbox_id),
+                )
+                if accion == "uncheck":
                     self._uncheck_checkbox(checkbox_id, name_attr)
                     print(f"  ⊘ {name_attr or checkbox_id} desmarcado (Excel = NO)")
                     continue
+                if accion == "skip":
+                    continue
 
-                if not is_known and not is_html_required and pref is not True:
-                    # No es términos ni required HTML — incluir solo si en DOM con layout + no marcado
-                    # Usamos _checkbox_in_dom en vez de is_displayed() para no excluir inputs con opacity:0
-                    try:
-                        if not self._checkbox_in_dom(checkbox) or not checkbox.is_enabled():
-                            continue
-                        if checkbox.is_selected():
-                            continue
-                    except StaleElementReferenceException:
+                # accion == "mark": sólo si sigue en el DOM (con layout, opacity:0 incluido),
+                # habilitado y no marcado todavía.
+                try:
+                    if not self._checkbox_in_dom(checkbox) or not checkbox.is_enabled():
                         continue
-                elif not lower_name and not is_html_required and pref is not True:
-                    continue  # sin nombre y sin required: saltar (comportamiento original)
+                    if checkbox.is_selected():
+                        continue
+                except StaleElementReferenceException:
+                    continue
 
                 priority = priority_map.get(lower_name, 0)
                 display = name_attr or checkbox_id or data_dtm or "checkbox"

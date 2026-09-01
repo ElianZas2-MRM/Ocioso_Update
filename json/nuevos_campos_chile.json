@@ -1,6 +1,6 @@
 {
   "pais": "Chile",
-  "ultima_deteccion": "2026-06-30T11:32:29",
+  "ultima_deteccion": "2026-09-01T01:37:35",
   "campos_nuevos": [
     {
       "id": "comment",
@@ -19,6 +19,300 @@
       "type": "text",
       "required": false,
       "label": " "
+    },
+    {
+      "id": "APELLIDO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 50 caracteres. Solo se debe permitir letras, la \"ñ\" y espacios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "RUT",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Posee un algoritmo, no permitir que se ingresen todos los dígitos iguales.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "N° DE DOCUMENTO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Depende del campo \"Tipo de Documento\". Requiere en cada caso:",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CELULAR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hastar 9 caracteres númericos. No permite símbolos especiales. No acepta unificado. No puede comenzar con 0.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PATENTE",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Debe permitir 6 dígitos alfanuméricos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "EDAD",
+      "type": "Rellenable",
+      "required": true,
+      "label": "2 caracteres numéricos máximo. Debe permitir del 18 al 99.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "AÑO MODELO DE SU VEHÍCULO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 4 caracteres numéricos. No debe permitir caracteres especiales. El año mínimo es 1925.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "VERSIÓN",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 30 caracteres alfanuméricos. No debe permitir carácteres especiales.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "COLOR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 30 caracteres alfabéticos. No debe permitir carácteres especiales.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TU INSTAGRAM",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 30 caracteres alfanuméricos. El campo ya tiene la “@” añadida en copy. Permite “_”. No permite espacios ni otros caracteres especiales.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁLES SON TUS PASATIEMPOS?",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Dropdown con múltiples opciones seleccionables.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TIPO DE DOCUMENTO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega tres opciones: RUR Jurídico, RUT Natural y Pasaporte. Está ligado al campo \"N° de Documento\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MODELOS",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los vehículos elegidos para el form.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CIUDAD",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las ciudades del form. Depende del campo Región. Tiene anclado el campo Concesionarios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CONCESIONARIO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los concesionarios elegidos para el form. Depende de los campos: Región y Ciudad.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA ESTIMADA DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TIPO DE EMPRESA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Muestra 12 opciones de tipo de empresa para que el cliente escoja. No es un seleccionador múltiple.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TAMAÑO DE LA FLOTA ACTUAL",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Muestra 3 opciones de cantidad de días.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "REQUERIMIENTO DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KILOMETRAJE ESTIMADO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega opciones a partir de 5 mil km a 50 mil km.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OCUPACIÓN",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega diferentes profesiones.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "GÉNERO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega varios tipos de género.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "NORMATIVA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega dos opciones: EURO V y EURO VI. Está enlazado al campo Modelos. Dependiendo de la opción elegida, muestra cierto grupo de modelos. No podemos reemplazar el grupo de modelos porque sino afectamos el funcionamiento del campo.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "EVENTO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega eventos agregados directamente desde DEV.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "PREFERENCIA DE CONTACTO",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra tres opciones: E-mail; Llamada telefónica; WhatsApp. Se puede seleccionar más de una opción.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MARCA AQUÍ SI NECESITAS FINANCIAMIENTO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Funciona sólo para seleccionar la opción.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MARCA AQUÍ SI OFRECERÁS TU AUTO USADO COMO PARTE DE PAGO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Funciona sólo para seleccionar la opción.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SELECCIONE UNA OPCIÓN",
+      "type": "Checkbox",
+      "required": false,
+      "label": "No tiene título. Cuenta con dos opciones: \"Quiero información\" y \"Quiero comprar\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUENTA CON UN CHEVROLET?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES HACER UN TEST DRIVE?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES COTIZAR LA BATERÍA?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra sólo la opción \"Sí\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿QUIERES COTIZAR LAS LLANTAS?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Muestra sólo la opción \"Sí\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ERES EMPRENDEDOR?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO)?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "COMENTARIOS",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 120 caracteres. Permite letras, la \"ñ\", números, caracteres especiales y espacios. Debe llegar al campo comentarios del cliente en Salesforce.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "ME GUSTARÍA RECIBIR INFORMACIÓN DE LOS PRODUCTOS",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Copy mostrado: Me gustaría recibir información de los productos.\nDebe llegar al campo comentarios del cliente en Salesforce como \"Recibe info de Productos: Sí\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "NOMBRE DEL CAMPO",
+      "type": "TIPO DE CAMPO",
+      "required": false,
+      "label": "Ingrese validaciones y/o condiciones",
+      "origen": "crm_excel_import"
     }
   ]
 }

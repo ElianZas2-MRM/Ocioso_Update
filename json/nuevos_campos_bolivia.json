@@ -1,12 +1,89 @@
 {
   "pais": "Bolivia",
-  "ultima_deteccion": "2026-08-15T02:55:42",
+  "ultima_deteccion": "2026-09-01T01:37:35",
   "campos_nuevos": [
     {
       "id": "payment-method",
       "type": "select",
       "required": true,
       "label": "payment-method"
+    },
+    {
+      "id": "NOMBRE",
+      "type": "Rellenable",
+      "required": true,
+      "label": "De 2 a 50 caracteres. Permite sólo letras, espacios, la \"ñ\" y tildes.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "APELLIDO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "De 2 a 50 caracteres. Permite sólo letras, espacios, la \"ñ\" y tildes.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CÉDULA",
+      "type": "Rellenable",
+      "required": true,
+      "label": "De 5 a 12 dígitos. Permite sólo números. Tiene un copy debajo del campo que dice \"Ingresa tu número de cédula sin guiones\". Debe abrir el teclado numérico.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CELULAR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Permite 8 dígitos. Debe empezar siempre con 6 o 7. No acepta unicodigo",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MODELOS",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega todos los modelos asignados al formulario.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DEPARTAMENTO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega todas las regiones o provincias asignadas al formulario. Tiene anclados los campos \"Ciudad\" y \"Distribuidor\". Este debe completarse en primer lugar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CIUDAD",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega todas las ciudades asignadas al formulario. Está anclado al campo \"Departamento\". A su vez, una vez completado, desbloquea el campo \"Distribuidor\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA ESTIMADA DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Se muestran los meses de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MÉTODO DE PAGO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las opciones \"Al contado\" y \"Financiado\". Impacta en el campo comentario de Salesforce. Es obligatorio.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TÉRMINOS Y CONDICIONES",
+      "type": "T&C",
+      "required": true,
+      "label": "Es el checkbox que está por default en todos los formularios.",
+      "origen": "crm_excel_import"
     }
   ]
 }

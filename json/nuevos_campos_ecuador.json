@@ -1,0 +1,258 @@
+{
+  "pais": "Ecuador",
+  "ultima_deteccion": "2026-09-01T01:37:35",
+  "campos_nuevos": [
+    {
+      "id": "NOMBRE",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "APELLIDO",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CELULAR",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 10 dígitos. Debe comenzar con 09. Sólo se permiten números. No acepta unicodigo",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "E-MAIL",
+      "type": "Rellenable",
+      "required": true,
+      "label": "No hay límite de caracteres. Para que se admita, debe llevar un @.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TU INSTAGRAM",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 30 caracteres. Debe comenzar con @.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CÓDIGO GMIN: *",
+      "type": "Rellenable",
+      "required": true,
+      "label": "Hasta 10 dígitos. Permite sólo números.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MODELOS",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los modelos asignados al formulario.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CIUDAD",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las ciudades aplicadas al form. Tiene anclado el campo \"Concesionario\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CONCESIONARIO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega los concesionarios aplicados al form. Primero debe completarse el campo \"Ciudad\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA ESTIMADA DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "AÑO DE COMPRA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Muestra diferentes años.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "FECHA DE NACIMIENTO",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega un calendario seleccionable. Tiene un copy debajo que dice \"Completar AAAA/MM/DD. Debe ser mayor de 18 años\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MARCA",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega diferentes marcas.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "OCUPACIÓN",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega diferentes profesiones.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "KILOMETRAJE ESTIMADO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega kilometrajes entre 5 mil km y 50 mil km.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "TU AUTO ES",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Sólo muestra opciones de \"0 km\" y \"Seminuevo\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿TIENE OTRO VEHÍCULO?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Sólo despliega opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿TIENES PENSADO CAMBIAR DE AUTO?",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega opciones de deseo de compra.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SI TIENE OTRO VEHÍCULO, INDIQUE LA MARCA",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega diferentes marcas.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SI HOY PUDIERAS COMPRAR UN CHEVROLET, ¿CUÁL SERÍA?",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega opciones de vehículos.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Sólo despliega opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ES SU PRIMER AUTO?",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Sólo despliega opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "CLASE",
+      "type": "Dropdown",
+      "required": true,
+      "label": "Despliega diferentes clases, agregadas directamente por DEV. Tiene un copy debajo que dice \"Los cupos son limitados y están sujetos a disponibilidad.\"",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "MARCA AQUÍ SI NECESITAS FINANCIAMIENTO.",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Llega al campo comentario el mismo copy.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "DESEO RECIBIR COMUNICACIONES COMERCIALES Y PROMOCIONES DE CHEVROLET",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Llega al campo comentario el mismo copy. Se posiciona arriba del checkbox de Términos y Condiciones.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "SOY EMPLEADO GM",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Llega al campo comentario el mismo copy.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "QUIERO COTIZAR LA BATERÍA",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Llega al campo comentario el mismo copy.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "QUIERO COTIZAR LAS LLANTAS",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Llega al campo comentario el mismo copy.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "QUIERO COTIZAR MI PLAN DE MANTENIMIENTO",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Llega al campo comentario el mismo copy. El título es el mismo.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿CUENTA CON UN CHEVROLET?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Sólo muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿TIENES AUTO?",
+      "type": "Checkbox",
+      "required": false,
+      "label": "Sólo muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿YA ERES CLIENTE CHEVROLET?",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Sólo muestra opciones de \"Sí\" y \"No\".",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "type": "Checkbox",
+      "required": true,
+      "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "origen": "crm_excel_import"
+    },
+    {
+      "id": "EVENTO",
+      "type": "Dropdown",
+      "required": false,
+      "label": "Despliega eventos del mes. El dropdown se actualiza muy seguido.",
+      "origen": "crm_excel_import"
+    }
+  ]
+}
