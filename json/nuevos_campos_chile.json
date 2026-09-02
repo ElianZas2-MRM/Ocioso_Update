@@ -1,6 +1,6 @@
 {
   "pais": "Chile",
-  "ultima_deteccion": "2026-09-01T01:37:35",
+  "ultima_deteccion": "2026-09-02T10:10:12",
   "campos_nuevos": [
     {
       "id": "comment",
@@ -313,6 +313,41 @@
       "required": false,
       "label": "Ingrese validaciones y/o condiciones",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "document-type",
+      "type": "select",
+      "required": true,
+      "label": "document-type",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "document",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "telephone_prefix",
+      "type": "text",
+      "required": false,
+      "label": "telephone_prefix",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "normative",
+      "type": "select",
+      "required": false,
+      "label": "normative",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "versions",
+      "type": "select",
+      "required": false,
+      "label": "versions",
+      "origen": "runtime_discovery"
     }
   ]
 }

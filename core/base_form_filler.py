@@ -246,6 +246,7 @@ class BaseFormFiller:
         self._t_step_change = float(_global_timeouts.get('step_change', 5.0))
         # Registro por fila de IDs de campos seleccionados (enfocado en dropdowns)
         self.current_row_field_values = {}
+        self._dropdowns_sin_elegir = []
         # Campos nuevos detectados durante la ejecución actual
         self._campos_nuevos_detectados = []
         # Callback para solicitar valores manuales (se inyecta desde la UI)
@@ -317,6 +318,11 @@ class BaseFormFiller:
     def begin_row_tracking(self):
         """Resetea el tracking de IDs/valores para la fila actual."""
         self.current_row_field_values = {}
+        # El set de ids propios se arma leyendo disco: se cachea por fila, no por llamada.
+        self._ids_propios_cache = None
+        # Dropdowns que quedaron en su placeholder: se reportan aparte para que no pasen
+        # como "completados" en el Excel de resultado.
+        self._dropdowns_sin_elegir = []
         self._campos_sin_mapeo_exitoso = []
         self._campos_dropdown_no_encontrados = []
         self._campos_sin_valor_asignado = []
@@ -604,21 +610,40 @@ class BaseFormFiller:
             real_value = self._entry_value(entry)
             if not real_value:
                 continue
+            # Un dropdown que quedó en su placeholder ("Seleccionar", "Selecione",
+            # "Escolha"…) NO está elegido: registrarlo como valor hacía que el Excel de
+            # resultado dijera `models = Seleccionar`, que es exactamente lo contrario de
+            # lo que pasó. Se deja constancia del campo sin elegir y se sigue.
+            if entry.get("tag") == "select" and self._is_placeholder_text(real_value):
+                self.current_row_field_values.pop(key, None)
+                if raw_id not in self._dropdowns_sin_elegir:
+                    self._dropdowns_sin_elegir.append(raw_id)
+                print(f"⚠ {raw_id}: el dropdown quedó en '{real_value}' (placeholder), "
+                      f"no se eligió ninguna opción")
+                continue
             old_value = str(self.current_row_field_values.get(key, "")).strip()
             if self._normalize_text(old_value) != self._normalize_text(real_value):
                 self.current_row_field_values[key] = real_value
                 print(f"🔄 {raw_id}: el form quedó con '{real_value}' (trackeado era "
                       f"'{old_value}') — se registra el valor real")
 
-        # Campos con valor que nadie trackeó (randoms de selects no mapeados, etc.)
+        # Campos con valor que nadie trackeó (randoms de selects no mapeados, autovalores
+        # de campos auto-descubiertos, etc.). Todo lo que viaja en el lead tiene que quedar
+        # registrado en el Excel de resultado como evidencia, esté o no en el de entrada.
+        ids_propios = self._ids_llenados_por_la_herramienta()
         for key, entry in snap.items():
             eid = entry.get("realId") or entry.get("name") or ""
             if not eid or eid != key or eid in covered or eid in tracked_ids:
                 continue
-            # Solo selects: un input de texto sin trackear suele ser ruido de la landing
-            # (buscador, newsletter); un select con valor sí es una elección que viaja.
-            if entry.get("tag") != "select":
-                continue
+            # Un select con valor siempre es una elección que viaja. Un input de texto se
+            # registra sólo si es un campo que esta herramienta llenó — auto-descubierto o
+            # con valor en IDs dinámicos: el snapshot barre TODA la página, así que un input
+            # suelto de la landing (buscador, newsletter) no es parte del lead y sólo
+            # ensuciaría el Excel con una columna por corrida.
+            es_select = entry.get("tag") == "select"
+            if not es_select:
+                if eid not in ids_propios or not entry.get("visible"):
+                    continue
             value = self._entry_value(entry)
             if not value or self._is_placeholder_text(value):
                 continue
@@ -657,6 +682,11 @@ class BaseFormFiller:
                 continue
             mismatches.append(f"{fname}: pedido '{expected}' → quedó '{real_value}'")
 
+        # Un dropdown sin elegir es un dato que el lead NO llevó: va al mismo reporte que
+        # los valores distintos a los pedidos, para que no quede como una corrida limpia.
+        for fid in self._dropdowns_sin_elegir:
+            mismatches.append(f"{fid}: quedó sin elegir (placeholder)")
+
         if mismatches:
             self._datos_vs_excel = " ; ".join(mismatches)
             self._datos_mismatch = True
@@ -664,6 +694,47 @@ class BaseFormFiller:
         else:
             self._datos_vs_excel = "OK"
             self._datos_mismatch = False
+
+    def _ids_llenados_por_la_herramienta(self):
+        """Ids que esta herramienta llena aunque no estén en el mapping del país.
+
+        Tres fuentes: los campos que el auto-discovery encontró en esta corrida, los que
+        quedaron registrados en corridas anteriores (json/nuevos_campos_<pais>.json) y los
+        que tienen valor en IDs dinámicos. Se usa para decidir qué input de texto merece
+        quedar registrado como evidencia en el Excel de resultado.
+
+        El histórico hace falta: el auto-discovery sólo reporta lo que todavía no conocía,
+        así que a la segunda corrida `_campos_nuevos_detectados` viene vacío y sin esto la
+        evidencia se perdería justo en los formularios que ya se corrieron antes.
+        """
+        if getattr(self, "_ids_propios_cache", None) is not None:
+            return self._ids_propios_cache
+
+        ids = set()
+        for campo in getattr(self, "_campos_nuevos_detectados", []) or []:
+            fid = str((campo or {}).get("id") or "").strip()
+            if fid:
+                ids.add(fid)
+
+        pais = str(self.config.get("pais") or "").strip().lower().replace(" ", "_")
+        if pais:
+            ruta = os.path.join(self.BASE_DIR, "json", f"nuevos_campos_{pais}.json")
+            try:
+                with open(ruta, "r", encoding="utf-8") as fh:
+                    for campo in (json.load(fh) or {}).get("campos_nuevos", []):
+                        fid = str((campo or {}).get("id") or "").strip()
+                        if fid:
+                            ids.add(fid)
+            except Exception:
+                pass
+
+        try:
+            ids.update(self._cargar_ids_dinamicos().keys())
+        except Exception:
+            pass
+
+        self._ids_propios_cache = ids
+        return ids
 
     def _get_selected_text_for_select(self, select_element):
         """Obtiene el texto seleccionado actual de un select simple."""
@@ -1951,6 +2022,11 @@ class BaseFormFiller:
                                 "arguments[0].dispatchEvent(new Event('change',{bubbles:true}));",
                                 el, value
                             )
+                        # Estos IDs no están en el mapping del país, así que sin registrarlos
+                        # acá no llegan al Excel de resultado: el lead viajaba con domicilio,
+                        # monto y detalle del reclamo sin que quedara constancia de qué se
+                        # envió. Todo campo que la herramienta llena es evidencia.
+                        self._record_field_value(field_id, value)
                         print(f"  ✓ libro-reclamaciones: '{field_id}' = '{value}'")
                         return True
             except Exception as e:
@@ -2125,6 +2201,11 @@ class BaseFormFiller:
                 print("⚠️ [DEBUG] Llenado parcial activo: deteniendo tras primer paso.")
                 break
 
+            # Antes de dejar atrás el paso: un dropdown que quedó en su placeholder no está
+            # elegido. En un form multi-paso el paso anterior puede desaparecer del DOM, así
+            # que si no se mira acá el chequeo del submit final ya no lo alcanza.
+            self._registrar_dropdowns_en_placeholder()
+
             if not self._has_next_button():
                 break
 
@@ -2210,6 +2291,45 @@ class BaseFormFiller:
         )
 
         return any(keyword in normalized for keyword in placeholder_keywords)
+
+    def _registrar_dropdowns_en_placeholder(self):
+        """Anota los <select> visibles que siguen en su placeholder ("Seleccionar",
+        "Selecione", "Escolha"…). Devuelve la lista de ids anotados en esta pasada.
+
+        Se llama al cerrar cada paso de un form multi-paso: al avanzar, el paso anterior
+        puede salir del DOM y entonces el chequeo previo al submit ya no lo ve.
+        """
+        try:
+            selects = self.driver.execute_script("""
+                var out = [];
+                document.querySelectorAll('select').forEach(function(s){
+                    if (!s.getClientRects().length) return;
+                    var id = s.id || s.getAttribute('name') || '';
+                    if (!id) return;
+                    var o = s.selectedIndex >= 0 ? s.options[s.selectedIndex] : null;
+                    out.push({id: id, texto: o ? (o.text || '').trim() : ''});
+                });
+                return out;
+            """) or []
+        except Exception:
+            return []
+
+        nuevos = []
+        for s in selects:
+            fid, texto = s.get("id", ""), s.get("texto", "")
+            if not fid or not self._is_placeholder_text(texto):
+                continue
+            if fid not in self._dropdowns_sin_elegir:
+                self._dropdowns_sin_elegir.append(fid)
+                nuevos.append(fid)
+            # No puede quedar registrado como si fuera un valor elegido.
+            for clave in [k for k in self.current_row_field_values
+                          if k.split("::", 1)[-1] == fid]:
+                self.current_row_field_values.pop(clave, None)
+        if nuevos:
+            print(f"⚠ Dropdowns sin elegir en el paso {getattr(self, '_current_step', 1)}: "
+                  f"{', '.join(nuevos)}")
+        return nuevos
 
     def _select_has_valid_selected_option(self, select_id):
         """Indica si un select ya tiene una opción elegida que no parece placeholder."""
@@ -4163,8 +4283,10 @@ class BaseFormFiller:
     def _sembrar_valores_campos_detectados(self):
         """Genera valores de prueba para los campos recién auto-descubiertos y los
         persiste en json/ids_dinamicos.json (scopeados al país). Para selects toma
-        opciones reales del DOM; para inputs, el regex_full de la regla de validación.
-        El Excel siempre tiene prioridad y nunca se pisa un valor cargado a mano."""
+        opciones reales del DOM; para inputs, el regex_full de la regla de validación (y
+        si no hay, la forma inferida del nombre del campo). El Excel siempre tiene
+        prioridad; un valor ya cargado se respeta salvo que no cumpla su propia validación
+        en este mercado, en cuyo caso se reemplaza y se avisa por consola."""
         campos = list(getattr(self, "_campos_nuevos_detectados", []) or [])
         pais = str(self.config.get("pais") or "").strip()
         if not campos or not pais:
@@ -4198,10 +4320,13 @@ class BaseFormFiller:
 
         from utils.autovalores_campos_detectados import AutovaloresCamposDetectados
 
-        sembrados = AutovaloresCamposDetectados(pais).sembrar(payload)
+        sembrados, corregidos = AutovaloresCamposDetectados(pais).sembrar(payload)
         if sembrados:
             print(f"Autovalores: sembrados {len(sembrados)} campo(s) en IDs dinámicos "
                   f"({pais}): {', '.join(sembrados)}")
+        for fid, valores in corregidos.items():
+            print(f"Autovalores: '{fid}' tenía un valor que no cumple su validación en "
+                  f"{pais} → reemplazado por {valores[0]} (el anterior queda en valor_previo)")
 
     def _get_mapped_select_ids(self, field_mapping=None):
         """Obtiene IDs de campos que tienen un valor de datos asignado (data_index o data_key).
@@ -4662,7 +4787,11 @@ class BaseFormFiller:
         # Manejo especial: kits[] es un select múltiple Bootstrap Select
         # El <select> real está oculto (display:none), hay que interactuar con el botón del widget
         try:
-            kits_elements = self.driver.find_elements(By.ID, "kits[]")
+            # By.ID se traduce a "#kits[]" y los corchetes son sintaxis de selector de
+            # atributo: reventaba con InvalidSelectorException en TODAS las corridas, antes
+            # de mirar siquiera si el campo existe. Por XPath el id se pasa como literal.
+            kits_elements = self.driver.find_elements(
+                By.XPATH, '//*[@id="kits[]" or @name="kits[]"]')
             if kits_elements:
                 kits_el = kits_elements[0]
                 # NO chequeamos is_displayed() porque Bootstrap Select oculta el <select> real
@@ -5803,6 +5932,17 @@ class BaseFormFiller:
                 try:
                     d.find_element(By.CSS_SELECTOR, "div.rp-wrapper")
                     return True
+                except Exception:
+                    pass
+                # Libro de Reclamaciones de Perú (form-reclamos): su confirmación no es un
+                # div#thank-you sino un div propio que REEMPLAZA al formulario, con el número
+                # correlativo del reclamo y un CTA para descargarlo. El lead se enviaba bien
+                # pero, al no reconocer esta TY, se reportaba como "sin confirmación TY Page"
+                # y se reintentaba al pepe, generando un segundo reclamo por cada corrida.
+                try:
+                    el = d.find_element(By.CSS_SELECTOR, "div.reclamos-typ")
+                    if el.is_displayed():
+                        return True
                 except Exception:
                     pass
                 # Forms 2.0 (URL con /tools/forms): la TY NO es div#thank-you sino un
