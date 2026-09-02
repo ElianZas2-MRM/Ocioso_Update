@@ -1,11 +1,12 @@
 {
   "pais": "Peru",
-  "fecha_importacion": "2026-09-01T01:40:35.955058",
+  "fecha_importacion": "2026-09-01T18:46:00.495484",
   "hoja_excel": "Peru",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 18,
-    "ok": 28
+    "incompletos": 15,
+    "conflictos": 2,
+    "ok": 29
   },
   "faltantes": [],
   "incompletos": [
@@ -16,32 +17,8 @@
       "descripcion": "Está anclado al campo \"Tipo de Documento\". Sus validaciones cambian dependiendo del documento seleccionado.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CELULAR",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9 . No acepta unicodigo",
-      "mensajes_error": [
-        "Ingresa tu celular.",
-        "Completa 9 números comenzando con el 9",
-        "El celular ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "TELÉFONO",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9. No permite  unicódigo ni símbolos especiales.",
-      "mensajes_error": [
-        "Ingresa tu celular.",
-        "Completa 9 números.",
-        "El celular ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -54,6 +31,8 @@
         "El email ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -66,17 +45,8 @@
         "El email ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "PATENTE",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Hasta 15 caracteres alfanuméricos.",
-      "mensajes_error": [
-        "Ingresa la placa de tu vehículo."
-      ],
-      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -88,6 +58,8 @@
         "Seleccina un tipo de documento."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -99,6 +71,8 @@
         "Seleccione una ciudad."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -110,6 +84,8 @@
         "Selecciona un concesionario."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -119,6 +95,8 @@
       "descripcion": "Muestra la fecha de hoy. Es obligatorio por default.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -130,6 +108,8 @@
         "Selecciona la fecha estimada de compra."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -141,6 +121,8 @@
         "Selecciona un tipo de compra."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -152,6 +134,8 @@
         "Selecciona un evento."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -163,6 +147,8 @@
         "Selecciona una opción."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -174,6 +160,8 @@
         "Selecciona una opción."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -183,6 +171,8 @@
       "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -194,6 +184,8 @@
         "Seleccione el checkbox."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -205,10 +197,12 @@
         "Por favor ingrese sus comentarios."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{1,120}$",
+      "motivo_derivacion": "Form ACDelco. Tiene un maximo de 120 caracteres alfanuméricos.",
       "tiene_regex": false
     }
   ],
-  "ok": [
+  "conflictos": [
     {
       "nombre_campo": "NOMBRES",
       "tipo": "Rellenable",
@@ -218,7 +212,12 @@
         "Ingresa tu nombre."
       ],
       "ultimo_ajuste": "2026-08-24",
-      "tiene_regex": true
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "motivo_derivacion": "Hasta 50 caracteres alfabeticos. Ya con ingresar uno funciona.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
     },
     {
       "nombre_campo": "APELLIDOS",
@@ -229,6 +228,56 @@
         "Ingresa tu apellido."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "motivo_derivacion": "Hasta 50 caracteres alfabeticos. Ya con ingresar uno funciona.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    }
+  ],
+  "ok": [
+    {
+      "nombre_campo": "CELULAR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9 . No acepta unicodigo",
+      "mensajes_error": [
+        "Ingresa tu celular.",
+        "Completa 9 números comenzando con el 9",
+        "El celular ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^(?=(?:9))[0-9]{9}$",
+      "motivo_derivacion": "Completa 9 números comenzando con el 9",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "TELÉFONO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 9 caracteres numéricos. Tiene que comenzar con 9. No permite  unicódigo ni símbolos especiales.",
+      "mensajes_error": [
+        "Ingresa tu celular.",
+        "Completa 9 números.",
+        "El celular ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^(?=(?:9))[0-9]{9}$",
+      "motivo_derivacion": "Completa 9 números.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "PATENTE",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 15 caracteres alfanuméricos.",
+      "mensajes_error": [
+        "Ingresa la placa de tu vehículo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{1,15}$",
+      "motivo_derivacion": "Hasta 15 caracteres alfanuméricos.",
       "tiene_regex": true
     },
     {
@@ -241,6 +290,8 @@
         "Ingresa 17 dígitos."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{17}$",
+      "motivo_derivacion": "Ingresa 17 dígitos.",
       "tiene_regex": true
     },
     {
@@ -250,6 +301,8 @@
       "descripcion": "Despliega las opciones de vehículos asignadas al form.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -259,6 +312,8 @@
       "descripcion": "Despliega opciones desde 5 mil km hasta 50 mil km.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -268,6 +323,8 @@
       "descripcion": "Despliega diferentes profesiones.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -277,6 +334,8 @@
       "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -286,6 +345,8 @@
       "descripcion": "Muestra sólo la opción \"Sí\". Llega al campo comentario en Salesfore.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -295,6 +356,8 @@
       "descripcion": "Muestra sólo la opción \"Sí\". Llega al campo comentario en Salesfore.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -304,6 +367,8 @@
       "descripcion": "Muestra opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -313,6 +378,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -324,7 +391,9 @@
         "Ingresa tu nombre."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,100}$",
+      "motivo_derivacion": "Hasta 100 caracteres alfabeticos. El campo tiene un tamaño extenso.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "DOCUMENTO DE IDENTIDAD, RUC O PASAPORTE",
@@ -337,7 +406,9 @@
         "Ingresa máximo 12 caracteres."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{8,12}$",
+      "motivo_derivacion": "Ingresa al menos 8 caracteres.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "DOMICILIO",
@@ -348,7 +419,9 @@
         "Ingresa tu domicilio."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,100}$",
+      "motivo_derivacion": "Hasta 100 caracteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "RECLAMO / QUEJA / PEDIDO",
@@ -360,7 +433,9 @@
         "Ingresa el detalle de la queja."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,2000}$",
+      "motivo_derivacion": "Hasta 2000 caractéres alfanuméricos. Al seleccionar \"Reclamo\" o \"Queja\", se despliegan nuevos campos rellenables que requieren al menos un caracter alfanumérico. El campo tiene un tamaño extenso.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "DETALLE DEL RECLAMO / QUEJA / PEDIDO",
@@ -369,7 +444,9 @@
       "descripcion": "Hasta 2000 caractéres alfanuméricos. El campo tiene un tamaño extenso.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,2000}$",
+      "motivo_derivacion": "Hasta 2000 caractéres alfanuméricos. El campo tiene un tamaño extenso.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "MONTO DEL RECLAMO/QUEJA",
@@ -380,7 +457,9 @@
         "Ingresa el monto a reclamar."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{1,9}$",
+      "motivo_derivacion": "Hasta 9 caraceteres numéricos. El campo tiene un tamaño extenso.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "TELÉFONO DEL TELEFONO",
@@ -393,7 +472,9 @@
         "El celular ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^(?=(?:9))[0-9]{9}$",
+      "motivo_derivacion": "Completa 9 números.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CORREO ELECTRÓNICO DEL RESPONSABLE",
@@ -405,6 +486,8 @@
         "El email ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -416,7 +499,9 @@
         "Ingresa tu domicilio."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,100}$",
+      "motivo_derivacion": "Hasta 100 caracteres alfanuméricos. El campo tiene un tamaño extenso.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "VIN",
@@ -428,6 +513,8 @@
         "Ingresa 17 dígitos."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{17}$",
+      "motivo_derivacion": "Ingresa 17 dígitos.",
       "tiene_regex": true
     },
     {
@@ -439,6 +526,8 @@
         "Ingresa tu el nombre de tu Padre o Madre."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -451,7 +540,9 @@
         "Ingresa 17 dígitos."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{17}$",
+      "motivo_derivacion": "Ingresa 17 dígitos.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "BIEN CONTRATADO",
@@ -460,6 +551,8 @@
       "descripcion": "Muestra sólo dos opciones: \"Producto\" o \"Servicio\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -471,6 +564,8 @@
         "Seleccione una ciudad."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -482,6 +577,8 @@
         "Selecciona un concesionario."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -493,6 +590,8 @@
         "Seleccione una ciudad."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -504,6 +603,8 @@
         "Selecciona un concesionario."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ]

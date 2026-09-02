@@ -1,86 +1,15 @@
 {
   "pais": "Brasil",
-  "fecha_importacion": "2026-09-01T01:40:07.976453",
+  "fecha_importacion": "2026-09-01T18:45:35.743046",
   "hoja_excel": "Brasil",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 11,
-    "ok": 24
+    "incompletos": 2,
+    "conflictos": 0,
+    "ok": 33
   },
   "faltantes": [],
   "incompletos": [
-    {
-      "nombre_campo": "NOME",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Máximo 20 caracteres alfabético",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "SOBRENOME",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Máximo 30 caracteres alfabético.",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CEP",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "8 caracteres numéricos",
-      "mensajes_error": [
-        "Formato inválido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CPF",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "14 caracteres numéricos (Usar el generador de CPF)",
-      "mensajes_error": [
-        "O CPF não é válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CNPJ",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "14 caracteres numéricos (Usar el generador de CNPJ)",
-      "mensajes_error": [
-        "Insira 14 dígitos.",
-        "O CNPJ não é válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CNPJ/CPF",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "minimo 11, maximo 14 caracteres numericos",
-      "mensajes_error": [
-        "Insira 11/14 dígitos."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CELULAR",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Maximo 11 caracteres numericos",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
     {
       "nombre_campo": "E-MAIL",
       "tipo": "Rellenable",
@@ -90,28 +19,8 @@
         "E-mail inválido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "ANO E MODELO DO VEÍCULO",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Maximo 50 caracteres alfanumericos",
-      "mensajes_error": [
-        "Digite o ano e modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "VIN/CHASSI",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "17 caracteres alfanumericos",
-      "mensajes_error": [
-        "Digite 17 dígitos."
-      ],
-      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -123,10 +32,112 @@
         "Descreva melhor sua opinião"
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ],
+  "conflictos": [],
   "ok": [
+    {
+      "nombre_campo": "NOME",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 20 caracteres alfabético",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,20}$",
+      "motivo_derivacion": "Máximo 20 caracteres alfabético",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "SOBRENOME",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Máximo 30 caracteres alfabético.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,30}$",
+      "motivo_derivacion": "Máximo 30 caracteres alfabético.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CEP",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "8 caracteres numéricos",
+      "mensajes_error": [
+        "Formato inválido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{8}$",
+      "motivo_derivacion": "8 caracteres numéricos",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CPF",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "14 caracteres numéricos (Usar el generador de CPF)",
+      "mensajes_error": [
+        "O CPF não é válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{14}$",
+      "motivo_derivacion": "14 caracteres numéricos (Usar el generador de CPF)",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CNPJ",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "14 caracteres numéricos (Usar el generador de CNPJ)",
+      "mensajes_error": [
+        "Insira 14 dígitos.",
+        "O CNPJ não é válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{14}$",
+      "motivo_derivacion": "Insira 14 dígitos.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CNPJ/CPF",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "minimo 11, maximo 14 caracteres numericos",
+      "mensajes_error": [
+        "Insira 11/14 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^(?:[0-9]{11}|[0-9]{14})$",
+      "motivo_derivacion": "Insira 11/14 dígitos.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CELULAR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Maximo 11 caracteres numericos",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{1,11}$",
+      "motivo_derivacion": "Maximo 11 caracteres numericos",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "ANO E MODELO DO VEÍCULO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Maximo 50 caracteres alfanumericos",
+      "mensajes_error": [
+        "Digite o ano e modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{1,50}$",
+      "motivo_derivacion": "Maximo 50 caracteres alfanumericos",
+      "tiene_regex": true
+    },
     {
       "nombre_campo": "PLACA",
       "tipo": "Rellenable",
@@ -134,7 +145,9 @@
       "descripcion": "Máximo 36 caracteres alfanumericos.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,36}$",
+      "motivo_derivacion": "Máximo 36 caracteres alfanumericos.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CÓD. CONFIRMACIÓN",
@@ -143,7 +156,22 @@
       "descripcion": "17 caracteres alfanumericos",
       "mensajes_error": [],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{17}$",
+      "motivo_derivacion": "17 caracteres alfanumericos",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "VIN/CHASSI",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "17 caracteres alfanumericos",
+      "mensajes_error": [
+        "Digite 17 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{17}$",
+      "motivo_derivacion": "Digite 17 dígitos.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "MENSAGEM",
@@ -152,7 +180,9 @@
       "descripcion": "Maximo 400 caracteres alfarnumericos",
       "mensajes_error": [],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{1,400}$",
+      "motivo_derivacion": "Maximo 400 caracteres alfarnumericos",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "DESCRIÇÃO DA NECESSIDADE",
@@ -161,7 +191,9 @@
       "descripcion": "Máximo 400 caracteres alfanumericos.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,400}$",
+      "motivo_derivacion": "Máximo 400 caracteres alfanumericos.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "ESTADO",
@@ -172,6 +204,8 @@
         "Selecione um estado."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -183,6 +217,8 @@
         "Selecione uma cidade."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -194,6 +230,8 @@
         "Selecione uma concessionária."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -205,6 +243,8 @@
         "Selecione data estimada de compra."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -216,6 +256,8 @@
         "Esse campo é obrigatório."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -225,6 +267,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -234,6 +278,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -243,6 +289,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -252,6 +300,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -261,6 +311,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -270,6 +322,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -279,6 +333,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -288,6 +344,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -297,6 +355,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -306,6 +366,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -315,6 +377,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -324,6 +388,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -333,6 +399,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": "FALTA ACTUALIZAR",
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -342,6 +410,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -351,6 +421,8 @@
       "descripcion": "",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ]

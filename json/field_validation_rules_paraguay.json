@@ -391,7 +391,7 @@
       "descripcion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -410,15 +410,15 @@
       "mensajes_error_excel": [
         "Ingresa tu nombre."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.762579"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.762579",
+      "motivo_derivacion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios."
     },
     "APELLIDO": {
       "descripcion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -437,15 +437,15 @@
       "mensajes_error_excel": [
         "Ingresa tu apellido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.762579"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.762579",
+      "motivo_derivacion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios."
     },
     "CELULAR": {
       "descripcion": "Hasta 10 dígitos numéricos. No permite ingresar el mismo dígito más de 4 veces seguidas. No acepta unicodigo. No permite caracteres especiales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{10}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -466,9 +466,9 @@
         "Completa 10 números.",
         "No puede ingresar el mismo dígito más de 4 veces seguidas."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.762579"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.762579",
+      "motivo_derivacion": "Completa 10 números."
     },
     "E-MAIL": {
       "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
@@ -610,7 +610,7 @@
       "descripcion": "Hasta 50 caracteres alfanuméricos. Admite al menos uno.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -630,9 +630,9 @@
         "Ingresa la matrícula de tu vehículo.",
         "La matrícula ingresada no parece válida."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.762579"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.762579",
+      "motivo_derivacion": "Hasta 50 caracteres alfanuméricos. Admite al menos uno."
     },
     "OCUPACIÓN": {
       "descripcion": "Despliega diferentes profesiones.",

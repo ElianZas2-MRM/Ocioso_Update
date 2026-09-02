@@ -3,10 +3,25 @@ crm_excel_importer.py — Cruza el excel externo de validaciones del CRM contra
 field_validation_rules_<pais>.json y detecta campos que el excel documenta pero que el
 JSON todavía no tiene mapeados (el gap que hoy se pierde por detección DOM incompleta).
 
-La columna de validaciones del excel es prosa libre, no regex: este módulo NUNCA
-autogenera regex ni pisa una entrada ya existente en el JSON, aunque el excel diga que
-un campo es obligatorio y el JSON no tenga ninguna regla real — eso queda marcado como
-"incompleto" para revisión manual, no se escribe solo.
+La columna de validaciones del excel es prosa libre, no regex. Este módulo la traduce vía
+`utils.regex_desde_prosa`, que sólo emite un patrón cuando la prosa alcanza para derivarlo
+con confianza y lo verifica contra el generador antes de devolverlo. Con eso:
+
+- un campo obligatorio sin regla se completa solo, en vez de quedar esperando revisión
+  manual indefinidamente;
+- un campo cuyo regex cargado contradice al mensaje de error del excel se corrige, pero
+  SÓLO en el largo, guardando el anterior en `regex_full_previo`.
+
+El mensaje de error gana sobre la descripción cuando se contradicen: es el texto literal
+que el form muestra al rechazar. Caso testigo — NÚMERO DE CONTRATO (Argentina) tenía
+`[0-9]{1,10}` por la descripción ("de 1 a 10") mientras el form exige los 10 exactos que
+anuncia su mensaje de error, y un valor de 3 dígitos se rechazaba en producción.
+
+Por qué sólo el largo en un campo que ya tiene regla: un regex escrito a mano suele saber
+cosas que el excel no menciona —que un comentario admite espacios y puntuación, que un
+nombre necesita vocal y consonante, que una cédula ecuatoriana arranca con el código de
+provincia— y regenerarlo entero desde la prosa las perdería. En un barrido sobre los nueve
+mercados, reemplazar el regex completo mejoraba 4 campos y empeoraba 10.
 """
 import datetime
 import json
@@ -16,6 +31,7 @@ import re
 import openpyxl
 
 from utils.paths import BASE_DIR, JSON_DIR
+from utils.regex_desde_prosa import ajustar_largo_desde_prosa, derivar_regex
 
 CRM_EXCEL_FILENAME = "CRM - GMSA - Validaciones Formularios (1).xlsx"
 
@@ -182,43 +198,75 @@ class CrmValidacionesImporter:
         return columnas
 
     def comparar(self, pais, reglas_json):
+        """Clasifica los campos del excel contra las reglas ya cargadas.
+
+        Cuatro categorías: `faltantes` (no están en el JSON), `incompletos` (obligatorios
+        sin regla), `conflictos` (tienen regla pero la prosa deriva otra distinta) y `ok`.
+        Todos los campos salen anotados con `regex_derivado`/`motivo_derivacion` para que
+        `aplicar_merge` no tenga que volver a parsear la prosa.
+        """
         campos_por_pais = self.parsear()
         campos_excel = campos_por_pais.get(pais, [])
         fields = (reglas_json or {}).get("fields") or {}
 
-        faltantes, incompletos, ok = [], [], []
+        faltantes, incompletos, conflictos, ok = [], [], [], []
         for campo in campos_excel:
+            regex_derivado, motivo = derivar_regex(
+                campo.get("descripcion"), campo.get("mensajes_error")
+            )
+            campo = {**campo, "regex_derivado": regex_derivado, "motivo_derivacion": motivo}
+
             entry = fields.get(campo["nombre_campo"])
             if entry is None:
                 faltantes.append(campo)
                 continue
-            tiene_regex = bool(str(entry.get("regex_full") or "").strip())
-            if tiene_regex:
+
+            regex_actual = str(entry.get("regex_full") or "").strip()
+            if regex_actual and regex_derivado and regex_derivado != regex_actual:
+                # Sólo se corrige el LARGO del regex ya cargado; el resto (lookaheads,
+                # clases, reglas que la prosa no menciona) queda intacto. `regex_ajustado`
+                # vacío = la prosa no aporta nada aplicable y el conflicto sólo se reporta.
+                ajustado, motivo_ajuste = ajustar_largo_desde_prosa(
+                    regex_actual, campo.get("descripcion"), campo.get("mensajes_error")
+                )
+                conflictos.append({**campo, "tiene_regex": True,
+                                   "regex_actual": regex_actual,
+                                   "regex_ajustado": ajustado,
+                                   "motivo_ajuste": motivo_ajuste})
+            elif regex_actual:
                 ok.append({**campo, "tiene_regex": True})
             elif campo.get("obligatorio"):
                 incompletos.append({**campo, "tiene_regex": False})
             else:
                 ok.append({**campo, "tiene_regex": False})
 
-        return {"faltantes": faltantes, "incompletos": incompletos, "ok": ok}
+        return {"faltantes": faltantes, "incompletos": incompletos,
+                "conflictos": conflictos, "ok": ok}
 
     def aplicar_merge(self, pais, comparacion, reglas_json):
+        """Devuelve `(reglas_actualizadas, cambios)`.
+
+        `cambios` es `{"agregados", "completados", "recalculados"}` — la UI lo usa para el
+        resumen. No muta `reglas_json`: trabaja sobre una copia profunda.
+        """
         import copy
         actualizado = copy.deepcopy(reglas_json or {"fields": {}})
         fields = actualizado.setdefault("fields", {})
 
-        agregados = 0
+        cambios = {"agregados": 0, "completados": 0, "recalculados": 0}
         fecha_importacion = datetime.datetime.now().isoformat()
+
         for campo in comparacion.get("faltantes", []):
             nombre = campo["nombre_campo"]
             if nombre in fields:
                 # Ya se agregó en una corrida previa de "todos los países" — no duplicar.
                 continue
+            regex_derivado = campo.get("regex_derivado") or ""
             fields[nombre] = {
                 "descripcion": campo.get("descripcion", ""),
                 "campo": "",
                 "element_id": "",
-                "regex_full": "",
+                "regex_full": regex_derivado,
                 "regex_char": "",
                 "test_text": "",
                 "dropdown": False,
@@ -233,13 +281,50 @@ class CrmValidacionesImporter:
                 "error_priority": [],
                 "obligatorio_excel": bool(campo.get("obligatorio")),
                 "mensajes_error_excel": list(campo.get("mensajes_error") or []),
-                "pendiente_regex": True,
-                "origen": "crm_excel_import",
+                "origen": "regex_derivado_prosa" if regex_derivado else "crm_excel_import",
                 "fecha_importacion": fecha_importacion,
             }
-            agregados += 1
+            if regex_derivado:
+                fields[nombre]["motivo_derivacion"] = campo.get("motivo_derivacion", "")
+            else:
+                # Sin prosa suficiente: sigue esperando una regla escrita a mano.
+                fields[nombre]["pendiente_regex"] = True
+            cambios["agregados"] += 1
 
-        return actualizado, agregados
+        # Ya presentes pero sin regla: se completan con lo derivado de la prosa. Se recorren
+        # también los 'ok' sin regex (no obligatorios) — tener con qué llenarlos igual sirve.
+        sin_regla = list(comparacion.get("incompletos", [])) + [
+            c for c in comparacion.get("ok", []) if not c.get("tiene_regex")
+        ]
+        for campo in sin_regla:
+            entry = fields.get(campo["nombre_campo"])
+            regex_derivado = campo.get("regex_derivado") or ""
+            if not regex_derivado or not isinstance(entry, dict):
+                continue
+            if str(entry.get("regex_full") or "").strip():
+                continue
+            entry["regex_full"] = regex_derivado
+            entry["motivo_derivacion"] = campo.get("motivo_derivacion", "")
+            entry["origen"] = "regex_derivado_prosa"
+            entry.pop("pendiente_regex", None)
+            cambios["completados"] += 1
+
+        # La prosa contradice al regex cargado. Se corrige únicamente el largo: el regex
+        # escrito a mano suele saber cosas que el excel no dice (que un comentario admite
+        # espacios, que una cédula arranca con el código de provincia), y regenerarlo entero
+        # las perdería. Los conflictos sin ajuste aplicable quedan sólo en el reporte.
+        for campo in comparacion.get("conflictos", []):
+            entry = fields.get(campo["nombre_campo"])
+            ajustado = campo.get("regex_ajustado") or ""
+            if not ajustado or not isinstance(entry, dict):
+                continue
+            entry["regex_full_previo"] = str(entry.get("regex_full") or "").strip()
+            entry["regex_full"] = ajustado
+            entry["motivo_derivacion"] = campo.get("motivo_ajuste", "")
+            entry["origen"] = "largo_ajustado_prosa"
+            cambios["recalculados"] += 1
+
+        return actualizado, cambios
 
 
 def construir_reporte(pais, hoja_excel, comparacion):
@@ -252,10 +337,14 @@ def construir_reporte(pais, hoja_excel, comparacion):
         "resumen": {
             "faltantes": len(comparacion.get("faltantes", [])),
             "incompletos": len(comparacion.get("incompletos", [])),
+            "conflictos": len(comparacion.get("conflictos", [])),
             "ok": len(comparacion.get("ok", [])),
         },
         "faltantes": comparacion.get("faltantes", []),
         "incompletos": comparacion.get("incompletos", []),
+        # Cada conflicto lleva regex_actual + regex_derivado + motivo: es el registro de
+        # auditoría para revisar (o revertir) una regla recalculada.
+        "conflictos": comparacion.get("conflictos", []),
         "ok": comparacion.get("ok", []),
     }
 

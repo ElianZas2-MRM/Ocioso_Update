@@ -259,7 +259,7 @@
       "descripcion": "MATRÍCULA VEHÍCULO",
       "campo": "patent",
       "element_id": "patent",
-      "regex_full": "^[a-zA-Z0-9]{15}$",
+      "regex_full": "^[a-zA-Z0-9]{1,10}$",
       "regex_char": "[a-zA-Z0-9]",
       "test_text": "324124purj=?we234",
       "dropdown": false,
@@ -287,7 +287,10 @@
         "invalid_chars",
         "min_length",
         "max_length"
-      ]
+      ],
+      "regex_full_previo": "^[a-zA-Z0-9]{15}$",
+      "motivo_derivacion": "Permite hasta 10 caracteres alfanuméricos. No permite símbolos o caracteres especiales.",
+      "origen": "largo_ajustado_prosa"
     },
     "MODELOS (Uruguay)": {
       "descripcion": "MODELOS",
@@ -559,7 +562,7 @@
       "descripcion": "Hasta 50 caracteres. Sólo debe permitir letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -578,15 +581,15 @@
       "mensajes_error_excel": [
         "Ingresa tu nombre."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.770944"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.770944",
+      "motivo_derivacion": "Hasta 50 caracteres. Sólo debe permitir letras, la \"ñ\" y espacios."
     },
     "APELLIDO": {
       "descripcion": "Hasta 50 caracteres. Sólo debe permitir letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -605,15 +608,15 @@
       "mensajes_error_excel": [
         "Ingresa tu nombre."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.770944"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.770944",
+      "motivo_derivacion": "Hasta 50 caracteres. Sólo debe permitir letras, la \"ñ\" y espacios."
     },
     "CÉDULA": {
       "descripcion": "Permite hasta 8 caracteres. Abre el teclado numérico. No permite el ingreso de otro tipo de caracteres (ej: especiales). No permite el input de dígitos iguales y/o consecutivos (12345678).",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{8}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -634,15 +637,15 @@
         "Ingresa 8 dígitos.",
         "La cédula de identidad ingresada no parece válida."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.770944"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.770944",
+      "motivo_derivacion": "Ingresa 8 dígitos."
     },
     "CELULAR": {
       "descripcion": "Campo numérico de 9 dígitos. Debe comenzar con 09. No permite caracteres especiales ni unicódigo.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^(?=(?:09))[0-9]{9}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -664,9 +667,9 @@
         "Comenzá con los números 09.",
         "El número ingresado no parece válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.770944"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.770944",
+      "motivo_derivacion": "Ingresa 9 números."
     },
     "E-MAIL": {
       "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
@@ -700,7 +703,7 @@
       "descripcion": "Hasta 500 caracteres alfanuméricos. Es un campo expandible.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,500}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -717,9 +720,9 @@
       "error_priority": [],
       "obligatorio_excel": false,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.770944"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.770944",
+      "motivo_derivacion": "Hasta 500 caracteres alfanuméricos. Es un campo expandible."
     },
     "MODELOS": {
       "descripcion": "Despliega los vehículos asignados al form.",

@@ -411,7 +411,7 @@
       "descripcion": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -430,15 +430,15 @@
       "mensajes_error_excel": [
         "Ingresa tu nombre."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.758807"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.758807",
+      "motivo_derivacion": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios."
     },
     "APELLIDO": {
       "descripcion": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -457,15 +457,15 @@
       "mensajes_error_excel": [
         "Ingresa tu apellido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.758807"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.758807",
+      "motivo_derivacion": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios."
     },
     "CELULAR": {
       "descripcion": "Hasta 10 dígitos. Debe comenzar con 09. Sólo se permiten números. No acepta unicodigo",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^(?=(?:09))[0-9]{10}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -487,9 +487,9 @@
         "El celular debe comenzar con 09.",
         "El celular ingresado no parece válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.758807"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.758807",
+      "motivo_derivacion": "Ingresa 10 números."
     },
     "E-MAIL": {
       "descripcion": "No hay límite de caracteres. Para que se admita, debe llevar un @.",
@@ -551,7 +551,7 @@
       "descripcion": "Hasta 10 dígitos. Permite sólo números.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,10}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -570,9 +570,9 @@
       "mensajes_error_excel": [
         "Completa su codigo GM."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.758807"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.758807",
+      "motivo_derivacion": "Hasta 10 dígitos. Permite sólo números."
     },
     "MODELOS": {
       "descripcion": "Despliega los modelos asignados al formulario.",

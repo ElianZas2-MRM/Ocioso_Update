@@ -1,14 +1,142 @@
 {
   "pais": "Paraguay",
-  "fecha_importacion": "2026-09-01T01:40:33.569684",
+  "fecha_importacion": "2026-09-01T18:45:35.780186",
   "hoja_excel": "Paraguay",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 12,
-    "ok": 4
+    "incompletos": 8,
+    "conflictos": 1,
+    "ok": 7
   },
   "faltantes": [],
   "incompletos": [
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
+      "mensajes_error": [
+        "Ingresa tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los vehículos asignados al form.",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las ciudades asignadas al form. Tiene anclado el campo \"Concesionario\".",
+      "mensajes_error": [
+        "Selecciona una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DÓNDE COMPRAR",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los concesionarios asignados al form. Se desbloquea cuando el campo \"Ciudad\" está completo.",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "mensajes_error": [
+        "Selecciona la fecha estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "OCUPACIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes profesiones.",
+      "mensajes_error": [
+        "Selecciona una ocupación."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO)?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    }
+  ],
+  "conflictos": [
+    {
+      "nombre_campo": "CÉDULA",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Permite ingresar 7 dígitos numéricos. No permite la secuencia del mismo número (ejemplo: 1111111) ni secuencias que comiencen con 0 (ejemplo: 0123456).",
+      "mensajes_error": [
+        "Ingresa tu cédula de identidad.",
+        "Ingresa al menos 7 dígitos.",
+        "La cédula de identidad ingresada no parece vállida."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{7,}$",
+      "motivo_derivacion": "Ingresa al menos 7 dígitos.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!(.)(\\1+$))(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{7}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    }
+  ],
+  "ok": [
     {
       "nombre_campo": "NOMBRE",
       "tipo": "Rellenable",
@@ -18,7 +146,9 @@
         "Ingresa tu nombre."
       ],
       "ultimo_ajuste": "2026-08-24",
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "motivo_derivacion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "APELLIDO",
@@ -29,7 +159,9 @@
         "Ingresa tu apellido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "motivo_derivacion": "Hasta 50 caracteres. Sólo se debe permitir letras, la \"ñ\" y espacios.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CELULAR",
@@ -42,63 +174,9 @@
         "No puede ingresar el mismo dígito más de 4 veces seguidas."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "E-MAIL",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Debe iniciar con un caracter alfanumérico. Debe incluir un símbolo '@' y finalizar con un punto y letra para ser válido. Ejemplo: a@a.aa",
-      "mensajes_error": [
-        "Ingresa tu email.",
-        "El email ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MODELOS",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega los vehículos asignados al form.",
-      "mensajes_error": [
-        "Selecciona un modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CIUDAD",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las ciudades asignadas al form. Tiene anclado el campo \"Concesionario\".",
-      "mensajes_error": [
-        "Selecciona una ciudad."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "DÓNDE COMPRAR",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega los concesionarios asignados al form. Se desbloquea cuando el campo \"Ciudad\" está completo.",
-      "mensajes_error": [
-        "Selecciona un concesionario."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
-      "mensajes_error": [
-        "Selecciona la fecha estimada de compra."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{10}$",
+      "motivo_derivacion": "Completa 10 números.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "PLACA",
@@ -110,54 +188,8 @@
         "La matrícula ingresada no parece válida."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "OCUPACIÓN",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega diferentes profesiones.",
-      "mensajes_error": [
-        "Selecciona una ocupación."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO)?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Para seleccionar los grados desde el \"1\" al \"10\". Sólo permite seleccionar uno. Tiene un copy adicional contextual abajo. No se puede des-seleccionar.",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    }
-  ],
-  "ok": [
-    {
-      "nombre_campo": "CÉDULA",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Permite ingresar 7 dígitos numéricos. No permite la secuencia del mismo número (ejemplo: 1111111) ni secuencias que comiencen con 0 (ejemplo: 0123456).",
-      "mensajes_error": [
-        "Ingresa tu cédula de identidad.",
-        "Ingresa al menos 7 dígitos.",
-        "La cédula de identidad ingresada no parece vállida."
-      ],
-      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{1,50}$",
+      "motivo_derivacion": "Hasta 50 caracteres alfanuméricos. Admite al menos uno.",
       "tiene_regex": true
     },
     {
@@ -167,6 +199,8 @@
       "descripcion": "Despliega opciones desde 5 mil km hasta 50 mil km.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -176,6 +210,8 @@
       "descripcion": "Despliega sólo opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -185,6 +221,8 @@
       "descripcion": "Muestra sólo la opción \"Quiero cotizar la batería\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ]

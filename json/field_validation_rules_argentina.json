@@ -247,7 +247,7 @@
       "descripcion": "NÚMERO DE CONTRATO",
       "campo": "contract",
       "element_id": "contract",
-      "regex_full": "^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{1,10}$",
+      "regex_full": "^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{10}$",
       "regex_char": "[0-9]",
       "test_text": "38293829382pó=?",
       "dropdown": false,
@@ -275,7 +275,10 @@
         "invalid_chars",
         "min_length",
         "max_length"
-      ]
+      ],
+      "regex_full_previo": "^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{1,10}$",
+      "motivo_derivacion": "Ingresá 10 caracteres que no comiencen con 0.",
+      "origen": "largo_ajustado_prosa"
     },
     "ORDEN": {
       "descripcion": "ORDEN",
@@ -345,7 +348,7 @@
       "descripcion": "VIN/CHASIS",
       "campo": "vin",
       "element_id": "vin",
-      "regex_full": "^[a-zA-Z0-9]{17,}$",
+      "regex_full": "^[a-zA-Z0-9]{17}$",
       "regex_char": "[a-zA-Z0-9]",
       "test_text": "3928ksu8392839283=?",
       "dropdown": false,
@@ -373,7 +376,10 @@
         "invalid_chars",
         "min_length",
         "max_length"
-      ]
+      ],
+      "regex_full_previo": "^[a-zA-Z0-9]{17,}$",
+      "motivo_derivacion": "Ingresá 17 dígitos.",
+      "origen": "largo_ajustado_prosa"
     },
     "INSERTÁ TU OPINIÓN": {
       "descripcion": "INSERTÁ TU OPINIÓN",
@@ -625,7 +631,7 @@
       "descripcion": "Sólo 4 caracteres numéricos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{4}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -645,15 +651,15 @@
         "Ingresá el código postal.",
         "Ingresá 4 dígitos."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:30.448144"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:30.448144",
+      "motivo_derivacion": "Ingresá 4 dígitos."
     },
     "CUIT": {
       "descripcion": "11 caracteres numéricos. Se autorellena con guiones. Ejemplo: 01-12345678-9",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{11}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -673,15 +679,15 @@
         "Ingresá tu CUIT.",
         "El CUIT debe tener 11 dígitos."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:30.448144"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:30.448144",
+      "motivo_derivacion": "El CUIT debe tener 11 dígitos."
     },
     "RAZÓN SOCIAL": {
       "descripcion": "De 1 a 100 caracteres alfanuméricos. Permite enviar sólo letras, sólo números; y mezclado. Permite caracteres especiales y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,100}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -700,15 +706,15 @@
       "mensajes_error_excel": [
         "Ingresá la razón social."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:30.448144"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:30.448144",
+      "motivo_derivacion": "De 1 a 100 caracteres alfanuméricos. Permite enviar sólo letras, sólo números; y mezclado. Permite caracteres especiales y espacios."
     },
     "GRUPO": {
       "descripcion": "De 1 a 4 caracteres numéricos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,4}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -727,15 +733,15 @@
       "mensajes_error_excel": [
         "Ingresá el grupo."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:30.448144"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:30.448144",
+      "motivo_derivacion": "De 1 a 4 caracteres numéricos."
     },
     "PREFIJO - CELULAR (SIN 15)": {
       "descripcion": "Prefijo: de 2 a 4 caracteres numéricos. Celular: de 6 a 10 caracteres numéricos. No acepta unicodigo (ej. 00000000)",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{6,}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -757,15 +763,15 @@
         "Ingrese un número telefónico válido.",
         "Ingresá un valor de prefijo telefónico válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:30.448144"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:30.448144",
+      "motivo_derivacion": "Ingresá mínimo 6 números."
     },
     "TUS RESPUESTAS SON COMPLETAMENTE ANÓNIMAS": {
       "descripcion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{5,500}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -784,9 +790,9 @@
       "mensajes_error_excel": [
         "Describí mejor tu opinión."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:30.448144"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:30.448144",
+      "motivo_derivacion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse."
     },
     "¿CUÁL ES TU CANCIÓN IDEAL PARA DESCUBRIR NUEVOS CAMINOS?": {
       "descripcion": "Máximo 1.000 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
@@ -1490,6 +1496,66 @@
       "pendiente_regex": true,
       "origen": "crm_excel_import",
       "fecha_importacion": "2026-09-01T01:37:30.448144"
+    },
+    "REGRET-REASON": {
+      "descripcion": "regret-reason",
+      "campo": "regret-reason",
+      "element_id": "regret-reason",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "COMMENTS": {
+      "descripcion": " ",
+      "campo": "comments",
+      "element_id": "comments",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "EVENT": {
+      "descripcion": "event",
+      "campo": "event",
+      "element_id": "event",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Argentina"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

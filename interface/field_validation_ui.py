@@ -840,25 +840,31 @@ def build_field_validation_tab(parent, palette, shared_config=None):
             bg=button_bg, fg=button_fg, relief="flat", cursor="hand2", padx=10, pady=3,
         ).pack(pady=(0, 10))
 
-    def _formatear_resumen_import_crm(pais, comparacion, cantidad_agregada):
+    def _formatear_resumen_import_crm(pais, comparacion, cambios):
+        pendientes = len(comparacion["incompletos"]) - cambios["completados"]
         return (
             f"{pais}: {len(comparacion['faltantes'])} faltantes "
-            f"({cantidad_agregada} agregados al JSON), "
-            f"{len(comparacion['incompletos'])} incompletos (obligatorios sin regex — "
-            f"revisar a mano), {len(comparacion['ok'])} ya cubiertos."
+            f"({cambios['agregados']} agregados al JSON), "
+            f"{cambios['completados']} reglas derivadas de la prosa del excel, "
+            f"{cambios['recalculados']} recalculadas por conflicto con el mensaje de error "
+            f"(regex anterior guardado en regex_full_previo), "
+            f"{pendientes} obligatorios siguen sin regex — revisar a mano, "
+            f"{len(comparacion['ok'])} ya cubiertos."
         )
 
     def _importar_crm_para_pais(importer, pais):
-        """Compara y, si hace falta, guarda field_validation_rules_<pais>.json — nunca pisa
-        una entrada que ya exista (ver CrmValidacionesImporter.aplicar_merge)."""
+        """Compara y guarda field_validation_rules_<pais>.json. Completa las reglas que la
+        prosa del excel permite derivar y recalcula las que su mensaje de error contradice,
+        preservando el regex anterior (ver CrmValidacionesImporter.aplicar_merge)."""
         reglas = _load_rules_file(pais=pais)
         comparacion = importer.comparar(pais, reglas)
-        actualizado, cantidad_agregada = importer.aplicar_merge(pais, comparacion, reglas)
-        if cantidad_agregada:
+        actualizado, cambios = importer.aplicar_merge(pais, comparacion, reglas)
+        if any(cambios.values()):
             _save_rules_file(actualizado, pais=pais)
+        if cambios["agregados"]:
             registrar_campos_importados_desde_excel(pais, comparacion["faltantes"])
         guardar_reporte(pais, construir_reporte(pais, pais, comparacion))
-        return comparacion, cantidad_agregada
+        return comparacion, cambios
 
     def _importar_crm_excel_pais_actual():
         importer = CrmValidacionesImporter()
@@ -869,7 +875,7 @@ def build_field_validation_tab(parent, palette, shared_config=None):
 
         pais = crm_import_pais_var.get()
         try:
-            comparacion, cantidad_agregada = _importar_crm_para_pais(importer, pais)
+            comparacion, cambios = _importar_crm_para_pais(importer, pais)
         except Exception as exc:
             LOGGER.exception("Error importando validaciones del CRM para %s", pais)
             messagebox.showerror("Importar validaciones desde Excel CRM", f"Error importando {pais}: {exc}")
@@ -877,9 +883,12 @@ def build_field_validation_tab(parent, palette, shared_config=None):
 
         _mostrar_resultado_import_crm(
             "Importar validaciones desde Excel CRM",
-            _formatear_resumen_import_crm(pais, comparacion, cantidad_agregada),
+            _formatear_resumen_import_crm(pais, comparacion, cambios),
         )
-        status_var.set(f"Import Excel CRM ({pais}): {cantidad_agregada} campo(s) nuevo(s) agregados.")
+        status_var.set(
+            f"Import Excel CRM ({pais}): {cambios['agregados']} agregado(s), "
+            f"{cambios['completados']} derivada(s), {cambios['recalculados']} recalculada(s)."
+        )
 
     def _importar_crm_excel_todos_los_paises():
         importer = CrmValidacionesImporter()
@@ -889,19 +898,23 @@ def build_field_validation_tab(parent, palette, shared_config=None):
             return
 
         lineas = []
-        total_agregados = 0
+        totales = {"agregados": 0, "completados": 0, "recalculados": 0}
         for pais in AVAILABLE_COUNTRIES:
             try:
-                comparacion, cantidad_agregada = _importar_crm_para_pais(importer, pais)
+                comparacion, cambios = _importar_crm_para_pais(importer, pais)
             except Exception as exc:
                 LOGGER.exception("Error importando validaciones del CRM para %s", pais)
                 lineas.append(f"{pais}: ERROR — {exc}")
                 continue
-            total_agregados += cantidad_agregada
-            lineas.append(_formatear_resumen_import_crm(pais, comparacion, cantidad_agregada))
+            for clave in totales:
+                totales[clave] += cambios[clave]
+            lineas.append(_formatear_resumen_import_crm(pais, comparacion, cambios))
 
         _mostrar_resultado_import_crm("Importar en TODOS los países", "\n".join(lineas))
-        status_var.set(f"Import Excel CRM (todos los países): {total_agregados} campo(s) nuevo(s) en total.")
+        status_var.set(
+            f"Import Excel CRM (todos los países): {totales['agregados']} agregado(s), "
+            f"{totales['completados']} derivada(s), {totales['recalculados']} recalculada(s)."
+        )
 
     def _clear_form_inputs():
         field_name_var.set("")
