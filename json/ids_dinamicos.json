@@ -3,11 +3,16 @@
   "entries": [
     {
       "id": "contract",
-      "valor": "324",
+      "valor": [
+        "1257879843",
+        "1022848398"
+      ],
       "paises": [
         "Argentina"
       ],
-      "nombre_campo": "Número de contrato - form arrepentimiento"
+      "nombre_campo": "Número de contrato - form arrepentimiento",
+      "valor_previo": "324",
+      "origen": "autovalor_corregido"
     },
     {
       "id": "patent",
@@ -704,6 +709,72 @@
       "paises": [
         "Chile"
       ]
+    },
+    {
+      "id": "regret-reason",
+      "valor": [
+        "Situación económica",
+        "Atención / Asesoramiento del Concesionario"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "regret-reason",
+      "origen": "autovalor"
+    },
+    {
+      "id": "document-type",
+      "valor": [
+        "Carné de Extranjería",
+        "Pasaporte"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "document-type",
+      "origen": "autovalor"
+    },
+    {
+      "id": "categories",
+      "valor": [
+        "Novo",
+        "Seminovo"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "categories",
+      "origen": "autovalor"
+    },
+    {
+      "id": "event",
+      "valor": "Verano",
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "event",
+      "origen": "autovalor"
+    },
+    {
+      "id": "normative",
+      "valor": "EURO VI",
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "normative",
+      "origen": "autovalor"
+    },
+    {
+      "id": "versions",
+      "valor": [
+        "FRR 1121",
+        "FRR 1121 EXT"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "versions",
+      "origen": "autovalor"
     }
   ],
   "dependencies": [
