@@ -785,10 +785,10 @@
       "motivo_derivacion": "Máximo 30 caracteres alfanuméricos. No debe permitir carácteres especiales."
     },
     "COLOR": {
-      "descripcion": "Máximo 30 caracteres alfabéticos. No debe permitir carácteres especiales.",
-      "campo": "",
-      "element_id": "",
-      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,30}$",
+      "descripcion": "color",
+      "campo": "color",
+      "element_id": "color",
+      "regex_full": "",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -802,15 +802,7 @@
       "error_messages": {},
       "error_message_patterns": [],
       "error_config": {},
-      "error_priority": [],
-      "obligatorio_excel": true,
-      "mensajes_error_excel": [
-        "Escribe el color de tu vehículo.",
-        "Ingresa sólo caracteres alfanuméricos."
-      ],
-      "origen": "regex_derivado_prosa",
-      "fecha_importacion": "2026-09-01T01:37:35.749314",
-      "motivo_derivacion": "Máximo 30 caracteres alfabéticos. No debe permitir carácteres especiales."
+      "error_priority": []
     },
     "TU INSTAGRAM": {
       "descripcion": "Máximo 30 caracteres alfanuméricos. El campo ya tiene la “@” añadida en copy. Permite “_”. No permite espacios ni otros caracteres especiales.",
@@ -1751,6 +1743,106 @@
       "regex_char": "",
       "test_text": "",
       "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GENDER": {
+      "descripcion": "gender",
+      "campo": "gender",
+      "element_id": "gender",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "AGE": {
+      "descripcion": "age",
+      "campo": "age",
+      "element_id": "age",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "MODEL_YEAR": {
+      "descripcion": "model_year",
+      "campo": "model_year",
+      "element_id": "model_year",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "VERSION": {
+      "descripcion": "version",
+      "campo": "version",
+      "element_id": "version",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "INSTAGRAM": {
+      "descripcion": "instagram",
+      "campo": "instagram",
+      "element_id": "instagram",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
       "dropdown_error_message": "",
       "dependencies": [],
       "paises": [

@@ -1,6 +1,6 @@
 {
   "pais": "Colombia",
-  "ultima_deteccion": "2026-09-01T01:37:35",
+  "ultima_deteccion": "2026-09-02T13:35:14",
   "campos_nuevos": [
     {
       "id": "NOMBRE",
@@ -358,6 +358,27 @@
       "required": false,
       "label": "(No se pudo identificar)",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "telephone_prefix",
+      "type": "text",
+      "required": false,
+      "label": "telephone_prefix",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "patent",
+      "type": "text",
+      "required": false,
+      "label": "patent",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "standAlone",
+      "type": "text",
+      "required": false,
+      "label": "la dirección, ciudad, estado",
+      "origen": "runtime_discovery"
     }
   ]
 }

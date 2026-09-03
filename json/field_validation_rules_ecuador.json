@@ -1352,6 +1352,26 @@
       "pendiente_regex": true,
       "origen": "crm_excel_import",
       "fecha_importacion": "2026-09-01T01:37:35.758807"
+    },
+    "EVENT": {
+      "descripcion": "event",
+      "campo": "event",
+      "element_id": "event",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Ecuador"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

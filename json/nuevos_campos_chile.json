@@ -1,6 +1,6 @@
 {
   "pais": "Chile",
-  "ultima_deteccion": "2026-09-02T10:10:12",
+  "ultima_deteccion": "2026-09-02T14:16:49",
   "campos_nuevos": [
     {
       "id": "comment",
@@ -347,6 +347,48 @@
       "type": "select",
       "required": false,
       "label": "versions",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "gender",
+      "type": "select",
+      "required": false,
+      "label": "gender",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "age",
+      "type": "text",
+      "required": false,
+      "label": "age",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "model_year",
+      "type": "text",
+      "required": false,
+      "label": "model_year",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "version",
+      "type": "text",
+      "required": false,
+      "label": "version",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "color",
+      "type": "text",
+      "required": false,
+      "label": "color",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "instagram",
+      "type": "text",
+      "required": false,
+      "label": "instagram",
       "origen": "runtime_discovery"
     }
   ]

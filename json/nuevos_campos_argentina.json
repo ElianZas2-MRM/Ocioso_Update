@@ -1,6 +1,6 @@
 {
   "pais": "Argentina",
-  "ultima_deteccion": "2026-09-02T09:49:14",
+  "ultima_deteccion": "2026-09-02T13:58:52",
   "campos_nuevos": [
     {
       "id": "patent",
@@ -265,6 +265,55 @@
       "type": "select",
       "required": false,
       "label": "event",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "purchase-type",
+      "type": "select",
+      "required": true,
+      "label": "purchase-type",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "disapproval",
+      "type": "textarea",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "suggestions",
+      "type": "textarea",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "termination-reason",
+      "type": "select",
+      "required": true,
+      "label": "termination-reason",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "preferred-shift",
+      "type": "select",
+      "required": true,
+      "label": "preferred-shift",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "group",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "order",
+      "type": "text",
+      "required": true,
+      "label": " ",
       "origen": "runtime_discovery"
     }
   ]

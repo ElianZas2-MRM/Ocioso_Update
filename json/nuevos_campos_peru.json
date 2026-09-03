@@ -1,6 +1,6 @@
 {
   "pais": "Peru",
-  "ultima_deteccion": "2026-09-01T01:37:35",
+  "ultima_deteccion": "2026-09-02T14:21:59",
   "campos_nuevos": [
     {
       "id": "cc_date",
@@ -366,6 +366,13 @@
       "required": false,
       "label": "Despliega los concesionarios elegidos para el form. Depende del campo \"Ciudad\".",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "estimated-mileage",
+      "type": "select",
+      "required": false,
+      "label": "estimated-mileage",
+      "origen": "runtime_discovery"
     }
   ]
 }
