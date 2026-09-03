@@ -323,6 +323,8 @@ class BaseFormFiller:
         # Dropdowns que quedaron en su placeholder: se reportan aparte para que no pasen
         # como "completados" en el Excel de resultado.
         self._dropdowns_sin_elegir = []
+        # Qué campos opcionales se completan en esta fila (se sortea uno por campo).
+        self._decision_opcionales = {}
         self._campos_sin_mapeo_exitoso = []
         self._campos_dropdown_no_encontrados = []
         self._campos_sin_valor_asignado = []
@@ -1243,8 +1245,37 @@ class BaseFormFiller:
                 
         return val_str
 
+    # Formularios que exigen un valor CONCRETO en algún campo, imposible de sortear al azar.
+    # La clave es un fragmento de la URL del form; el valor, {id_del_campo: valor_fijo}.
+    #
+    # clubemyev valida el VIN contra la base de vehículos reales, y el VIN de prueba que
+    # tenemos es de un Spark EUV: si el modelo se sortea entre los cuatro del dropdown, el
+    # form rechaza el lead con "O VIN inserido não parece ser válido" 3 de cada 4 veces.
+    _VALORES_FIJOS_POR_FORM = {
+        "clubemyev": {"models": "Spark EUV"},
+    }
+
+    def _valor_fijo_para(self, field_config):
+        """Valor forzado para este campo en el formulario en curso, o "" si no hay."""
+        try:
+            url = (self.driver.current_url or "").lower()
+        except Exception:
+            return ""
+        ids = field_config.get("__resolved_id") or field_config.get("id")
+        ids = ids if isinstance(ids, list) else [ids]
+        for marca, fijos in self._VALORES_FIJOS_POR_FORM.items():
+            if marca not in url:
+                continue
+            for fid in ids:
+                if fid and fid in fijos:
+                    return fijos[fid]
+        return ""
+
     def _resolve_field_value(self, form_data, field_config):
         """Resuelve el valor a usar para un campo según su mapping"""
+        fijo = self._valor_fijo_para(field_config)
+        if fijo:
+            return fijo
         val = ""
         if isinstance(form_data, dict):
             by_id = form_data.get("__by_id", {}) if isinstance(form_data.get("__by_id"), dict) else {}
@@ -1502,6 +1533,28 @@ class BaseFormFiller:
             if not element.is_displayed():
                 return False
 
+            # Un datepicker jQuery UI trae su propio botón "Next" (mes siguiente) con la
+            # clase ui-datepicker-next. Al llenar una fecha el calendario se abre, y ese
+            # botón matcheaba como "avanzar de paso": el motor lo clickeaba —encima suele
+            # estar deshabilitado— y reportaba "el formulario no avanzó tras clic en
+            # Siguiente". Un botón deshabilitado nunca avanza nada, así que también se
+            # descarta.
+            clase = (element.get_attribute("class") or "").lower()
+            if "datepicker" in clase or "ui-state-disabled" in clase:
+                return False
+            try:
+                if not element.is_enabled():
+                    return False
+            except Exception:
+                pass
+            try:
+                if self.driver.execute_script(
+                        "return !!arguments[0].closest('.ui-datepicker, [class*=datepicker],"
+                        " [class*=calendar], [role=dialog]');", element):
+                    return False
+            except Exception:
+                pass
+
             text_parts = [
                 element.text or "",
                 element.get_attribute("data-dtm") or "",
@@ -1743,14 +1796,16 @@ class BaseFormFiller:
                         try:
                             element = self.safe_find_element(By.ID, field_id)
                             if element and element.is_displayed() and element.is_enabled():
+                                # Con el setter nativo del prototipo, no `el.value = x`: React
+                                # y Angular no registran la asignación directa y revierten el
+                                # campo al re-renderizar. Se veía como que el valor se cargaba
+                                # ("completado con ID dinámico") y el form quedaba vacío igual
+                                # — así se caían los crm-validacion de Argentina, que son un
+                                # único textarea obligatorio.
+                                self._set_input_value_js(element, fixed_value)
                                 self.driver.execute_script(
-                                    "arguments[0].focus();"
-                                    "arguments[0].value = arguments[1];"
-                                    "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));"
-                                    "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));"
                                     "arguments[0].dispatchEvent(new Event('blur', { bubbles: true }));",
                                     element,
-                                    fixed_value,
                                 )
                                 print(f"📌 Campo '{field_id}' completado con ID dinámico: {fixed_value}")
                                 self._record_field_value(field_id, fixed_value)
@@ -1850,6 +1905,7 @@ class BaseFormFiller:
             fill_with_dependencies(field_config)
         if not solo_verificar_visual:
             self._auto_fill_unmapped_dropdowns(self.field_mapping)
+            self._auto_fill_unmapped_text(self.field_mapping)
 
     # === Adobe AEM Adaptive Form (formularios "2.0") =========================
     # Lógica compartida en utils/aem_fill.py (misma fuente para desktop y LambdaTest).
@@ -2200,6 +2256,16 @@ class BaseFormFiller:
             if solo_verificar_visual:
                 print("⚠️ [DEBUG] Llenado parcial activo: deteniendo tras primer paso.")
                 break
+
+            # Radios y checkboxes DEL PASO EN CURSO. Antes sólo se marcaban al final del
+            # formulario, así que un paso intermedio que depende de un radio no se podía
+            # completar y el form no dejaba avanzar. Es el caso del selector de color de
+            # electricos-final (Brasil): los colores son radios ocultos por CSS con un
+            # <label for> encima, no elementos decorativos.
+            try:
+                self._handle_terms_checkboxes()
+            except Exception as _e:
+                print(f" Radios/checkboxes del paso {getattr(self, '_current_step', 1)}: {_e}")
 
             # Antes de dejar atrás el paso: un dropdown que quedó en su placeholder no está
             # elegido. En un form multi-paso el paso anterior puede desaparecer del DOM, así
@@ -3528,6 +3594,7 @@ class BaseFormFiller:
                 continue
 
         self._auto_fill_unmapped_dropdowns(mapping)
+        self._auto_fill_unmapped_text(mapping)
 
     # --- Helpers reutilizables para formularios de 3 pasos ---
     def _fill_optional_model_and_kit(self, data, model_id="models", kit_id="kits[]", model_key="model", kit_key="kit"):
@@ -4506,6 +4573,107 @@ class BaseFormFiller:
                     return str(val).strip()
         return ""
 
+    # Probabilidad de completar un campo OPCIONAL que no trae dato cargado.
+    _PROB_OPCIONAL = 0.5
+
+    def _llenar_opcional_al_azar(self, field_id=""):
+        """¿Se completa este campo opcional en esta fila? Se decide una vez por campo y por
+        fila, para que el mismo campo no quede lleno en un paso y vacío en el siguiente."""
+        cache = getattr(self, "_decision_opcionales", None)
+        if cache is None:
+            cache = self._decision_opcionales = {}
+        clave = str(field_id or "")
+        if clave not in cache:
+            cache[clave] = random.random() < self._PROB_OPCIONAL
+        return cache[clave]
+
+    def _auto_fill_unmapped_text(self, field_mapping=None):
+        """Llena inputs de texto y textarea que NO están en el mapping del país.
+
+        Hasta ahora el único autofill para campos fuera del mapping era el de <select>, así
+        que un campo de texto sin mapear quedaba vacío aunque tuviera valor cargado en IDs
+        dinámicos. Con eso se caían formularios enteros: crm-validacion-si-ar y -no-ar de
+        Argentina son un <textarea> obligatorio y un checkbox, nada más, y el textarea nunca
+        se completaba.
+
+        Prioridad del valor: IDs dinámicos > forma inferida del nombre del campo.
+
+        Sólo se tocan campos vacíos, visibles, habilitados y que además sean obligatorios o
+        tengan valor cargado: el DOM incluye toda la página, y un input suelto de la landing
+        (buscador, newsletter) no es parte del lead.
+        """
+        mapped_ids = self._get_mapped_select_ids(field_mapping)
+        ya_llenos = set()
+        for _k in getattr(self, "current_row_field_values", {}) or {}:
+            ya_llenos.add(_k.split("::", 1)[1] if "::" in _k else _k)
+
+        ids_dinamicos = self._cargar_ids_dinamicos()
+        try:
+            from utils.regex_desde_prosa import regex_por_semantica
+            from utils.valor_campo_generator import GeneradorValorCampo
+        except Exception:
+            regex_por_semantica, GeneradorValorCampo = None, None
+
+        try:
+            elementos = self.driver.find_elements(
+                By.XPATH,
+                "//textarea | //input[not(@type) or @type='text' or @type='email'"
+                " or @type='tel' or @type='number' or @type='search']")
+        except Exception as e:
+            print(f" Error buscando campos de texto no mapeados: {e}")
+            return False
+
+        llenados = 0
+        for el in elementos:
+            try:
+                fid = (el.get_attribute("id") or el.get_attribute("name") or "").strip()
+                if not fid or fid in mapped_ids or fid in ya_llenos:
+                    continue
+                if not el.is_displayed() or not el.is_enabled():
+                    continue
+                if (el.get_attribute("value") or "").strip():
+                    continue
+                if el.get_attribute("readonly") is not None:
+                    continue
+
+                requerido = bool(el.get_attribute("required")
+                                 or el.get_attribute("aria-required") == "true")
+                candidatos = self._resolve_dynamic_id_values(ids_dinamicos.get(fid))
+                valor = candidatos[0] if candidatos else ""
+
+                if not valor:
+                    if not regex_por_semantica:
+                        continue
+                    # Sin dato cargado, el obligatorio se completa siempre y el opcional se
+                    # sortea: un campo opcional a veces lo llena el usuario y a veces no, y
+                    # las corridas tienen que cubrir los dos casos. Si el dato SÍ estaba
+                    # cargado no se llega hasta acá — ese valor manda y no se sortea nada.
+                    if not requerido:
+                        if not self._llenar_opcional_al_azar(fid):
+                            continue
+                    etiqueta = (el.get_attribute("aria-label")
+                                or el.get_attribute("placeholder") or "")
+                    patron = regex_por_semantica(fid, etiqueta)
+                    if not patron:
+                        continue
+                    generados = GeneradorValorCampo().generar_desde_regex(patron, max_variantes=1)
+                    if not generados:
+                        continue
+                    valor = generados[0]
+
+                self._set_input_value_js(el, valor)
+                if not (el.get_attribute("value") or "").strip():
+                    continue
+                self._record_field_value(fid, valor)
+                llenados += 1
+                print(f"📌 Campo de texto no mapeado '{fid}' completado: {valor[:40]}")
+            except Exception:
+                continue
+
+        if llenados:
+            print(f" Campos de texto no mapeados completados: {llenados}")
+        return llenados > 0
+
     def _auto_fill_unmapped_dropdowns(self, field_mapping=None):
         """Completa campos no mapeados: respeta lo pedido en el Excel, después IDs
         dinámicos, y sólo sortea cuando no hay ningún valor pedido."""
@@ -4542,6 +4710,21 @@ class BaseFormFiller:
                 if not select_element.is_enabled():
                     continue
                 if select_element.get_attribute("multiple") is not None:
+                    # Los <select multiple> se salteaban por completo, así que uno obligatorio
+                    # dejaba el formulario sin poder enviarse (hobbies[] de retail-colorado en
+                    # Chile). Suelen venir envueltos en Bootstrap Select, que oculta el select
+                    # real y pinta su propio widget: por eso además del change hay que pedirle
+                    # al plugin que se refresque, o el usuario ve el campo vacío.
+                    try:
+                        elegidas = self.driver.execute_script(
+                            "var s = arguments[0], tope = arguments[1], out = [];for (var i = 0; i < s.options.length && out.length < tope; i++) {  var o = s.options[i];  if (o.disabled || !(o.value || '').trim()) continue;  o.selected = true; out.push((o.text || '').trim());}s.dispatchEvent(new Event('change', { bubbles: true }));try { if (window.jQuery && window.jQuery(s).selectpicker) {  window.jQuery(s).selectpicker('refresh'); } } catch (e) {}return out;", select_element, 2) or []
+                    except Exception as e:
+                        print(f" {select_id}: no se pudo elegir en el select múltiple — {e}")
+                        elegidas = []
+                    if elegidas:
+                        self._record_field_value(select_id, " | ".join(elegidas))
+                        print(f"🎲 {select_id} (múltiple) - elegidas: {', '.join(elegidas)}")
+                        filled_any = True
                     continue
 
                 # Para selects no mapeados siempre intentamos seleccionar.
@@ -5838,7 +6021,13 @@ class BaseFormFiller:
     def submit_and_verify_form(self, current_ss_number, expected_form_url):
         """Envía el formulario y verifica resultado"""
         expected_form_url = self._sanitize_url(expected_form_url)
-        if bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
+        # `chequeo_campos` llena el formulario COMPLETO (todos los campos, todos los pasos)
+        # y sólo se saltea el envío. Es distinto de solo_verificar_visual/no_enviar_lead, que
+        # cortan el llenado a los 2 campos porque su objetivo es nada más ver que el form
+        # carga. Acá interesa lo contrario: verificar que todo se llena, sin generar leads.
+        if bool(self.config.get("solo_verificar_visual", False)
+                or self.config.get("no_enviar_lead", False)
+                or self.config.get("chequeo_campos", False)):
             print("🚫 [DEBUG] Modo 'No enviar lead' activo. Omitiendo envío final.")
             return "PASS (Verificación visual)", "Verificación visual"
         try:
