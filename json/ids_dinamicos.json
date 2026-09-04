@@ -3,11 +3,16 @@
   "entries": [
     {
       "id": "contract",
-      "valor": "324",
+      "valor": [
+        "1257879843",
+        "1022848398"
+      ],
       "paises": [
         "Argentina"
       ],
-      "nombre_campo": "Número de contrato - form arrepentimiento"
+      "nombre_campo": "Número de contrato - form arrepentimiento",
+      "valor_previo": "324",
+      "origen": "autovalor_corregido"
     },
     {
       "id": "patent",
@@ -40,7 +45,7 @@
       "nombre_campo": "Código de asesor"
     },
     {
-      "id": "dosapproval",
+      "id": "disapproval",
       "valor": "Este comentario es un test.",
       "paises": [],
       "nombre_campo": "Comentario2"
@@ -107,11 +112,16 @@
     },
     {
       "id": "patent",
-      "valor": "a1b2c3d4e5f6g8h",
+      "valor": [
+        "N1p",
+        "maP4"
+      ],
       "paises": [
         "Uruguay"
       ],
-      "nombre_campo": "Patente"
+      "nombre_campo": "Patente",
+      "valor_previo": "a1b2c3d4e5f6g8h",
+      "origen": "autovalor_corregido"
     },
     {
       "id": "patent",
@@ -704,6 +714,464 @@
       "paises": [
         "Chile"
       ]
+    },
+    {
+      "id": "regret-reason",
+      "valor": [
+        "Situación económica",
+        "Atención / Asesoramiento del Concesionario"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "regret-reason",
+      "origen": "autovalor"
+    },
+    {
+      "id": "document-type",
+      "valor": [
+        "Carné de Extranjería",
+        "Pasaporte"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "document-type",
+      "origen": "autovalor"
+    },
+    {
+      "id": "categories",
+      "valor": [
+        "Novo",
+        "Seminovo"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "categories",
+      "origen": "autovalor"
+    },
+    {
+      "id": "event",
+      "valor": "Verano",
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "event",
+      "origen": "autovalor"
+    },
+    {
+      "id": "normative",
+      "valor": "EURO VI",
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "normative",
+      "origen": "autovalor"
+    },
+    {
+      "id": "versions",
+      "valor": [
+        "FRR 1121",
+        "FRR 1121 EXT"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "versions",
+      "origen": "autovalor"
+    },
+    {
+      "id": "payment-method",
+      "valor": [
+        "Financiado",
+        "Al contado"
+      ],
+      "paises": [
+        "Bolivia"
+      ],
+      "nombre_campo": "payment-method",
+      "origen": "autovalor"
+    },
+    {
+      "id": "event",
+      "valor": [
+        "No Aplica",
+        "Supercines"
+      ],
+      "paises": [
+        "Ecuador"
+      ],
+      "nombre_campo": "event",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase-type",
+      "valor": [
+        "Plan de ahorro",
+        "Compra al contado/Financiación"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "purchase-type",
+      "origen": "autovalor"
+    },
+    {
+      "id": "comments",
+      "valor": [
+        "skyfdqYtAuJlaP0",
+        "CQ71wb7Xqv2fEBY3"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "comments",
+      "origen": "autovalor"
+    },
+    {
+      "id": "termination-reason",
+      "valor": [
+        "Atención/Asesoramiento del Concesionario",
+        "Disconformidad en condiciones del plan"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "termination-reason",
+      "origen": "autovalor"
+    },
+    {
+      "id": "preferred-shift",
+      "valor": [
+        "Mañana",
+        "Tarde"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "preferred-shift",
+      "origen": "autovalor"
+    },
+    {
+      "id": "order",
+      "valor": [
+        "996",
+        "4"
+      ],
+      "paises": [
+        "Argentina"
+      ],
+      "nombre_campo": "order",
+      "origen": "autovalor"
+    },
+    {
+      "id": "estimated-mileage",
+      "valor": [
+        "30.000 km",
+        "5.000 km"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "estimated-mileage",
+      "origen": "autovalor"
+    },
+    {
+      "id": "gender",
+      "valor": [
+        "Otro",
+        "Masculino"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "gender",
+      "origen": "autovalor"
+    },
+    {
+      "id": "estimated-mileage",
+      "valor": [
+        "5.000 km",
+        "10.000 km"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "estimated-mileage",
+      "origen": "autovalor"
+    },
+    {
+      "id": "cc_name",
+      "valor": [
+        "mpGsVjEEEhI",
+        "rDM"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "cc_name",
+      "origen": "autovalor"
+    },
+    {
+      "id": "cc_ci",
+      "valor": [
+        "2995972199",
+        "5394778200"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "cc_ci",
+      "origen": "autovalor"
+    },
+    {
+      "id": "cc_telephone",
+      "valor": [
+        "2735218",
+        "753941876"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "cc_telephone",
+      "origen": "autovalor"
+    },
+    {
+      "id": "cc_email",
+      "valor": [
+        "qa.prueba1@mrm.com",
+        "qa.prueba2@mrm.com"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "cc_email",
+      "origen": "autovalor"
+    },
+    {
+      "id": "cc_order_claim",
+      "valor": [
+        "593584",
+        "850314430"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "cc_order_claim",
+      "origen": "autovalor"
+    },
+    {
+      "id": "cc_vin",
+      "valor": [
+        "7rgu9cRF69nI8rfA6",
+        "H4erfc35e9h33EIvU"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "cc_vin",
+      "origen": "autovalor"
+    },
+    {
+      "id": "comment",
+      "valor": [
+        "nMCMvoJX5iR",
+        "CLge3zPDTkqIYQyPG"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "comment",
+      "origen": "autovalor"
+    },
+    {
+      "id": "estimated-mileage",
+      "valor": [
+        "50.000 km o más",
+        "40.000 km"
+      ],
+      "paises": [
+        "Uruguay"
+      ],
+      "nombre_campo": "estimated-mileage",
+      "origen": "autovalor"
+    },
+    {
+      "id": "guideContainer-rootPanel-guidedropdownlist___widget",
+      "valor": [
+        "2 meses",
+        "3 meses"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "Data estimada da compra",
+      "origen": "autovalor"
+    },
+    {
+      "id": "guideContainer-rootPanel-firstName___widget",
+      "valor": [
+        "OaHEDBhCsj",
+        "zTDORKtTV"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "Nome",
+      "origen": "autovalor"
+    },
+    {
+      "id": "guideContainer-rootPanel-lastName___widget",
+      "valor": [
+        "WunxzZ",
+        "Alhwsy"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "Sobrenome",
+      "origen": "autovalor"
+    },
+    {
+      "id": "guideContainer-rootPanel-guidetelephone___widget",
+      "valor": [
+        "swfDzrB",
+        "oeqzHv"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "guideContainer-rootPanel-guidetelephone___jqName",
+      "origen": "autovalor"
+    },
+    {
+      "id": "guideContainer-rootPanel-emailFragment-guideemail___widget",
+      "valor": [
+        "qa.prueba1@mrm.com",
+        "qa.prueba2@mrm.com"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "E-MAIL",
+      "origen": "autovalor"
+    },
+    {
+      "id": "acquisition-method",
+      "valor": [
+        "Locadoras",
+        "Frotistas"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "acquisition-method",
+      "origen": "autovalor"
+    },
+    {
+      "id": "activity-area",
+      "valor": [
+        "Outros",
+        "Alimentação e Bebidas, e Agricultura"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "activity-area",
+      "origen": "autovalor"
+    },
+    {
+      "id": "fleet-size",
+      "valor": [
+        "21 a 100 veículos",
+        "5 a 20 veículos"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "fleet-size",
+      "origen": "autovalor"
+    },
+    {
+      "id": "company-name",
+      "valor": [
+        "BoVRzBV",
+        "dfsHcuydTZ"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "company-name",
+      "origen": "autovalor"
+    },
+    {
+      "id": "group",
+      "valor": [
+        "1",
+        "5"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "group",
+      "origen": "autovalor"
+    },
+    {
+      "id": "tour-donation",
+      "valor": [
+        "NÃO",
+        "SIM"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "tour-donation",
+      "origen": "autovalor"
+    },
+    {
+      "id": "document",
+      "valor": [
+        "304593",
+        "6782860"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "document",
+      "origen": "autovalor"
+    },
+    {
+      "id": "vin-code",
+      "valor": "LK6ADAE3XTB075680",
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "VIN Spark EUV (clubemyev)"
+    },
+    {
+      "id": "street",
+      "valor": "Avenida Paulista",
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "Rua"
+    },
+    {
+      "id": "street-number",
+      "valor": "1578",
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "Número"
+    },
+    {
+      "id": "birthday",
+      "valor": "15/03/1990",
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "Data de nascimento"
     }
   ],
   "dependencies": [

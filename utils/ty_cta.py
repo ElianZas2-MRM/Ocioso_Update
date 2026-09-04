@@ -111,7 +111,7 @@ def investigate_ty_cta(driver, log=print, evidence_dir=None, take_screenshot=Tru
     try:
         data = driver.execute_script(r"""
             var out = {links: [], weird: []};
-            var containers = document.querySelectorAll('div#thank-you, div.rp-wrapper');
+            var containers = document.querySelectorAll('div#thank-you, div.rp-wrapper, div.reclamos-typ');
             for (var i=0; i<containers.length; i++) {
                 var c = containers[i];
                 var as = c.querySelectorAll('a[href]');
@@ -120,6 +120,14 @@ def investigate_ty_cta(driver, log=print, evidence_dir=None, take_screenshot=Tru
                     var href = a.getAttribute('href') || '';
                     if (!href || href.indexOf('javascript:') === 0 || href === '#') continue;
                     out.links.push({text:(a.textContent||'').trim(), href:a.href, target:a.getAttribute('target')||''});
+                }
+                // El CTA del Libro de Reclamaciones ("Descarga tu reclamo") es un <button>,
+                // no un <a>: dispara la descarga por JS y no tiene href que verificar. Se
+                // reporta igual para que quede constancia de que la TY lo trajo.
+                var bs = c.querySelectorAll('button');
+                for (var k=0; k<bs.length; k++) {
+                    var t = (bs[k].textContent||'').trim();
+                    if (t) out.links.push({text: t, href: '', target: '', boton: true});
                 }
             }
             // Link "raro": atributo href/data-href/data-url/src cuyo valor tiene pinta de
@@ -193,15 +201,25 @@ def investigate_ty_cta(driver, log=print, evidence_dir=None, take_screenshot=Tru
     _seen = set()
     for lk in links:
         href = lk.get("href") or ""
-        if not href or href in _seen:
+        es_boton = bool(lk.get("boton"))
+        clave = href or "boton::" + (lk.get("text") or "")
+        if (not href and not es_boton) or clave in _seen:
             continue
-        _seen.add(href)
+        _seen.add(clave)
         cta = {
             "text": lk.get("text") or "(sin texto)",
             "href": href,
             "target": _target_label(lk.get("target")),
             "landed_url": "", "screenshot": "",
         }
+        if es_boton:
+            # Un CTA <button> dispara su acción por JS y no tiene URL: no hay adónde
+            # navegar ni destino que verificar, pero sí interesa dejar constancia de que
+            # la TY lo mostró (es el "Descarga tu reclamo" del Libro de Reclamaciones).
+            cta["target"] = "botón (acción por JS)"
+            log(f"  🔗 CTA en TY: '{cta['text']}' (botón, sin URL que verificar)")
+            info["ctas"].append(cta)
+            continue
         log(f"  🔗 CTA en TY: '{cta['text']}' -> {href} — segun target abre en: {cta['target']}")
         if take_screenshot:
             cta["landed_url"], cta["screenshot"] = _open_and_capture(
@@ -231,7 +249,8 @@ def format_ty_cta(info):
     ctas = info.get("ctas") or []
     chunks = []
     for cta in ctas:
-        p = [f"{cta['text']} -> {cta['href']} ({cta['target']})"]
+        destino = f" -> {cta['href']}" if cta.get("href") else ""
+        p = [f"{cta['text']}{destino} ({cta['target']})"]
         if cta.get("landed_url"):
             p.append(f"llegó a: {cta['landed_url']}")
         if cta.get("screenshot"):

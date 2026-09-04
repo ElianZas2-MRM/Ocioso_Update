@@ -1,6 +1,6 @@
 {
   "pais": "Ecuador",
-  "ultima_deteccion": "2026-09-01T01:37:35",
+  "ultima_deteccion": "2026-09-02T13:54:24",
   "campos_nuevos": [
     {
       "id": "NOMBRE",
@@ -253,6 +253,20 @@
       "required": false,
       "label": "Despliega eventos del mes. El dropdown se actualiza muy seguido.",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "patent",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "event",
+      "type": "select",
+      "required": true,
+      "label": "event",
+      "origen": "runtime_discovery"
     }
   ]
 }

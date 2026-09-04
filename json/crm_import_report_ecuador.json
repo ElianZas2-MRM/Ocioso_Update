@@ -1,14 +1,290 @@
 {
   "pais": "Ecuador",
-  "fecha_importacion": "2026-09-01T01:40:28.275428",
+  "fecha_importacion": "2026-09-01T18:45:35.770766",
   "hoja_excel": "Ecuador",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 22,
-    "ok": 17
+    "incompletos": 18,
+    "conflictos": 2,
+    "ok": 19
   },
   "faltantes": [],
   "incompletos": [
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "No hay límite de caracteres. Para que se admita, debe llevar un @.",
+      "mensajes_error": [
+        "Ingresa tu correo electrónico.",
+        "El correo electrónico ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TU INSTAGRAM",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 30 caracteres. Debe comenzar con @.",
+      "mensajes_error": [
+        "Ingresa tu usuario de Instagram.",
+        "Tu usuario debe comenzar con @"
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los modelos asignados al formulario.",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega modelos agregados al iframe directamente.",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las ciudades aplicadas al form. Tiene anclado el campo \"Concesionario\".",
+      "mensajes_error": [
+        "Selecciona una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CONCESIONARIO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los concesionarios aplicados al form. Primero debe completarse el campo \"Ciudad\".",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "mensajes_error": [
+        "Selecciona una fecha estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "AÑO DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra diferentes años.",
+      "mensajes_error": [
+        "Selecciona el año de tu auto."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA DE NACIMIENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega un calendario seleccionable. Tiene un copy debajo que dice \"Completar AAAA/MM/DD. Debe ser mayor de 18 años\".",
+      "mensajes_error": [
+        "Ingresa tu fecha de nacimiento.",
+        "Deben ser mayores de 18 años"
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MARCA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes marcas.",
+      "mensajes_error": [
+        "Selecciona una marca."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "OCUPACIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes profesiones.",
+      "mensajes_error": [
+        "Selecciona una ocupación."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿TIENES PENSADO CAMBIAR DE AUTO?",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega opciones de deseo de compra.",
+      "mensajes_error": [
+        "Seleccione una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "SI HOY PUDIERAS COMPRAR UN CHEVROLET, ¿CUÁL SERÍA?",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega opciones de vehículos.",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CLASE",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes clases, agregadas directamente por DEV. Tiene un copy debajo que dice \"Los cupos son limitados y están sujetos a disponibilidad.\"",
+      "mensajes_error": [
+        "Seleccione la clase a la que desea asistir."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿YA ERES CLIENTE CHEVROLET?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Sólo muestra opciones de \"Sí\" y \"No\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    }
+  ],
+  "conflictos": [
+    {
+      "nombre_campo": "C.I.",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Longitud: Debe tener entre 7 a 10 dígitos.\nLos dos primeros dígitos representan el código de provincia (del 01 al 24).\nEl tercer dígito debe estar entre 0 y 5, ya que indica que es una cédula de persona natural.\nEl ultimo dígito es un dígito verificador, calculado con módulo 10 sobre los primeros 9 dígitos.",
+      "mensajes_error": [
+        "Ingresa tu cédula de identidad.",
+        "Ingresa al menos 7 dígitos.",
+        "La cédula de identidad ingresada no parece válida."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{7,10}$",
+      "motivo_derivacion": "Ingresa al menos 7 dígitos.",
+      "tiene_regex": true,
+      "regex_actual": "^((0[0-9]|1[0-9]|2[0-4])|30)[0-9]{5,8}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    },
+    {
+      "nombre_campo": "PLACA",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Hasta 7 caracteres alfanuméricos. Los primeros tres deben ser alfabéticos.",
+      "mensajes_error": [
+        "Completa la placa de tu vehículo.",
+        "Ingresa 7 caracteres.",
+        "La placa ingresada no parece válida."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{7}$",
+      "motivo_derivacion": "Ingresa 7 caracteres.",
+      "tiene_regex": true,
+      "regex_actual": "^[A-Za-z]{3}[A-Za-z0-9]{0,4}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    }
+  ],
+  "ok": [
     {
       "nombre_campo": "NOMBRE",
       "tipo": "Rellenable",
@@ -18,7 +294,9 @@
         "Ingresa tu nombre."
       ],
       "ultimo_ajuste": "2026-08-12",
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "motivo_derivacion": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "APELLIDO",
@@ -29,7 +307,9 @@
         "Ingresa tu apellido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
+      "motivo_derivacion": "Máximo 50 caracteres. Sólo permite letras, la \"ñ\" y espacios.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CELULAR",
@@ -43,31 +323,9 @@
         "El celular ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "E-MAIL",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "No hay límite de caracteres. Para que se admita, debe llevar un @.",
-      "mensajes_error": [
-        "Ingresa tu correo electrónico.",
-        "El correo electrónico ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "TU INSTAGRAM",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Hasta 30 caracteres. Debe comenzar con @.",
-      "mensajes_error": [
-        "Ingresa tu usuario de Instagram.",
-        "Tu usuario debe comenzar con @"
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^(?=(?:09))[0-9]{10}$",
+      "motivo_derivacion": "Ingresa 10 números.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CÓDIGO GMIN: *",
@@ -78,209 +336,8 @@
         "Completa su codigo GM."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MODELOS",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega los modelos asignados al formulario.",
-      "mensajes_error": [
-        "Selecciona un modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MODELO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega modelos agregados al iframe directamente.",
-      "mensajes_error": [
-        "Selecciona un modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CIUDAD",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las ciudades aplicadas al form. Tiene anclado el campo \"Concesionario\".",
-      "mensajes_error": [
-        "Selecciona una ciudad."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CONCESIONARIO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega los concesionarios aplicados al form. Primero debe completarse el campo \"Ciudad\".",
-      "mensajes_error": [
-        "Selecciona un concesionario."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
-      "mensajes_error": [
-        "Selecciona una fecha estimada de compra."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "AÑO DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Muestra diferentes años.",
-      "mensajes_error": [
-        "Selecciona el año de tu auto."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "FECHA DE NACIMIENTO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega un calendario seleccionable. Tiene un copy debajo que dice \"Completar AAAA/MM/DD. Debe ser mayor de 18 años\".",
-      "mensajes_error": [
-        "Ingresa tu fecha de nacimiento.",
-        "Deben ser mayores de 18 años"
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MARCA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega diferentes marcas.",
-      "mensajes_error": [
-        "Selecciona una marca."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "OCUPACIÓN",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega diferentes profesiones.",
-      "mensajes_error": [
-        "Selecciona una ocupación."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿TIENES PENSADO CAMBIAR DE AUTO?",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega opciones de deseo de compra.",
-      "mensajes_error": [
-        "Seleccione una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "SI HOY PUDIERAS COMPRAR UN CHEVROLET, ¿CUÁL SERÍA?",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega opciones de vehículos.",
-      "mensajes_error": [
-        "Selecciona un modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CLASE",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega diferentes clases, agregadas directamente por DEV. Tiene un copy debajo que dice \"Los cupos son limitados y están sujetos a disponibilidad.\"",
-      "mensajes_error": [
-        "Seleccione la clase a la que desea asistir."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿YA ERES CLIENTE CHEVROLET?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Sólo muestra opciones de \"Sí\" y \"No\".",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    }
-  ],
-  "ok": [
-    {
-      "nombre_campo": "C.I.",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Longitud: Debe tener entre 7 a 10 dígitos.\nLos dos primeros dígitos representan el código de provincia (del 01 al 24).\nEl tercer dígito debe estar entre 0 y 5, ya que indica que es una cédula de persona natural.\nEl ultimo dígito es un dígito verificador, calculado con módulo 10 sobre los primeros 9 dígitos.",
-      "mensajes_error": [
-        "Ingresa tu cédula de identidad.",
-        "Ingresa al menos 7 dígitos.",
-        "La cédula de identidad ingresada no parece válida."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": true
-    },
-    {
-      "nombre_campo": "PLACA",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Hasta 7 caracteres alfanuméricos. Los primeros tres deben ser alfabéticos.",
-      "mensajes_error": [
-        "Completa la placa de tu vehículo.",
-        "Ingresa 7 caracteres.",
-        "La placa ingresada no parece válida."
-      ],
-      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{1,10}$",
+      "motivo_derivacion": "Hasta 10 dígitos. Permite sólo números.",
       "tiene_regex": true
     },
     {
@@ -290,6 +347,8 @@
       "descripcion": "Despliega kilometrajes entre 5 mil km y 50 mil km.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -299,6 +358,8 @@
       "descripcion": "Sólo muestra opciones de \"0 km\" y \"Seminuevo\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -308,6 +369,8 @@
       "descripcion": "Sólo despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -317,6 +380,8 @@
       "descripcion": "Despliega diferentes marcas.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -326,6 +391,8 @@
       "descripcion": "Sólo despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -335,6 +402,8 @@
       "descripcion": "Sólo despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -344,6 +413,8 @@
       "descripcion": "Llega al campo comentario el mismo copy.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -353,6 +424,8 @@
       "descripcion": "Llega al campo comentario el mismo copy. Se posiciona arriba del checkbox de Términos y Condiciones.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -362,6 +435,8 @@
       "descripcion": "Llega al campo comentario el mismo copy.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -371,6 +446,8 @@
       "descripcion": "Llega al campo comentario el mismo copy.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -380,6 +457,8 @@
       "descripcion": "Llega al campo comentario el mismo copy.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -389,6 +468,8 @@
       "descripcion": "Llega al campo comentario el mismo copy. El título es el mismo.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -398,6 +479,8 @@
       "descripcion": "Sólo muestra opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -407,6 +490,8 @@
       "descripcion": "Sólo muestra opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -416,6 +501,8 @@
       "descripcion": "Despliega eventos del mes. El dropdown se actualiza muy seguido.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ]

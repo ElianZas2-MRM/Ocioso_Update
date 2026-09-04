@@ -399,7 +399,7 @@
       "descripcion": "De 2 a 50 caracteres. Permite sólo letras, espacios, la \"ñ\" y tildes.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -419,15 +419,15 @@
         "Ingresa tu nombre.",
         "Ingresa al menos 2 letras."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.724951"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.724951",
+      "motivo_derivacion": "Ingresa al menos 2 letras."
     },
     "APELLIDO": {
       "descripcion": "De 2 a 50 caracteres. Permite sólo letras, espacios, la \"ñ\" y tildes.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -447,15 +447,15 @@
         "Ingresa tu apellido.",
         "Ingresa al menos 2 letras."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.724951"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.724951",
+      "motivo_derivacion": "Ingresa al menos 2 letras."
     },
     "CÉDULA": {
       "descripcion": "De 5 a 12 dígitos. Permite sólo números. Tiene un copy debajo del campo que dice \"Ingresa tu número de cédula sin guiones\". Debe abrir el teclado numérico.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{2,12}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -475,15 +475,15 @@
         "Ingresa tu cédula de identidad.",
         "Ingresa al menos 2 letras."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.724951"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.724951",
+      "motivo_derivacion": "Ingresa al menos 2 letras."
     },
     "CELULAR": {
       "descripcion": "Permite 8 dígitos. Debe empezar siempre con 6 o 7. No acepta unicodigo",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^(?=(?:6|7))[0-9]{8}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -504,9 +504,9 @@
         "El número debe comenzar con 6 o 7.",
         "El celular ingresado no parece válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.724951"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.724951",
+      "motivo_derivacion": "Permite 8 dígitos. Debe empezar siempre con 6 o 7. No acepta unicodigo"
     },
     "E-MAIL": {
       "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",

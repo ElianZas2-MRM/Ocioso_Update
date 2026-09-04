@@ -533,7 +533,7 @@
       "descripcion": "Hasta 50 caracteres. Solo se debe permitir letras, la \"ñ\" y espacios.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -552,15 +552,15 @@
       "mensajes_error_excel": [
         "Ingresa tu apellido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Hasta 50 caracteres. Solo se debe permitir letras, la \"ñ\" y espacios."
     },
     "RUT": {
       "descripcion": "Posee un algoritmo, no permitir que se ingresen todos los dígitos iguales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{8,}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -581,9 +581,9 @@
         "El RUT ingresado no parece válido.",
         "Ingresa tu RUT"
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Ingresar al menos 8 dígitos."
     },
     "N° DE DOCUMENTO": {
       "descripcion": "Depende del campo \"Tipo de Documento\". Requiere en cada caso:",
@@ -616,7 +616,7 @@
       "descripcion": "Hastar 9 caracteres númericos. No permite símbolos especiales. No acepta unificado. No puede comenzar con 0.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[1-9][0-9]{8}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -637,9 +637,9 @@
         "El  número no puede empezar con 0.",
         "Completar 9 números."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Completar 9 números."
     },
     "E-MAIL": {
       "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
@@ -673,7 +673,7 @@
       "descripcion": "Debe permitir 6 dígitos alfanuméricos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{6}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -694,15 +694,15 @@
         "Ingresa la patente en uno de los siguientes formatos: AA1111 o AAAA11.",
         "Ingresa 6 caracteres."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Ingresa 6 caracteres."
     },
     "EDAD": {
       "descripcion": "2 caracteres numéricos máximo. Debe permitir del 18 al 99.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,2}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -723,15 +723,15 @@
         "La edad ingresada no parece válida.",
         "Debes ser mayor de 18 años."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "2 caracteres numéricos máximo. Debe permitir del 18 al 99."
     },
     "AÑO MODELO DE SU VEHÍCULO": {
       "descripcion": "Máximo 4 caracteres numéricos. No debe permitir caracteres especiales. El año mínimo es 1925.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,4}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -752,15 +752,15 @@
         "Ingresa sólo números.",
         "El año ingresado no es válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Máximo 4 caracteres numéricos. No debe permitir caracteres especiales. El año mínimo es 1925."
     },
     "VERSIÓN": {
       "descripcion": "Máximo 30 caracteres alfanuméricos. No debe permitir carácteres especiales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,30}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -780,14 +780,14 @@
         "Ingresa la versión de tu vehículo.",
         "Ingresa sólo caracteres alfanuméricos."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Máximo 30 caracteres alfanuméricos. No debe permitir carácteres especiales."
     },
     "COLOR": {
-      "descripcion": "Máximo 30 caracteres alfabéticos. No debe permitir carácteres especiales.",
-      "campo": "",
-      "element_id": "",
+      "descripcion": "color",
+      "campo": "color",
+      "element_id": "color",
       "regex_full": "",
       "regex_char": "",
       "test_text": "",
@@ -802,21 +802,13 @@
       "error_messages": {},
       "error_message_patterns": [],
       "error_config": {},
-      "error_priority": [],
-      "obligatorio_excel": true,
-      "mensajes_error_excel": [
-        "Escribe el color de tu vehículo.",
-        "Ingresa sólo caracteres alfanuméricos."
-      ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "error_priority": []
     },
     "TU INSTAGRAM": {
       "descripcion": "Máximo 30 caracteres alfanuméricos. El campo ya tiene la “@” añadida en copy. Permite “_”. No permite espacios ni otros caracteres especiales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,30}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -836,9 +828,9 @@
         "Ingresa tu usuario de Instagram.",
         "El usuario ingresado no parece válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Máximo 30 caracteres alfanuméricos. El campo ya tiene la “@” añadida en copy. Permite “_”. No permite espacios ni otros caracteres especiales."
     },
     "¿CUÁLES SON TUS PASATIEMPOS?": {
       "descripcion": "Dropdown con múltiples opciones seleccionables.",
@@ -1584,7 +1576,7 @@
       "descripcion": "Máximo 120 caracteres. Permite letras, la \"ñ\", números, caracteres especiales y espacios. Debe llegar al campo comentarios del cliente en Salesforce.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,120}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -1603,9 +1595,9 @@
       "mensajes_error_excel": [
         "Por favor ingrese sus comentarios."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.749314"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.749314",
+      "motivo_derivacion": "Máximo 120 caracteres. Permite letras, la \"ñ\", números, caracteres especiales y espacios. Debe llegar al campo comentarios del cliente en Salesforce."
     },
     "ME GUSTARÍA RECIBIR INFORMACIÓN DE LOS PRODUCTOS": {
       "descripcion": "Copy mostrado: Me gustaría recibir información de los productos.\nDebe llegar al campo comentarios del cliente en Salesforce como \"Recibe info de Productos: Sí\".",
@@ -1662,6 +1654,206 @@
       "pendiente_regex": true,
       "origen": "crm_excel_import",
       "fecha_importacion": "2026-09-01T01:37:35.749314"
+    },
+    "DOCUMENT-TYPE": {
+      "descripcion": "document-type",
+      "campo": "document-type",
+      "element_id": "document-type",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "DOCUMENT": {
+      "descripcion": " ",
+      "campo": "document",
+      "element_id": "document",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "TELEPHONE_PREFIX": {
+      "descripcion": "telephone_prefix",
+      "campo": "telephone_prefix",
+      "element_id": "telephone_prefix",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "NORMATIVE": {
+      "descripcion": "normative",
+      "campo": "normative",
+      "element_id": "normative",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "VERSIONS": {
+      "descripcion": "versions",
+      "campo": "versions",
+      "element_id": "versions",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "GENDER": {
+      "descripcion": "gender",
+      "campo": "gender",
+      "element_id": "gender",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "AGE": {
+      "descripcion": "age",
+      "campo": "age",
+      "element_id": "age",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "MODEL_YEAR": {
+      "descripcion": "model_year",
+      "campo": "model_year",
+      "element_id": "model_year",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "VERSION": {
+      "descripcion": "version",
+      "campo": "version",
+      "element_id": "version",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "INSTAGRAM": {
+      "descripcion": "instagram",
+      "campo": "instagram",
+      "element_id": "instagram",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Chile"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

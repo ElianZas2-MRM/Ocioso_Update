@@ -1,14 +1,123 @@
 {
   "pais": "Bolivia",
-  "fecha_importacion": "2026-09-01T01:40:05.242739",
+  "fecha_importacion": "2026-09-01T18:45:35.736161",
   "hoja_excel": "Bolivia",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 12,
-    "ok": 0
+    "incompletos": 8,
+    "conflictos": 0,
+    "ok": 4
   },
   "faltantes": [],
   "incompletos": [
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
+      "mensajes_error": [
+        "Ingresa tu correo electrónico.",
+        "El correo ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega todos los modelos asignados al formulario.",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DEPARTAMENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega todas las regiones o provincias asignadas al formulario. Tiene anclados los campos \"Ciudad\" y \"Distribuidor\". Este debe completarse en primer lugar.",
+      "mensajes_error": [
+        "Selecciona un departamento."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega todas las ciudades asignadas al formulario. Está anclado al campo \"Departamento\". A su vez, una vez completado, desbloquea el campo \"Distribuidor\".",
+      "mensajes_error": [
+        "Selecciona una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "DISTRIBUIDOR",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega todos los concesionarios seleccionados para el formulario. Depende de que los campos \"Departamento\" y \"Ciudad\" hayan sido completados.",
+      "mensajes_error": [
+        "Selecciona un distribuidor."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Se muestran los meses de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses",
+      "mensajes_error": [
+        "Selecciona una fecha estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MÉTODO DE PAGO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las opciones \"Al contado\" y \"Financiado\". Impacta en el campo comentario de Salesforce. Es obligatorio.",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TÉRMINOS Y CONDICIONES",
+      "tipo": "T&C",
+      "obligatorio": true,
+      "descripcion": "Es el checkbox que está por default en todos los formularios.",
+      "mensajes_error": [
+        "Acepte los términos y condiciones de registro."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    }
+  ],
+  "conflictos": [],
+  "ok": [
     {
       "nombre_campo": "NOMBRE",
       "tipo": "Rellenable",
@@ -19,7 +128,9 @@
         "Ingresa al menos 2 letras."
       ],
       "ultimo_ajuste": "2026-08-07",
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "motivo_derivacion": "Ingresa al menos 2 letras.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "APELLIDO",
@@ -31,7 +142,9 @@
         "Ingresa al menos 2 letras."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "motivo_derivacion": "Ingresa al menos 2 letras.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CÉDULA",
@@ -43,7 +156,9 @@
         "Ingresa al menos 2 letras."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{2,12}$",
+      "motivo_derivacion": "Ingresa al menos 2 letras.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CELULAR",
@@ -56,97 +171,9 @@
         "El celular ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "E-MAIL",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
-      "mensajes_error": [
-        "Ingresa tu correo electrónico.",
-        "El correo ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MODELOS",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega todos los modelos asignados al formulario.",
-      "mensajes_error": [
-        "Selecciona un modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "DEPARTAMENTO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega todas las regiones o provincias asignadas al formulario. Tiene anclados los campos \"Ciudad\" y \"Distribuidor\". Este debe completarse en primer lugar.",
-      "mensajes_error": [
-        "Selecciona un departamento."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CIUDAD",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega todas las ciudades asignadas al formulario. Está anclado al campo \"Departamento\". A su vez, una vez completado, desbloquea el campo \"Distribuidor\".",
-      "mensajes_error": [
-        "Selecciona una ciudad."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "DISTRIBUIDOR",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega todos los concesionarios seleccionados para el formulario. Depende de que los campos \"Departamento\" y \"Ciudad\" hayan sido completados.",
-      "mensajes_error": [
-        "Selecciona un distribuidor."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Se muestran los meses de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses",
-      "mensajes_error": [
-        "Selecciona una fecha estimada de compra."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MÉTODO DE PAGO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las opciones \"Al contado\" y \"Financiado\". Impacta en el campo comentario de Salesforce. Es obligatorio.",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "TÉRMINOS Y CONDICIONES",
-      "tipo": "T&C",
-      "obligatorio": true,
-      "descripcion": "Es el checkbox que está por default en todos los formularios.",
-      "mensajes_error": [
-        "Acepte los términos y condiciones de registro."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^(?=(?:6|7))[0-9]{8}$",
+      "motivo_derivacion": "Permite 8 dígitos. Debe empezar siempre con 6 o 7. No acepta unicodigo",
+      "tiene_regex": true
     }
-  ],
-  "ok": []
+  ]
 }

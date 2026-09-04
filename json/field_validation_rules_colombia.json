@@ -394,7 +394,7 @@
       "descripcion": "De 1 a 50 caracteres alfabeticos. No permite números ni caracteres especiales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -413,15 +413,15 @@
       "mensajes_error_excel": [
         "Ingresa tu nombre."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "De 1 a 50 caracteres alfabeticos. No permite números ni caracteres especiales."
     },
     "APELLIDO": {
       "descripcion": "De 1 a 50 caracteres alfabeticos. No permite números ni caracteres especiales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -440,15 +440,15 @@
       "mensajes_error_excel": [
         "Ingresa tu apellido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "De 1 a 50 caracteres alfabeticos. No permite números ni caracteres especiales."
     },
     "CÉDULA": {
       "descripcion": "De 7 a 10 caracteres numéricos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{7,10}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -469,15 +469,15 @@
         "Ingresa al menos 7 dígitos.",
         "La cédula de identidad ingresada no parece válida."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "Ingresa al menos 7 dígitos."
     },
     "CELULAR": {
       "descripcion": "Acepta 10 caracteres numéricos. El primer número del celular debe ser 3.. No acepta unicódigo ejemplo (1111111111, 3111111111) ni símbolos especiales.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^(?=(?:3))[0-9]{10}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -499,9 +499,9 @@
         "Completa los 10 dígitos de tu celular.",
         "El celular ingresado no parece válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "Completa los 10 dígitos de tu celular que empieza con 3."
     },
     "E-MAIL": {
       "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido. No permite ingresar \".\" dos veces seguidas.",
@@ -535,7 +535,7 @@
       "descripcion": "Hasta 30 caracteres alfanumericos. Debe comenzar con \"@\". Permite todo tipo de caracteres.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,30}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -555,15 +555,15 @@
         "Ingresa tu usuario de Instagram.",
         "Tu usuario debe comenzar con @"
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "Hasta 30 caracteres alfanumericos. Debe comenzar con \"@\". Permite todo tipo de caracteres."
     },
     "PLACA": {
       "descripcion": "Sólo 6 carácteres alfanuméricos. Los primeros tres deben ser alfabéticos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{6}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -582,9 +582,9 @@
       "mensajes_error_excel": [
         "Ingrese un placa válida alfanumérica de 6 caracteres."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "Ingrese un placa válida alfanumérica de 6 caracteres."
     },
     "COMENTARIOS": {
       "descripcion": "Hasta 1.000 caracteres alfanuméricos. La vista es expandible.",
@@ -643,7 +643,7 @@
       "descripcion": "De 2 a 50 caracteres alfanuméricos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{2,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -663,9 +663,9 @@
         "Ingresa tu comentario.",
         "Ingresa mínimo 2 caracteres."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.754342"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.754342",
+      "motivo_derivacion": "Ingresa mínimo 2 caracteres."
     },
     "EVENTO": {
       "descripcion": "Despliega eventos del mes. El dropdown se actualiza muy seguido.",
@@ -1722,6 +1722,66 @@
       "pendiente_regex": true,
       "origen": "crm_excel_import",
       "fecha_importacion": "2026-09-01T01:37:35.754342"
+    },
+    "TELEPHONE_PREFIX": {
+      "descripcion": "telephone_prefix",
+      "campo": "telephone_prefix",
+      "element_id": "telephone_prefix",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "PATENT": {
+      "descripcion": "patent",
+      "campo": "patent",
+      "element_id": "patent",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "STANDALONE": {
+      "descripcion": "la dirección, ciudad, estado",
+      "campo": "standAlone",
+      "element_id": "standAlone",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

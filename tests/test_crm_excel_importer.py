@@ -6,6 +6,7 @@ arma un workbook sintético con openpyxl en un archivo temporal.
 import datetime
 import json
 import os
+import re
 
 import openpyxl
 import pytest
@@ -26,15 +27,23 @@ def _crear_excel_sintetico(tmp_path):
     ar = wb.create_sheet("Argentina")
     ar.append(["CAMPO", "TIPO", "OBLIGATORIO", "VALIDACIONES", "MENSAJE DE ERROR",
                "MENSAJE DE ERROR2", "ÚLTIMO AJUSTE"])
-    # Ya existe en el JSON con regex_full armado -> no se debe tocar (va a "ok").
+    # Ya existe en el JSON con un regex_full que coincide con lo que deriva su prosa -> "ok".
     ar.append(["NOMBRE", "Rellenable", True, "De 2 a 50 caracteres.",
                "Ingresá tu nombre.", "Ingresá mínimo 2 letras.", "19 de Junio"])
-    # Existe en el JSON pero regex_full vacío y obligatorio=True -> "incompletos".
+    # Existe en el JSON pero regex_full vacío y obligatorio=True -> "incompletos", y su
+    # prosa alcanza para derivar la regla, así que el merge se la completa.
     ar.append(["APELLIDO", "Rellenable", True, "De 2 a 50 caracteres.",
-               "Ingresá tu apellido.", None, None])
+               "Ingresá tu apellido.", "Ingresá mínimo 2 letras.", None])
     # No existe en el JSON -> "faltantes", se debe crear en el merge.
     ar.append(["DNI", "Rellenable", True, "De 7 a 9 caracteres numéricos.",
                "Ingresá tu DNI.", "Ingresá mínimo 7 dígitos.", None])
+    # Caso real que motivó la feature: la descripción dice "de 1 a 10" pero el mensaje de
+    # error dice "10 caracteres", y el form rechaza cualquier cosa que no tenga 10 -> el
+    # regex cargado quedó mal y esto debe caer en "conflictos".
+    ar.append(["NÚMERO DE CONTRATO", "Rellenable", True,
+               "De 1 a 10 caracteres numéricos. No permite iniciar con 0.",
+               "Ingresá el número de contrato.",
+               "Ingresá 10 caracteres que no comiencen con 0.", None])
 
     # Chile: usa "MENSAJE DE ERROR 2" (con espacio) como variante de header, y
     # "DESCRIPCIÓN" en vez de "VALIDACIONES" para la columna de prosa.
@@ -50,16 +59,27 @@ def _crear_excel_sintetico(tmp_path):
     return ruta
 
 
+# El regex que la prosa de NOMBRE deriva, calcado: si el JSON ya trae exactamente este,
+# el campo va a "ok" y nada se recalcula.
+REGEX_NOMBRE_DERIVADO = r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$"
+# El regex viejo de NÚMERO DE CONTRATO, el que aceptaba 1 dígito y dejaba pasar "324".
+REGEX_CONTRATO_VIEJO = r"^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{1,10}$"
+
+
 def _reglas_json_argentina():
     return {
         "fields": {
             "NOMBRE": {
-                "regex_full": "^[a-zA-Z ]{2,50}$",
+                "regex_full": REGEX_NOMBRE_DERIVADO,
                 "descripcion": "NOMBRE",
             },
             "APELLIDO": {
                 "regex_full": "",
                 "descripcion": "APELLIDO",
+            },
+            "NÚMERO DE CONTRATO": {
+                "regex_full": REGEX_CONTRATO_VIEJO,
+                "descripcion": "NÚMERO DE CONTRATO",
             },
         }
     }
@@ -111,7 +131,7 @@ class TestParsear:
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
         campos_por_pais = importer.parsear()
         assert set(campos_por_pais.keys()) == {"Argentina", "Chile"}
-        assert len(campos_por_pais["Argentina"]) == 3
+        assert len(campos_por_pais["Argentina"]) == 4
         assert len(campos_por_pais["Chile"]) == 1
 
     def test_detecta_columna_mensaje_error_con_headers_no_uniformes(self, excel_sintetico):
@@ -153,6 +173,21 @@ class TestComparar:
         assert "NOMBRE" in nombres_ok
         assert "NOMBRE" not in {c["nombre_campo"] for c in comparacion["incompletos"]}
         assert "NOMBRE" not in {c["nombre_campo"] for c in comparacion["faltantes"]}
+        assert "NOMBRE" not in {c["nombre_campo"] for c in comparacion["conflictos"]}
+
+    def test_campo_cuya_prosa_contradice_el_regex_cargado_va_a_conflictos(self, excel_sintetico):
+        importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
+        comparacion = importer.comparar("Argentina", _reglas_json_argentina())
+
+        conflictos = {c["nombre_campo"]: c for c in comparacion["conflictos"]}
+        assert "NÚMERO DE CONTRATO" in conflictos
+        contrato = conflictos["NÚMERO DE CONTRATO"]
+        assert contrato["regex_actual"] == REGEX_CONTRATO_VIEJO
+        assert contrato["regex_derivado"] == r"^[1-9][0-9]{9}$"
+        # Lo que realmente se aplica es el ajuste de largo sobre la regla existente.
+        assert contrato["regex_ajustado"] == r"^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{10}$"
+        # El motivo cita el mensaje de error, que es el que ganó sobre la descripción.
+        assert "10 caracteres" in contrato["motivo_derivacion"]
 
     def test_campo_existente_sin_regex_y_obligatorio_va_a_incompletos(self, excel_sintetico):
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
@@ -170,45 +205,123 @@ class TestComparar:
 
 
 class TestAplicarMerge:
-    def test_nunca_pisa_una_entrada_existente(self, excel_sintetico):
-        """Invariante más importante del plan: ni 'ok' ni 'incompletos' se tocan."""
+    def test_no_toca_un_campo_cuyo_regex_ya_coincide_con_su_prosa(self, excel_sintetico):
+        """Un regex que la prosa confirma queda intacto, y la entrada original no se muta."""
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
         reglas = _reglas_json_argentina()
         nombre_original = dict(reglas["fields"]["NOMBRE"])
-        apellido_original = dict(reglas["fields"]["APELLIDO"])
 
         comparacion = importer.comparar("Argentina", reglas)
         actualizado, _ = importer.aplicar_merge("Argentina", comparacion, reglas)
 
         assert actualizado["fields"]["NOMBRE"] == nombre_original
-        assert actualizado["fields"]["APELLIDO"] == apellido_original
-        # La copia de entrada no se muta tampoco.
+        # aplicar_merge trabaja sobre una copia: el dict de entrada no se muta.
         assert reglas["fields"]["NOMBRE"] == nombre_original
+
+    def test_completa_el_regex_de_un_obligatorio_que_no_lo_tenia(self, excel_sintetico):
+        importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
+        reglas = _reglas_json_argentina()
+        comparacion = importer.comparar("Argentina", reglas)
+
+        actualizado, cambios = importer.aplicar_merge("Argentina", comparacion, reglas)
+
+        apellido = actualizado["fields"]["APELLIDO"]
+        assert apellido["regex_full"] == REGEX_NOMBRE_DERIVADO
+        assert apellido["origen"] == "regex_derivado_prosa"
+        assert apellido["motivo_derivacion"]
+        assert "pendiente_regex" not in apellido
+        assert cambios["completados"] == 1
+
+    def test_conflicto_corrige_el_largo_y_conserva_el_resto_de_la_regla(self, excel_sintetico):
+        """El caso que motivó la feature: la descripción decía 1-10 y el form pide 10.
+
+        Se ajusta el cuantificador y NADA más: el lookahead que impide empezar con 0 sigue
+        ahí, aunque la prosa no vuelva a mencionarlo."""
+        importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
+        reglas = _reglas_json_argentina()
+        comparacion = importer.comparar("Argentina", reglas)
+
+        actualizado, cambios = importer.aplicar_merge("Argentina", comparacion, reglas)
+
+        contrato = actualizado["fields"]["NÚMERO DE CONTRATO"]
+        assert contrato["regex_full"] == r"^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{10}$"
+        assert contrato["regex_full_previo"] == REGEX_CONTRATO_VIEJO
+        assert contrato["origen"] == "largo_ajustado_prosa"
+        assert cambios["recalculados"] == 1
+        # El valor que fallaba en producción ya no pasa; uno de 10 dígitos sí.
+        assert re.fullmatch(contrato["regex_full"], "5372819044")
+        assert not re.fullmatch(contrato["regex_full"], "324")
+        assert not re.fullmatch(contrato["regex_full"], "0372819044")
+
+    def test_conflicto_conserva_la_clase_de_caracteres_al_ajustar_el_largo(self, excel_sintetico):
+        """La regla admite espacios y puntuación; la prosa de NOMBRE sólo habla de "letras"
+        y de un largo 2-50. Se corrige el largo y la clase queda intacta: derivar el regex
+        entero desde la prosa dejaría un comentario sin espacios."""
+        importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
+        reglas = {"fields": {"NOMBRE": {"regex_full": r"^[a-zA-ZñÑ .,;:!?]{5,500}$"}}}
+        comparacion = importer.comparar("Argentina", reglas)
+
+        actualizado, cambios = importer.aplicar_merge("Argentina", comparacion, reglas)
+
+        assert actualizado["fields"]["NOMBRE"]["regex_full"] == r"^[a-zA-ZñÑ .,;:!?]{5,50}$"
+        assert cambios["recalculados"] == 1
+        # Lo que importa: la puntuación y el espacio siguen permitidos.
+        assert re.fullmatch(actualizado["fields"]["NOMBRE"]["regex_full"], "Hola, me interesa.")
+
+    def test_conflicto_sin_largo_aplicable_no_toca_la_regla(self, excel_sintetico):
+        """Cuando el largo cargado ya cae dentro de lo que pide la prosa no hay nada que
+        corregir, pero el conflicto igual queda registrado para revisarlo a mano."""
+        importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
+        regla = r"^[a-zA-ZñÑ .,;:!?]{2,50}$"
+        reglas = {"fields": {"NOMBRE": {"regex_full": regla}}}
+        comparacion = importer.comparar("Argentina", reglas)
+
+        actualizado, cambios = importer.aplicar_merge("Argentina", comparacion, reglas)
+
+        assert actualizado["fields"]["NOMBRE"]["regex_full"] == regla
+        assert "regex_full_previo" not in actualizado["fields"]["NOMBRE"]
+        assert cambios["recalculados"] == 0
+        assert "NOMBRE" in {c["nombre_campo"] for c in comparacion["conflictos"]}
 
     def test_agrega_solo_los_campos_faltantes(self, excel_sintetico):
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
         reglas = _reglas_json_argentina()
         comparacion = importer.comparar("Argentina", reglas)
 
-        actualizado, cantidad = importer.aplicar_merge("Argentina", comparacion, reglas)
+        actualizado, cambios = importer.aplicar_merge("Argentina", comparacion, reglas)
 
-        assert cantidad == 1
+        assert cambios["agregados"] == 1
         assert "DNI" in actualizado["fields"]
         nuevo = actualizado["fields"]["DNI"]
-        assert nuevo["pendiente_regex"] is True
-        assert nuevo["origen"] == "crm_excel_import"
-        assert nuevo["regex_full"] == ""
+        # Su prosa alcanza para derivar la regla, así que nace con regex en vez de pendiente.
+        assert nuevo["regex_full"] == r"^[0-9]{7,9}$"
+        assert nuevo["origen"] == "regex_derivado_prosa"
+        assert "pendiente_regex" not in nuevo
         assert nuevo["obligatorio_excel"] is True
         assert nuevo["mensajes_error_excel"] == ["Ingresá tu DNI.", "Ingresá mínimo 7 dígitos."]
 
-    def test_no_agrega_nada_si_no_hay_faltantes(self, excel_sintetico):
+    def test_faltante_sin_prosa_util_nace_pendiente_de_revision(self, excel_sintetico):
+        """Sin con qué derivar, el campo se crea igual pero marcado para revisión manual:
+        el módulo no inventa una regla."""
+        importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
+        comparacion = importer.comparar("Chile", {"fields": {}})
+
+        actualizado, cambios = importer.aplicar_merge("Chile", comparacion, {"fields": {}})
+
+        rut = actualizado["fields"]["RUT"]  # "Posee un algoritmo de validación."
+        assert rut["regex_full"] == ""
+        assert rut["pendiente_regex"] is True
+        assert rut["origen"] == "crm_excel_import"
+        assert cambios["agregados"] == 1
+
+    def test_no_cambia_nada_si_no_hay_faltantes_ni_conflictos(self, excel_sintetico):
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
         reglas_chile = {"fields": {"RUT": {"regex_full": "^[0-9kK.-]+$"}}}
         comparacion = importer.comparar("Chile", reglas_chile)
 
-        actualizado, cantidad = importer.aplicar_merge("Chile", comparacion, reglas_chile)
+        actualizado, cambios = importer.aplicar_merge("Chile", comparacion, reglas_chile)
 
-        assert cantidad == 0
+        assert cambios == {"agregados": 0, "completados": 0, "recalculados": 0}
         assert actualizado["fields"]["RUT"]["regex_full"] == "^[0-9kK.-]+$"
 
 
@@ -222,7 +335,9 @@ class TestReporte:
         assert reporte["pais"] == "Argentina"
         assert reporte["hoja_excel"] == "Argentina"
         assert "fecha_importacion" in reporte
-        assert reporte["resumen"] == {"faltantes": 1, "incompletos": 1, "ok": 1}
+        assert reporte["resumen"] == {"faltantes": 1, "incompletos": 1,
+                                      "conflictos": 1, "ok": 1}
+        assert reporte["conflictos"] == comparacion["conflictos"]
         assert reporte["faltantes"] == comparacion["faltantes"]
         assert reporte["incompletos"] == comparacion["incompletos"]
         assert reporte["ok"] == comparacion["ok"]

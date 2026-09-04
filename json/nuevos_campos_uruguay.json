@@ -1,6 +1,6 @@
 {
   "pais": "Uruguay",
-  "ultima_deteccion": "2026-09-01T01:37:35",
+  "ultima_deteccion": "2026-09-02T14:33:54",
   "campos_nuevos": [
     {
       "id": "patent",
@@ -163,6 +163,20 @@
       "required": true,
       "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "estimated-mileage",
+      "type": "select",
+      "required": true,
+      "label": "estimated-mileage",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "vin",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
     }
   ]
 }

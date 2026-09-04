@@ -1,85 +1,15 @@
 {
   "pais": "Argentina",
-  "fecha_importacion": "2026-09-01T01:40:02.302505",
+  "fecha_importacion": "2026-09-01T18:45:35.726113",
   "hoja_excel": "Argentina",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 26,
-    "ok": 24
+    "incompletos": 20,
+    "conflictos": 7,
+    "ok": 23
   },
   "faltantes": [],
   "incompletos": [
-    {
-      "nombre_campo": "CÓDIGO POSTAL",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Sólo 4 caracteres numéricos.",
-      "mensajes_error": [
-        "Ingresá el código postal.",
-        "Ingresá 4 dígitos."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CUIT",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "11 caracteres numéricos. Se autorellena con guiones. Ejemplo: 01-12345678-9",
-      "mensajes_error": [
-        "Ingresá tu CUIT.",
-        "El CUIT debe tener 11 dígitos."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "RAZÓN SOCIAL",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "De 1 a 100 caracteres alfanuméricos. Permite enviar sólo letras, sólo números; y mezclado. Permite caracteres especiales y espacios.",
-      "mensajes_error": [
-        "Ingresá la razón social."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "GRUPO",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "De 1 a 4 caracteres numéricos.",
-      "mensajes_error": [
-        "Ingresá el grupo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "PREFIJO - CELULAR (SIN 15)",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Prefijo: de 2 a 4 caracteres numéricos. Celular: de 6 a 10 caracteres numéricos. No acepta unicodigo (ej. 00000000)",
-      "mensajes_error": [
-        "Ingresá tu celular.",
-        "Ingresá mínimo 6 números.",
-        "Ingrese un número telefónico válido.",
-        "Ingresá un valor de prefijo telefónico válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "TUS RESPUESTAS SON COMPLETAMENTE ANÓNIMAS",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
-      "mensajes_error": [
-        "Describí mejor tu opinión."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
     {
       "nombre_campo": "MODELOS",
       "tipo": "Dropdown",
@@ -89,6 +19,8 @@
         "Seleccioná un modelo."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -100,6 +32,8 @@
         "Seleccioná una provincia."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -111,6 +45,8 @@
         "Seleccioná una ciudad."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -122,6 +58,8 @@
         "Seleccioná un concesionario."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -133,6 +71,8 @@
         "Seleccioná la fecha estimada de compra."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -144,6 +84,8 @@
         "Seleccioná una opción."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -155,6 +97,8 @@
         "Seleccioná al menos una opción."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -166,6 +110,8 @@
         "Seleccioná tu versión."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -177,6 +123,8 @@
         "Seleccioná tu servicio."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -188,6 +136,8 @@
         "Seleccioná una consultoría."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -199,6 +149,8 @@
         "Seleccioná una ocupación."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -210,6 +162,8 @@
         "Elegí tu respuesta."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -221,6 +175,8 @@
         "Elegí tu respuesta."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -232,6 +188,8 @@
         "Elegí tu respuesta."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -243,6 +201,8 @@
         "Elegí tu respuesta."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -254,6 +214,8 @@
         "Elegí tu respuesta."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -265,6 +227,8 @@
         "Selecciona una opción."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -276,6 +240,8 @@
         "Selecciona una opción."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -285,6 +251,8 @@
       "descripcion": "Tiene las opciones de \"Sí\" y \"No\". Sólo puedes elegir uno. No se puede des-seleccionar.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -294,10 +262,12 @@
       "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ],
-  "ok": [
+  "conflictos": [
     {
       "nombre_campo": "NOMBRE",
       "tipo": "Rellenable",
@@ -309,7 +279,12 @@
         "Ingrese un nombre válido."
       ],
       "ultimo_ajuste": "19 de Junio",
-      "tiene_regex": true
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "motivo_derivacion": "Ingresá mínimo 2 letras.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
     },
     {
       "nombre_campo": "APELLIDO",
@@ -322,7 +297,12 @@
         "Ingrese un apellido válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": true
+      "regex_derivado": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "motivo_derivacion": "Ingresá mínimo 2 letras.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!.*(.)(\\1){2})(?=.*[aeiouAEIOUáéíóúÁÉÍÓÚ])(?=.*[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZñÑ])[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{2,50}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
     },
     {
       "nombre_campo": "CELULAR",
@@ -336,7 +316,12 @@
         "Ingresá un valor de prefijo válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": true
+      "regex_derivado": "^[0-9]{10,}$",
+      "motivo_derivacion": "Ingresá mínimo 10 números.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!(.)(\\1+$))[0-9]{10,15}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
     },
     {
       "nombre_campo": "DNI",
@@ -350,19 +335,12 @@
         "El DNI no puede empezar con 0."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": true
-    },
-    {
-      "nombre_campo": "E-MAIL",
-      "tipo": "E-mail",
-      "obligatorio": true,
-      "descripcion": "Debe incluir el símbolo \"@\" para ser válido. No tiene límite de caracteres, pero tampoco deja enviar. Permite caracteres especiales y es alfanumerico.",
-      "mensajes_error": [
-        "Ingresá tu email.",
-        "El email ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": true
+      "regex_derivado": "^[1-9][0-9]{6,8}$",
+      "motivo_derivacion": "Ingresá minimo 7 dígitos.",
+      "tiene_regex": true,
+      "regex_actual": "^(?!(.)(\\1+$))[0-9]{7,9}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
     },
     {
       "nombre_campo": "NÚMERO DE CONTRATO",
@@ -374,6 +352,85 @@
         "Ingresá 10 caracteres que no comiencen con 0."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[1-9][0-9]{9}$",
+      "motivo_derivacion": "Ingresá 10 caracteres que no comiencen con 0.",
+      "tiene_regex": true,
+      "regex_actual": "^(?=(?:1|2|3|4|5|6|7|8|9))[0-9]{10}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    },
+    {
+      "nombre_campo": "INSERTÁ TU OPINIÓN",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
+      "mensajes_error": [
+        "Describí mejor tu opinión."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{5,500}$",
+      "motivo_derivacion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
+      "tiene_regex": true,
+      "regex_actual": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ .,;:!?\"'()_\\-+/@#%&*0-9]{5,500}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    },
+    {
+      "nombre_campo": "COMENTARIOS",
+      "tipo": "Rellenable",
+      "obligatorio": false,
+      "descripcion": "Máximo 520 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{1,520}$",
+      "motivo_derivacion": "Máximo 520 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
+      "tiene_regex": true,
+      "regex_actual": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ .,;:!?\"'()_\\-+/@#%&*0-9]{5,520}$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    }
+  ],
+  "ok": [
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "E-mail",
+      "obligatorio": true,
+      "descripcion": "Debe incluir el símbolo \"@\" para ser válido. No tiene límite de caracteres, pero tampoco deja enviar. Permite caracteres especiales y es alfanumerico.",
+      "mensajes_error": [
+        "Ingresá tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CÓDIGO POSTAL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Sólo 4 caracteres numéricos.",
+      "mensajes_error": [
+        "Ingresá el código postal.",
+        "Ingresá 4 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{4}$",
+      "motivo_derivacion": "Ingresá 4 dígitos.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "CUIT",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "11 caracteres numéricos. Se autorellena con guiones. Ejemplo: 01-12345678-9",
+      "mensajes_error": [
+        "Ingresá tu CUIT.",
+        "El CUIT debe tener 11 dígitos."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{11}$",
+      "motivo_derivacion": "El CUIT debe tener 11 dígitos.",
       "tiene_regex": true
     },
     {
@@ -385,6 +442,8 @@
         "Ingresá el orden."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{1,3}$",
+      "motivo_derivacion": "De 1 a 3 caracteres numéricos.",
       "tiene_regex": true
     },
     {
@@ -397,6 +456,8 @@
         "La patente debe tener entre 6 y 7 caracteres."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{6,7}$",
+      "motivo_derivacion": "La patente debe tener entre 6 y 7 caracteres.",
       "tiene_regex": true
     },
     {
@@ -409,10 +470,54 @@
         "Ingresá 17 dígitos."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{17}$",
+      "motivo_derivacion": "Ingresá 17 dígitos.",
       "tiene_regex": true
     },
     {
-      "nombre_campo": "INSERTÁ TU OPINIÓN",
+      "nombre_campo": "RAZÓN SOCIAL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "De 1 a 100 caracteres alfanuméricos. Permite enviar sólo letras, sólo números; y mezclado. Permite caracteres especiales y espacios.",
+      "mensajes_error": [
+        "Ingresá la razón social."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{1,100}$",
+      "motivo_derivacion": "De 1 a 100 caracteres alfanuméricos. Permite enviar sólo letras, sólo números; y mezclado. Permite caracteres especiales y espacios.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "GRUPO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "De 1 a 4 caracteres numéricos.",
+      "mensajes_error": [
+        "Ingresá el grupo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{1,4}$",
+      "motivo_derivacion": "De 1 a 4 caracteres numéricos.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "PREFIJO - CELULAR (SIN 15)",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Prefijo: de 2 a 4 caracteres numéricos. Celular: de 6 a 10 caracteres numéricos. No acepta unicodigo (ej. 00000000)",
+      "mensajes_error": [
+        "Ingresá tu celular.",
+        "Ingresá mínimo 6 números.",
+        "Ingrese un número telefónico válido.",
+        "Ingresá un valor de prefijo telefónico válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{6,}$",
+      "motivo_derivacion": "Ingresá mínimo 6 números.",
+      "tiene_regex": true
+    },
+    {
+      "nombre_campo": "TUS RESPUESTAS SON COMPLETAMENTE ANÓNIMAS",
       "tipo": "Rellenable",
       "obligatorio": true,
       "descripcion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
@@ -420,15 +525,8 @@
         "Describí mejor tu opinión."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": true
-    },
-    {
-      "nombre_campo": "COMENTARIOS",
-      "tipo": "Rellenable",
-      "obligatorio": false,
-      "descripcion": "Máximo 520 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{5,500}$",
+      "motivo_derivacion": "De 5 a 500 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
       "tiene_regex": true
     },
     {
@@ -438,6 +536,8 @@
       "descripcion": "Máximo 1.000 caracteres alfanuméricos. Permite caracteres especiales. Puede ampliarse.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -449,6 +549,8 @@
         "Seleccioná el año."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -458,6 +560,8 @@
       "descripcion": "Despliega los segmentos de vehículos. No es obligatorio.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -469,6 +573,8 @@
         "Seleccioná el kilometraje."
       ],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -478,6 +584,8 @@
       "descripcion": "Despliega un grupo de modelos específico agregado al iframe. No es obligatorio.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -487,6 +595,8 @@
       "descripcion": "Despliega un grupo de modelos específico agregado al iframe. No es obligatorio.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -496,6 +606,8 @@
       "descripcion": "Despliega los eventos cargados específicamente en el iframe.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -505,6 +617,8 @@
       "descripcion": "Despliega las opciones de \"Si\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -514,6 +628,8 @@
       "descripcion": "Despliega opciones afirmativas y negativas. No es obligatorio.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -523,6 +639,8 @@
       "descripcion": "Es como el checkbox de Términos y Condiciones. Aparece a la derecha del form.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -532,6 +650,8 @@
       "descripcion": "Tiene la opción de \"Sí\". Es des-seleccionable.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -541,6 +661,8 @@
       "descripcion": "Tiene la opción de \"Sí\". Es des-seleccionable.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -550,6 +672,8 @@
       "descripcion": "Tiene las opciones de \"Si\" y \"No\". No es des-seleccionable.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ]
