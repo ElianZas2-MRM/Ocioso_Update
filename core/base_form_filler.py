@@ -4936,7 +4936,22 @@ class BaseFormFiller:
                     # Decidir orden de prueba: si type/inputmode sugiere numérico, probar num primero
                     _inputmode = (element.get_attribute("inputmode") or "").lower()
                     _likely_num = input_type in ("number", "tel") or _inputmode in ("numeric", "tel", "decimal")
-                    _probes = ["12345678", "Carlos"] if _likely_num else ["Carlos", "12345678"]
+                    _base = ["12345678", "Carlos"] if _likely_num else ["Carlos", "12345678"]
+                    # Primero un valor con forma razonable segun lo que el nombre del campo
+                    # dice ser: el probe generico deja el formulario enviable pero con datos
+                    # sin sentido (en registro-gm-tour la edad quedaba en 12345678 y el talle
+                    # de calzado tambien). Si el form lo rechaza, se cae al probe de siempre.
+                    _plausible = ""
+                    try:
+                        from utils.data_generator import valor_plausible_por_nombre
+                        # No se reusa field_name: sólo existe si entró por la prioridad 2.
+                        _etiqueta = (element.get_attribute("aria-label")
+                                     or element.get_attribute("placeholder")
+                                     or element.get_attribute("name") or "")
+                        _plausible = valor_plausible_por_nombre(field_id, _etiqueta)
+                    except Exception:
+                        _plausible = ""
+                    _probes = ([_plausible] if _plausible else []) + _base
 
                     _probe_success = False
                     for _probe in _probes:

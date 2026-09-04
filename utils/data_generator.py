@@ -1,6 +1,7 @@
 """Generadores de datos válidos por país para el tab 'Generar Excels'."""
 
 import random
+import re
 import unicodedata
 
 FIRST_NAMES = [
@@ -433,3 +434,76 @@ def generar_fila_datos(pais, device=None, doc_types=None):
             fila[t] = _generar_doc_por_tipo(t) if sel.get(t, False) else ""
 
     return fila
+
+
+# ── Valores plausibles para campos que no están en el mapping de ningún mercado ──
+# El motor, ante un campo obligatorio sin valor asignado, probaba "Carlos" y "12345678"
+# hasta que el form aceptara uno. Funcionaba —el lead se enviaba— pero dejaba datos sin
+# sentido: en registro-gm-tour (Brasil) la edad quedaba en 12345678 y el talle de calzado
+# también. Esto da un valor con forma razonable según lo que el nombre del campo dice ser.
+
+_CALLES = [
+    "Avenida Paulista", "Rua das Flores", "Avenida Libertador", "Calle San Martín",
+    "Avenida Providencia", "Rua Sete de Setembro", "Calle Los Álamos", "Avenida Colón",
+]
+_VERSIONES = ["LT", "LTZ", "Premier", "RS", "Activ", "Midnight"]
+_COLORES = ["Blanco", "Negro", "Gris", "Plata", "Azul", "Rojo"]
+_INSTITUCIONES = ["Colegio San José", "Universidad Nacional", "Instituto Técnico",
+                  "Escuela Belgrano", "Fundación Aprender"]
+_FRASES = [
+    "Consulta generada por una prueba automatizada.",
+    "Solicito más información sobre el vehículo.",
+    "Prueba automatizada de formulario, favor ignorar.",
+]
+
+# (palabras que puede tener el id/label, función que arma el valor). El orden importa:
+# lo más específico primero, porque "numero" aparece dentro de muchos nombres.
+_PLAUSIBLES = (
+    (("birthday", "nacimiento", "nascimento", "fecha_nac"),
+     lambda: "{:02d}/{:02d}/{}".format(random.randint(1, 28), random.randint(1, 12),
+                                       random.randint(1970, 2004))),
+    (("model_year", "ano_modelo", "anio", "año", "year"),
+     lambda: str(random.randint(2015, 2025))),
+    # Kilometraje va ANTES que edad: "txtMilage" contiene "age" y se leia como edad.
+    (("kilometraje", "mileage", "milage", "km"), lambda: str(random.randint(5, 90) * 1000)),
+    (("edad", "age", "idade"), lambda: str(random.randint(21, 65))),
+    (("shoes", "calzado", "talle", "sapato"), lambda: str(random.randint(36, 45))),
+    (("monto", "amount", "valor", "precio", "preco"), lambda: str(random.randint(1, 99) * 1000)),
+    (("street_number", "street-number", "numero_calle", "altura"),
+     lambda: str(random.randint(100, 9999))),
+    (("street", "rua", "direccion", "domicilio", "endereco", "address"),
+     lambda: random.choice(_CALLES)),
+    (("instagram", "usuario", "username", "perfil"),
+     lambda: "@qa_" + str(random.randint(1000, 9999))),
+    (("institution", "institucion", "instituicao", "empresa", "company", "escuela"),
+     lambda: random.choice(_INSTITUCIONES)),
+    (("version", "versao"), lambda: random.choice(_VERSIONES)),
+    (("color", "cor"), lambda: random.choice(_COLORES)),
+    (("comment", "comentario", "mensaje", "message", "detalle", "observ", "pedido"),
+     lambda: random.choice(_FRASES)),
+    (("group", "grupo"), lambda: str(random.randint(1, 5))),
+)
+
+
+def valor_plausible_por_nombre(field_id, label=""):
+    """Valor con forma razonable para un campo, deducido de su id/label. "" si no aplica.
+
+    Último recurso: sólo se usa cuando el campo no tiene dato en el Excel ni en IDs
+    dinámicos. Si el nombre no dice nada reconocible devuelve "" y el motor sigue con su
+    probe genérico, que al menos deja el formulario enviable.
+    """
+    texto = _strip_accents("{} {}".format(field_id or "", label or "")).lower()
+    if not texto.strip():
+        return ""
+    for claves, generar in _PLAUSIBLES:
+        for clave in claves:
+            clave = _strip_accents(clave).lower()
+            # Las claves cortas se exigen como palabra entera: "age" esta dentro de
+            # "txtMilage" (kilometraje) y "km" dentro de un monton de nombres, asi que
+            # como substring devolvian el valor de otro campo.
+            if len(clave) <= 4:
+                if re.search(r"(?:^|[^a-z0-9])" + re.escape(clave) + r"(?:[^a-z0-9]|$)", texto):
+                    return generar()
+            elif clave in texto:
+                return generar()
+    return ""
