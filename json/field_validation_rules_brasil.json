@@ -762,7 +762,7 @@
       "descripcion": "Máximo 20 caracteres alfabético",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,20}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -779,15 +779,15 @@
       "error_priority": [],
       "obligatorio_excel": true,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Máximo 20 caracteres alfabético"
     },
     "SOBRENOME": {
       "descripcion": "Máximo 30 caracteres alfabético.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]{1,30}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -804,15 +804,15 @@
       "error_priority": [],
       "obligatorio_excel": true,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Máximo 30 caracteres alfabético."
     },
     "CEP": {
       "descripcion": "8 caracteres numéricos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{8}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -831,15 +831,15 @@
       "mensajes_error_excel": [
         "Formato inválido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "8 caracteres numéricos"
     },
     "CPF": {
       "descripcion": "14 caracteres numéricos (Usar el generador de CPF)",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{14}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -858,15 +858,15 @@
       "mensajes_error_excel": [
         "O CPF não é válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "14 caracteres numéricos (Usar el generador de CPF)"
     },
     "CNPJ": {
       "descripcion": "14 caracteres numéricos (Usar el generador de CNPJ)",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{14}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -886,15 +886,15 @@
         "Insira 14 dígitos.",
         "O CNPJ não é válido."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Insira 14 dígitos."
     },
     "CNPJ/CPF": {
       "descripcion": "minimo 11, maximo 14 caracteres numericos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^(?:[0-9]{11}|[0-9]{14})$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -913,15 +913,15 @@
       "mensajes_error_excel": [
         "Insira 11/14 dígitos."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Insira 11/14 dígitos."
     },
     "CELULAR": {
       "descripcion": "Maximo 11 caracteres numericos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,11}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -938,9 +938,9 @@
       "error_priority": [],
       "obligatorio_excel": true,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Maximo 11 caracteres numericos"
     },
     "E-MAIL": {
       "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido.",
@@ -973,7 +973,7 @@
       "descripcion": "Maximo 50 caracteres alfanumericos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,50}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -992,15 +992,15 @@
       "mensajes_error_excel": [
         "Digite o ano e modelo."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Maximo 50 caracteres alfanumericos"
     },
     "PLACA": {
       "descripcion": "Máximo 36 caracteres alfanumericos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,36}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -1017,15 +1017,15 @@
       "error_priority": [],
       "obligatorio_excel": false,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Máximo 36 caracteres alfanumericos."
     },
     "CÓD. CONFIRMACIÓN": {
       "descripcion": "17 caracteres alfanumericos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{17}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -1042,15 +1042,15 @@
       "error_priority": [],
       "obligatorio_excel": false,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "17 caracteres alfanumericos"
     },
     "VIN/CHASSI": {
       "descripcion": "17 caracteres alfanumericos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{17}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -1069,9 +1069,9 @@
       "mensajes_error_excel": [
         "Digite 17 dígitos."
       ],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Digite 17 dígitos."
     },
     "INSIRA SUA OPINÃO": {
       "descripcion": "minimo 5, maximo 300 caracteres",
@@ -1104,7 +1104,7 @@
       "descripcion": "Maximo 400 caracteres alfarnumericos",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[0-9]{1,400}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -1121,15 +1121,15 @@
       "error_priority": [],
       "obligatorio_excel": false,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Maximo 400 caracteres alfarnumericos"
     },
     "DESCRIÇÃO DA NECESSIDADE": {
       "descripcion": "Máximo 400 caracteres alfanumericos.",
       "campo": "",
       "element_id": "",
-      "regex_full": "",
+      "regex_full": "^[a-zA-Z0-9]{1,400}$",
       "regex_char": "",
       "test_text": "",
       "dropdown": false,
@@ -1146,9 +1146,9 @@
       "error_priority": [],
       "obligatorio_excel": false,
       "mensajes_error_excel": [],
-      "pendiente_regex": true,
-      "origen": "crm_excel_import",
-      "fecha_importacion": "2026-09-01T01:37:35.744525"
+      "origen": "regex_derivado_prosa",
+      "fecha_importacion": "2026-09-01T01:37:35.744525",
+      "motivo_derivacion": "Máximo 400 caracteres alfanumericos."
     },
     "MODELOS": {
       "descripcion": "",
@@ -1526,6 +1526,166 @@
       "pendiente_regex": true,
       "origen": "crm_excel_import",
       "fecha_importacion": "2026-09-01T01:37:35.744525"
+    },
+    "GROUP": {
+      "descripcion": "group",
+      "campo": "group",
+      "element_id": "group",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "TOUR-DATE": {
+      "descripcion": "tour-date",
+      "campo": "tour-date",
+      "element_id": "tour-date",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "TOUR-DONATION": {
+      "descripcion": "tour-donation",
+      "campo": "tour-donation",
+      "element_id": "tour-donation",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "DOCUMENT": {
+      "descripcion": " ",
+      "campo": "document",
+      "element_id": "document",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "AGE": {
+      "descripcion": " ",
+      "campo": "age",
+      "element_id": "age",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "SHOES": {
+      "descripcion": " ",
+      "campo": "shoes",
+      "element_id": "shoes",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "INSTITUTION": {
+      "descripcion": " ",
+      "campo": "institution",
+      "element_id": "institution",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "STANDALONE": {
+      "descripcion": "Entre o endereço, cidade, estado ou CEP",
+      "campo": "standAlone",
+      "element_id": "standAlone",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

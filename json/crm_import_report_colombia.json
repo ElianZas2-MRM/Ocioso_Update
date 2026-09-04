@@ -1,14 +1,281 @@
 {
   "pais": "Colombia",
-  "fecha_importacion": "2026-09-01T01:40:22.219985",
+  "fecha_importacion": "2026-09-01T18:45:35.763319",
   "hoja_excel": "Colombia",
   "resumen": {
     "faltantes": 0,
-    "incompletos": 26,
-    "ok": 26
+    "incompletos": 19,
+    "conflictos": 1,
+    "ok": 32
   },
   "faltantes": [],
   "incompletos": [
+    {
+      "nombre_campo": "E-MAIL",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido. No permite ingresar \".\" dos veces seguidas.",
+      "mensajes_error": [
+        "Ingresa tu email.",
+        "El email ingresado no parece válido."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA DE NACIMIENTO",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Muestra un calendario actualizado. Tiene un copy debajo del campo que es \"Completar DD/MM/AAAA. Debe ser mayor de 18 años\".",
+      "mensajes_error": [
+        "Ingresa tu fecha de nacimiento.",
+        "Deben ser mayores de 18 años."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "EVENTO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega eventos del mes. El dropdown se actualiza muy seguido.",
+      "mensajes_error": [
+        "Seleccione el evento."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
+      "mensajes_error": [
+        "Selecciona la fecha estimada de compra."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "MODELOS",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los modelos seleccionados para ese form",
+      "mensajes_error": [
+        "Selecciona un modelo."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CIUDAD",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega las ciudades seleccionadas para ese form",
+      "mensajes_error": [
+        "Selecciona una ciudad."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "CONCESIONARIO",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega los dealers seleccionados para ese form",
+      "mensajes_error": [
+        "Selecciona un concesionario."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "OCUPACIÓN",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes profesiones.",
+      "mensajes_error": [
+        "Selecciona una ocupación."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PLAN",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega diferentes planes.",
+      "mensajes_error": [
+        "Selecciona un plan."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CÓMO LLEGÓ ACÁ?",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Despliega dos opciones: visitante o prospecto.",
+      "mensajes_error": [
+        "Seleccioná una opción.",
+        "Seleccione una opción"
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TIPO DE EMPRESA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 12 opciones de tipo de empresa para que el cliente escoja. No es un seleccionador múltiple.",
+      "mensajes_error": [
+        "Seleccione un tipo de empresa."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "TAMAÑO DE LA FLOTA ACTUAL",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "mensajes_error": [
+        "Seleccione el tamaño de su flota."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "FECHA DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 3 opciones de cantidad de días.",
+      "mensajes_error": [
+        "Seleccione una fecha de compra."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "REQUERIMIENTO DE COMPRA",
+      "tipo": "Dropdown",
+      "obligatorio": true,
+      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
+      "mensajes_error": [
+        "Seleccione cuánta cantidad requiere comprar."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "PREFERENCIA DE CONTACTO",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra tres opciones: E-mail; Llamada telefónica; WhatsApp. Se puede seleccionar más de una opción.",
+      "mensajes_error": [
+        "Seleccione al menos una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
+      "mensajes_error": [
+        "Selecciona una opción."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿TIENES UN CHEVROLET CON ONSTAR? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Sí\" y \"No\". Por defecto está seleccionada la opción \"Sí\". En el \"Sí\" muestra los campos, y en el \"No\" un copy. No se puede deseleccionar.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    },
+    {
+      "nombre_campo": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
+      "tipo": "Checkbox",
+      "obligatorio": true,
+      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
+      "mensajes_error": [],
+      "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
+      "tiene_regex": false
+    }
+  ],
+  "conflictos": [
+    {
+      "nombre_campo": "CÓDIGO ASESOR",
+      "tipo": "Rellenable",
+      "obligatorio": true,
+      "descripcion": "Sólo 3 caracteres alfabéticos. Deben ser números del 001 al 100.",
+      "mensajes_error": [
+        "Competa con números entre el 001 y 100."
+      ],
+      "ultimo_ajuste": null,
+      "regex_derivado": "^[0-9]{3}$",
+      "motivo_derivacion": "Sólo 3 caracteres alfabéticos. Deben ser números del 001 al 100.",
+      "tiene_regex": true,
+      "regex_actual": "^(00[1-9]|0[1-9][0-9]|100)$",
+      "regex_ajustado": "",
+      "motivo_ajuste": ""
+    }
+  ],
+  "ok": [
     {
       "nombre_campo": "NOMBRE",
       "tipo": "Rellenable",
@@ -18,7 +285,9 @@
         "Ingresa tu nombre."
       ],
       "ultimo_ajuste": "2026-02-13",
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{1,50}$",
+      "motivo_derivacion": "De 1 a 50 caracteres alfabeticos. No permite números ni caracteres especiales.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "APELLIDO",
@@ -29,7 +298,9 @@
         "Ingresa tu apellido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{1,50}$",
+      "motivo_derivacion": "De 1 a 50 caracteres alfabeticos. No permite números ni caracteres especiales.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CÉDULA",
@@ -42,7 +313,9 @@
         "La cédula de identidad ingresada no parece válida."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[0-9]{7,10}$",
+      "motivo_derivacion": "Ingresa al menos 7 dígitos.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "CELULAR",
@@ -56,19 +329,9 @@
         "El celular ingresado no parece válido."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "E-MAIL",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "No hay límite de caracteres, pero debe incluir un símbolo '@' para ser válido. No permite ingresar \".\" dos veces seguidas.",
-      "mensajes_error": [
-        "Ingresa tu email.",
-        "El email ingresado no parece válido."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^(?=(?:3))[0-9]{10}$",
+      "motivo_derivacion": "Completa los 10 dígitos de tu celular que empieza con 3.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "TU INSTAGRAM",
@@ -80,7 +343,9 @@
         "Tu usuario debe comenzar con @"
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{1,30}$",
+      "motivo_derivacion": "Hasta 30 caracteres alfanumericos. Debe comenzar con \"@\". Permite todo tipo de caracteres.",
+      "tiene_regex": true
     },
     {
       "nombre_campo": "PLACA",
@@ -91,18 +356,19 @@
         "Ingrese un placa válida alfanumérica de 6 caracteres."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
+      "regex_derivado": "^[a-zA-Z0-9]{6}$",
+      "motivo_derivacion": "Ingrese un placa válida alfanumérica de 6 caracteres.",
+      "tiene_regex": true
     },
     {
-      "nombre_campo": "FECHA DE NACIMIENTO",
+      "nombre_campo": "COMENTARIOS",
       "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Muestra un calendario actualizado. Tiene un copy debajo del campo que es \"Completar DD/MM/AAAA. Debe ser mayor de 18 años\".",
-      "mensajes_error": [
-        "Ingresa tu fecha de nacimiento.",
-        "Deben ser mayores de 18 años."
-      ],
+      "obligatorio": false,
+      "descripcion": "Hasta 1.000 caracteres alfanuméricos. La vista es expandible.",
+      "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -115,213 +381,9 @@
         "Ingresa mínimo 2 caracteres."
       ],
       "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "EVENTO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega eventos del mes. El dropdown se actualiza muy seguido.",
-      "mensajes_error": [
-        "Seleccione el evento."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "FECHA ESTIMADA DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las diferentes estimaciones de compra: 1 mes, 2 meses, 3 meses y Más de 3 meses. Cada opción deriva a una campaña específica.",
-      "mensajes_error": [
-        "Selecciona la fecha estimada de compra."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "MODELOS",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega los modelos seleccionados para ese form",
-      "mensajes_error": [
-        "Selecciona un modelo."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CIUDAD",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega las ciudades seleccionadas para ese form",
-      "mensajes_error": [
-        "Selecciona una ciudad."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "CONCESIONARIO",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega los dealers seleccionados para ese form",
-      "mensajes_error": [
-        "Selecciona un concesionario."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "OCUPACIÓN",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega diferentes profesiones.",
-      "mensajes_error": [
-        "Selecciona una ocupación."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "PLAN",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega diferentes planes.",
-      "mensajes_error": [
-        "Selecciona un plan."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿CÓMO LLEGÓ ACÁ?",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Despliega dos opciones: visitante o prospecto.",
-      "mensajes_error": [
-        "Seleccioná una opción.",
-        "Seleccione una opción"
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "TIPO DE EMPRESA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Muestra 12 opciones de tipo de empresa para que el cliente escoja. No es un seleccionador múltiple.",
-      "mensajes_error": [
-        "Seleccione un tipo de empresa."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "TAMAÑO DE LA FLOTA ACTUAL",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
-      "mensajes_error": [
-        "Seleccione el tamaño de su flota."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "FECHA DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Muestra 3 opciones de cantidad de días.",
-      "mensajes_error": [
-        "Seleccione una fecha de compra."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "REQUERIMIENTO DE COMPRA",
-      "tipo": "Dropdown",
-      "obligatorio": true,
-      "descripcion": "Muestra 4 opciones de tamaños aproximados. No es un seleccionador múltiple.",
-      "mensajes_error": [
-        "Seleccione cuánta cantidad requiere comprar."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "PREFERENCIA DE CONTACTO",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra tres opciones: E-mail; Llamada telefónica; WhatsApp. Se puede seleccionar más de una opción.",
-      "mensajes_error": [
-        "Seleccione al menos una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿CUÁL ES TU GRADO DE SATISFACCIÓN CON LA ATENCIÓN RECIBIDA EN EL CONCESIONARIO?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿SE CUMPLIERON LOS PLAZOS COMPROMETIDOS POR EL CONCESIONARIO (HORA, FECHA DE AGENDAMIENTO Y ENTREGA)?",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones del 1 al 10. Tiene un copy debajo que dice \"Califica tu experiencia siendo 10 Excelente y 1 Malo.\".",
-      "mensajes_error": [
-        "Selecciona una opción."
-      ],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿TIENES UN CHEVROLET CON ONSTAR? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones de \"Sí\" y \"No\". Por defecto está seleccionada la opción \"Sí\". En el \"Sí\" muestra los campos, y en el \"No\" un copy. No se puede deseleccionar.",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    },
-    {
-      "nombre_campo": "¿ESTÁS INTERESADO EN? *TIENE ONSTAR SI HAY 3 BOTONES (ROJO, AZUL Y NEGRO) CERCA DEL ESPEJO RETROVISOR.",
-      "tipo": "Checkbox",
-      "obligatorio": true,
-      "descripcion": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
-    }
-  ],
-  "ok": [
-    {
-      "nombre_campo": "CÓDIGO ASESOR",
-      "tipo": "Rellenable",
-      "obligatorio": true,
-      "descripcion": "Sólo 3 caracteres alfabéticos. Deben ser números del 001 al 100.",
-      "mensajes_error": [
-        "Competa con números entre el 001 y 100."
-      ],
-      "ultimo_ajuste": null,
+      "regex_derivado": "^[a-zA-Z0-9]{2,50}$",
+      "motivo_derivacion": "Ingresa mínimo 2 caracteres.",
       "tiene_regex": true
-    },
-    {
-      "nombre_campo": "COMENTARIOS",
-      "tipo": "Rellenable",
-      "obligatorio": false,
-      "descripcion": "Hasta 1.000 caracteres alfanuméricos. La vista es expandible.",
-      "mensajes_error": [],
-      "ultimo_ajuste": null,
-      "tiene_regex": false
     },
     {
       "nombre_campo": "AÑO DE COMPRA",
@@ -330,6 +392,8 @@
       "descripcion": "Despliega diferentes opciones de años, incluyendo la opción \"Otro\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -339,6 +403,8 @@
       "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -348,6 +414,8 @@
       "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -357,6 +425,8 @@
       "descripcion": "Despliega opciones de \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -366,6 +436,8 @@
       "descripcion": "Despliega fechas estimadas en años.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -375,6 +447,8 @@
       "descripcion": "Despliega diferentes opciones.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -384,6 +458,8 @@
       "descripcion": "(No se pudo identificar)",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -393,6 +469,8 @@
       "descripcion": "(No se pudo identificar)",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -402,6 +480,8 @@
       "descripcion": "Muestra kilometrajes entre 5 mil y 50 mil.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -411,6 +491,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto. Es iindependiente.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -420,6 +502,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto. Es iindependiente.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -429,6 +513,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto. Es iindependiente.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -438,6 +524,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto. Es iindependiente.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -447,6 +535,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto. Es iindependiente.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -456,6 +546,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto. Es iindependiente.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -465,6 +557,8 @@
       "descripcion": "Sirve para registrar la preferencia de contacto.",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -474,6 +568,8 @@
       "descripcion": "Solo muestra opciones \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -483,6 +579,8 @@
       "descripcion": "Solo muestra opciones \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -492,6 +590,8 @@
       "descripcion": "Solo muestra opciones \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -501,6 +601,8 @@
       "descripcion": "Sólo muestra la opción \"Sí\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -510,6 +612,8 @@
       "descripcion": "Sólo muestra la opción \"Sí\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -519,6 +623,8 @@
       "descripcion": "Solo muestra opciones \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -528,6 +634,8 @@
       "descripcion": "Solo muestra opciones \"Sí\" y \"No\".",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     },
     {
@@ -537,6 +645,8 @@
       "descripcion": "(No se pudo identificar)",
       "mensajes_error": [],
       "ultimo_ajuste": null,
+      "regex_derivado": "",
+      "motivo_derivacion": "",
       "tiene_regex": false
     }
   ]

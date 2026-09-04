@@ -1,6 +1,6 @@
 {
   "pais": "Argentina",
-  "ultima_deteccion": "2026-09-01T01:37:30",
+  "ultima_deteccion": "2026-09-02T13:58:52",
   "campos_nuevos": [
     {
       "id": "patent",
@@ -238,6 +238,83 @@
       "required": true,
       "label": "Muestra opciones de \"Renovar\" y \"Suscribir\". Por defecto está seleccionada la opción \"Renovar\". Con ambas opciones permite llenar el formulario. No se puede deseleccionar.",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "regret-reason",
+      "type": "select",
+      "required": true,
+      "label": "regret-reason",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "contract",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "comments",
+      "type": "textarea",
+      "required": false,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "event",
+      "type": "select",
+      "required": false,
+      "label": "event",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "purchase-type",
+      "type": "select",
+      "required": true,
+      "label": "purchase-type",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "disapproval",
+      "type": "textarea",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "suggestions",
+      "type": "textarea",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "termination-reason",
+      "type": "select",
+      "required": true,
+      "label": "termination-reason",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "preferred-shift",
+      "type": "select",
+      "required": true,
+      "label": "preferred-shift",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "group",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "order",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
     }
   ]
 }

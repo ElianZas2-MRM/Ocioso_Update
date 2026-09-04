@@ -1,6 +1,6 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-09-01T01:37:35",
+  "ultima_deteccion": "2026-09-02T15:03:15",
   "campos_nuevos": [
     {
       "id": "categories",
@@ -344,6 +344,62 @@
       "required": false,
       "label": "¿RECIBISTE INFORMACIÓN SOBRE NUESTRO PLAN CLIENTE FIEL?",
       "origen": "crm_excel_import"
+    },
+    {
+      "id": "group",
+      "type": "select",
+      "required": true,
+      "label": "group",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "tour-date",
+      "type": "select",
+      "required": true,
+      "label": "tour-date",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "tour-donation",
+      "type": "select",
+      "required": true,
+      "label": "tour-donation",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "document",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "age",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "shoes",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "institution",
+      "type": "text",
+      "required": false,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "standAlone",
+      "type": "text",
+      "required": false,
+      "label": "Entre o endereço, cidade, estado ou CEP",
+      "origen": "runtime_discovery"
     }
   ]
 }
