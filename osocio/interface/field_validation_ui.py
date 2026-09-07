@@ -2625,13 +2625,15 @@ def build_field_validation_tab(parent, palette, shared_config=None):
                 )
             except Exception as exc:
                 LOGGER.exception("Error ejecutando la validacion de campos")
+                # Se formatea acá y no dentro del lambda: Python borra `exc` al salir del
+                # except, y el lambda corre despues (via after). Usarlo adentro daba
+                # NameError justo en el handler de error, tapando el problema real.
+                _msg_error = "La validación terminó con error. " + _format_user_error(
+                    exc, fallback="Revisá la configuración e intentá nuevamente."
+                )
                 root_frame.after(
                     0,
-                    lambda: messagebox.showerror(
-                        "Validación de campos",
-                        "La validación terminó con error. "
-                        + _format_user_error(exc, fallback="Revisá la configuración e intentá nuevamente."),
-                    ),
+                    lambda m=_msg_error: messagebox.showerror("Validación de campos", m),
                 )
                 root_frame.after(0, lambda: status_var.set("La validación terminó con error."))
 
