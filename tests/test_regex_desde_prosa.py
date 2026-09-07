@@ -14,12 +14,12 @@ import re
 
 import pytest
 
-from utils.regex_desde_prosa import (
+from osocio.utils.regex_desde_prosa import (
     ajustar_largo_desde_prosa,
     derivar_regex,
     regex_por_semantica,
 )
-from utils.valor_campo_generator import GeneradorValorCampo
+from osocio.utils.valor_campo_generator import GeneradorValorCampo
 
 
 # (nombre, descripcion, mensajes_error, regex esperado)

@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from utils.autovalores_campos_detectados import (
+from osocio.utils.autovalores_campos_detectados import (
     PAISES_CONOCIDOS,
     AutovaloresCamposDetectados,
 )

@@ -204,7 +204,7 @@ REM empaquetar se refrescan para que el portable salga con los que corresponden 
 REM navegadores de esta PC. Si no hay internet se usa lo que haya en .\drivers y, en el peor
 REM caso, el portable los descarga solo en el primer arranque.
 echo Verificando drivers de navegador...
-%PY% -c "import truststore; truststore.inject_into_ssl(); from utils.driver_updater import ensure_drivers_ready; ensure_drivers_ready()"
+%PY% -c "import truststore; truststore.inject_into_ssl(); from osocio.utils.driver_updater import ensure_drivers_ready; ensure_drivers_ready()"
 
 if exist ".\drivers" (
     robocopy ".\drivers" "%PORTABLE_DIR%\drivers" /E /XD ".tmp_update" /NFL /NDL /NJH /NJS /NC /NS >nul

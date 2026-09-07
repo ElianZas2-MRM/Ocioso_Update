@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from utils.valor_campo_generator import GeneradorValorCampo
+from osocio.utils.valor_campo_generator import GeneradorValorCampo
 
 
 # Patrones representativos tomados 1:1 de json/field_validation_rules_*.json.
