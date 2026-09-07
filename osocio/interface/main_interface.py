@@ -2734,12 +2734,15 @@ def iniciar_interfaz(autostart_leads=False):
                         if start <= now_min < start + 15:
                             key = ("masivo", dia, hora)
                             if _sched_triggered.get(key) != ahora.date():
+                                # Mismo criterio que en Envío de Leads (ver comentario arriba):
+                                # sin guard de "primera vuelta". Acá además `first` nunca llegaba
+                                # a existir — se leía antes de asignarse, tiraba NameError que el
+                                # `except Exception: pass` de abajo se tragaba, y como el slot ya
+                                # habia quedado marcado como disparado dos lineas antes, la
+                                # Revision Masiva programada no corria nunca y sin avisar.
                                 _sched_triggered[key] = ahora.date()
                                 _sched_save_triggered()
-                                if not first:
-                                    root.after(0, lambda: cmd_iniciar_masivo())
-
-                first = False
+                                root.after(0, lambda: cmd_iniciar_masivo())
             except Exception:
                 pass
             time.sleep(5)
@@ -5020,7 +5023,11 @@ def iniciar_interfaz(autostart_leads=False):
                 else:
                     _ui(lambda: messagebox.showerror("Error de Ejecución", f"Error en revisión masiva:\n{info}"))
             except Exception as ex:
-                _ui(lambda: messagebox.showerror("Error Crítico", f"Excepción crítica durante la revisión masiva:\n{ex}"))
+                # El texto se arma acá y no dentro del lambda: Python borra `ex` al salir del
+                # except, y el lambda corre despues (via _ui). Usarlo adentro daba NameError
+                # justo en el handler de error, tapando el problema real.
+                _msg_critico = f"Excepción crítica durante la revisión masiva:\n{ex}"
+                _ui(lambda m=_msg_critico: messagebox.showerror("Error Crítico", m))
             finally:
                 _ui(lambda: modal.destroy() if modal.winfo_exists() else None)
                 _ui(_reset_masivo_btn)
