@@ -5,49 +5,24 @@ from PyInstaller.utils.hooks import collect_submodules
 
 a = Analysis(
     ['run.py'],
-    pathex=['.', 'forms', 'core', 'validation', 'utils', 'interface'],
+    # Todo el codigo cuelga del paquete osocio/, asi que alcanza con la raiz: ya no hace
+    # falta listar una ruta por carpeta para que resuelvan los imports planos.
+    pathex=['.'],
     binaries=[],
     datas=[
         ('Asset/Fullheader.png', 'Asset'),
         ('Asset/icon.ico', 'Asset'),
         ('Asset/osopng.png', 'Asset'),
         ('Asset/tabler_icons', 'Asset/tabler_icons'),
-        ('lambdatest_mac', 'lambdatest_mac'),
-        ('lambdatest_android', 'lambdatest_android'),
     ],
-    hiddenimports=[
-        'autonomous_runner',
-        '_runner_common',
-        'generic_country_base',
-        'country_configs',
-        'field_dependencies',
-        'base_form_filler',
-        'browser_manager',
-        'screenshot_manager',
-        'utils.data_generator',
-        'utils.field_id_aliases',
-        'utils.fixed_field_mapping_store',
-        'utils.paths',
-        'utils.popup_logger',
-        'utils.scheduling',
-        'utils.aem_fill',
-        'utils.ty_cta',
-        'utils.url_status',
-        'utils.excel_layout',
-        'utils.win_task_scheduler',
-        'utils.driver_updater',
-        'interface.main_interface',
-        'interface.helpers_interface',
-        'interface.driver_update_ui',
-        'interface.field_validation_ui',
-        'interface.console_widget',
-        'interface.dealer_comparator_ui',
-        'core.dealer_comparator_runner',
-        'validation.selenium_validation_runner',
-        'validation.error_message_validator',
-        'validation.text_field_validator',
-        'validation.validation_email',
-        'validation.validation_exporter',
+    # lambdatest_mac/android ya no van en datas: eran carpetas sueltas que se cargaban por
+    # sys.path desde el disco. Ahora son subpaquetes de osocio.providers y entran como
+    # codigo, igual que el resto.
+    hiddenimports=collect_submodules('osocio') + [
+        # collect_submodules ignora los modulos que arrancan con guion bajo, y este trae
+        # get_runner(), que es por donde corre CADA pais. Sin esta linea el .exe compila
+        # igual y revienta recien al ejecutar un pais.
+        'osocio.forms._runner_common',
         'pytz',
         'openpyxl',
         'truststore',

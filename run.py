@@ -21,8 +21,8 @@ try:
 except Exception:
     pass
 
-from interface.main_interface import iniciar_interfaz
-from utils.paths import BASE_DIR, FORMS_DIR
+from osocio.interface.main_interface import iniciar_interfaz
+from osocio.utils.paths import BASE_DIR, FORMS_DIR
 
 
 ENVIRONMENTS = {
@@ -35,22 +35,18 @@ ENVIRONMENTS = {
 }
 
 
-def _ensure_form_paths():
-    for path in (BASE_DIR, FORMS_DIR, os.path.join(BASE_DIR, "core")):
-        if path not in sys.path:
-            sys.path.insert(0, path)
-
-
 def _load_country_run_function(country_name, excel_suffix=""):
-    _ensure_form_paths()
-
     try:
-        try:
-            from forms._runner_common import get_runner
-        except ImportError:
-            from _runner_common import get_runner  # type: ignore[import-not-found]
+        from osocio.forms._runner_common import get_runner
         return get_runner(country_name, excel_suffix)
     except (ImportError, AttributeError):
+        # Camino legacy: los 9 Formulario_<Pais>_Main.py se eliminaron cuando get_runner()
+        # pasó a resolver los países con GenericCountryBase. Se conserva por si alguien
+        # todavía deja un script suelto en forms/, y solo ese caso necesita FORMS_DIR
+        # en sys.path (el resto del proyecto ya importa por ruta absoluta).
+        if FORMS_DIR not in sys.path:
+            sys.path.insert(0, FORMS_DIR)
+
         module_name = f"Formulario_{country_name}_Main"
         script_path = os.path.join(FORMS_DIR, f"{module_name}.py")
 
@@ -87,29 +83,22 @@ def _run_country(country_name, environment, headless=False, enviar_email=True, i
 
 def _run_autonomous(once=False):
     if once:
-        from autonomous_runner import run_once
+        from osocio.autonomous_runner import run_once
 
         return run_once()
 
-    from autonomous_runner import main as autonomous_main
+    from osocio.autonomous_runner import main as autonomous_main
 
     return autonomous_main()
 
 
 def _run_lambdatest(lt_type, pais, build_name=""):
     """Ejecuta LambdaTest Mac o Android para un país y muestra el resumen."""
-    lt_mac_dir = os.path.join(BASE_DIR, "lambdatest_mac")
-    lt_android_dir = os.path.join(BASE_DIR, "lambdatest_android")
-
     if lt_type == "mac":
-        if lt_mac_dir not in sys.path:
-            sys.path.insert(0, lt_mac_dir)
-        import lt_controller  # type: ignore[import]
+        from osocio.providers.lambdatest_mac import lt_controller
         summary = lt_controller.run(pais=pais, build_name=build_name)
     elif lt_type == "android":
-        if lt_android_dir not in sys.path:
-            sys.path.insert(0, lt_android_dir)
-        import lt_android_controller  # type: ignore[import]
+        from osocio.providers.lambdatest_android import lt_android_controller
         summary = lt_android_controller.run(pais=pais, build_name=build_name)
     else:
         raise ValueError(f"Tipo LambdaTest no reconocido: {lt_type!r}")
@@ -162,16 +151,16 @@ def _ensure_drivers(show_ui=True):
     """
     try:
         if show_ui:
-            from interface.driver_update_ui import ensure_drivers_with_ui
+            from osocio.interface.driver_update_ui import ensure_drivers_with_ui
             ensure_drivers_with_ui()
         else:
-            from utils.driver_updater import ensure_drivers_ready
+            from osocio.utils.driver_updater import ensure_drivers_ready
             ensure_drivers_ready()
     except Exception as exc:
         # Un fallo actualizando drivers no puede impedir que la app abra ni que corra el
         # scheduler: si el driver que ya estaba sirve, la ejecucion sigue funcionando igual.
         try:
-            from utils.popup_logger import log_runtime
+            from osocio.utils.popup_logger import log_runtime
             log_runtime(f"No se pudo verificar los drivers al iniciar: {exc}", level="ERROR")
         except Exception:
             print(f"[ERROR] No se pudo verificar los drivers al iniciar: {exc}")
@@ -184,7 +173,7 @@ if __name__ == "__main__":
     # con --autonomous no hay nadie que pueda cerrar un modal y la corrida quedaría colgada.
     if args.autonomous:
         try:
-            from utils.popup_logger import set_unattended
+            from osocio.utils.popup_logger import set_unattended
             set_unattended(True)
         except Exception:
             pass
