@@ -11,7 +11,7 @@ import re
 import openpyxl
 import pytest
 
-from utils.crm_excel_importer import CrmValidacionesImporter, construir_reporte, guardar_reporte
+from osocio.utils.crm_excel_importer import CrmValidacionesImporter, construir_reporte, guardar_reporte
 
 
 def _crear_excel_sintetico(tmp_path):
@@ -344,7 +344,7 @@ class TestReporte:
 
     def test_guardar_reporte_no_revienta_con_ultimo_ajuste_datetime(self, excel_sintetico, tmp_path, monkeypatch):
         json_dir = str(tmp_path / "json")
-        monkeypatch.setattr("utils.crm_excel_importer.JSON_DIR", json_dir)
+        monkeypatch.setattr("osocio.utils.crm_excel_importer.JSON_DIR", json_dir)
 
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
         comparacion = importer.comparar("Chile", {"fields": {}})
@@ -358,7 +358,7 @@ class TestReporte:
 
     def test_guardar_reporte_escribe_json_dir_con_nombre_por_pais(self, excel_sintetico, tmp_path, monkeypatch):
         json_dir = str(tmp_path / "json")
-        monkeypatch.setattr("utils.crm_excel_importer.JSON_DIR", json_dir)
+        monkeypatch.setattr("osocio.utils.crm_excel_importer.JSON_DIR", json_dir)
 
         importer = CrmValidacionesImporter(ruta_excel=excel_sintetico)
         comparacion = importer.comparar("Argentina", _reglas_json_argentina())

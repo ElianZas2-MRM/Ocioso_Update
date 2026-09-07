@@ -2,13 +2,13 @@
 
 App de escritorio (Windows, Python + Tkinter + Selenium) para automatizar el llenado y envío de formularios de leads en varios países, generar los Excels de datos de prueba, validar reglas de campos, programar ejecuciones recurrentes, y chequear que los concesionarios (dealers) de un formulario coincidan con un Excel de referencia.
 
-> El historial de cambios detallado de versiones anteriores quedó guardado en `README_HISTORIAL_ANTERIOR.md` (no se perdió, solo se sacó de este archivo para dejar una guía limpia).
+> El historial de cambios detallado de versiones anteriores quedó guardado en `docs/README_HISTORIAL_ANTERIOR.md` (no se perdió, solo se sacó de este archivo para dejar una guía limpia).
 
 ## Arquitectura
 
 Mapa de alto nivel de cómo está armada la app — quién dispara qué y a dónde van los resultados:
 
-![Arquitectura de la app](Asset/screenshots/00_arquitectura.png)
+![Arquitectura de la app](docs/screenshots/00_arquitectura.png)
 
 - **Punto de entrada** (`run.py`): el único arranque de la app. Según cómo lo llames, abre la **interfaz gráfica**, arranca el **programador autónomo**, o corre un país puntual directo por consola (`--run-country`), sin abrir ninguna ventana.
 - **Interfaz gráfica** (`interface/main_interface.py`): la ventana con las pestañas de este README — desde ahí configurás y disparás manualmente el Envío de Leads, la Revisión Masiva y el Comparador de Dealers.
@@ -57,7 +57,7 @@ Al abrir, vas a ver la barra superior con el logo, el campo de **Email destinata
 
 Es la pestaña principal: rellena y envía los formularios reales usando los Excels de datos generados.
 
-![Envío de Leads](Asset/screenshots/01_envio_de_leads.png)
+![Envío de Leads](docs/screenshots/01_envio_de_leads.png)
 
 **Paso a paso:**
 
@@ -68,7 +68,7 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
    - **Pausar para login manual antes de llenar el primer formulario**: al activarse, la app abre el navegador en la landing y **frena ahí** con un cartel emergente para que inicies sesión a mano (SSO, MFA, credenciales). Recién cuando apretás 'Aceptar' cierra cookies, saca la captura de la landing, detecta el formulario y arranca el llenado normal; con 'Cancelar' se corta la ejecución. Aplica a envíos manuales, programados y al Comparador de Dealers.
    - **Minimizar a la bandeja al cerrar**: controla la acción de cierre (ocultar en la bandeja del sistema o salir).
 
-   ![Configuración avanzada](Asset/screenshots/16_configuracion_global.png)
+   ![Configuración avanzada](docs/screenshots/16_configuracion_global.png)
 
 3. **MERCADOS** y **EXCELS POR DISPOSITIVO**: cada uno se pone en **Secuencial** (uno detrás del otro) o **Paralelo** (todos a la vez), y son independientes entre sí.
    - **MERCADOS** decide cómo se recorren los países: uno por vez (AR → BO → …) o todos juntos.
@@ -78,7 +78,7 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
    - **🧩 Formularios T3 2.0 (usa los Excels …_T3)**: tildalo si los formularios de este envío son la versión nueva Adobe AEM — la app busca directamente los Excels con sufijo `_T3.xlsx` en vez de los normales. 
    - Al elegir **Mac LT** o **Android LT** aparece a la derecha el panel **CREDENCIALES LT** con los campos **User** y **Key** (la contraseña se ve enmascarada). Se auto-completa con lo que ya tengas guardado en `lambdatest_credentials.txt`; si lo cambiás y apretás **💾 Guardar**, se sobreescribe ese archivo. Es la única forma de cargar credenciales de LambdaTest desde la app (no hay otra pantalla de configuración para esto).
 
-   ![Credenciales LT](Asset/screenshots/06_credenciales_lt.png)
+   ![Credenciales LT](docs/screenshots/06_credenciales_lt.png)
 
 5. **PAÍSES A EJECUTAR**: hacé click en las tarjetas de los mercados que querés correr (AR/BO/BR/CL/CO/EC/PY/PE/UY) — se pueden elegir varios a la vez, cada tarjeta clickeada queda resaltada y el contador de arriba a la derecha suma. Los links **Todos** / **Ninguno** seleccionan o deseleccionan todos de un click. Recién ahí se habilita (se pone verde) el botón **EJECUTAR ENVÍO**; con 0 países elegidos queda gris y sin click.
 
@@ -93,7 +93,7 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
    Así se ve la parte de abajo de la pestaña, con la selección de países arriba y la tabla de datos debajo:
 
-   ![Países a ejecutar y Datos por país](Asset/screenshots/09_datos_por_pais.png)
+   ![Países a ejecutar y Datos por país](docs/screenshots/09_datos_por_pais.png)
 
 7. **EJECUTAR ENVÍO**: se habilita apenas elegís al menos un país. Antes de arrancar, la app **valida que exista un Excel con al menos un lead** para cada combinación país + dispositivo elegida; si alguno falta o está vacío, no ejecuta nada y te lo dice con el detalle (ej. *"Colombia · Chrome: … (vacío / sin leads)"*). Si está todo bien, abre el **modal de ejecución** (ver abajo).
 8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para LambdaTest, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda como una columna **"Video LT"** dentro del Excel de resultados — abrilo desde ahí y hacé click en el link.
@@ -108,7 +108,7 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 
 **Solapa "Campos detectados"** — los campos nuevos que la automatización encontró en los formularios durante las corridas (los que quedan registrados en `json/nuevos_campos_<país>.json`). Elegís el país y ves cada campo con su label, ID real, tipo y si es requerido:
 
-![IDs Dinámicos — Campos detectados](Asset/screenshots/20_ids_dinamicos_campos_detectados.png)
+![IDs Dinámicos — Campos detectados](docs/screenshots/20_ids_dinamicos_campos_detectados.png)
 
 - **Añadir un valor**: escribí en el cuadro y apretá **➕ Añadir valor** (o Enter). Cada valor se **guarda al instante** y queda como una **etiqueta** al lado de "Valores:".
 - **Varios valores = rotación aleatoria**: repetí "Añadir valor" las veces que quieras. En cada envío la app **elige uno al azar**, así el campo no se llena siempre igual. Aplica a campos de texto y a dropdowns (elige al azar entre las opciones que coincidan). Si cargás uno solo, usa siempre ese.
@@ -117,13 +117,13 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 
 **Solapa "IDs únicos"** — alta manual de cualquier ID no mapeado: escribís el ID, la descripción opcional y los países donde aplica (sin tildar = todos). En **Valor** podés cargar varios: escribí uno y apretá **➕** (o Enter) — queda como etiqueta y se elige uno al azar en cada envío. Abajo se listan los configurados, con **filtro** que busca por ID, descripción, valor o país (podés escribir varias palabras: matchean las filas que contengan todas) más el combo de país, y botones **Editar** / **✕** por fila. Un mismo ID puede tener una fila por país (valores distintos según el mercado); si existieran entradas repetidas del mismo ID **y** mismo alcance de países, la app las fusiona sola en una al abrir el popup, así **Editar siempre te muestra todos los valores juntos**:
 
-![IDs Dinámicos — IDs únicos](Asset/screenshots/21_ids_dinamicos_ids_unicos.png)
+![IDs Dinámicos — IDs únicos](docs/screenshots/21_ids_dinamicos_ids_unicos.png)
 
 **Checkboxes con SI/NO** — para un checkbox opcional (ej. `test-drive`, newsletter), cargá su ID con valor **SI** o **NO** (los mismos valores que acepta el Excel: si/no, yes/1/0, marcar/desmarcar…). La app lo marca o lo deja sin marcar en cada envío. Si le cargás SI **y** NO como dos valores, sortea entre marcar y no marcar por fila. La columna del Excel, si existe, tiene prioridad sobre esto.
 
 **Solapa "IDs Excel"** — a diferencia de IDs únicos (valores fijos que no vienen del Excel), acá vive el mapeo entre **columnas del Excel de datos** y **campos del formulario real**: le decís a la app "la columna X del Excel va en el campo con id=Y del HTML". Es lo que usa el robot para saber, fila por fila, qué escribir en cada campo al enviar un lead.
 
-![IDs Dinámicos — IDs Excel](Asset/screenshots/22_ids_dinamicos_ids_excel.png)
+![IDs Dinámicos — IDs Excel](docs/screenshots/22_ids_dinamicos_ids_excel.png)
 
 - **País**: para qué país es esta fila del mapping (cada país tiene el suyo).
 - **Tipo**: `Rellenable` (input/textarea de texto libre) o `Dropdown` (`<select>`).
@@ -138,7 +138,7 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 
 **Solapa "Dependencias"** — registrá qué ID hijo depende de un ID padre por país, para que la app los llene en orden (ej. `city` depende de `region`: hasta que no se elige la región, el dropdown de ciudad no trae opciones). Elegís el país, el **ID padre** y el **ID hijo**, y quedan listadas abajo para editar o borrar:
 
-![IDs Dinámicos — Dependencias](Asset/screenshots/23_ids_dinamicos_dependencias.png)
+![IDs Dinámicos — Dependencias](docs/screenshots/23_ids_dinamicos_dependencias.png)
 
 > **Si un campo queda sin valor al enviar, la app te avisa.** Cuando una corrida no puede completar campos porque no tienen valor asignado:
 > - **Campos requeridos sin completar** → la fila cuenta como **FAIL** en el Excel de resultados (columna Resultado: *"Campos sin completar (sin valor asignado): …"*) y aparece como error en el mail.
@@ -185,7 +185,7 @@ Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), 
 
 Mientras corre el envío, la app abre una ventana "Ejecución de Test" que es tu único tablero de control: te dice qué está pasando y es lo que usás para frenar.
 
-![Modal de ejecución](Asset/screenshots/11_modal_ejecucion.png)
+![Modal de ejecución](docs/screenshots/11_modal_ejecucion.png)
 
 Qué muestra, de arriba abajo:
 
@@ -196,7 +196,7 @@ Qué muestra, de arriba abajo:
 
 Mientras el modal está abierto, **la ventana de atrás queda bloqueada** (no podés tocar los selectores ni cambiar de pestaña) para que no le muevas la configuración a una corrida en progreso — por eso el aviso amarillo *"No podés cerrar esta ventana mientras se ejecuta. Para correr otro test ahora, abrí otra ventana de la app."* El botón EJECUTAR ENVÍO de atrás también se deshabilita y pasa a decir **"EN CURSO…"**:
 
-![Modal sobre la app](Asset/screenshots/17_modal_sobre_app.png)
+![Modal sobre la app](docs/screenshots/17_modal_sobre_app.png)
 
 **Cuando termina**, el modal no se cierra solo: se le agregan abajo tres cosas y espera a que las leas.
 
@@ -245,7 +245,7 @@ Esta pestaña cuenta con dos sub-pestañas internas:
 - **📅 Programación Semanal**: Programa la ejecución automática y recurrente de "Envío de Leads" (por ejemplo, todos los martes a las 03:00) sin que tengas que apretar nada.
 - **🔍 Revisión Masiva de Forms**: Auditoría y verificación rápida de formularios masivos mediante matriz de URLs.
 
-![Programación de Tests](Asset/screenshots/04_programacion_tests.png)
+![Programación de Tests](docs/screenshots/04_programacion_tests.png)
 
 **Paso a paso:**
 
@@ -257,15 +257,15 @@ Esta pestaña cuenta con dos sub-pestañas internas:
    - **Horarios elegidos**: aparecen como chips "✕ HH:MM" debajo de la grilla — click en el chip para sacar ese horario puntual.
    - **Aplicar a otros días**: con al menos un horario tildado en el día abierto, aparece la fila **"Aplicar estos horarios a otros días"** — botón **Todos** (copia instantánea a los 7 días) o elegir días puntuales y confirmar con **"✓ Aplicar a N días"** (si un día ya tenía horarios, se avisa "(se reemplaza)").
 
-     ![Aplicar horarios a otros días](Asset/screenshots/15_aplicar_otros_dias.png)
+     ![Aplicar horarios a otros días](docs/screenshots/15_aplicar_otros_dias.png)
 
    - **Modo "Solo este día" / "Todos los días"**: si activás "Todos los días", cualquier horario que toques en el día abierto se replica en vivo a todos los demás días (aparece un aviso "⚠ Cambios aplican a TODOS los días"). Es distinto de "Aplicar a otros días", que es una copia puntual de una sola vez.
 
-   ![Calendario de horarios](Asset/screenshots/08_calendario_horarios.png)
+   ![Calendario de horarios](docs/screenshots/08_calendario_horarios.png)
 
    - **PAÍSES A TESTEAR**: tildá los países que se van a correr en cada disparo programado (link **"Seleccionar todos"** para marcarlos todos juntos). Abajo de todo, **Guardar configuración**:
 
-     ![Programación — países a testear](Asset/screenshots/45_programacion_paises.png)
+     ![Programación — países a testear](docs/screenshots/45_programacion_paises.png)
    - **Guardar configuración**: guarda el calendario armado. Antes de guardar, la app valida que ya existan los Excel necesarios en `data/` para cada combinación país + dispositivo elegida (si falta alguno, avisa "Archivos Excel Faltantes").
 3. Una vez guardada, en la pestaña principal aparece la tarjeta **"Programado en background"** con un resumen del próximo disparo (día, hora, modo, mercados).
 4. **Programar test automático**: activa la programación. El botón cambia a **Iniciar ahora** (para disparar ya, sin esperar el horario) + **Desactivar**.
@@ -277,7 +277,7 @@ Esta pestaña cuenta con dos sub-pestañas internas:
 
 Chequea que las reglas de validación (regex, largo, campo obligatorio, etc.) de cada campo del formulario real coincidan con lo esperado — sin llegar a enviar un lead real.
 
-![Validación de Campos](Asset/screenshots/03_validacion_campos.png)
+![Validación de Campos](docs/screenshots/03_validacion_campos.png)
 
 **Paso a paso:**
 
@@ -290,26 +290,26 @@ Chequea que las reglas de validación (regex, largo, campo obligatorio, etc.) de
    - **Regex full** / **Regex char**: la expresión regular completa del valor válido, y la de caracter-por-caracter (para bloquear teclas inválidas mientras se escribe).
    - **Texto de prueba**: el valor que se va a tipear en ese campo durante la validación, más una fila de checkboxes por país (AR/BO/BR/CH/CO/EC/PA/PE/UY) para que la regla aplique solo a algunos mercados.
 
-   ![Configuración de ID — detalle](Asset/screenshots/07_configuracion_id_detalle.png)
+   ![Configuración de ID — detalle](docs/screenshots/07_configuracion_id_detalle.png)
 
    - **Filtro** (texto libre) + combo de **País** + **Limpiar filtros**: filtran la tabla de reglas de abajo.
    - **Generador regex**: abre un asistente para armar la expresión regular sin escribirla a mano — tildás combinaciones de **Letras minúsculas, Letras mayúsculas, Acentos, Espacios, Símbolos, Números, Máx. 2 iguales seguidos, No todos iguales, Todos iguales, Al menos una vocal, Al menos una consonante, Email, Campo obligatorio**, y definís **Mín./Máx. largo**. Va mostrando en vivo el "Regex full" y "Regex char" resultantes, con botones **Copiar regex full** / **Copia regex char** para pasarlos al portapapeles y pegarlos en los campos de arriba.
 
-     ![Generador de regex](Asset/screenshots/12_generador_regex.png)
+     ![Generador de regex](docs/screenshots/12_generador_regex.png)
 
    - **Limpiar campos**: vacía el formulario de arriba para cargar una regla nueva desde cero.
    - **Mensaje de error**: abre un popup para definir qué mensaje de error espera ver la app cuando el campo falla. Si el campo es Dropdown, es un único mensaje; si no, podés cargar **varias reglas regex → mensaje** (distintos mensajes según qué regla de formato se rompa) — ojo, primero tenés que tener un ID cargado/seleccionado, si no la app avisa "Completá o seleccioná un ID antes de configurar mensajes." en vez de abrir el popup vacío.
 
-     ![Mensaje de error](Asset/screenshots/13_mensaje_error.png)
+     ![Mensaje de error](docs/screenshots/13_mensaje_error.png)
 
    - **Dependencia**: abre un popup para decir que este campo depende del valor de otro (ej. "Ciudad" solo tiene sentido si "Región" ya tiene un valor elegido) — se arma como una lista de pares (ID dependiente, Valor), con botones **Agregar / Editar dependencia** y **Eliminar dependencia**.
 
-     ![Dependencia](Asset/screenshots/14_dependencia.png)
+     ![Dependencia](docs/screenshots/14_dependencia.png)
    - **Agregar regla / Editar regla**: guarda el formulario de arriba como una regla nueva, o actualiza la seleccionada (el botón cambia de nombre solo según si hay una fila elegida en la tabla).
    - **Eliminar regla**: borra la regla seleccionada de la tabla.
    - **Tabla de reglas**: lista todo lo cargado (ID, Dropdown, Descripción, Dependencias, Regex full, Regex char, Texto de prueba, Países, Teclado mobile) — click en una fila para traerla al formulario de edición.
 
-     ![Validación — tabla de reglas](Asset/screenshots/42_validacion_reglas.png)
+     ![Validación — tabla de reglas](docs/screenshots/42_validacion_reglas.png)
 3. **Ejecutar validación**: corre la validación real contra el/los formularios configurados.
 4. **Resultados**: abre la carpeta con el detalle de la validación.
 
@@ -319,7 +319,7 @@ Chequea que las reglas de validación (regex, largo, campo obligatorio, etc.) de
 
 Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo, ciudad, dealer, etc.) que después usan "Envío de Leads" y "Programación de Tests".
 
-![Generar Excels con Datos](Asset/screenshots/02_generar_excels.png)
+![Generar Excels con Datos](docs/screenshots/02_generar_excels.png)
 
 **Paso a paso:**
 
@@ -334,7 +334,7 @@ Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo,
 
 La parte de abajo de la pestaña, con el cuadro de URLs y la barra de acciones:
 
-![Generar Excels — parte inferior](Asset/screenshots/41_generar_excels_abajo.png)
+![Generar Excels — parte inferior](docs/screenshots/41_generar_excels_abajo.png)
 
 ---
 
@@ -344,7 +344,7 @@ Chequea que los concesionarios (dealers) de una marca estén correctamente carga
 
 La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra de EJECUTAR. Se ve en dos partes:
 
-![Comparar Dealers — parte superior](Asset/screenshots/30_dealers_tab_top.png)
+![Comparar Dealers — parte superior](docs/screenshots/30_dealers_tab_top.png)
 
 **Paso a paso:**
 
@@ -357,7 +357,7 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
      - **Excluir** → esos dealers **NO deben estar** (se verifica la ausencia; si aparecen, es FAIL).
    - **No tiene filtro (usar todas las filas)**: compara todo el Excel contra el form, con la misma lógica de conjunto. Sirve para validar el mapeo Región/Ciudad/Dealer sin depender de una columna de filtro.
 
-![Comparar Dealers — filtro, columnas, salida, email y presets](Asset/screenshots/31_dealers_tab_mid.png)
+![Comparar Dealers — filtro, columnas, salida, email y presets](docs/screenshots/31_dealers_tab_mid.png)
 
 5. **⑤ COLUMNAS DEL EXCEL** — las píldoras **region / city / dealer** son los **ids reales del `<select>` en el HTML** del form (no cambian de país a país, aunque el texto visible sí: "Provincia" en AR sigue siendo `region`). Desmarcá el nivel que tu form no tenga (ej. sin `dealer`, valida solo región+ciudad). Debajo mapeás qué **columna de tu Excel** es cada nivel (Región=`PROVINCIA`, Ciudad=`CIUDAD`, Dealer=`NOMBRE`, etc.).
    - **Columnas adicionales a comprobar**: agregás cualquier campo extra (columna del Excel → id del form, ej. `CEP` → `customer-cep`); quedan como píldoras-checkbox activables. Todo se guarda por país.
@@ -378,7 +378,7 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
    - **🗑 Eliminar**: borra el preset (con confirmación).
 La parte de abajo de la pestaña, con los presets guardados y la barra de EJECUTAR:
 
-![Comparar Dealers — parte inferior](Asset/screenshots/44_dealers_abajo.png)
+![Comparar Dealers — parte inferior](docs/screenshots/44_dealers_abajo.png)
 
 10. **EJECUTAR** — se habilita con el Excel de URLs, el de dealers y las columnas mapeadas. Corre en **2 fases** por cada form: **Fase 1** compara y **guarda el Excel de resultados enseguida**; **Fase 2** (si elegiste capturas) toma las capturas. Cada form deja su **carpeta propia** nombrada `país_form_columna(o sinfiltro)_incluidos|excluidos_timestamp` dentro de `Dealerscheck_resultados/`.
 
@@ -420,7 +420,7 @@ La parte de abajo de la pestaña, con los presets guardados y la barra de EJECUT
 
 La comparación corre dentro de un modal que bloquea la ventana de atrás:
 
-![Modal del Comparador](Asset/screenshots/18_modal_comparador.png)
+![Modal del Comparador](docs/screenshots/18_modal_comparador.png)
 
 - **Comparando dealers… / país**: sobre qué mercado corre.
 - **Barra de progreso** sobre el total.
@@ -430,7 +430,7 @@ La comparación corre dentro de un modal que bloquea la ventana de atrás:
 
 Mientras corre, la ventana de atrás queda bloqueada (igual que en Envío de Leads):
 
-![Modal del Comparador sobre la app](Asset/screenshots/19_modal_comparador_sobre_app.png)
+![Modal del Comparador sobre la app](docs/screenshots/19_modal_comparador_sobre_app.png)
 
 ### 🔁 Reintentar Fallidos
 

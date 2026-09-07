@@ -9,7 +9,7 @@ import os
 import openpyxl
 import pytest
 
-from utils.muestreo_gm_forms import MuestreadorGmForms
+from osocio.utils.muestreo_gm_forms import MuestreadorGmForms
 
 
 def _crear_excel_sintetico(tmp_path, filas_argentina=None):
@@ -150,7 +150,7 @@ class TestGenerarExcelMuestra:
     def test_sin_salida_explicita_guarda_en_results_dir(self, tmp_path, monkeypatch):
         ruta = _crear_excel_sintetico(str(tmp_path), FILAS_MIXTAS)
         results_dir = str(tmp_path / "resultados")
-        monkeypatch.setattr("utils.muestreo_gm_forms.RESULTS_DIR", results_dir)
+        monkeypatch.setattr("osocio.utils.muestreo_gm_forms.RESULTS_DIR", results_dir)
 
         muestreador = MuestreadorGmForms(ruta_excel=ruta, n_por_pais=1, seed=1)
         ruta_generada = muestreador.generar_excel_muestra()

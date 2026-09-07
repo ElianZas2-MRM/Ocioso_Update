@@ -11,7 +11,7 @@ import re
 
 import pytest
 
-from utils.data_generator import valor_plausible_por_nombre as valor
+from osocio.utils.data_generator import valor_plausible_por_nombre as valor
 
 
 @pytest.mark.parametrize("field_id,patron", [

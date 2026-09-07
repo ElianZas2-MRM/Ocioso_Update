@@ -10,15 +10,10 @@ un input suelto de la landing. Se hace sin driver, mockeando el snapshot.
 """
 import json
 import os
-import sys
 
 import pytest
 
-CORE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
-if CORE_DIR not in sys.path:
-    sys.path.insert(0, CORE_DIR)
-
-from base_form_filler import BaseFormFiller  # noqa: E402
+from osocio.core.base_form_filler import BaseFormFiller
 
 
 def _entry(eid, value, tag="input", visible=True):

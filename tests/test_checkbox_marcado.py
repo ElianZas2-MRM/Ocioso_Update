@@ -6,14 +6,7 @@ Prioridad acordada con el usuario para checkboxes:
    o es un checkbox de términos/privacidad conocido. Los opcionales quedan como están
    (antes se marcaba cualquier checkbox visible sin distinguir).
 """
-import os
-import sys
-
-CORE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "core")
-if CORE_DIR not in sys.path:
-    sys.path.insert(0, CORE_DIR)
-
-from base_form_filler import BaseFormFiller  # noqa: E402
+from osocio.core.base_form_filler import BaseFormFiller
 
 decidir = BaseFormFiller._decidir_marca_checkbox
 
