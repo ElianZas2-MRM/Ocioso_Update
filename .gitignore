@@ -78,3 +78,4 @@ log/
 # desfasados cada vez que Chrome/Edge se autoactualizaban y habia que reemplazar a mano.
 drivers/
 json/driver_check.json
+*.json
