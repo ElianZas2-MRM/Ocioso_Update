@@ -4,16 +4,13 @@ Carga, guarda y limpia el archivo json/programacion_test.json que define
 qué países, en qué horarios y con qué browser se ejecutan automáticamente.
 """
 import os
-import sys
 import json
 from datetime import datetime
 
 # === RUTAS BASE ===
-if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_DIR = os.path.join(BASE_DIR, "json")
+# Se importan de osocio/utils/paths.py, que es el unico lugar que resuelve la raiz
+# (y el unico que contempla el caso empaquetado con PyInstaller).
+from osocio.utils.paths import BASE_DIR, JSON_DIR  # noqa: E402
 
 def guardar_programacion(programacion, filename="programacion_test.json"):
     """Guarda la programación en archivo JSON. None = eliminar. Soporta esquema semanal y legado."""

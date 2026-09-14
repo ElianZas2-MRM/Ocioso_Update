@@ -27,10 +27,7 @@ from osocio.core.browser_manager import BrowserManager
 from osocio.core.country_configs import COUNTRY_CONFIGS
 from osocio.core.screenshot_manager import ScreenshotManager
 
-try:
-    from osocio.utils.paths import RESULTS_DIR
-except Exception:
-    RESULTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resultados")
+from osocio.utils.paths import RESULTS_DIR
 
 
 DEFAULT_SELECT_IDS = {"region": "region", "city": "city", "dealer": "dealer"}

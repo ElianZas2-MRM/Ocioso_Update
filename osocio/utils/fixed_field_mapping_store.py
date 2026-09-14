@@ -6,7 +6,6 @@ del usuario en fixed_field_mappings.json, que tiene prioridad sobre la base.
 import json
 import os
 import re
-import sys
 
 from osocio.utils.paths import BASE_DIR, BUNDLE_DIR
 

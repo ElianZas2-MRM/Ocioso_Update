@@ -173,18 +173,10 @@ class BaseFormFiller:
             config (dict): Configuración específica del país
         """
         self.config = config
-        try:
-            from osocio.utils.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
-            self.BASE_DIR = BASE_DIR
-            self.DATA_DIR = DATA_DIR
-            self.RESULTADOS_DIR = RESULTS_DIR
-        except ImportError:
-            if getattr(sys, 'frozen', False):
-                self.BASE_DIR = os.path.dirname(sys.executable)
-            else:
-                self.BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            self.DATA_DIR = os.path.join(self.BASE_DIR, "data")
-            self.RESULTADOS_DIR = os.path.join(self.BASE_DIR, "resultados")
+        from osocio.utils.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
+        self.BASE_DIR = BASE_DIR
+        self.DATA_DIR = DATA_DIR
+        self.RESULTADOS_DIR = RESULTS_DIR
         
         os.makedirs(self.DATA_DIR, exist_ok=True)
         os.makedirs(self.RESULTADOS_DIR, exist_ok=True)

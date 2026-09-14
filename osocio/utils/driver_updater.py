@@ -32,12 +32,7 @@ import subprocess
 import zipfile
 from datetime import datetime, timedelta
 
-try:
-    from osocio.utils.paths import DRIVERS_DIR, JSON_DIR
-except Exception:  # pragma: no cover - fallback si se ejecuta suelto
-    _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    DRIVERS_DIR = os.path.join(_BASE, "drivers")
-    JSON_DIR = os.path.join(_BASE, "json")
+from osocio.utils.paths import DRIVERS_DIR, JSON_DIR
 
 try:
     from osocio.utils.popup_logger import log_runtime
