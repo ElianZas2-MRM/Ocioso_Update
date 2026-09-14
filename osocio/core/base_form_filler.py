@@ -165,14 +165,18 @@ class BaseFormFiller:
         "advisor_code", "event", "kit", "chassis", "color", "insurance", "comment"
     ]
     
-    def __init__(self, config):
+    def __init__(self, config, browser_factory=None):
         """
         Configura el form filler base
         
         Args:
             config (dict): Configuración específica del país
+            browser_factory (callable): con que crear el navegador. Por defecto
+                BrowserManager.create_browser. Se puede inyectar un doble en los
+                tests para ejercitar el motor sin abrir un navegador de verdad.
         """
         self.config = config
+        self._browser_factory = browser_factory or BrowserManager.create_browser
         from osocio.utils.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
         self.BASE_DIR = BASE_DIR
         self.DATA_DIR = DATA_DIR
@@ -1353,7 +1357,7 @@ class BaseFormFiller:
     
     def initialize_browser(self):
         """Inicializa el navegador según la configuración"""
-        self.driver = BrowserManager.create_browser(
+        self.driver = self._browser_factory(
             browser_type=self.config['browser'],
             viewport=self.config['viewport'],
             headless=self.config.get('headless', False),
