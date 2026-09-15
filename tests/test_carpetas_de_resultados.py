@@ -75,8 +75,14 @@ def test_el_ejecutor_autonomo_busca_donde_se_escribe():
     )
 
 
-def test_no_quedaron_carpetas_de_resultados_sueltas_en_la_raiz():
-    """La raíz solo puede tener `resultados/`. Las otras tres se migraron adentro."""
+def test_nadie_escribe_en_las_carpetas_viejas_de_la_raiz():
+    """Las carpetas viejas, si todavía existen, tienen que estar vacías.
+
+    El invariante que importa es que el código no escriba más ahí, no que la carpeta no
+    exista: el proyecto vive dentro de OneDrive y la sincronización puede recrear una
+    carpeta vacía por su cuenta después de borrarla. Un test que falle por eso es un test
+    que se termina ignorando, y entonces deja de servir para lo que fue escrito.
+    """
     viejas = [
         "resultados_lambdatestmac",
         "resultados_lambdatest_android",
@@ -85,9 +91,14 @@ def test_no_quedaron_carpetas_de_resultados_sueltas_en_la_raiz():
         "resultados_mac",
         "resultados_android",
     ]
-    encontradas = [n for n in viejas if os.path.isdir(os.path.join(paths.BASE_DIR, n))]
-    assert not encontradas, (
-        "volvieron a aparecer carpetas de resultados sueltas en la raíz: " + ", ".join(encontradas)
+    con_contenido = []
+    for nombre in viejas:
+        ruta = os.path.join(paths.BASE_DIR, nombre)
+        if os.path.isdir(ruta) and os.listdir(ruta):
+            con_contenido.append(f"{nombre} ({len(os.listdir(ruta))} items)")
+
+    assert not con_contenido, (
+        "hay resultados escribiéndose fuera de resultados/: " + ", ".join(con_contenido)
     )
 
 
