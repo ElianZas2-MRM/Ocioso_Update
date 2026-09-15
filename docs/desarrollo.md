@@ -14,6 +14,19 @@ venv\Scripts\activate
 pip install -r requirements-dev.txt
 ```
 
+> **Usá el venv de verdad, no el Python del sistema.** Los tests pasan igual sin
+> `pywin32` instalado —los imports están protegidos— pero la app queda a medias sin
+> avisar: `pywin32` es lo que usa para mandar los mails por Outlook y para el ícono de la
+> bandeja. Si corrés desde el Python del sistema, el envío de emails falla y lo único que
+> vas a ver es una línea en `temporales/runtime.log`:
+>
+> ```
+> [ERROR] No module named 'win32com'
+> ```
+>
+> El `.exe` no tiene este problema: `build.bat` instala `requirements.txt` en el venv que
+> empaqueta.
+
 ### Por qué hay dos archivos de requirements
 
 No es un descuido, es a propósito:

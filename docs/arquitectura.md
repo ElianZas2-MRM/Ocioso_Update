@@ -71,6 +71,36 @@ hoy está partida en mixins bajo `core/form_filler/`, uno por responsabilidad:
 Son mixins, no composición: comparten `self`. Desde afuera se sigue importando
 `from osocio.core.base_form_filler import BaseFormFiller` y nada cambió.
 
+#### Por qué mixins y no colaboradores
+
+La idea original era dar un paso más: que en vez de heredar, `BaseFormFiller` **tuviera**
+esas piezas (`self._casillas = Casillas(driver, log)`), que es composición de verdad. Se
+midió antes de hacerlo, contando cuánto estado compartido toca cada grupo y a cuántos
+métodos de afuera llama:
+
+| Mixin | Métodos | Atributos de `self` | Llama afuera |
+|---|---|---|---|
+| `aem` | 5 | 5 | 1 |
+| `navegacion` | 6 | 3 | 4 |
+| `ids_dinamicos` | 5 | 7 | 2 |
+| `desplegables` | 13 | 7 | 5 |
+| `casillas` | 21 | 8 | 3 |
+| `por_mercado` | 10 | 13 | 5 |
+
+**Ninguno tiene un borde lo bastante limpio.** Todos tocan `self.driver` y `self.config`, y
+todos llaman métodos que quedaron en la clase principal. Convertirlos en colaboradores
+implicaría pasarles una referencia de vuelta al padre para que puedan llamarlo: una
+dependencia circular disfrazada de composición, que es peor que el mixin.
+
+El caso más ilustrativo es `por_mercado` (Brasil y Perú). Por su nombre parece lógica de
+negocio pura y debería ser el candidato más fácil; medido resultó **el más enredado de los
+seis**, porque manipula el DOM tanto como el resto.
+
+Así que se paró acá a propósito. La ganancia real —poder encontrar las cosas y no
+navegar 7.000 líneas— ya está. Forzar la composición ahora agregaría indirección sin
+desacoplar nada. Si en algún momento se quiere avanzar, lo que primero hay que resolver es
+la dependencia con `driver`, no la forma de la herencia.
+
 `GenericCountryBase` hereda de `BaseFormFiller` y le arma la configuración de cada país
 desde `country_configs.py`. Antes había 9 archivos `Formulario_<País>_Main.py`; se
 eliminaron y hoy los resuelve `forms/_runner_common.get_runner()`.
