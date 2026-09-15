@@ -26,6 +26,15 @@ FORMS_DIR = os.path.join(BASE_DIR, "osocio", "forms")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 ASSET_DIR = os.path.join(BUNDLE_DIR, "Asset")
 RESULTS_DIR = os.path.join(BASE_DIR, "resultados")
+
+# Todo lo que la app produce vive adentro de resultados/, cada cosa en su subcarpeta.
+# Antes estas tres colgaban sueltas de la raiz (resultados_lambdatestmac/,
+# resultados_lambdatest_android/ y Dealerscheck_resultados/), que ensuciaba la raiz
+# y obligaba a buscar los resultados de una corrida en cuatro lugares distintos.
+RESULTS_LT_MAC_DIR = os.path.join(RESULTS_DIR, "lambdatest_mac")
+RESULTS_LT_ANDROID_DIR = os.path.join(RESULTS_DIR, "lambdatest_android")
+RESULTS_DEALERS_DIR = os.path.join(RESULTS_DIR, "dealers")
+RESULTS_MASIVA_DIR = os.path.join(RESULTS_DIR, "resultado_urlsinsertas")
 JSON_DIR = os.path.join(BASE_DIR, "json")
 TEMPORALES_DIR = os.path.join(BASE_DIR, "temporales")
 DRIVERS_DIR = os.path.join(BASE_DIR, "drivers")

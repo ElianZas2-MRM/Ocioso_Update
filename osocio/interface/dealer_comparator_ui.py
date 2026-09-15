@@ -96,7 +96,8 @@ def _get_settings_path():
 
 
 def _get_results_dir():
-    return os.path.join(_get_base_dir(), "Dealerscheck_resultados")
+    from osocio.utils.paths import RESULTS_DEALERS_DIR
+    return RESULTS_DEALERS_DIR
 
 
 def _load_all_settings():

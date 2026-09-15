@@ -216,7 +216,7 @@ if exist ".\drivers" (
 REM Las carpetas de salida se crean VACIAS. Antes se copiaban enteras y el portable
 REM viajaba con los resultados, capturas y reportes de revision masiva de esta PC
 REM (cientos de MB de datos de otra corrida). El portable arranca limpio.
-for %%D in (resultados temporales Dealerscheck_resultados resultados_lambdatestmac resultados_lambdatest_android) do (
+for %%D in (resultados temporales) do (
     if not exist "%PORTABLE_DIR%\%%D" mkdir "%PORTABLE_DIR%\%%D"
 )
 

@@ -219,9 +219,8 @@ def _build_lambdatest_command(lt_type, pais_nombre):
 
 def _get_lt_results_dir(lt_type):
     """Devuelve el directorio de resultados de LambdaTest según el tipo."""
-    if lt_type == "mac":
-        return os.path.join(PROJECT_ROOT, "resultados_lambdatestmac")
-    return os.path.join(PROJECT_ROOT, "resultados_lambdatest_android")
+    from osocio.utils.paths import RESULTS_LT_ANDROID_DIR, RESULTS_LT_MAC_DIR
+    return RESULTS_LT_MAC_DIR if lt_type == "mac" else RESULTS_LT_ANDROID_DIR
 
 
 def ejecutar_tests(programacion):
