@@ -27,7 +27,7 @@ from osocio.core.browser_manager import BrowserManager
 from osocio.core.country_configs import COUNTRY_CONFIGS
 from osocio.core.screenshot_manager import ScreenshotManager
 
-from osocio.utils.paths import RESULTS_DIR
+from osocio.paths import RESULTS_DIR
 
 
 DEFAULT_SELECT_IDS = {"region": "region", "city": "city", "dealer": "dealer"}

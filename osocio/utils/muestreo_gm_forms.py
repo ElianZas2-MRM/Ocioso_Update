@@ -14,7 +14,7 @@ import re
 
 import openpyxl
 
-from osocio.utils.paths import BASE_DIR, RESULTS_DIR
+from osocio.paths import BASE_DIR, RESULTS_DIR
 
 GM_FORMS_EXCEL_FILENAME = "GM Forms - 2026.xlsx"
 

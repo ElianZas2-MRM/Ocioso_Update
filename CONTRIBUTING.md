@@ -65,7 +65,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # NO
 Va así:
 
 ```python
-from osocio.utils.paths import BASE_DIR, JSON_DIR, RESULTS_DIR           # SI
+from osocio.paths import BASE_DIR, JSON_DIR, RESULTS_DIR           # SI
 ```
 
 `test_solo_paths_py_puede_calcular_la_raiz` lo verifica recorriendo el paquete por AST.

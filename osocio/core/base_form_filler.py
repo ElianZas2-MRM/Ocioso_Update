@@ -183,7 +183,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         """
         self.config = config
         self._browser_factory = browser_factory or BrowserManager.create_browser
-        from osocio.utils.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
+        from osocio.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
         self.BASE_DIR = BASE_DIR
         self.DATA_DIR = DATA_DIR
         self.RESULTADOS_DIR = RESULTS_DIR

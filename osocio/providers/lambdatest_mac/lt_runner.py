@@ -80,7 +80,7 @@ _VISID_ID_ALIASES: dict = {
 # ── Rutas base ────────────────────────────────────────────────────────────────
 # paths.py ya resuelve la raíz del proyecto tanto como script como empaquetado con
 # PyInstaller, asi que no se recalcula a mano subiendo directorios desde __file__.
-from osocio.utils.paths import (
+from osocio.paths import (
     BASE_DIR as _OSOCIO_DIR,
     DATA_DIR as _DATA_DIR,
     JSON_DIR as _JSON_DIR,

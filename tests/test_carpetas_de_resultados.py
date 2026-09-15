@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from osocio.utils import paths
+from osocio import paths
 
 
 SUBCARPETAS = [
@@ -145,6 +145,6 @@ def test_ningun_modulo_arma_carpetas_de_resultados_a_mano():
                     sospechosas.append(f"{rel}:{nodo.lineno} -> {nodo.value!r}")
 
     assert not sospechosas, (
-        "estos módulos nombran carpetas de resultados a mano en vez de usar osocio.utils.paths:"
+        "estos módulos nombran carpetas de resultados a mano en vez de usar osocio.paths:"
         "\n  " + "\n  ".join(sospechosas)
     )

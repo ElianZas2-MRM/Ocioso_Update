@@ -101,7 +101,7 @@ class TestDependenciasEntreCampos:
         carpeta = tmp_path / "json"
         carpeta.mkdir()
         (carpeta / "ids_dinamicos.json").write_text("{ esto no es json", encoding="utf-8")
-        monkeypatch.setattr("osocio.utils.paths.JSON_DIR", str(carpeta))
+        monkeypatch.setattr("osocio.paths.JSON_DIR", str(carpeta))
 
         from osocio.core.field_dependencies import get_field_dependencies
         deps = get_field_dependencies("Peru")
@@ -123,7 +123,7 @@ class TestAutovalores:
 
     def test_por_defecto_usa_el_json_del_proyecto(self):
         from osocio.utils.autovalores_campos_detectados import AutovaloresCamposDetectados
-        from osocio.utils import paths
+        from osocio import paths
 
         autov = AutovaloresCamposDetectados("Peru")
         assert os.path.normpath(autov.json_dir) == os.path.normpath(paths.JSON_DIR)
@@ -137,7 +137,7 @@ class TestReglasDeValidacion:
     """Las reglas por país que usa la pestaña 'Validación de Campos'."""
 
     def _paises_con_reglas(self):
-        from osocio.utils import paths
+        from osocio import paths
         if not os.path.isdir(paths.JSON_DIR):
             return []
         return [n for n in os.listdir(paths.JSON_DIR)
@@ -147,7 +147,7 @@ class TestReglasDeValidacion:
         assert self._paises_con_reglas(), "no hay ningún field_validation_rules_<pais>.json"
 
     def test_cada_archivo_de_reglas_tiene_forma_de_diccionario(self):
-        from osocio.utils import paths
+        from osocio import paths
 
         for nombre in self._paises_con_reglas():
             with open(os.path.join(paths.JSON_DIR, nombre), "r", encoding="utf-8") as fh:
@@ -168,7 +168,7 @@ class TestDrivers:
 
     def test_apunta_a_la_carpeta_drivers_del_proyecto(self):
         from osocio.utils import driver_updater
-        from osocio.utils import paths
+        from osocio import paths
 
         assert os.path.normpath(driver_updater.DRIVERS_DIR) == os.path.normpath(paths.DRIVERS_DIR)
 
@@ -189,7 +189,7 @@ class TestEjecutorAutonomo:
     def test_sus_rutas_son_las_del_proyecto(self):
         """Era uno de los 10 sitios rotos: usaba json/ y resultados/ equivocados."""
         from osocio import autonomous_runner
-        from osocio.utils import paths
+        from osocio import paths
 
         assert os.path.normpath(autonomous_runner.JSON_DIR) == os.path.normpath(paths.JSON_DIR)
         assert os.path.normpath(autonomous_runner.RESULTS_DIR) == os.path.normpath(paths.RESULTS_DIR)

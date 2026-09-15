@@ -32,7 +32,7 @@ _ANDROID_DEVICES = {
 _DEFAULT_ANDROID_DEVICE = "Galaxy S24"
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
-from osocio.utils.paths import (
+from osocio.paths import (
     BASE_DIR as _OSOCIO_DIR,
     DATA_DIR as _DATA_DIR,
     RESULTS_LT_ANDROID_DIR as _ANDROID_RESULTADOS_DIR,

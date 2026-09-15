@@ -128,7 +128,7 @@ reglas o listados de concesionarios **sin llegar a enviar un lead real**.
 
 ## `paths.py`: la única fuente de rutas
 
-**Todas** las rutas del proyecto salen de `osocio/utils/paths.py`. Ningún otro módulo
+**Todas** las rutas del proyecto salen de `osocio/paths.py`. Ningún otro módulo
 calcula la raíz del proyecto ni arma carpetas de salida a mano, y hay un test que lo hace
 cumplir (`test_rutas.py`).
 

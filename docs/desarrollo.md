@@ -87,7 +87,7 @@ dos existen por bugs reales que costaron caro:
 
 1. **`test_solo_paths_py_puede_calcular_la_raiz`** — ningún módulo puede encadenar
    `os.path.dirname()` sobre `__file__` para llegar a la raíz del proyecto. Eso lo hace
-   `osocio/utils/paths.py` y nadie más. Cuando el código se movió a `osocio/`, había 16
+   `osocio/paths.py` y nadie más. Cuando el código se movió a `osocio/`, había 16
    copias de esa cuenta y todas quedaron cortas en un nivel: la app escribió en la carpeta
    equivocada durante una semana sin quejarse.
 

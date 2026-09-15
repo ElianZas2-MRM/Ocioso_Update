@@ -20,8 +20,8 @@ _NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
 def _project_root():
-    # La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado (ver tests/test_rutas.py).
-    from osocio.utils.paths import BASE_DIR
+    # La raiz se resuelve en osocio/paths.py y en ningun otro lado (ver tests/test_rutas.py).
+    from osocio.paths import BASE_DIR
     return BASE_DIR
 
 

@@ -35,7 +35,7 @@ from osocio.utils.driver_updater import (
 )
 
 try:
-    from osocio.utils.paths import ASSET_DIR
+    from osocio.paths import ASSET_DIR
 except Exception:  # pragma: no cover
     ASSET_DIR = ""
 

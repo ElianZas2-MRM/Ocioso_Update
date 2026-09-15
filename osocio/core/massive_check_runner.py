@@ -650,7 +650,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     # Se usa utils.paths.BASE_DIR porque en el portable (PyInstaller) __file__ apunta al
     # temporal _MEIPASS: sin esto el Excel terminaba en una carpeta temporal aleatoria en
     # vez de resultados/resultado_urlsinsertas/ al lado del .exe.
-    from osocio.utils.paths import BASE_DIR as base_dir
+    from osocio.paths import BASE_DIR as base_dir
     dest_dir = os.path.join(base_dir, "resultados", "resultado_urlsinsertas")
     os.makedirs(dest_dir, exist_ok=True)
 

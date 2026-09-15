@@ -10,8 +10,8 @@ import sys
 def get_base_dir() -> str:
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
-    # Sube desde osocio/utils/paths.py hasta la raíz del proyecto: utils -> osocio -> raíz
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    # Sube desde osocio/paths.py hasta la raíz del proyecto: osocio -> raíz
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def get_bundle_dir() -> str:
