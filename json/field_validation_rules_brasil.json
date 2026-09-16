@@ -1686,6 +1686,26 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "ZIP_CODE": {
+      "descripcion": " ",
+      "campo": "zip_code",
+      "element_id": "zip_code",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

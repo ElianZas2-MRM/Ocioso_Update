@@ -1172,6 +1172,54 @@
         "Brasil"
       ],
       "nombre_campo": "Data de nascimento"
+    },
+    {
+      "id": "company_type",
+      "valor": [
+        "Manufactura",
+        "Servicios públicos"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "company_type",
+      "origen": "autovalor"
+    },
+    {
+      "id": "current_fleet_size",
+      "valor": [
+        "16 a 25 vehículos",
+        "26 o más vehículos"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "current_fleet_size",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase_date",
+      "valor": [
+        "En 60 días o más",
+        "Próximos 60 días"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "purchase_date",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase_requirement",
+      "valor": [
+        "De 16 a 25 vehículos",
+        "De 6 a 15 vehículos"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "purchase_requirement",
+      "origen": "autovalor"
     }
   ],
   "dependencies": [
