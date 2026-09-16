@@ -5,7 +5,6 @@ gestión de config global, lectura/escritura de Excels, IDs dinámicos y depende
 """
 import os
 import sys
-import ast
 import builtins
 import pandas as pd
 import zipfile
@@ -13,7 +12,6 @@ from datetime import datetime
 from glob import glob
 from tkinter import messagebox
 import re
-from tkinter import ttk
 import json
 import time
 import queue
@@ -543,7 +541,7 @@ def obtener_ultima_carpeta(prefijo):
     try:
         carpetas_ordenadas = sorted(carpetas, key=extract_number, reverse=True)
         return carpetas_ordenadas[0]
-    except Exception as e:
+    except Exception:
         # Si falla el ordenamiento por números, usar modificación de carpeta
         carpetas_ordenadas = sorted(carpetas, key=lambda x: os.path.getmtime(x) if os.path.exists(x) else 0, reverse=True)
         return carpetas_ordenadas[0]
@@ -1398,7 +1396,7 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             if os.path.getsize(excel_path) < 24 * 1024 * 1024:
                 adjuntos.append(excel_path)
             else:
-                print(f"⚠️ Excel excede 24 MB, no se adjuntará")
+                print("⚠️ Excel excede 24 MB, no se adjuntará")
                 cuerpo += f"\n⚠️ NOTA: El archivo Excel es muy grande y no se pudo adjuntar. Ubicación: {excel_path}"
 
         if adjuntar_screenshots and screenshots_dir and os.path.exists(screenshots_dir):
@@ -1406,7 +1404,7 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             if zip_files:
                 adjuntos.extend(zip_files)
             else:
-                print(f"⚠️ No se pudieron comprimir los screenshots")
+                print("⚠️ No se pudieron comprimir los screenshots")
                 cuerpo += f"\n⚠️ NOTA: Los screenshots no se pudieron comprimir. Ubicación: {screenshots_dir}"
 
         destinatario = obtener_email_destinatario()
@@ -1585,7 +1583,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
         destinatario = obtener_email_destinatario()
 
         if not destinatario or destinatario == "correo@example.com":
-            print(f"❌ ERROR: Email destinatario no configurado o es el default. No se puede enviar.")
+            print("❌ ERROR: Email destinatario no configurado o es el default. No se puede enviar.")
             return False
 
         try:
@@ -1895,7 +1893,7 @@ def enviar_email_revision_masiva(excel_path, counts, adjuntar_res=True, adjuntar
         
         asunto = f"[{resultado_global}] Osocio — REVISIÓN MASIVA FORMS {fecha_actual} — {total_passed} OK / {total_failed} errores"
         
-        cuerpo = f"📊 Reporte de Revisión Masiva de Formularios\n"
+        cuerpo = "📊 Reporte de Revisión Masiva de Formularios\n"
         cuerpo += f"Fecha: {fecha_actual}\n"
         cuerpo += f"Tiempo de ejecución: {counts.get('elapsed_time', 'N/A')}\n"
         cuerpo += f"Resultado Global: {resultado_global}\n"

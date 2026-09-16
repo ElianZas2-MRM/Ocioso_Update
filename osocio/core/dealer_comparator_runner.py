@@ -23,7 +23,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.common.exceptions import StaleElementReferenceException
 
-from osocio.core.browser_manager import BrowserManager
 from osocio.core.country_configs import COUNTRY_CONFIGS
 from osocio.core.screenshot_manager import ScreenshotManager
 

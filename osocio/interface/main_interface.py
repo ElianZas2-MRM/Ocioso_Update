@@ -4961,7 +4961,6 @@ def iniciar_interfaz(autostart_leads=False):
             try:
                 from osocio.core.massive_check_runner import run_massive_check
                 import time
-                import copy
                 
                 dest_dir = os.path.join(BASE_DIR, "resultados", "resultado_urlsinsertas")
                 start_time_all = time.time()
@@ -5680,7 +5679,6 @@ def iniciar_interfaz(autostart_leads=False):
     def _bombear_eventos_tray():
         # El icono corre en su propio hilo (ver SysTrayIcon): los clicks llegan por una cola
         # y se ejecutan acá, en el hilo de Tk, porque Tk no es thread-safe.
-        global _tray_instance
         if _tray_instance is None:
             return
         try:

@@ -7,11 +7,8 @@ import re
 import time
 import unicodedata
 
-from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 
 
 DEFAULT_ERROR_PRIORITY = ["required", "invalid_chars", "min_length", "max_length"]

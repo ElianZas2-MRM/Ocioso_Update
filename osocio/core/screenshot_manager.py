@@ -7,7 +7,6 @@ import os
 import time
 from PIL import Image
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 
 class ScreenshotManager:
     """Gestiona la toma de screenshots completos de páginas"""
@@ -423,7 +422,7 @@ class ScreenshotManager:
                 print(f"Captura de respaldo guardada: {filename}")
                 return True
             except:
-                print(f"Error crítico al tomar screenshot")
+                print("Error crítico al tomar screenshot")
                 return False
         finally:
             self._restore_fixed_elements()

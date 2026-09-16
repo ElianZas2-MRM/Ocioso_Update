@@ -117,8 +117,13 @@ def _es_la_raiz(ruta):
 
 
 def test_scheduling_apunta_a_la_raiz():
+    """La programación se guarda en el json/ del proyecto, no en uno de adentro del paquete.
+
+    Se verifica `JSON_DIR`, que es lo que el módulo usa de verdad. Antes esto miraba
+    también un `BASE_DIR` que scheduling reexportaba sin usar: eso era un detalle de
+    implementación, no el invariante, y ataba el test a que ese nombre siguiera existiendo.
+    """
     from osocio.utils import scheduling
-    assert _es_la_raiz(scheduling.BASE_DIR)
     assert os.path.normpath(scheduling.JSON_DIR) == os.path.normpath(paths.JSON_DIR)
 
 

@@ -8,7 +8,6 @@ from selenium.webdriver.common.by import By
 
 
 from osocio.core.generic_country_base import GenericCountryBase
-from osocio.utils.data_generator import generar_fila_datos
 
 # Igual que en run.py: hace que Python use la lista de certificados de confianza de Windows.
 # Sin esto, detrás de un proxy corporativo que inspecciona TLS (Netskope/Zscaler) la

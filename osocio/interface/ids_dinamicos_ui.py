@@ -10,7 +10,10 @@ import os
 import json
 import textwrap
 from datetime import datetime
-from tkinter import *
+from tkinter import (
+    LEFT, RIGHT,
+    Button, Canvas, Checkbutton, Entry, Frame, Label, Toplevel,
+)
 from tkinter import ttk, messagebox
 from tkinter import StringVar, BooleanVar
 

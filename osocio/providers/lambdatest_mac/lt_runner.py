@@ -34,7 +34,6 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
 try:
@@ -48,7 +47,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
-    TimeoutException, StaleElementReferenceException, NoSuchElementException
+    TimeoutException, StaleElementReferenceException
 )
 from selenium.webdriver import Remote
 from selenium.webdriver.chrome.options import Options as ChromeOptions
@@ -60,7 +59,7 @@ try:
 except ImportError:
     raise ImportError("openpyxl requerido: pip install openpyxl")
 
-from osocio.providers.lambdatest_mac.lt_excel_reader import read_osocio_excel, find_osocio_excels, LeadRow
+from osocio.providers.lambdatest_mac.lt_excel_reader import read_osocio_excel, LeadRow
 
 # Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
 _VISID_ID_ALIASES: dict = {
@@ -82,7 +81,6 @@ _VISID_ID_ALIASES: dict = {
 # PyInstaller, asi que no se recalcula a mano subiendo directorios desde __file__.
 from osocio.paths import (
     BASE_DIR as _OSOCIO_DIR,
-    DATA_DIR as _DATA_DIR,
     JSON_DIR as _JSON_DIR,
     RESULTS_LT_MAC_DIR as _RESULTADOS_DIR,
 )
@@ -3467,7 +3465,7 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
                     EC.element_to_be_clickable((By.XPATH, xpath))
                 )
                 driver.execute_script("arguments[0].click();", btn)
-                log(f"  ✓ Enviar clickeado (XPath)")
+                log("  ✓ Enviar clickeado (XPath)")
                 return True
             except TimeoutException:
                 continue
@@ -3508,7 +3506,7 @@ def _click_submit(driver, log: Callable = print, is_android: bool = False) -> bo
                     EC.element_to_be_clickable((By.XPATH, xpath))
                 )
                 driver.execute_script("arguments[0].click();", btn)
-                log(f"  ✓ Enviar clickeado (XPath) tras scroll")
+                log("  ✓ Enviar clickeado (XPath) tras scroll")
                 return True
             except Exception:
                 continue
@@ -4432,7 +4430,7 @@ def _run_single_lead_impl(driver, pais: str, lead: LeadRow,
                 log("  ⚠ DOM no cambió tras Siguiente (validación fallida o form atascado).")
                 break
 
-            log(f"  ✓ Transición al siguiente paso detectada.")
+            log("  ✓ Transición al siguiente paso detectada.")
 
         else:
             log(f"  ⚠ Se alcanzó el máximo de iteraciones ({max_iter}).")
