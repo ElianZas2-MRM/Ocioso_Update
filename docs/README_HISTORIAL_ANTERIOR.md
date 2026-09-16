@@ -1,5 +1,10 @@
 # Form Automation Project
 
+> **Documento histórico.** Describe la app tal como estaba **antes** del paquete
+> `osocio/`: las rutas que menciona (`core/`, `interface/`, `Dealerscheck_resultados/`…)
+> ya no existen. Se conserva por el historial de funcionalidades, no como referencia de
+> estructura. Para eso están [arquitectura.md](arquitectura.md) y [desarrollo.md](desarrollo.md).
+
 Automatización de formularios para varios países con Selenium, generación de resultados y UI de administración.
 
 ## Requisitos

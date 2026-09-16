@@ -1,43 +1,96 @@
-# Cómo trabajar en este repo
+# Cómo colaborar
 
-## Lo básico
+La rama `main` está **protegida**: nadie —ni el dueño— puede hacer `git push` directo a
+`main`. Todo cambio entra por **Pull Request**. Tampoco se puede hacer `force-push` ni
+borrar `main`.
 
-`main` está protegida: no se commitea directo. Todo entra por rama y pull request.
+## Quién puede tocar el repo
+
+| Quién | Qué puede hacer |
+|---|---|
+| Colaboradores con acceso de escritura (los invita el dueño, uno por uno) | Crear ramas, pushear a esas ramas, abrir PRs y mergearlos |
+| Cualquier otra persona (repo público) | Forkear y abrir un PR **desde su fork**. No puede pushear ni mergear nada; el PR no toca `main` hasta que un colaborador le da merge |
+
+Ser colaborador no es automático: el dueño manda la invitación por usuario de GitHub y la
+persona la acepta. Nadie se agrega solo.
+
+## Flujo para un colaborador (tenés acceso de escritura)
 
 ```bash
+# 1. Partí siempre de main actualizada
 git checkout main
 git pull
-git checkout -b fix/lo-que-arreglas
-# ... trabajás ...
-git push -u origin fix/lo-que-arreglas
+
+# 2. Rama nueva con nombre descriptivo: tipo/descripcion-corta
+git checkout -b feat/nombre-del-cambio      # o fix/... , chore/... , docs/...
+
+# 3. Trabajás y commiteás (ver convención abajo)
+git add -A
+git commit -m "feat: descripción corta en imperativo"
+
+# 4. Subís la rama
+git push -u origin feat/nombre-del-cambio
+
+# 5. Abrís el PR contra main
+gh pr create --base main --fill        # o desde la web de GitHub
+
+# 6. Mergeás el PR (no hace falta aprobación de terceros)
+gh pr merge --squash --delete-branch   # o el botón "Merge" en la web
+
+# 7. Volvés a main y actualizás
+git checkout main
+git pull
 ```
 
-Antes de pedir el PR, que esto esté en verde:
+## Flujo desde afuera (sin acceso de escritura)
 
-```bash
-pytest                              # los 416
+1. Fork del repo (botón *Fork* en GitHub).
+2. Cloná tu fork, hacé una rama, commiteá y pusheá a **tu** fork.
+3. Abrí un PR desde tu fork hacia `main` de este repo.
+4. Un colaborador lo revisa y, si está ok, le da merge.
+
+## Convención de commits
+
+- **Conventional commits**, en español, en imperativo:
+  `feat:` (funcionalidad nueva), `fix:` (bug), `chore:` (mantenimiento/config),
+  `docs:` (documentación), `refactor:`, `test:`.
+- Un commit = un cambio con sentido propio. Si el PR mezcla cosas, partilo en varios commits.
+- **Sin** `Co-Authored-By` ni firmas de herramientas de IA.
+
+Ejemplos reales del repo:
+
+```
+feat: autovalores para campos detectados y marcado selectivo de checkboxes
+fix: dropdowns no ignoran el valor cargado en el Excel
+docs: actualiza README y capturas con reintento de fallidos y drivers
+```
+
+## Antes de abrir el PR
+
+```powershell
+.\venv\Scripts\activate
+pip install -r requirements-dev.txt   # solo la primera vez (trae pytest)
+python -m pytest                      # tiene que dar todo verde
 python -m pyflakes osocio run.py tests   # sin nombres indefinidos
-python run.py                       # que la app abra
+python run.py                         # que la app abra
 ```
 
-## Nombres de rama
+Si tocaste lógica de llenado de formularios, además probá una corrida real chica
+(`python run.py`, un país, pocas filas del Excel de datos) antes de mergear.
 
-| Prefijo | Para qué |
-|---|---|
-| `fix/` | arreglar algo roto |
-| `feat/` | funcionalidad nueva |
-| `refactor/` | mover o reorganizar sin cambiar comportamiento |
-| `test/` | solo tests |
-| `chore/` | mantenimiento, documentación, build |
+---
+
+# Lo que aprendimos a los golpes
+
+Lo de acá abajo no es estilo: son cosas que ya se rompieron una vez y ahora están
+vigiladas por tests.
 
 ## Si apilás ramas, mergealas en orden
 
-Esto nos costó un rato, así que queda escrito.
-
 Cuando una rama se apoya sobre otra que todavía no se mergeó, **hay que mergear la base
-primero**. GitHub hace *squash merge*: aplasta todos los commits de la rama en uno nuevo con
-un SHA distinto. Si mergeás la de arriba antes que la de abajo, git ve la historia duplicada
-y te tira conflictos en archivos que nadie tocó dos veces.
+primero**. GitHub hace *squash merge*: aplasta todos los commits de la rama en uno nuevo
+con un SHA distinto. Si mergeás la de arriba antes que la de abajo, git ve la historia
+duplicada y te tira conflictos en archivos que nadie tocó dos veces.
 
 Nos pasó con dos PRs invertidos y quedó una carpeta `lambdatest_mac/` huérfana en la raíz,
 creada por el PR que entró segundo. Nadie lo notó hasta días después.
@@ -50,11 +103,7 @@ git rebase --onto origin/main <la-rama-base> <tu-rama>
 
 Eso se queda solo con tus commits propios, apoyados sobre el `main` nuevo.
 
-## Dos reglas que los tests hacen cumplir
-
-No son estilo: son decisiones de diseño que ya se rompieron una vez y ahora están vigiladas.
-
-### Las rutas salen de `paths.py`
+## Las rutas salen de `paths.py`
 
 Ningún módulo puede calcular la raíz del proyecto por su cuenta. Nada de:
 
@@ -65,7 +114,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # NO
 Va así:
 
 ```python
-from osocio.paths import BASE_DIR, JSON_DIR, RESULTS_DIR           # SI
+from osocio.paths import BASE_DIR, JSON_DIR, RESULTS_DIR                 # SI
 ```
 
 `test_solo_paths_py_puede_calcular_la_raiz` lo verifica recorriendo el paquete por AST.
@@ -78,14 +127,12 @@ rutas para aislarse.
 
 Si agregás una carpeta nueva, va en `paths.py`.
 
-### Los resultados van adentro de `resultados/`
+## Los resultados van adentro de `resultados/`
 
 Nada de crear carpetas hermanas en la raíz. Cada tipo de ejecución tiene su subcarpeta y
 sale de `paths.py`. `test_ningun_modulo_arma_carpetas_de_resultados_a_mano` lo vigila.
 
-## Sobre los tests
-
-Hay dos clases y hacen falta las dos:
+## Los tests necesitan las dos clases
 
 - **Los que aíslan** usan `tmp_path` y `monkeypatch` para probar lógica sin tocar datos
   reales. Son la mayoría.
@@ -96,14 +143,27 @@ El bug de rutas se coló porque **solo existía el primer tipo**: al parchear `J
 ningún test ejercitaba la resolución verdadera. Si escribís un test que parchea una ruta,
 preguntate si además hace falta uno que la verifique de verdad.
 
+## Que un módulo importe no significa que ande
+
+Python no resuelve los nombres hasta que se llama la función. Un módulo puede importar
+perfecto y reventar con `NameError` recién en producción. Pasó dos veces:
+
+- `import a.b.c` liga el nombre `a`, no `c`. El import pasa y el atributo falta al usarlo.
+- Al mover funciones entre archivos, las que quedaron usando nombres del archivo original
+  importan bien y fallan al llamarlas.
+
+Por eso `test_humo_general.py` no solo importa cada módulo: también verifica que los
+símbolos públicos **existan**.
+
 ## Cosas que no van al repo
 
 `resultados/`, `temporales/`, `drivers/`, `venv/`, `build/`, `dist/` y los Excel de datos
 están en `.gitignore`.
 
-Prestá atención a `dist/` en particular: **este repo pesa 388 MB por eso**. En su momento se
-commitearon el `.exe`, un `.zip` de 91 MB, un `.rar` de 83 MB y cuatro copias de los drivers.
-Siguen en el historial aunque ya no estén en el árbol. Antes de commitear, mirá `git status`.
+Prestá atención a `dist/` en particular: **este repo pesa 388 MB por eso**. En su momento
+se commitearon el `.exe`, un `.zip` de 91 MB, un `.rar` de 83 MB y cuatro copias de los
+drivers. Siguen en el historial aunque ya no estén en el árbol. Antes de commitear, mirá
+`git status`.
 
 ## Al agregar código nuevo
 

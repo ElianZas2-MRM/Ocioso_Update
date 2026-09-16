@@ -382,7 +382,7 @@ La parte de abajo de la pestaña, con los presets guardados y la barra de EJECUT
 
 ![Comparar Dealers — parte inferior](docs/screenshots/44_dealers_abajo.png)
 
-10. **EJECUTAR** — se habilita con el Excel de URLs, el de dealers y las columnas mapeadas. Corre en **2 fases** por cada form: **Fase 1** compara y **guarda el Excel de resultados enseguida**; **Fase 2** (si elegiste capturas) toma las capturas. Cada form deja su **carpeta propia** nombrada `país_form_columna(o sinfiltro)_incluidos|excluidos_timestamp` dentro de `Dealerscheck_resultados/`.
+10. **EJECUTAR** — se habilita con el Excel de URLs, el de dealers y las columnas mapeadas. Corre en **2 fases** por cada form: **Fase 1** compara y **guarda el Excel de resultados enseguida**; **Fase 2** (si elegiste capturas) toma las capturas. Cada form deja su **carpeta propia** nombrada `país_form_columna(o sinfiltro)_incluidos|excluidos_timestamp` dentro de `resultados/dealers/`.
 
 > **Funciona con formularios de 1, 2 o 3 pasos.** Si los dropdowns `region/city/dealer` están en el primer paso, los usa al instante. Si el form es **multi-paso** (los dropdowns aparecen más adelante), el comparador **avanza los pasos** igual que Envío de Leads: completa los campos requeridos de cada paso con valores sintéticos (selects: primera opción válida; textos: dato dummy; checkboxes/radios: los marca) **sin tocar** region/city/dealer, aprieta *Siguiente/Next*, y **recién empieza a comparar cuando aparece el nivel más alto que elegiste** (region si la activaste, si no city, si no dealer). Nunca envía el formulario. Si el form se traba (un campo requerido que no reconoce), lo detecta y corta en vez de quedar en loop.
 >
@@ -585,13 +585,13 @@ Los drivers viven en `drivers/` (junto al proyecto, o junto al `.exe` al compila
 
 Genera **solo la carpeta portable**:
 
-- `dist/OsocioFormAutomation_portable/` — con el `.exe` adentro más `data/`, `drivers/`, `json/`, `resultados/`, `temporales/`, `Dealerscheck_resultados/`, `resultados_lambdatestmac/` y `resultados_lambdatest_android/`. Se abre con `Abrir_Osocio_Form_Automation.bat`.
+- `dist/OsocioFormAutomation_portable/` — con el `.exe` adentro más `data/`, `drivers/`, `json/`, `resultados/` y `temporales/`. Se abre con `Abrir_Osocio_Form_Automation.bat`.
 - `dist/OsocioFormAutomation_portable.zip` — la misma carpeta comprimida, para mandarla de una.
 
 **Qué NO viaja en el portable:**
 
 - **Ningún Excel de datos**, salvo `data/Field_Validation_URLs.xlsx` (la pestaña de Validación de Campos lo espera ahí). Los Excels de leads los genera la propia app desde "Generar Excels con Datos", el Excel matriz de Revisión Masiva lo elige el usuario, y los listados de dealers son datos reales de clientes.
-- **Ningún resultado, captura ni reporte** de la PC donde se compiló: `resultados/`, `temporales/`, `Dealerscheck_resultados/` y las de LambdaTest se crean **vacías**.
+- **Ningún resultado, captura ni reporte** de la PC donde se compiló: `resultados/` y `temporales/` se crean **vacías** (con sus subcarpetas de dealers y LambdaTest adentro).
 - El estado local del scheduler (`programacion_test/leads/masivo.json`, `scheduler_triggered.json`), `dealer_comparator_settings.json` y `config_global.json`.
 
 Los **drivers sí viajan** (`chromedriver`, `geckodriver`, `msedgedriver`): `build.bat` los actualiza justo antes de empaquetar, así el portable sale con los que corresponden. Si igual quedan desfasados en la PC de destino, el portable los actualiza solo al abrirse.
@@ -641,74 +641,9 @@ Las credenciales de LambdaTest se buscan **en este orden**:
 
 ---
 
-## Cómo colaborar (Git / Pull Requests)
-
-La rama `main` está **protegida**: nadie —ni el dueño— puede hacer `git push` directo a `main`. Todo cambio entra por **Pull Request**. Tampoco se puede hacer `force-push` ni borrar `main`.
-
-### Quién puede tocar el repo
-
-| Quién | Qué puede hacer |
-|---|---|
-| Colaboradores con acceso de escritura (los invita el dueño, uno por uno) | Crear ramas, pushear a esas ramas, abrir PRs y mergearlos |
-| Cualquier otra persona (repo público) | Forkear y abrir un PR **desde su fork**. No puede pushear ni mergear nada; el PR no toca `main` hasta que un colaborador le da merge |
-
-Ser colaborador no es automático: el dueño manda la invitación por usuario de GitHub y la persona la acepta. Nadie se agrega solo.
-
-### Flujo para un colaborador (tenés acceso de escritura)
-
-```bash
-# 1. Partí siempre de main actualizada
-git checkout main
-git pull
-
-# 2. Rama nueva con nombre descriptivo: tipo/descripcion-corta
-git checkout -b feat/nombre-del-cambio      # o fix/... , chore/... , docs/...
-
-# 3. Trabajás y commiteás (ver convención abajo)
-git add -A
-git commit -m "feat: descripción corta en imperativo"
-
-# 4. Subís la rama
-git push -u origin feat/nombre-del-cambio
-
-# 5. Abrís el PR contra main
-gh pr create --base main --fill        # o desde la web de GitHub
-
-# 6. Mergeás el PR (no hace falta aprobación de terceros)
-gh pr merge --squash --delete-branch   # o el botón "Merge" en la web
-
-# 7. Volvés a main y actualizás
-git checkout main
-git pull
-```
-
-### Flujo desde afuera (sin acceso de escritura)
-
-1. Fork del repo (botón *Fork* en GitHub).
-2. Cloná tu fork, hacé una rama, commiteá y pusheá a **tu** fork.
-3. Abrí un PR desde tu fork hacia `main` de este repo.
-4. Un colaborador lo revisa y, si está ok, le da merge.
-
-### Convención de commits
-
-- **Conventional commits**, en español, en imperativo:
-  `feat:` (funcionalidad nueva), `fix:` (bug), `chore:` (mantenimiento/config), `docs:` (documentación), `refactor:`, `test:`.
-- Un commit = un cambio con sentido propio. Si el PR mezcla cosas, partilo en varios commits.
-- **Sin** `Co-Authored-By` ni firmas de herramientas de IA.
-
-Ejemplos reales del repo:
-```
-feat: autovalores para campos detectados y marcado selectivo de checkboxes
-fix: dropdowns no ignoran el valor cargado en el Excel
-docs: actualiza README y capturas con reintento de fallidos y drivers
-```
-
-### Antes de abrir el PR
-
-```powershell
-.\venv\Scripts\activate
-pip install -r requirements-dev.txt   # solo la primera vez (trae pytest)
-python -m pytest                      # tiene que dar todo verde
-```
-
-Si tocaste lógica de llenado de formularios, además probá una corrida real chica (`python run.py`, un país, pocas filas del Excel de datos) antes de mergear.
+## Cómo colaborar
+
+`main` está protegida: todo cambio entra por Pull Request.
+
+El detalle —permisos, flujo con y sin acceso de escritura, convención de commits y las
+reglas que los tests hacen cumplir— está en [CONTRIBUTING.md](CONTRIBUTING.md).
