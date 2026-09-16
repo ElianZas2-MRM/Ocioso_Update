@@ -12,8 +12,9 @@ __pycache__/
 
 # Runtime data
 temporales/
+# Todo lo que produce la app (leads, LambdaTest Mac/Android, dealers,
+# revision masiva) vive adentro de resultados/, asi que con esta linea alcanza.
 resultados/
-Dealerscheck_resultados/
 json/programacion_test.json
 json/programacion_leads.json
 json/programacion_masivo.json
@@ -56,7 +57,6 @@ debug_run.log
 json/ejecutor_autonomo.log
 
 # Outputs de LambdaTest (regenerables)
-resultados_lambdatest*/
 cta_evidence/
 Ocioso_Update - COPIA_SEGURIDAD-VERSIONUNO/
 

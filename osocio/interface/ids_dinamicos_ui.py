@@ -28,7 +28,7 @@ from osocio.utils.fixed_field_mapping_store import (
     save_country_fixed_field_mapping,
 )
 
-from osocio.utils.paths import ASSET_DIR, JSON_DIR
+from osocio.paths import ASSET_DIR, JSON_DIR
 
 APP_BG_COLOR = "#5D3C7A"
 HEADER_BG_COLOR = "#9c6fb4"

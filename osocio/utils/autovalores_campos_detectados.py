@@ -42,7 +42,7 @@ PAISES_CONOCIDOS = (
 class AutovaloresCamposDetectados:
     def __init__(self, pais, *, json_dir=None, generador=None):
         self.pais = str(pais or "").strip()
-        from osocio.utils.paths import JSON_DIR
+        from osocio.paths import JSON_DIR
         self.json_dir = json_dir or JSON_DIR
         self.generador = generador or GeneradorValorCampo()
         self._reglas_cache = {}

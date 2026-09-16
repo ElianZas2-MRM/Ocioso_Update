@@ -7,7 +7,7 @@ import json
 import os
 import re
 
-from osocio.utils.paths import BASE_DIR, BUNDLE_DIR
+from osocio.paths import BASE_DIR, BUNDLE_DIR
 
 CORE_DIR = os.path.join(BUNDLE_DIR, "core")
 JSON_DIR = os.path.join(BASE_DIR, "json")

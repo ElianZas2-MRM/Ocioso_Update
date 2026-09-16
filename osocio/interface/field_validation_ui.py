@@ -71,8 +71,8 @@ COUNTRY_NAMES_LOWER = {country.lower(): country for country in AVAILABLE_COUNTRI
 
 
 def _get_base_dir():
-    # La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado (ver tests/test_rutas.py).
-    from osocio.utils.paths import BASE_DIR
+    # La raiz se resuelve en osocio/paths.py y en ningun otro lado (ver tests/test_rutas.py).
+    from osocio.paths import BASE_DIR
     return BASE_DIR
 
 

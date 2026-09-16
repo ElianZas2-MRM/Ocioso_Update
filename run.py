@@ -22,7 +22,7 @@ except Exception:
     pass
 
 from osocio.interface.main_interface import iniciar_interfaz
-from osocio.utils.paths import BASE_DIR, FORMS_DIR
+from osocio.paths import BASE_DIR, FORMS_DIR
 
 
 ENVIRONMENTS = {

@@ -270,7 +270,7 @@ class BrowserManager:
     
     @staticmethod
     def _get_drivers_dir():
-        from osocio.utils.paths import DRIVERS_DIR
+        from osocio.paths import DRIVERS_DIR
         return DRIVERS_DIR
 
     @staticmethod

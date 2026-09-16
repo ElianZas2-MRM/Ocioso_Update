@@ -1782,6 +1782,86 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "COMPANY_TYPE": {
+      "descripcion": "company_type",
+      "campo": "company_type",
+      "element_id": "company_type",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "CURRENT_FLEET_SIZE": {
+      "descripcion": "current_fleet_size",
+      "campo": "current_fleet_size",
+      "element_id": "current_fleet_size",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "PURCHASE_DATE": {
+      "descripcion": "purchase_date",
+      "campo": "purchase_date",
+      "element_id": "purchase_date",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "PURCHASE_REQUIREMENT": {
+      "descripcion": "purchase_requirement",
+      "campo": "purchase_requirement",
+      "element_id": "purchase_requirement",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": true,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Colombia"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }
