@@ -32,7 +32,7 @@ import subprocess
 import zipfile
 from datetime import datetime, timedelta
 
-from osocio.utils.paths import DRIVERS_DIR, JSON_DIR
+from osocio.paths import DRIVERS_DIR, JSON_DIR
 
 try:
     from osocio.utils.popup_logger import log_runtime

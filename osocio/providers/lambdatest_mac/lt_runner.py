@@ -80,12 +80,16 @@ _VISID_ID_ALIASES: dict = {
 # ── Rutas base ────────────────────────────────────────────────────────────────
 # paths.py ya resuelve la raíz del proyecto tanto como script como empaquetado con
 # PyInstaller, asi que no se recalcula a mano subiendo directorios desde __file__.
-from osocio.utils.paths import BASE_DIR as _OSOCIO_DIR, DATA_DIR as _DATA_DIR, JSON_DIR as _JSON_DIR
+from osocio.paths import (
+    BASE_DIR as _OSOCIO_DIR,
+    DATA_DIR as _DATA_DIR,
+    JSON_DIR as _JSON_DIR,
+    RESULTS_LT_MAC_DIR as _RESULTADOS_DIR,
+)
 
 # Carpeta de este módulo: se usa para buscar un lambdatest_credentials.txt puesto al lado.
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
-_RESULTADOS_DIR = os.path.join(_OSOCIO_DIR, "resultados_lambdatestmac")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

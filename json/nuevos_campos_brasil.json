@@ -1,6 +1,6 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-09-02T15:03:15",
+  "ultima_deteccion": "2026-09-15T12:13:28",
   "campos_nuevos": [
     {
       "id": "categories",
@@ -399,6 +399,13 @@
       "type": "text",
       "required": false,
       "label": "Entre o endereço, cidade, estado ou CEP",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "zip_code",
+      "type": "text",
+      "required": false,
+      "label": " ",
       "origen": "runtime_discovery"
     }
   ]

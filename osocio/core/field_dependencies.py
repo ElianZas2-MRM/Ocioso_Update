@@ -24,7 +24,7 @@ def _cargar_dependencias_json() -> dict[str, str]:
     """Lee las dependencias definidas por el usuario en ids_dinamicos.json."""
     result: dict[str, str] = dict(_HARDCODED)
     try:
-        from osocio.utils.paths import JSON_DIR
+        from osocio.paths import JSON_DIR
         path = os.path.join(JSON_DIR, "ids_dinamicos.json")
         if not os.path.exists(path):
             return result
@@ -46,7 +46,7 @@ def get_field_dependencies(country: str | None = None) -> dict[str, str]:
     combined = dict(_HARDCODED)
     # Load user-defined dependencies from JSON
     try:
-        from osocio.utils.paths import JSON_DIR
+        from osocio.paths import JSON_DIR
         path = os.path.join(JSON_DIR, "ids_dinamicos.json")
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:

@@ -25,7 +25,7 @@ from osocio.utils.fixed_field_mapping_store import (
     infer_country_from_excel_filename,
 )
 from osocio.utils.popup_logger import log_runtime
-from osocio.utils.paths import BASE_DIR, DATA_DIR, TEMPORALES_DIR, JSON_DIR
+from osocio.paths import BASE_DIR, DATA_DIR, TEMPORALES_DIR, JSON_DIR
 
 # === RUTAS ===
 os.makedirs(DATA_DIR, exist_ok=True)

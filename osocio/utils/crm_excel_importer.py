@@ -30,7 +30,7 @@ import re
 
 import openpyxl
 
-from osocio.utils.paths import BASE_DIR, JSON_DIR
+from osocio.paths import BASE_DIR, JSON_DIR
 from osocio.utils.regex_desde_prosa import ajustar_largo_desde_prosa, derivar_regex
 
 CRM_EXCEL_FILENAME = "CRM - GMSA - Validaciones Formularios (1).xlsx"

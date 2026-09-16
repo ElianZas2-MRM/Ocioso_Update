@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-from osocio.utils import paths
+from osocio import paths
 
 
 RAIZ_PAQUETE = os.path.dirname(os.path.abspath(paths.__file__ + "/../.."))
@@ -92,7 +92,7 @@ def test_solo_paths_py_puede_calcular_la_raiz():
     """Una sola fuente de verdad.
 
     Un `dirname(abspath(__file__))` suelto está bien: es "mi propia carpeta". Encadenar dos o
-    más es intentar llegar a la raíz, y eso lo hace `osocio/utils/paths.py` y nadie más. Es
+    más es intentar llegar a la raíz, y eso lo hace `osocio/paths.py` y nadie más. Es
     exactamente la regla que, de haber existido, habría evitado el bug.
     """
     infractores = []
@@ -106,7 +106,7 @@ def test_solo_paths_py_puede_calcular_la_raiz():
 
     assert not infractores, (
         "Estos módulos calculan la raíz por su cuenta en vez de importarla de "
-        "osocio.utils.paths:\n  " + "\n  ".join(infractores)
+        "osocio.paths:\n  " + "\n  ".join(infractores)
     )
 
 

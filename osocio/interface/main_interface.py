@@ -20,10 +20,10 @@ import threading
 from datetime import datetime as _dt, date as _date
 from PIL import Image, ImageTk
 
-# La raiz del proyecto y sus carpetas se resuelven en osocio/utils/paths.py y en ningun
+# La raiz del proyecto y sus carpetas se resuelven en osocio/paths.py y en ningun
 # otro lado (ver tests/test_rutas.py). Este import vive afuera del try de abajo a
 # proposito: paths.py solo usa os y sys, asi que no puede fallar por dependencias.
-from osocio.utils.paths import BASE_DIR, DATA_DIR, JSON_DIR
+from osocio.paths import BASE_DIR, DATA_DIR, JSON_DIR
 
 _APP_BASE = BASE_DIR
 
@@ -630,7 +630,7 @@ class _DemoSchedulerPanel(tk.Frame):
 
 
 # Directorio de Assets
-from osocio.utils.paths import BASE_DIR, ASSET_DIR
+from osocio.paths import BASE_DIR, ASSET_DIR
 
 ICONS_CACHE = {}
 

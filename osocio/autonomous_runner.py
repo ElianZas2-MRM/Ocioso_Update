@@ -21,8 +21,8 @@ from osocio.interface.helpers_interface import (
 from osocio.utils.scheduling import cargar_programacion, limpiar_programacion
 
 
-# La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado.
-from osocio.utils.paths import (  # noqa: E402
+# La raiz se resuelve en osocio/paths.py y en ningun otro lado.
+from osocio.paths import (  # noqa: E402
     BASE_DIR as PROJECT_ROOT,
     JSON_DIR,
     RESULTS_DIR,
@@ -219,9 +219,8 @@ def _build_lambdatest_command(lt_type, pais_nombre):
 
 def _get_lt_results_dir(lt_type):
     """Devuelve el directorio de resultados de LambdaTest según el tipo."""
-    if lt_type == "mac":
-        return os.path.join(PROJECT_ROOT, "resultados_lambdatestmac")
-    return os.path.join(PROJECT_ROOT, "resultados_lambdatest_android")
+    from osocio.paths import RESULTS_LT_ANDROID_DIR, RESULTS_LT_MAC_DIR
+    return RESULTS_LT_MAC_DIR if lt_type == "mac" else RESULTS_LT_ANDROID_DIR
 
 
 def ejecutar_tests(programacion):

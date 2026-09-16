@@ -32,9 +32,11 @@ _ANDROID_DEVICES = {
 _DEFAULT_ANDROID_DEVICE = "Galaxy S24"
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
-from osocio.utils.paths import BASE_DIR as _OSOCIO_DIR, DATA_DIR as _DATA_DIR
-
-_ANDROID_RESULTADOS_DIR = os.path.join(_OSOCIO_DIR, "resultados_lambdatest_android")
+from osocio.paths import (
+    BASE_DIR as _OSOCIO_DIR,
+    DATA_DIR as _DATA_DIR,
+    RESULTS_LT_ANDROID_DIR as _ANDROID_RESULTADOS_DIR,
+)
 
 # Importar toda la lógica reutilizable desde lambdatest_mac
 from osocio.providers.lambdatest_mac.lt_runner import (  # type: ignore[import]

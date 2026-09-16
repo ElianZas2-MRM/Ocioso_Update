@@ -84,8 +84,8 @@ MODAL_PILL_BG = "#38234D"
 
 
 def _get_base_dir():
-    # La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado (ver tests/test_rutas.py).
-    from osocio.utils.paths import BASE_DIR
+    # La raiz se resuelve en osocio/paths.py y en ningun otro lado (ver tests/test_rutas.py).
+    from osocio.paths import BASE_DIR
     return BASE_DIR
 
 
@@ -96,7 +96,8 @@ def _get_settings_path():
 
 
 def _get_results_dir():
-    return os.path.join(_get_base_dir(), "Dealerscheck_resultados")
+    from osocio.paths import RESULTS_DEALERS_DIR
+    return RESULTS_DEALERS_DIR
 
 
 def _load_all_settings():

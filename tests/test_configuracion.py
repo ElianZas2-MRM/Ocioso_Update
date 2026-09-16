@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from osocio.utils import paths
+from osocio import paths
 
 
 def _jsons_de_configuracion():

@@ -14,7 +14,7 @@ import json
 import threading
 from typing import Callable, Optional
 
-from osocio.utils.paths import BASE_DIR as _OSOCIO_DIR, JSON_DIR as _JSON_DIR
+from osocio.paths import BASE_DIR as _OSOCIO_DIR, JSON_DIR as _JSON_DIR
 
 
 
