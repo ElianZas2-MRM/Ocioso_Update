@@ -4,16 +4,15 @@ Genera un archivo con colores (verde/rojo) por campo y resultado, listo para rev
 o adjuntar al email de reporte de validación.
 """
 import os
-import sys
 
 import pandas as pd
 from openpyxl.styles import Font, PatternFill
 
 
 def _get_base_dir():
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado (ver tests/test_rutas.py).
+    from osocio.utils.paths import BASE_DIR
+    return BASE_DIR
 
 
 def _ensure_results_dir():

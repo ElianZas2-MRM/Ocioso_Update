@@ -28,11 +28,7 @@ from osocio.utils.fixed_field_mapping_store import (
     save_country_fixed_field_mapping,
 )
 
-try:
-    from osocio.utils.paths import ASSET_DIR, JSON_DIR
-except Exception:
-    ASSET_DIR = ""
-    JSON_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "json")
+from osocio.utils.paths import ASSET_DIR, JSON_DIR
 
 APP_BG_COLOR = "#5D3C7A"
 HEADER_BG_COLOR = "#9c6fb4"

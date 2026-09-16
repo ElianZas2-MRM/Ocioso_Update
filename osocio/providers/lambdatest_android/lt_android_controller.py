@@ -6,7 +6,6 @@ Espejo de lambdatest_mac/lt_controller.py pero para Android (Samsung + Chrome).
 """
 
 import os
-import sys
 import json
 import threading
 from typing import Callable, Optional

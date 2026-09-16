@@ -20,9 +20,9 @@ _NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
 def _project_root():
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado (ver tests/test_rutas.py).
+    from osocio.utils.paths import BASE_DIR
+    return BASE_DIR
 
 
 def _launch_command(abrir_app=False):
