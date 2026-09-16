@@ -160,10 +160,16 @@ símbolos públicos **existan**.
 `resultados/`, `temporales/`, `drivers/`, `venv/`, `build/`, `dist/` y los Excel de datos
 están en `.gitignore`.
 
-Prestá atención a `dist/` en particular: **este repo pesa 388 MB por eso**. En su momento
-se commitearon el `.exe`, un `.zip` de 91 MB, un `.rar` de 83 MB y cuatro copias de los
-drivers. Siguen en el historial aunque ya no estén en el árbol. Antes de commitear, mirá
-`git status`.
+Prestá atención a `dist/` en particular. El repo llegó a pesar **388 MB** porque en su
+momento se commitearon el `.exe`, un `.zip` de 91 MB, un `.rar` de 83 MB y cuatro copias de
+los drivers. En septiembre de 2026 se reescribió el historial para purgarlos y quedó en
+**13 MB**, pero eso obligó a que todos re-clonaran: no hay forma de deshacerlo sin volver a
+hacer lo mismo. Antes de commitear, mirá `git status`.
+
+> Una advertencia que quedó de ahí: reescribir el historial **no saca un secreto de
+> GitHub**. El repo tiene refs `refs/pull/*`, una por PR, que apuntan a los commits
+> originales; las gestiona GitHub y no se pueden pushear ni borrar. Si se filtra una
+> credencial, lo único que la vuelve inservible es **rotarla**.
 
 ## Al agregar código nuevo
 
