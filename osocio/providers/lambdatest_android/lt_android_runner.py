@@ -14,8 +14,8 @@ import glob
 import time
 import traceback
 import threading
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional
 
 from openpyxl import load_workbook
 from selenium.webdriver import ChromeOptions
@@ -33,8 +33,6 @@ _DEFAULT_ANDROID_DEVICE = "Galaxy S24"
 
 # ── Rutas base ────────────────────────────────────────────────────────────────
 from osocio.paths import (
-    BASE_DIR as _OSOCIO_DIR,
-    DATA_DIR as _DATA_DIR,
     RESULTS_LT_ANDROID_DIR as _ANDROID_RESULTADOS_DIR,
 )
 
@@ -48,7 +46,6 @@ from osocio.providers.lambdatest_mac.lt_runner import (  # type: ignore[import]
     _load_field_dependencies,
     _load_ids_dinamicos,
     _get_field_mapping_for_pais,
-    fill_form_fields,
     _run_single_lead,
     _write_row_result,
 )

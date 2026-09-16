@@ -11,7 +11,7 @@ import sys
 import threading
 from copy import deepcopy
 import pandas as pd
-from tkinter import BOTH, END, LEFT, RIGHT, W, BooleanVar, Button, Checkbutton, Entry, Frame, Label, StringVar, Text, Toplevel
+from tkinter import BOTH, END, LEFT, RIGHT, BooleanVar, Button, Checkbutton, Entry, Frame, Label, StringVar, Text, Toplevel
 from tkinter import messagebox
 from tkinter import ttk
 
@@ -530,7 +530,6 @@ def build_field_validation_tab(parent, palette, shared_config=None):
     expander_state = {'open': False}
 
     # Color más oscuro para la barra del expander
-    from tkinter import colorchooser
     def darken_color(hex_color, factor=0.85):
         hex_color = hex_color.lstrip('#')
         rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))

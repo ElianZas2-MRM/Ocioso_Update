@@ -20,7 +20,7 @@ import os
 import threading
 from datetime import datetime
 from tkinter import (
-    BooleanVar, Button, Canvas, Checkbutton, Entry, Frame, Label, StringVar, Text,
+    BooleanVar, Button, Canvas, Entry, Frame, Label, StringVar,
     Toplevel, filedialog, messagebox, ttk,
 )
 
@@ -1656,7 +1656,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         # de intentar re-seleccionarlo en una página donde ya no existe ese select.
                         cant = len(models_to_run) if models_to_run else 1
                         ui_log(
-                            f"El selector de Modelo está en un paso anterior al de dealer (no se "
+                            "El selector de Modelo está en un paso anterior al de dealer (no se "
                             f"puede re-seleccionar en este form) — se compara una sola vez"
                             + (f", no una por cada uno de los {cant} modelos detectados." if cant > 1 else "."),
                             "warn",

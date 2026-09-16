@@ -108,7 +108,7 @@ class NavegacionDOMMixin:
                                 self.driver.execute_script("arguments[0].click();", element)
                                 time.sleep(1)
                                 return True
-                except Exception as e:
+                except Exception:
                     continue
 
             return False
@@ -138,7 +138,7 @@ class NavegacionDOMMixin:
                         self.driver.execute_script("arguments[0].click();", element)
                         time.sleep(1)
                         return True
-            except Exception as e:
+            except Exception:
                 continue
 
         return False

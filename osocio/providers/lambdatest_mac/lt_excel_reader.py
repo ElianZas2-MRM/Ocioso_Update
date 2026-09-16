@@ -23,8 +23,8 @@ El lector devuelve una lista de LeadRow, donde cada LeadRow tiene:
 """
 
 import os
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from dataclasses import dataclass
+from typing import List, Dict
 
 try:
     from openpyxl import load_workbook

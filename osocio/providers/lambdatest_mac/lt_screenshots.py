@@ -51,7 +51,7 @@ screenshots_dir/
 
 import os
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 try:
     import requests as _req
@@ -328,7 +328,7 @@ class LTScreenshotManager:
         auth = (self.username, self.access_key)
 
         self.log(f"\n  📥 Descargando {self._lt_count} capturas con frame Mac de LT...")
-        self.log(f"     (disponibles ~30s después de cerrar la sesión)")
+        self.log("     (disponibles ~30s después de cerrar la sesión)")
 
         # LT necesita tiempo para procesar — reintentar hasta 6 veces con 10s
         screenshots = []

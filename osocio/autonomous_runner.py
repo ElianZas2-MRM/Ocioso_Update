@@ -18,7 +18,7 @@ from osocio.interface.helpers_interface import (
     enviar_email_resultados_consolidados,
     esperar_envios_pendientes,
 )
-from osocio.utils.scheduling import cargar_programacion, limpiar_programacion
+from osocio.utils.scheduling import cargar_programacion
 
 
 # La raiz se resuelve en osocio/paths.py y en ningun otro lado.
@@ -304,7 +304,6 @@ def ejecutar_tests(programacion):
             # Corre todos los browsers/viewports de UN país, secuencialmente.
             # La detección de Excel es por país (glob resultados_{pais}*), por lo
             # que distintos países pueden correr en paralelo sin colisionar.
-            nonlocal total_ejecutados
 
             def _run_uno(navegador, viewport, excel_suffix=""):
                 nonlocal total_ejecutados

@@ -5,12 +5,11 @@ qué países, en qué horarios y con qué browser se ejecutan automáticamente.
 """
 import os
 import json
-from datetime import datetime
 
 # === RUTAS BASE ===
 # Se importan de osocio/paths.py, que es el unico lugar que resuelve la raiz
 # (y el unico que contempla el caso empaquetado con PyInstaller).
-from osocio.paths import BASE_DIR, JSON_DIR  # noqa: E402
+from osocio.paths import JSON_DIR  # noqa: E402
 
 def guardar_programacion(programacion, filename="programacion_test.json"):
     """Guarda la programación en archivo JSON. None = eliminar. Soporta esquema semanal y legado."""

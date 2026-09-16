@@ -10,7 +10,6 @@ import re
 import shutil
 import unicodedata
 import random
-import json
 import threading
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
@@ -1836,7 +1835,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             _stage_fin = f"completado_paso{_last_step}" if _last_step > 1 else "completado"
             form_completado_name = self.screenshot_manager.fname("form", _stage_fin, current_ss_number)
             self.screenshot_manager.take_form_screenshot(current_ss_number, _stage_fin, full_page=True)
-            print(f"Captura 2/3: Formulario completado (Verificación visual - parcial)")
+            print("Captura 2/3: Formulario completado (Verificación visual - parcial)")
             return form_completado_name
 
         self._finalize_model_kit_on_last_step(form_data)
@@ -2533,7 +2532,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 if not self.safe_select_option_if_visible(kit_id, kit_valor, "Kit"):
                     print(f" No se pudo seleccionar kit con valor: {kit_valor}")
             elif not kit_valor:
-                print(f" Kit valor está vacío")
+                print(" Kit valor está vacío")
             elif not self._is_visible(By.ID, kit_id):
                 print(f" Kit select (ID: {kit_id}) no está visible")
         except Exception as e:
@@ -3252,7 +3251,6 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 # 2) send_keys con el texto — genera eventos de teclado REALES que
                 #    Angular/React procesan dentro de su propio zone (no son sintéticos)
                 try:
-                    from selenium.webdriver.common.keys import Keys
                     select_element.send_keys(option_text)
                 except Exception:
                     pass
@@ -3701,7 +3699,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 value = None
 
             if not value:
-                print(f"  → Omitido por el usuario.")
+                print("  → Omitido por el usuario.")
                 continue
 
             try:
@@ -4336,7 +4334,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         _event_id_retry_done = False
                         if ty_page_name is None and isinstance(result_text, str) and result_text.startswith("ERROR_EVENT_ID:"):
                             _event_id_retry_done = True
-                            print(f"  ↺ Error event_id (intento 1). Esperando recarga automática del formulario...")
+                            print("  ↺ Error event_id (intento 1). Esperando recarga automática del formulario...")
                             try:
                                 time.sleep(4)
                                 if use_iframe:
