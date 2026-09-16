@@ -17,7 +17,6 @@ Ejecutar, y un modal de ejecución igual al de Envío de Leads).
 import json
 import logging
 import os
-import sys
 import threading
 from datetime import datetime
 from tkinter import (
@@ -85,9 +84,9 @@ MODAL_PILL_BG = "#38234D"
 
 
 def _get_base_dir():
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado (ver tests/test_rutas.py).
+    from osocio.utils.paths import BASE_DIR
+    return BASE_DIR
 
 
 def _get_settings_path():

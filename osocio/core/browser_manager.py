@@ -4,7 +4,6 @@ Crea y configura el navegador con las opciones correctas (headless, tamaño de v
 anti-detección de bots). Usa solo los drivers locales de la carpeta /drivers/.
 """
 import os
-import sys
 import threading
 import subprocess
 from selenium import webdriver
@@ -271,15 +270,8 @@ class BrowserManager:
     
     @staticmethod
     def _get_drivers_dir():
-        try:
-            from osocio.utils.paths import DRIVERS_DIR
-            return DRIVERS_DIR
-        except ImportError:
-            if getattr(sys, 'frozen', False):
-                base = os.path.dirname(sys.executable)
-            else:
-                base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            return os.path.normpath(os.path.join(base, 'drivers'))
+        from osocio.utils.paths import DRIVERS_DIR
+        return DRIVERS_DIR
 
     @staticmethod
     def _get_driver_path(driver_name):

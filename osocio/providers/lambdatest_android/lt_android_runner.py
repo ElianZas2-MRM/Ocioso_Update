@@ -10,7 +10,6 @@ directorio de resultados propio.
 """
 
 import os
-import sys
 import glob
 import time
 import traceback

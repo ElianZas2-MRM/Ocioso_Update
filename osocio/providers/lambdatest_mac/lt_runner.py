@@ -30,7 +30,6 @@ Qué es diferente (mejoras para LambdaTest):
 import json
 import os
 import random
-import sys
 import threading
 import time
 import traceback

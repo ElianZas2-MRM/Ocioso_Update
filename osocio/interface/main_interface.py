@@ -20,14 +20,18 @@ import threading
 from datetime import datetime as _dt, date as _date
 from PIL import Image, ImageTk
 
+# La raiz del proyecto y sus carpetas se resuelven en osocio/utils/paths.py y en ningun
+# otro lado (ver tests/test_rutas.py). Este import vive afuera del try de abajo a
+# proposito: paths.py solo usa os y sys, asi que no puede fallar por dependencias.
+from osocio.utils.paths import BASE_DIR, DATA_DIR, JSON_DIR
+
+_APP_BASE = BASE_DIR
+
 # === Backend real (coexiste con la app vieja; import defensivo) ===
-# Sube desde osocio/interface/main_interface.py hasta la raíz: interface -> osocio -> raíz.
-_APP_BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BACKEND_OK = True
 _BACKEND_IMPORT_ERROR = ""
 try:
-    from osocio.utils.paths import DATA_DIR, JSON_DIR, BASE_DIR
     from osocio.utils.fixed_field_mapping_store import build_excel_columns_for_country
     from osocio.utils.data_generator import generar_fila_datos
     from osocio.core.country_configs import COUNTRY_CONFIGS
@@ -44,9 +48,6 @@ except Exception as _imp_err:  # noqa: BLE001
     build_field_validation_tab = None
     build_dealer_comparator_tab = None
     abrir_popup_ids_dinamicos = None
-    BASE_DIR = _APP_BASE
-    DATA_DIR = os.path.join(_APP_BASE, "data")
-    JSON_DIR = os.path.join(_APP_BASE, "json")
     COUNTRY_CONFIGS = {}
 
     def build_excel_columns_for_country(pais):

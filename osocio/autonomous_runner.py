@@ -21,13 +21,12 @@ from osocio.interface.helpers_interface import (
 from osocio.utils.scheduling import cargar_programacion, limpiar_programacion
 
 
-if getattr(sys, 'frozen', False):
-    PROJECT_ROOT = os.path.dirname(sys.executable)
-else:
-    PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-
-JSON_DIR = os.path.join(PROJECT_ROOT, "json")
-RESULTS_DIR = os.path.join(PROJECT_ROOT, "resultados")
+# La raiz se resuelve en osocio/utils/paths.py y en ningun otro lado.
+from osocio.utils.paths import (  # noqa: E402
+    BASE_DIR as PROJECT_ROOT,
+    JSON_DIR,
+    RESULTS_DIR,
+)
 LOG_FILE = os.path.join(JSON_DIR, "ejecutor_autonomo.log")
 AUTONOMOUS_MUTEX_NAME = "Global\\OsocioFormAutomationAutonomous"
 ERROR_ALREADY_EXISTS = 183
