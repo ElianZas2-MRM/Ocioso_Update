@@ -1016,6 +1016,26 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         return ""
 
     @staticmethod
+    def _usar_valor_fijo(field_id, field_value, ids_dinamicos):
+        """¿Corresponde usar el valor fijo de json/ids_dinamicos.json para este campo?
+
+        Solo si la celda del Excel vino vacía. **Lo que cargaste en el Excel gana
+        siempre**: es el invariante que ya declaraba el sembrador de autovalores y es lo
+        que espera cualquiera que escribe un dato en una celda.
+
+        Que no lo respetara se veía así: el campo `document` (el CPF de los forms
+        gm_frontend) tenía un autovalor sembrado por la app de cuando era un campo no
+        mapeado. El llenado lo consultaba ANTES del Excel y cortaba ahí, así que el CPF
+        cargado a mano no llegaba nunca al formulario.
+
+        Con la celda vacía el valor fijo sigue aplicándose, que es para lo que existe la
+        pestaña "IDs Dinámicos": campos que el Excel no cubre.
+        """
+        if str(field_value if field_value is not None else "").strip():
+            return False
+        return field_id in (ids_dinamicos or {})
+
+    @staticmethod
     def _tipo_documento_brasil(*ids):
         """¿Es un campo de documento brasileño? Devuelve cpf, cnpj, cep o None.
 
@@ -1597,9 +1617,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 if success:
                     processed_ids.add(field_id)
             else:
-                # Text, textarea, etc. Si es dinámico, completar con valor fijo si corresponde
+                # Text, textarea, etc. Si es dinámico, completar con valor fijo si corresponde.
+                # Ojo con el orden: esto va DESPUÉS de mirar el Excel, no antes. Un valor
+                # fijo solo se usa si la celda vino vacía.
                 ids_dinamicos = self._cargar_ids_dinamicos()
-                if field_id in ids_dinamicos:
+                if self._usar_valor_fijo(field_id, field_value, ids_dinamicos):
                     dynamic_candidates = self._resolve_dynamic_id_values(ids_dinamicos[field_id])
                     if dynamic_candidates:
                         fixed_value = dynamic_candidates[0]
