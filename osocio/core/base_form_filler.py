@@ -50,6 +50,7 @@ from osocio.core.screenshot_manager import ScreenshotManager
 from osocio.core.browser.browser_actions import BrowserActions
 
 from osocio.utils.field_id_aliases import VISID_ID_ALIASES
+from osocio.utils.omitir_campo import pide_omitir
 
 try:
     from osocio.utils.popup_logger import popup_log, log_runtime
@@ -84,6 +85,12 @@ def set_global_manual_input_callback(callback):
 
 class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMixin, DesplegablesMixin, CasillasYRadiosMixin, NavegacionDOMMixin):
     """Clase base unificada para todos los formularios de países"""
+
+    # Default de clase a proposito: hay codigo que lee esto antes de que empiece una
+    # fila (y tests que arman el motor sin __init__). Vacio y de solo lectura = nadie
+    # pidio omitir nada, que es la respuesta correcta en ese momento. La lista de
+    # verdad la crea __init__ y la resetea begin_row_tracking en cada fila.
+    _campos_omitidos = ()
 
     _EVENT_ID_PATTERNS = (
         "ocurrió un inconveniente al realizar el envío del formulario",
@@ -251,6 +258,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         # Registro por fila de IDs de campos seleccionados (enfocado en dropdowns)
         self.current_row_field_values = {}
         self._dropdowns_sin_elegir = []
+        # Campos que el Excel pidio expresamente no completar (ver utils/omitir_campo.py)
+        self._campos_omitidos = []
         # Campos nuevos detectados durante la ejecución actual
         self._campos_nuevos_detectados = []
         # Callback para solicitar valores manuales (se inyecta desde la UI)
@@ -265,6 +274,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         # Dropdowns que quedaron en su placeholder: se reportan aparte para que no pasen
         # como "completados" en el Excel de resultado.
         self._dropdowns_sin_elegir = []
+        # Campos que el Excel pidio no completar en ESTA fila. Cada fila es un
+        # formulario distinto: sin este reset, omitir el concesionario en una URL lo
+        # omitiria en todas las siguientes.
+        self._campos_omitidos = []
         # Qué campos opcionales se completan en esta fila (se sortea uno por campo).
         self._decision_opcionales = {}
         self._campos_sin_mapeo_exitoso = []
@@ -560,7 +573,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             # lo que pasó. Se deja constancia del campo sin elegir y se sigue.
             if entry.get("tag") == "select" and self._is_placeholder_text(real_value):
                 self.current_row_field_values.pop(key, None)
-                if raw_id not in self._dropdowns_sin_elegir:
+                if raw_id not in self._dropdowns_sin_elegir and raw_id not in self._campos_omitidos:
                     self._dropdowns_sin_elegir.append(raw_id)
                 print(f"⚠ {raw_id}: el dropdown quedó en '{real_value}' (placeholder), "
                       f"no se eligió ninguna opción")
@@ -612,7 +625,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             except Exception:
                 expected = ""
             expected = "" if expected is None else str(expected).strip()
-            if not expected or self._is_placeholder_text(expected):
+            # La marca de omitir no es un valor pedido: comparar contra ella daría
+            # "dealer: pedido '-' pero quedó vacío", que es justo lo que se pidió.
+            if not expected or pide_omitir(expected) or self._is_placeholder_text(expected):
                 continue
             entry = _resolve(ids)
             if not entry:
@@ -631,12 +646,18 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         for fid in self._dropdowns_sin_elegir:
             mismatches.append(f"{fid}: quedó sin elegir (placeholder)")
 
+        # Lo omitido a pedido del Excel se deja dicho, pero NO ensucia la corrida: es
+        # lo que se pidió que pasara. Sin esta línea, una corrida con el CPF vacío a
+        # propósito se vería igual que una donde el CPF no se llegó a completar.
+        omitidos = (" (omitidos por el Excel: " + ", ".join(self._campos_omitidos) + ")"
+                    if self._campos_omitidos else "")
+
         if mismatches:
-            self._datos_vs_excel = " ; ".join(mismatches)
+            self._datos_vs_excel = " ; ".join(mismatches) + omitidos
             self._datos_mismatch = True
             print(f"⚠️ Datos distintos a los pedidos en el Excel: {self._datos_vs_excel}")
         else:
-            self._datos_vs_excel = "OK"
+            self._datos_vs_excel = "OK" + omitidos
             self._datos_mismatch = False
 
 
@@ -993,6 +1014,23 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 if fid and fid in fijos:
                     return fijos[fid]
         return ""
+
+    def _pide_omitir_campo(self, field_id, field_value):
+        """¿El Excel pidió expresamente que este campo NO se complete?
+
+        Deja anotado cuál se omitió, porque después hay dos lugares que necesitan
+        saberlo: el chequeo de dropdowns en placeholder (un concesionario bloqueado no
+        es un dato que faltó) y el resumen del resultado.
+
+        Una celda vacía NO pide nada: el default sigue siendo completar como siempre.
+        """
+        if not pide_omitir(field_value):
+            return False
+        fid = str(field_id or '').strip()
+        if fid and fid not in self._campos_omitidos:
+            self._campos_omitidos.append(fid)
+            print(f"⊘ {fid}: el Excel pidió no completarlo")
+        return True
 
     def _resolve_field_value(self, form_data, field_config):
         """Resuelve el valor a usar para un campo según su mapping"""
@@ -1487,6 +1525,14 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             field_type = field_config.get("type", "text")
             field_name = field_config.get("name", field_id)
             field_value = self._resolve_field_value(form_data, field_config)
+
+            # El Excel puede pedir que este campo no se complete: un opcional que se
+            # quiere probar vacío (CPF, CEP) o uno que el form tiene bloqueado (el
+            # concesionario de Cadillac). Va antes que todo lo demás para que no se
+            # genere un documento ni se toque el dropdown.
+            if self._pide_omitir_campo(field_id, field_value):
+                processed_ids.add(field_id)
+                return
 
             # Si el campo es select y tiene dependencias normales, usar la lógica robusta
             parent_id_normal = None
@@ -2467,6 +2513,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             field_id = field_config.get("__resolved_id") or field_config.get("id")
             field_name = field_config.get("name", field_id)
             field_value = self._resolve_field_value(form_data, field_config)
+
+            # Mismo criterio que en el llenado normal: si el Excel pidió omitirlo, no
+            # se toca. Son dos caminos distintos y los dos tienen que respetarlo.
+            if self._pide_omitir_campo(field_id, field_value):
+                continue
 
             if field_type != "select" and not field_value:
                 continue

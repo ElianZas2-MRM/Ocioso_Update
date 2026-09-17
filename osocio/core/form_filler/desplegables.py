@@ -86,6 +86,11 @@ class DesplegablesMixin:
             fid, texto = s.get("id", ""), s.get("texto", "")
             if not fid or not self._is_placeholder_text(texto):
                 continue
+            # Un campo que el Excel pidió omitir no es un dato que faltó. Es el caso
+            # del concesionario de Cadillac: viene bloqueado a propósito, no lo puede
+            # elegir nadie, y anotarlo marcaba como sucia una corrida que estuvo bien.
+            if fid in getattr(self, "_campos_omitidos", ()):  
+                continue
             if fid not in self._dropdowns_sin_elegir:
                 self._dropdowns_sin_elegir.append(fid)
                 nuevos.append(fid)
