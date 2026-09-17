@@ -35,6 +35,17 @@ RESULTS_LT_MAC_DIR = os.path.join(RESULTS_DIR, "lambdatest_mac")
 RESULTS_LT_ANDROID_DIR = os.path.join(RESULTS_DIR, "lambdatest_android")
 RESULTS_DEALERS_DIR = os.path.join(RESULTS_DIR, "dealers")
 RESULTS_MASIVA_DIR = os.path.join(RESULTS_DIR, "resultado_urlsinsertas")
+
+# Envio de Leads, separado por tipo de formulario. El sufijo _T3 ya elegia que Excel
+# leer; ahora tambien decide donde caen los resultados, asi una corrida T1 y una T3 del
+# mismo mercado no se mezclan en la misma carpeta.
+RESULTS_T1_DIR = os.path.join(RESULTS_DIR, "t1")
+RESULTS_T3_DIR = os.path.join(RESULTS_DIR, "t3")
+
+
+def results_dir_para(es_t3):
+    """Carpeta de resultados segun el tipo de formulario que se corrio."""
+    return RESULTS_T3_DIR if es_t3 else RESULTS_T1_DIR
 JSON_DIR = os.path.join(BASE_DIR, "json")
 TEMPORALES_DIR = os.path.join(BASE_DIR, "temporales")
 DRIVERS_DIR = os.path.join(BASE_DIR, "drivers")

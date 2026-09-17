@@ -182,10 +182,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         """
         self.config = config
         self._browser_factory = browser_factory or BrowserManager.create_browser
-        from osocio.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
+        from osocio.paths import BASE_DIR, DATA_DIR, results_dir_para
         self.BASE_DIR = BASE_DIR
         self.DATA_DIR = DATA_DIR
-        self.RESULTADOS_DIR = RESULTS_DIR
+        # T1 y T3 escriben en carpetas distintas: antes caian juntas y por el nombre del
+        # archivo no se podia saber de que tipo de formulario era cada corrida.
+        self.ES_T3 = bool(config.get('excel_suffix'))
+        self.RESULTADOS_DIR = results_dir_para(self.ES_T3)
         
         os.makedirs(self.DATA_DIR, exist_ok=True)
         os.makedirs(self.RESULTADOS_DIR, exist_ok=True)
