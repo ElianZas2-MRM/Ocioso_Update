@@ -86,6 +86,58 @@ class ContextoEnvioLeads:
 
 
 
+
+@dataclass(frozen=True)
+class OpcionesEnvioLeads:
+    """Lo que el usuario dejó elegido cuando apretó "Enviar".
+
+    Son las once opciones que la corrida lee **una sola vez, al principio**, y que a partir
+    de ahí no vuelve a mirar. Congelarlas acá tiene dos ventajas: la corrida deja de
+    depender de widgets de Tkinter para saber qué hacer, y queda claro de un vistazo qué
+    configura al envío.
+
+    Ojo con lo que NO está acá. `var_pausar_autenticacion`, `var_preview_navegador` y
+    `selected_disp` quedaron afuera a propósito: se leen adentro de funciones que corren
+    después, en hilos, así que tienen que seguir viendo el valor actual. Si el usuario
+    destilda "pausar autenticación" con la corrida ya empezada, las sesiones siguientes
+    respetan el cambio. Congelarlas acá rompería eso en silencio.
+
+    Por eso es `frozen=True`: si alguien intenta mutarla, es señal de que lo que necesita
+    es una lectura en vivo, no una opción.
+    """
+
+    t3: bool                 # correr los formularios 2.0 de AEM
+    t3_also: bool            # ademas de los normales
+    url_paralelo: bool       # varias URLs a la vez
+    url_max: int             # cuantas en paralelo (1 a 20)
+    enviar_mail: bool
+    modo_email: str          # "por_pais" | "consolidado"
+    destinatario: str
+    adjuntar_resultados: bool
+    adjuntar_capturas: bool
+    ver_navegador: bool      # mostrar el navegador en vez de correr oculto
+
+
+def _leer_opciones(ctx, scheduled):
+    """Toma una foto de lo que el usuario eligio en la pantalla."""
+    t3 = bool(ctx.var_t3.get())
+    return OpcionesEnvioLeads(
+        t3=t3,
+        # En una corrida programada manda la casilla del scheduler, no la de la pantalla.
+        t3_also=(not t3) and bool(
+            ctx.var_sched_t3.get() if scheduled else ctx.var_t3_also.get()
+        ),
+        url_paralelo=bool(ctx.var_url_parallel.get()),
+        url_max=max(1, min(20, int(ctx.url_max_var.get()))),
+        enviar_mail=bool(ctx.var_enviar_email.get()),
+        modo_email=ctx.var_modo_email.get(),
+        destinatario=ctx.email_entry.get().strip(),
+        adjuntar_resultados=bool(ctx.var_adjuntar_res.get()),
+        adjuntar_capturas=bool(ctx.var_adjuntar_ss.get()),
+        ver_navegador=bool(ctx.var_ver_navegador.get()),
+    )
+
+
 def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     """Corre el envío de leads. `ctx` trae los widgets, variables y helpers de la UI."""
     # Constantes de estilo y helpers que siguen viviendo en main_interface. El import va
@@ -108,6 +160,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     )
 
     _RETRY_DEVICE_SUFFIX = ctx._RETRY_DEVICE_SUFFIX
+
+    opciones = _leer_opciones(ctx, scheduled)
     _build_retry_excel = ctx._build_retry_excel
     _exec_state = ctx._exec_state
     _forzar_foreground = ctx._forzar_foreground
@@ -115,7 +169,6 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     active_p_tab = ctx.active_p_tab
     btn_enviar = ctx.btn_enviar
     btn_retry_leads = ctx.btn_retry_leads
-    email_entry = ctx.email_entry
     excel_mode_holder = ctx.excel_mode_holder
     excels_mode = ctx.excels_mode
     log_message = ctx.log_message
@@ -126,18 +179,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     scheduler_cfg_leads = ctx.scheduler_cfg_leads
     selected_countries = ctx.selected_countries
     selected_disp = ctx.selected_disp
-    url_max_var = ctx.url_max_var
-    var_adjuntar_res = ctx.var_adjuntar_res
-    var_adjuntar_ss = ctx.var_adjuntar_ss
-    var_enviar_email = ctx.var_enviar_email
-    var_modo_email = ctx.var_modo_email
     var_pausar_autenticacion = ctx.var_pausar_autenticacion
     var_preview_navegador = ctx.var_preview_navegador
-    var_sched_t3 = ctx.var_sched_t3
-    var_t3 = ctx.var_t3
-    var_t3_also = ctx.var_t3_also
-    var_url_parallel = ctx.var_url_parallel
-    var_ver_navegador = ctx.var_ver_navegador
 
     if not BACKEND_OK:
         messagebox.showerror("Ejecutar", f"El backend no está disponible.\n{_BACKEND_IMPORT_ERROR}")
@@ -190,12 +233,12 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     ]
 
     # Formularios T3 2.0 (Adobe AEM): usar los Excels con nombre …_T3.xlsx
-    t3 = bool(var_t3.get())
+    t3 = opciones.t3
     # "Correr también T3": el mercado corre normal y, además, con su Excel …_T3.
     # Cada pestaña tiene su propio check de "correr también los T3": la corrida
     # programada debe mirar el de Envío de Leads Programados, no el de la pestaña
     # manual (si no, el T3 nunca entraba en las corridas automáticas).
-    t3_also = (not t3) and bool(var_sched_t3.get() if scheduled else var_t3_also.get())
+    t3_also = opciones.t3_also
 
     def _t3_extra_sessions(sessions):
         """Duplica cada sesión apuntando a su Excel …_T3.xlsx. Sólo devuelve las
@@ -291,9 +334,9 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     # Modo "una sesión por URL": expande cada fila de cada Excel en su propia sesión
     # (un reintento ya corre sólo sobre las filas que fallaron — no tiene sentido
     # volver a fragmentarlas una por URL).
-    url_par = (not scheduled) and (not retry_only) and bool(var_url_parallel.get())
+    url_par = (not scheduled) and (not retry_only) and opciones.url_paralelo
     try:
-        url_max = max(1, min(20, int(url_max_var.get())))
+        url_max = opciones.url_max
     except Exception:
         url_max = 6
 
@@ -427,21 +470,21 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         total_leads += s["rows_count"]
 
     # Persistir email + enviar_mail en config_global (lo lee el backend de email)
-    enviar_mail = bool(var_enviar_email.get())
-    _email_modo = var_modo_email.get()  # "por_pais" | "consolidado"
-    dest = email_entry.get().strip()
+    enviar_mail = opciones.enviar_mail
+    _email_modo = opciones.modo_email  # "por_pais" | "consolidado"
+    dest = opciones.destinatario
     try:
         _cfg = cargar_config_global()
         _cfg["email_destinatario"] = dest
         _cfg["enviar_mail"] = enviar_mail
         # Opt-in real: sólo adjunta lo que el usuario tildó (no forzar True por default).
-        _cfg["adjuntar_resultados"] = bool(var_adjuntar_res.get())
-        _cfg["adjuntar_screenshots"] = bool(var_adjuntar_ss.get())
+        _cfg["adjuntar_resultados"] = opciones.adjuntar_resultados
+        _cfg["adjuntar_screenshots"] = opciones.adjuntar_capturas
         guardar_config_global(_cfg)
     except Exception:
         pass
 
-    background = not bool(var_ver_navegador.get())  # ver navegador → visible
+    background = not opciones.ver_navegador  # ver navegador → visible
     stop_event = threading.Event()
 
     if not scheduled:
