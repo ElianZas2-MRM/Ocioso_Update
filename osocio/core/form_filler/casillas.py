@@ -379,33 +379,66 @@ class CasillasYRadiosMixin:
             return "skip"
         return "mark" if (is_known or is_required) else "skip"
 
+    # Checkboxes de terminos/privacidad que hay que marcar aunque el HTML no los declare
+    # obligatorios: sin ellos el form no deja enviar.
+    CHECKBOX_CONOCIDOS = frozenset({
+        "terms",
+        "terms-and-conditions",    # visid standard
+        "terms-contact",
+        "terms_contact",
+        "termscontact",
+        "terms-platform",
+        "terms_platform",
+        "termsplatform",
+        "accept-terms",
+        "accept_terms",
+        "privacy",
+        "privacy_policy",
+    })
+
+    # En que orden marcarlos. El de terminos va primero porque marcar otro antes puede
+    # re-renderizar el formulario y dejar el resto de los elementos obsoletos.
+    CHECKBOX_PRIORIDADES = {
+        "terms": 3,
+        "terms-and-conditions": 3, # visid — misma prioridad que "terms"
+        "terms-platform": 2,
+        "terms_platform": 2,
+        "termsplatform": 2,
+        "terms-contact": 1,
+        "terms_contact": 1,
+        "termscontact": 1,
+    }
+
+    @staticmethod
+    def _identificadores_checkbox(name_attr, checkbox_id):
+        """El name y el id, normalizados y sin los vacios.
+
+        Un campo real siempre tiene al menos uno de los dos, pero no necesariamente los
+        dos: los forms de React suelen traer solo el id, porque es lo que engancha el
+        <label for>.
+        """
+        return [v for v in (str(name_attr or "").strip().lower(),
+                            str(checkbox_id or "").strip().lower()) if v]
+
+    @classmethod
+    def _es_checkbox_conocido(cls, name_attr, checkbox_id):
+        """¿Es un checkbox de terminos/privacidad de los que hay que marcar si o si?
+
+        Mira el name Y el id. Antes miraba solo el name, asi que un checkbox identificado
+        unicamente por id quedaba sin marcar salvo que ademas trajera `required` — y el
+        form no dejaba enviar sin que quedara claro por que.
+        """
+        return any(v in cls.CHECKBOX_CONOCIDOS
+                   for v in cls._identificadores_checkbox(name_attr, checkbox_id))
+
+    @classmethod
+    def _prioridad_checkbox(cls, name_attr, checkbox_id):
+        """En que orden marcarlo. 0 = sin prioridad, va ultimo."""
+        return max((cls.CHECKBOX_PRIORIDADES.get(v, 0)
+                    for v in cls._identificadores_checkbox(name_attr, checkbox_id)),
+                   default=0)
+
     def _mark_required_checkboxes(self):
-        known_names = {
-            "terms",
-            "terms-and-conditions",    # visid standard
-            "terms-contact",
-            "terms_contact",
-            "termscontact",
-            "terms-platform",
-            "terms_platform",
-            "termsplatform",
-            "accept-terms",
-            "accept_terms",
-            "privacy",
-            "privacy_policy",
-        }
-
-        priority_map = {
-            "terms": 3,
-            "terms-and-conditions": 3, # visid — misma prioridad que "terms"
-            "terms-platform": 2,
-            "terms_platform": 2,
-            "termsplatform": 2,
-            "terms-contact": 1,
-            "terms_contact": 1,
-            "termscontact": 1,
-        }
-
         candidates = []
 
         try:
@@ -423,7 +456,7 @@ class CasillasYRadiosMixin:
                 data_dtm = (checkbox.get_attribute("data-dtm") or "").strip()
                 value_attr = (checkbox.get_attribute("value") or "").strip()
 
-                is_known = lower_name in known_names
+                is_known = self._es_checkbox_conocido(name_attr, checkbox_id)
 
                 # El Excel manda: una columna con el name/id del checkbox y valor SI/NO
                 pref = self._checkbox_pref_for(lower_name, checkbox_id)
@@ -450,7 +483,7 @@ class CasillasYRadiosMixin:
                 except StaleElementReferenceException:
                     continue
 
-                priority = priority_map.get(lower_name, 0)
+                priority = self._prioridad_checkbox(name_attr, checkbox_id)
                 display = name_attr or checkbox_id or data_dtm or "checkbox"
 
                 candidates.append({
