@@ -22,7 +22,68 @@ from osocio.interface.helpers_interface import (
     cargar_config_global,
     guardar_config_global,
 )
+from dataclasses import dataclass
+
 from osocio.utils.fixed_field_mapping_store import build_excel_columns_for_country
+
+
+@dataclass
+class ContextoEnvioLeads:
+    """Todo lo que el envío de leads necesita de la pantalla, declarado y agrupado.
+
+    Antes esto era el closure de `iniciar_interfaz()`: 31 nombres sueltos que la función
+    tomaba del aire. Declararlos acá cumple tres cosas — dice exactamente qué necesita la
+    función, permite construirla en un test sin levantar la UI, y evita que alguien agregue
+    una dependencia nueva sin que se note.
+
+    Ojo con los tipos: casi todos son **objetos de Tkinter, no valores**. Eso es a
+    propósito. `var_pausar_autenticacion`, `var_preview_navegador` y `selected_disp` se
+    leen adentro de funciones que corren después, en hilos: si el usuario cambia un
+    checkbox con la corrida ya empezada, las sesiones siguientes tienen que ver el valor
+    nuevo. Guardar el valor en vez del objeto rompería eso sin que nada avise.
+    """
+
+    # --- la ventana y sus controles -----------------------------------------------
+    root: object                      # la ventana principal: binds, protocolos, after()
+    btn_enviar: object                # se deshabilita mientras corre
+    btn_retry_leads: object           # se habilita si quedaron fallidos
+    email_entry: object               # destinatario del mail final
+
+    # --- qué eligió el usuario ------------------------------------------------------
+    var_t3: object                    # formularios 2.0 de AEM
+    var_t3_also: object               # además de los normales
+    var_sched_t3: object              # el equivalente para corridas programadas
+    var_enviar_email: object
+    var_modo_email: object            # "por_pais" | "consolidado"
+    var_adjuntar_res: object          # adjuntar el Excel de resultados
+    var_adjuntar_ss: object           # adjuntar las capturas
+    var_ver_navegador: object         # mostrar el navegador en vez de correr oculto
+    var_url_parallel: object          # varias URLs a la vez
+    url_max_var: object               # cuántas en paralelo
+    var_pausar_autenticacion: object  # se lee EN VIVO, por sesión
+    var_preview_navegador: object     # se lee EN VIVO, por sesión
+
+    # --- qué mercados y dispositivos ------------------------------------------------
+    paises_list: object               # todos los países disponibles
+    selected_countries: object        # los tildados
+    selected_disp: object             # dispositivos tildados; se lee EN VIVO
+    active_p_tab: object              # la pestaña de país abierta
+    mercados_mode: object             # secuencial o paralelo
+    excels_mode: object
+    excel_mode_holder: object
+    scheduler_cfg_leads: object       # la configuración de la corrida programada
+
+    # --- estado de la corrida --------------------------------------------------------
+    _exec_state: object               # qué falló, para "reintentar fallidos"
+    _RETRY_DEVICE_SUFFIX: object
+
+    # --- cosas que la función le pide a la pantalla -----------------------------------
+    log_message: object               # escribir en la consola de la app
+    refresh_execute_state: object     # recalcular si el botón va habilitado
+    _forzar_foreground: object        # traer la ventana al frente
+    _restore_from_tray: object        # sacarla de la bandeja
+    _build_retry_excel: object        # armar el Excel con solo las filas que fallaron
+
 
 
 def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):

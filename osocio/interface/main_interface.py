@@ -3216,11 +3216,12 @@ def iniciar_interfaz(autostart_leads=False):
         closure. Se pasan los OBJETOS (no sus valores) porque tres de ellos se leen
         en vivo mientras la corrida avanza.
         """
-        from types import SimpleNamespace
+        from osocio.interface.envio_leads import (
+            ContextoEnvioLeads,
+            ejecutar_envio_leads,
+        )
 
-        from osocio.interface.envio_leads import ejecutar_envio_leads
-
-        ctx = SimpleNamespace(
+        ctx = ContextoEnvioLeads(
             _RETRY_DEVICE_SUFFIX=_RETRY_DEVICE_SUFFIX,
             _build_retry_excel=_build_retry_excel,
             _exec_state=_exec_state,
