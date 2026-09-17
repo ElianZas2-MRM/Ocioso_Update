@@ -183,6 +183,38 @@ Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), 
 
 **El modelo elegido queda en el Excel de resultados** (columna Modelo), sea el que pusiste vos o el aleatorio. Y si el formulario **no tiene dropdown de modelo** (el modelo viene fijado en la URL), la app toma el valor de `?model=` de la URL del form y lo escribe igual en esa columna — así siempre sabés con qué modelo se envió el lead.
 
+### Decirle que **no** complete un campo
+
+Por defecto la app completa todo lo que puede: si la celda de CPF o CEP está vacía, **genera uno válido**; si hay un dropdown mapeado, **elige una opción**. Casi siempre es lo que querés.
+
+Cuando no lo es, escribí un **guion** en la celda de ese campo:
+
+| Modelo | CPF | CEP | Concesionario |
+|---|---|---|---|
+| Onix | 41863799025 | 04538-133 | Cadillac São Paulo |
+| Onix | **-** | 04538-133 | **-** |
+| Onix | *(vacía)* | 04538-133 | Cadillac São Paulo |
+
+- La **primera fila** completa los cuatro campos.
+- La **segunda** deja el CPF vacío y no toca el dropdown de concesionario.
+- La **tercera** genera un CPF, como siempre.
+
+> **Una celda vacía NO significa "omitir".** Significa "completá como siempre". Es a propósito: los Excels que ya existían tenían celdas vacías por todos lados y ninguna quería decir eso — si lo vacío cambiara de significado, cada corrida vieja cambiaría de resultado sin que nadie lo pida.
+
+Para qué sirve, con los dos casos que lo motivaron (formulario de Cadillac Brasil T1):
+
+- **Campos opcionales que querés probar vacíos.** CPF y CEP no son obligatorios en ese form; con el guion podés mandar el lead sin ellos y ver qué hace.
+- **Campos que el formulario tiene bloqueados.** Ahí el dropdown de concesionario viene `disabled` a propósito. Sin el guion, la app lo anota como *"quedó sin elegir"* y marca la corrida como sucia, cuando en realidad estuvo bien.
+
+Detalles:
+
+- Es **por fila**, o sea por URL: el mismo campo puede omitirse en un formulario y completarse en otro.
+- Sirve para **campos de texto y para dropdowns** por igual.
+- Además del guion se aceptan `--`, `vacio`, `omitir`, `skip` y `n/a`, en mayúsculas o minúsculas. El guion es el recomendado.
+- **`NO` no sirve como marca**, a propósito: en las columnas de checkbox ya significa *destildar la casilla* (ver la sección de arriba), y la misma palabra con dos significados en el mismo Excel es una trampa.
+- **No hace falta agregar ninguna columna** ni regenerar los Excels: la marca va en la celda del campo, que ya existe.
+- Lo omitido queda anotado en el Excel de resultados — `OK (omitidos por el Excel: cpf, dealer)` — **sin** marcar la corrida como fallida: es lo que pediste que pasara.
+
 ### El modal de ejecución
 
 Mientras corre el envío, la app abre una ventana "Ejecución de Test" que es tu único tablero de control: te dice qué está pasando y es lo que usás para frenar.
