@@ -127,6 +127,28 @@ rutas para aislarse.
 
 Si agregás una carpeta nueva, va en `paths.py`.
 
+## Lo que hacen todos los navegadores, escrito una sola vez
+
+Hay cuatro cosas en la app que abren un navegador: Envío de Leads, Comparar Dealers,
+Validación de Campos y LambdaTest. Cuando las cuatro necesitan el mismo comportamiento del
+navegador, **va en un solo lugar** y las cuatro lo llaman.
+
+**Por qué importa:** el pre-scroll que carga el contenido diferido estaba escrito cuatro
+veces. Las cuatro copias tenían el mismo bug (medían la altura de la página una sola vez,
+antes de bajar, y una página con lazy-loading crece al bajar), más dos diferencias que
+nadie decidió: dos de ellas no disparaban el evento de scroll, y dos tenían un corte de
+seguridad que no podía ejecutarse nunca. Arreglar una sola no arreglaba nada.
+
+Hoy vive en `osocio/utils/scroll_dinamico.py`. Las cuatro funciones conservan su nombre y
+su firma — solo delegan — así que los lugares que las llaman no se enteraron.
+
+Lo que sí es legítimo que difiera son los tiempos de espera, y por eso son parámetros: en
+headless el navegador necesita más para procesar los eventos, y una sesión remota de
+LambdaTest ya paga su latencia en cada paso.
+
+`test_pre_scroll.py` corre la misma batería por los cuatro accesos. Si mañana aparece un
+quinto, el test avisa.
+
 ## Los resultados van adentro de `resultados/`
 
 Nada de crear carpetas hermanas en la raíz. Cada tipo de ejecución tiene su subcarpeta y

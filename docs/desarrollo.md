@@ -126,7 +126,7 @@ osocio/
   providers/               LambdaTest Mac y Android
   utils/                   rutas, generación de datos, drivers, programación
   forms/                   runner compartido de los países
-tests/                     416 tests
+tests/                     503 tests
 data/   json/   Asset/     datos, configuración y recursos del .exe
 resultados/                todo lo que la app produce
 docs/                      esta carpeta
