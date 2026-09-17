@@ -219,9 +219,24 @@ class NavegacionDOMMixin:
                 pass
             return False
 
+    # Techo de pasadas del pre-scroll. Una pagina con scroll infinito crece cada vez que se
+    # baja, asi que sin un limite el bucle no termina nunca.
+    _MAX_PASOS_PRE_SCROLL = 60
+
     def pre_scroll_for_dynamic_content(self):
-        """Realiza pre-scroll disparando eventos de scroll para activar IntersectionObserver y lazy-loading."""
-        total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
+        """Baja por la pagina disparando eventos de scroll, para que cargue lo diferido.
+
+        Muchos formularios montan sus campos recien cuando entran en pantalla
+        (IntersectionObserver, lazy-loading). Si no se baja primero, la mitad del form no
+        existe todavia en el DOM cuando se lo intenta llenar.
+
+        La altura se vuelve a medir en cada paso, y esa es la parte que importa: al bajar,
+        la pagina CRECE. Antes se medía una sola vez antes de arrancar, asi que en un
+        formulario largo con carga diferida el bucle cortaba con la altura inicial y se
+        saltaba todo el medio — justo el caso para el que esta funcion existe. El salto
+        final al fondo lo disimulaba, porque llegaba abajo pero sin haber pasado por las
+        secciones intermedias, que quedaban sin cargar.
+        """
         viewport_height = self.driver.execute_script("return window.innerHeight")
         scroll_step = max(viewport_height * 0.8, 800)
 
@@ -234,9 +249,13 @@ class NavegacionDOMMixin:
             "window.dispatchEvent(new Event('scroll', {bubbles:true,cancelable:false}));"
             "document.dispatchEvent(new Event('scroll', {bubbles:true}));"
         )
+        _ALTO_JS = "return document.body.parentNode.scrollHeight"
 
         current_position = 0
-        while current_position < total_height:
+        for _ in range(self._MAX_PASOS_PRE_SCROLL):
+            total_height = self.driver.execute_script(_ALTO_JS)
+            if current_position >= total_height:
+                break
             self.driver.execute_script(_SCROLL_JS, current_position)
             time.sleep(step_wait)
             current_position += scroll_step
