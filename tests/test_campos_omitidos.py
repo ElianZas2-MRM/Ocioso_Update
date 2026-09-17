@@ -2,8 +2,9 @@
 
 Dos casos reales, los dos del formulario de Cadillac Brasil T1:
 
-- CPF y CEP son opcionales y la app los genera sola cuando la celda viene vacia. Eso esta
-  bien como default, pero faltaba poder pedir lo contrario.
+- CPF y CEP son opcionales y se querian poder dejar vacios a proposito. (Cuando se
+  escribio esto la app ademas los generaba sola si la celda venia vacia; eso se saco
+  despues: los documentos se generan al crear el Excel, nunca durante una corrida.)
 - El dropdown de concesionario viene bloqueado (`disabled`) a proposito. Igual quedaba
   anotado como "quedo sin elegir" y marcaba como sucia una corrida que estuvo bien.
 
@@ -46,10 +47,11 @@ def test_no_importan_mayusculas_ni_espacios(escrito):
     "   ",
 ])
 def test_una_celda_vacia_no_pide_nada(celda):
-    """EL default. Vacio = completar como siempre, que es generar el CPF o el CEP.
+    """EL default, y la mitad del pedido: "si no pongo nada en excel entonces por
+    defecto que llene el de siempre".
 
-    Es la mitad del pedido: "si no pongo nada en excel entonces por defecto que llene el
-    de siempre".
+    Vacio no es una instruccion: el campo se completa con lo que corresponda. Omitir hay
+    que pedirlo.
     """
     assert not pide_omitir(celda)
 
@@ -194,17 +196,20 @@ def test_los_dos_caminos_de_llenado_consultan_la_regla(metodo):
     )
 
 
-def test_la_marca_se_consulta_antes_de_generar_el_documento():
-    """El bloque que genera CPF/CEP no puede correr para un campo omitido.
+def test_la_marca_se_consulta_antes_de_tocar_el_documento():
+    """El bloque que normaliza CPF/CEP no puede correr para un campo omitido.
 
-    Si se consultara despues, la app generaria el documento igual y solo despues decidiria
-    no escribirlo: el resultado se veria bien pero el numero generado ya habria viajado al
-    registro de la fila.
+    Si se consultara despues, un "-" en la celda de CPF pasaria primero por la
+    normalizacion, que le saca todo lo que no sea digito y lo dejaria en "": el campo se
+    escribiria vacio en vez de no tocarse, y la diferencia se perderia.
+
+    (Antes este test miraba el generador de documentos, que se saco del llenado: los CPF
+    se generan al crear el Excel, nunca durante una corrida.)
     """
     from osocio.core.base_form_filler import BaseFormFiller
 
     fuente = inspect.getsource(BaseFormFiller._fill_visible_fields_from_mapping)
     assert "_pide_omitir_campo" in fuente
-    assert fuente.index("_pide_omitir_campo") < fuente.index("_generate_brazil_document"), (
-        "la consulta tiene que ir antes de generar el documento"
+    assert fuente.index("_pide_omitir_campo") < fuente.index("_normalizar_documento_brasil"), (
+        "la consulta tiene que ir antes de normalizar el documento"
     )

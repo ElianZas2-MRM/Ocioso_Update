@@ -185,7 +185,7 @@ Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), 
 
 ### Decirle que **no** complete un campo
 
-Por defecto la app completa todo lo que puede: si la celda de CPF o CEP está vacía, **genera uno válido**; si hay un dropdown mapeado, **elige una opción**. Casi siempre es lo que querés.
+Por defecto la app completa todo lo que puede con lo que hay en el Excel, y si un **dropdown** mapeado quedó sin valor **elige una opción**. Casi siempre es lo que querés.
 
 Cuando no lo es, escribí un **guion** en la celda de ese campo:
 
@@ -193,13 +193,22 @@ Cuando no lo es, escribí un **guion** en la celda de ese campo:
 |---|---|---|---|
 | Onix | 41863799025 | 04538-133 | Cadillac São Paulo |
 | Onix | **-** | 04538-133 | **-** |
-| Onix | *(vacía)* | 04538-133 | Cadillac São Paulo |
+| *(vacía)* | 41863799025 | 04538-133 | *(vacía)* |
 
-- La **primera fila** completa los cuatro campos.
+- La **primera fila** completa los cuatro campos con lo que dice el Excel.
 - La **segunda** deja el CPF vacío y no toca el dropdown de concesionario.
-- La **tercera** genera un CPF, como siempre.
+- La **tercera** elige Modelo y Concesionario al azar entre las opciones del formulario.
 
-> **Una celda vacía NO significa "omitir".** Significa "completá como siempre". Es a propósito: los Excels que ya existían tenían celdas vacías por todos lados y ninguna quería decir eso — si lo vacío cambiara de significado, cada corrida vieja cambiaría de resultado sin que nadie lo pida.
+La diferencia entre dejar la celda vacía y poner un guion:
+
+| | celda vacía | guion |
+|---|---|---|
+| **Campo de texto** (CPF, CEP…) | queda vacío | queda vacío, y el resultado dice que fue a propósito |
+| **Dropdown** (Modelo, Concesionario…) | elige una al azar | no lo toca |
+
+> **En los dropdowns la diferencia importa mucho.** Si el `<select>` está bloqueado (`disabled`), con la celda vacía la app **le saca el bloqueo a la fuerza** y elige igual — porque muchos formularios dejan el hijo bloqueado hasta que elegís el padre (región → ciudad → concesionario) y hay que esperarlos. En un formulario donde el dropdown está bloqueado *a propósito*, eso manda un lead con una opción que nadie hubiera podido elegir. El guion es la forma de distinguir *"elegí vos"* de *"no lo toques"*.
+
+> **Los CPF, CNPJ y CEP no se generan durante la corrida.** Se generan al crear el Excel, en la pestaña *Generar Excels con Datos*, y la corrida usa exactamente lo que está ahí. Lo único que hace con ellos es sacarles el formato (puntos y guiones) y devolverles el cero inicial que Excel se come cuando la celda es numérica. Si la celda está vacía, el campo va vacío.
 
 Para qué sirve, con los dos casos que lo motivaron (formulario de Cadillac Brasil T1):
 

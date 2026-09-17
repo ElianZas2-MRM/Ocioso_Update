@@ -1015,6 +1015,47 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     return fijos[fid]
         return ""
 
+    @staticmethod
+    def _tipo_documento_brasil(*ids):
+        """¿Es un campo de documento brasileño? Devuelve cpf, cnpj, cep o None.
+
+        Recibe VARIOS ids a propósito: el del DOM y el del mapping. En los forms
+        gm_frontend el campo de CPF se llama `document`, donde no está la palabra
+        "cpf", así que mirando solo el id del DOM no se podría saber de qué se trata.
+        """
+        texto = " ".join(str(i or '').lower() for i in ids)
+        if "cnpj" in texto:
+            return "cnpj"
+        if any(x in texto for x in ("cep", "zip", "postal")):
+            return "cep"
+        if "cpf" in texto:
+            return "cpf"
+        return None
+
+    @staticmethod
+    def _normalizar_documento_brasil(tipo, valor):
+        """Deja el documento como lo espera el formulario: solo dígitos.
+
+        NO genera nada. Si la celda vino vacía, el campo queda vacío. Los documentos se
+        generan al crear el Excel (pestaña "Generar Excels con Datos"), nunca en medio
+        de una corrida: un documento generado en el momento hace que el lead viaje con
+        un número que no está en ninguna parte del Excel, y entonces el resultado no se
+        puede comparar contra lo que se pidió.
+        """
+        if valor is None:
+            return ""
+        crudo = str(int(valor)) if isinstance(valor, (int, float)) and not isinstance(valor, bool) else str(valor).strip()
+        digitos = "".join(c for c in crudo if c.isdigit())
+        if not digitos:
+            return crudo
+        largo = {"cnpj": 14, "cep": 8}.get(tipo, 11)
+        # Una celda numérica se come el cero inicial: CPF de 10 → 11, CNPJ de 13 → 14,
+        # CEP de 7 → 8. Es la causa más común de un documento rechazado. Solo cuando
+        # falta exactamente uno: rellenar más sería inventar datos.
+        if len(digitos) == largo - 1:
+            digitos = digitos.zfill(largo)
+        return digitos
+
     def _pide_omitir_campo(self, field_id, field_value):
         """¿El Excel pidió expresamente que este campo NO se complete?
 
@@ -1585,26 +1626,18 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 # Si no es dinámico, usar el valor normal.
                 # Acepta type="text", type="textarea" en el config, o detección automática
                 # por tag del DOM (input + textarea se tratan igual).
-                # Brasil: generar CPF/CNPJ/CEP solo si el Excel no trae un valor válido
+                # Brasil: el CPF/CNPJ/CEP sale del Excel, siempre. Se normaliza (solo
+                # dígitos, con el cero que Excel se come) pero no se genera: el
+                # generador vive en la pestaña "Generar Excels con Datos".
                 _fid_lower = field_id.lower()
                 _is_brasil = str(self.config.get("pais", "")).lower() in ("brasil", "brazil", "br")
-                if _is_brasil and any(x in _fid_lower for x in ("cpf", "cnpj", "cep", "zip", "postal")):
-                    _excel_empty = field_value in (None, "")
-                    if isinstance(field_value, (int, float)):
-                        _raw_str = str(int(field_value))
-                    else:
-                        _raw_str = str(field_value or "").strip()
-                    _digits = "".join(c for c in _raw_str if c.isdigit())
-                    _min_len = 14 if "cnpj" in _fid_lower else (8 if any(x in _fid_lower for x in ("cep", "zip", "postal")) else 11)
-                    # Excel numérico come el cero inicial: CPF de 10 → pad a 11, CNPJ de 13 → pad a 14, CEP de 7 → pad a 8
-                    if _digits and len(_digits) == _min_len - 1:
-                        _digits = _digits.zfill(_min_len)
-                    if _digits and len(_digits) >= _min_len:
-                        field_value = _digits
-                    else:
-                        generated = self._generate_brazil_document(field_id)
-                        if generated:
-                            field_value = generated
+                # Se le pasan los dos ids: el del DOM puede ser el alias ("document"),
+                # que no dice de qué documento se trata; el del mapping sí.
+                _ids_mapping = field_config.get("id")
+                _tipo_doc = self._tipo_documento_brasil(
+                    field_id, *(_ids_mapping if isinstance(_ids_mapping, list) else [_ids_mapping]))
+                if _is_brasil and _tipo_doc:
+                    field_value = self._normalizar_documento_brasil(_tipo_doc, field_value)
 
                 # Perú: sanitizar número de documento según tipo seleccionado.
                 # OJO con el id: en los forms visid / gm_front el 'ci' del mapping se resuelve
