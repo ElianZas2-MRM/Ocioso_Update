@@ -27,6 +27,7 @@ from osocio.core.country_configs import COUNTRY_CONFIGS
 from osocio.core.screenshot_manager import ScreenshotManager
 
 from osocio.paths import RESULTS_DIR
+from osocio.utils.scroll_dinamico import pre_scroll
 
 
 DEFAULT_SELECT_IDS = {"region": "region", "city": "city", "dealer": "dealer"}
@@ -729,33 +730,8 @@ def _find_form_iframe(driver, expected_form_url):
 
 def _pre_scroll_for_dynamic_content(driver):
     """Dispara eventos de scroll para activar IntersectionObserver/lazy-loading de iframes
-    embebidos en la landing (mismo criterio que 'Envío de Leads')."""
-    try:
-        total_height = driver.execute_script("return document.body.parentNode.scrollHeight") or 0
-        viewport_height = driver.execute_script("return window.innerHeight") or 800
-    except Exception:
-        return
-    scroll_step = max(viewport_height * 0.8, 800)
-    _scroll_js = (
-        "window.scrollTo(0, arguments[0]);"
-        "window.dispatchEvent(new Event('scroll', {bubbles:true,cancelable:false}));"
-        "document.dispatchEvent(new Event('scroll', {bubbles:true}));"
-    )
-    current_position = 0
-    while current_position < total_height:
-        try:
-            driver.execute_script(_scroll_js, current_position)
-        except Exception:
-            break
-        time.sleep(0.15)
-        current_position += scroll_step
-    try:
-        driver.execute_script(_scroll_js, 999999)
-        time.sleep(0.3)
-        driver.execute_script(_scroll_js, 0)
-        time.sleep(0.3)
-    except Exception:
-        pass
+    embebidos en la landing (misma implementacion que 'Envio de Leads')."""
+    pre_scroll(driver)
 
 
 def _locate_form_iframe(driver, form_url, wait_seconds=0):

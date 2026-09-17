@@ -11,6 +11,8 @@ import time
 
 from selenium.webdriver.common.by import By
 
+from osocio.utils.scroll_dinamico import pre_scroll
+
 
 class NavegacionDOMMixin:
     """Scroll, iframes y popups. Se usa solo como mixin de BaseFormFiller."""
@@ -219,49 +221,19 @@ class NavegacionDOMMixin:
                 pass
             return False
 
-    # Techo de pasadas del pre-scroll. Una pagina con scroll infinito crece cada vez que se
-    # baja, asi que sin un limite el bucle no termina nunca.
-    _MAX_PASOS_PRE_SCROLL = 60
-
     def pre_scroll_for_dynamic_content(self):
-        """Baja por la pagina disparando eventos de scroll, para que cargue lo diferido.
+        """Baja por la pagina para que cargue el contenido diferido.
 
-        Muchos formularios montan sus campos recien cuando entran en pantalla
-        (IntersectionObserver, lazy-loading). Si no se baja primero, la mitad del form no
-        existe todavia en el DOM cuando se lo intenta llenar.
+        La implementacion vive en osocio.utils.scroll_dinamico, compartida con Comparar
+        Dealers, Validacion de Campos y LambdaTest: eran cuatro copias de la misma funcion
+        y las cuatro arrastraban el mismo bug de medir la altura una sola vez.
 
-        La altura se vuelve a medir en cada paso, y esa es la parte que importa: al bajar,
-        la pagina CRECE. Antes se medía una sola vez antes de arrancar, asi que en un
-        formulario largo con carga diferida el bucle cortaba con la altura inicial y se
-        saltaba todo el medio — justo el caso para el que esta funcion existe. El salto
-        final al fondo lo disimulaba, porque llegaba abajo pero sin haber pasado por las
-        secciones intermedias, que quedaban sin cargar.
+        Lo unico propio del motor son las esperas: en headless el navegador necesita mas
+        tiempo para procesar los eventos de scroll e inyectar lo que falta.
         """
-        viewport_height = self.driver.execute_script("return window.innerHeight")
-        scroll_step = max(viewport_height * 0.8, 800)
-
         headless = self.config.get('headless', False)
-        step_wait = 0.5 if headless else 0.15
-        end_wait = 1 if headless else 0.3
-
-        _SCROLL_JS = (
-            "window.scrollTo(0, arguments[0]);"
-            "window.dispatchEvent(new Event('scroll', {bubbles:true,cancelable:false}));"
-            "document.dispatchEvent(new Event('scroll', {bubbles:true}));"
+        pre_scroll(
+            self.driver,
+            step_wait=0.5 if headless else 0.15,
+            end_wait=1 if headless else 0.3,
         )
-        _ALTO_JS = "return document.body.parentNode.scrollHeight"
-
-        current_position = 0
-        for _ in range(self._MAX_PASOS_PRE_SCROLL):
-            total_height = self.driver.execute_script(_ALTO_JS)
-            if current_position >= total_height:
-                break
-            self.driver.execute_script(_SCROLL_JS, current_position)
-            time.sleep(step_wait)
-            current_position += scroll_step
-
-        self.driver.execute_script(_SCROLL_JS, 999999)
-        time.sleep(end_wait)
-
-        self.driver.execute_script(_SCROLL_JS, 0)
-        time.sleep(end_wait)

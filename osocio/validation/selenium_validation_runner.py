@@ -17,6 +17,7 @@ from selenium.common.exceptions import TimeoutException
 from osocio.core.browser_manager import BrowserManager
 from osocio.core.field_dependencies import FIELD_DEPENDENCIES
 from osocio.utils.field_id_aliases import alias_ids_for
+from osocio.utils.scroll_dinamico import pre_scroll
 
 from selenium.webdriver.support.ui import Select
 
@@ -41,25 +42,13 @@ def _wait_document_ready(driver, timeout):
 
 
 def _pre_scroll_for_dynamic_content(driver):
-    try:
-        total_height = driver.execute_script("return document.body.parentNode.scrollHeight")
-        viewport_height = driver.execute_script("return window.innerHeight")
-        current_position = 0
-        scroll_step = max(1, int(viewport_height * 0.8))
+    """Baja por la pagina para que monten los campos con carga diferida.
 
-        while current_position < total_height:
-            driver.execute_script("window.scrollTo(0, arguments[0]);", current_position)
-            time.sleep(0.25)
-            current_position += scroll_step
-            if current_position > total_height * 3:
-                break
-
-        driver.execute_script("window.scrollTo(0, document.body.parentNode.scrollHeight);")
-        time.sleep(0.4)
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(0.4)
-    except Exception:
-        pass
+    Antes movia la ventana sin disparar el evento de scroll, asi que un form que escucha
+    el evento (React, IntersectionObserver) no montaba nada y la validacion no encontraba
+    los campos. La implementacion compartida si lo dispara.
+    """
+    pre_scroll(driver, step_wait=0.25, end_wait=0.4)
 
 
 def _wait_for_standalone_form_ready(driver, timeout=15):
