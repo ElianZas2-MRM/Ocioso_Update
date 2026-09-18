@@ -13,6 +13,8 @@ el valor nuevo. Congelarlas acá rompería eso en silencio.
 """
 
 import os
+
+from osocio.core.variantes import T3 as VAR_T3
 import threading
 import tkinter as tk
 from tkinter import messagebox
@@ -254,6 +256,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             e = dict(s)
             e["excel"] = t3_path
             e["device"] = f"{s['device']}·T3"
+            e["variante"] = VAR_T3
             # Nombre propio en el email: si va como "Brasil" se fusiona con el
             # mercado normal y el resultado del T3 desaparece del reporte.
             e["email_label"] = _etiqueta_t3(s["pais"])
@@ -272,7 +275,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             if not selected_disp.get(key):
                 continue
             path = gpath if shared else os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, t3))
-            out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix, "excel": path})
+            out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix,
+                        "excel": path, "variante": VAR_T3 if t3 else ""})
         return out + _t3_extra_sessions(out)
 
     if scheduled:
@@ -1106,10 +1110,16 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 from osocio.core.generic_country_base import GenericCountryBase
                 _pausar = var_pausar_autenticacion.get()
                 _preview = bool(var_preview_navegador.get())
+                # La variante tiene que viajar como tal, no solo como ruta de Excel:
+                # de ella dependen en que carpeta caen los resultados (t1/ o t3/) y
+                # como se llama el archivo. Pisar EXCEL_PATH a secas alcanzaba para
+                # LEER el Excel correcto, pero dejaba al motor creyendo que era una
+                # corrida normal: los T3 lanzados desde la app escribian en t1/.
                 form = GenericCountryBase(pais, browser=browser, viewport="fullscreen",
                                           headless=False, background=background, is_scheduled=scheduled,
                                           pausar_autenticacion=_pausar,
-                                          preview_visible_browser=_preview)
+                                          preview_visible_browser=_preview,
+                                          excel_suffix=sess.get("variante", ""))
 
                 if excel:
                     form.EXCEL_PATH = excel  # ← una sesión por Excel generado

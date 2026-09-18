@@ -159,3 +159,51 @@ def test_una_corrida_cdc_va_a_t1_aunque_tenga_sufijo():
     f = _filler("_CDC")
     assert f.ES_T3 is False
     assert os.path.normpath(f.RESULTADOS_DIR) == os.path.normpath(paths.RESULTS_T1_DIR)
+
+
+# --- la variante tiene que llegar al motor TAMBIEN desde la interfaz -------------------
+#
+# La UI arma el motor y despues le sobreescribe la ruta del Excel a mano:
+#
+#     form = GenericCountryBase(pais, browser=browser, ...)   # sin excel_suffix
+#     if excel:
+#         form.EXCEL_PATH = excel
+#
+# Pisar la ruta alcanza para LEER el Excel correcto, pero no le dice al motor de que
+# variante se trata. Con `excel_suffix` vacio, ES_T3 siempre daba False: las corridas T3
+# lanzadas desde la app escribian en resultados/t1/ junto con todo lo demas, y la carpeta
+# t3/ quedaba vacia. La separacion solo funcionaba por linea de comandos y en el
+# programador.
+
+def _fuente_envio_leads():
+    import inspect
+
+    from osocio.interface import envio_leads
+
+    return inspect.getsource(envio_leads)
+
+
+def test_la_interfaz_le_pasa_la_variante_al_motor():
+    """Sin esto, la variante se pierde y todo termina en la misma carpeta."""
+    import ast
+
+    arbol = ast.parse(_fuente_envio_leads())
+    llamadas = [n for n in ast.walk(arbol)
+                if isinstance(n, ast.Call)
+                and getattr(n.func, "id", getattr(n.func, "attr", "")) == "GenericCountryBase"]
+
+    assert llamadas, "no se encontro donde la interfaz arma el motor"
+    for c in llamadas:
+        nombres = {kw.arg for kw in c.keywords}
+        assert "excel_suffix" in nombres, (
+            "la interfaz arma el motor sin decirle la variante: los resultados de T3 y de "
+            "CDC van a caer en la carpeta del mercado normal"
+        )
+
+
+def test_cada_sesion_declara_su_variante():
+    """La sesion es lo que viaja de la pantalla al motor; si no la lleva, no hay de donde
+    sacarla despues."""
+    assert '"variante"' in _fuente_envio_leads(), (
+        "las sesiones no declaran a que variante pertenecen"
+    )
