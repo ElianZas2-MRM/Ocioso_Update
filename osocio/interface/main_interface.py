@@ -92,14 +92,14 @@ def _t3_tag(t3):
     return "_T3" if t3 else ""
 
 
-# Marca de los formularios T3 en los reportes/emails. En el mail no se habla de "T3"
-# (no le dice nada a quien lo lee): se nombra la marca, que es lo que distingue.
-_T3_ETIQUETAS = {"Brasil": "CADILLAC BR"}
-
-
 def _etiqueta_t3(pais):
-    """Nombre con el que aparece el formulario T3 de ese mercado en el email."""
-    return _T3_ETIQUETAS.get(pais, f"{pais} T3")
+    """Nombre con el que aparece el formulario T3 de ese mercado en el email.
+
+    Antes el T3 de Brasil se llamaba "CADILLAC BR". Cadillac dejo de ser el T3 de
+    Brasil: es una variante propia (_CDC) y es T1. Ver core/variantes.py.
+    """
+    from osocio.core.variantes import T3, etiqueta_de_corrida
+    return etiqueta_de_corrida(pais, T3)
 
 
 def _lead_excel_name(pais, suffix, t3=False):
