@@ -192,5 +192,7 @@ class TestEjecutorAutonomo:
         from osocio import paths
 
         assert os.path.normpath(autonomous_runner.JSON_DIR) == os.path.normpath(paths.JSON_DIR)
-        assert os.path.normpath(autonomous_runner.RESULTS_DIR) == os.path.normpath(paths.RESULTS_DIR)
+        # T1 y T3 se guardan aparte, asi que el modulo resuelve la carpeta por tipo.
+        for es_t3 in (False, True):
+            assert autonomous_runner.results_dir_para(es_t3).startswith(paths.RESULTS_DIR)
         assert autonomous_runner.LOG_FILE.startswith(paths.JSON_DIR)

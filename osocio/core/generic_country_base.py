@@ -34,5 +34,7 @@ class GenericCountryBase(BaseFormFiller):
         # excel_suffix permite apuntar a una variante del mismo mercado sin duplicar
         # configuración (hoy sólo "_T3", los formularios 2.0 de Adobe AEM).
         config['excel_file'] = f"Lead_information_Formulario_{country_name}_{dev_name}{excel_suffix or ''}.xlsx"
+        # Explicito, para que el motor no tenga que adivinarlo del nombre del archivo.
+        config['excel_suffix'] = excel_suffix or ""
 
         super().__init__(config, browser_factory=browser_factory)

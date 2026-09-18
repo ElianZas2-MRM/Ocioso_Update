@@ -25,7 +25,7 @@ from osocio.utils.scheduling import cargar_programacion
 from osocio.paths import (  # noqa: E402
     BASE_DIR as PROJECT_ROOT,
     JSON_DIR,
-    RESULTS_DIR,
+    results_dir_para,
 )
 LOG_FILE = os.path.join(JSON_DIR, "ejecutor_autonomo.log")
 AUTONOMOUS_MUTEX_NAME = "Global\\OsocioFormAutomationAutonomous"
@@ -161,11 +161,16 @@ def _basenames_resultados(pais, navegador):
     return f"Automatizacion_{pais}_{dev}", f"Automatizacion_screenshots_{pais}_{dev}"
 
 
-def obtener_numero_mayor_existente(pais, tipo="excel", basename=None):
-    """Obtiene el número de corrida más alto ya existente para ese prefijo."""
+def obtener_numero_mayor_existente(pais, tipo="excel", basename=None, es_t3=False):
+    """Obtiene el número de corrida más alto ya existente para ese prefijo.
+
+    `es_t3` elige en qué carpeta mirar: T1 y T3 guardan sus resultados por separado, así
+    que contar en la carpeta equivocada daría un número de corrida que no corresponde.
+    """
     try:
         base = basename or (f"resultados_{pais}" if tipo == "excel" else f"screenshots_{pais}")
-        pattern = os.path.join(RESULTS_DIR, f"{base}*.xlsx" if tipo == "excel" else f"{base}*/")
+        carpeta = results_dir_para(es_t3)
+        pattern = os.path.join(carpeta, f"{base}*.xlsx" if tipo == "excel" else f"{base}*/")
 
         matches = glob.glob(pattern)
         max_num = 0
@@ -315,8 +320,9 @@ def ejecutar_tests(programacion):
                 log_mensaje(f" Ejecutando {_idx}/{total_scripts}: {runner_name} ({env_param})")
 
                 base_excel, base_ss = _basenames_resultados(pais_nombre, navegador)
-                num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel)
-                num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots", base_ss)
+                _es_t3 = bool(excel_suffix)
+                num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel, es_t3=_es_t3)
+                num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots", base_ss, es_t3=_es_t3)
                 log_mensaje(f"    Números previos - Excel: {num_anterior_excel}, Screenshots: {num_anterior_screenshots}")
 
                 try:
@@ -332,12 +338,13 @@ def ejecutar_tests(programacion):
                         if result.stderr:
                             log_mensaje(f"   Error: {result.stderr.strip()}")
 
-                    num_nuevo_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel)
+                    num_nuevo_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel, es_t3=_es_t3)
                     log_mensaje(f"    📊 Números después - Excel: {num_nuevo_excel}")
 
                     if num_nuevo_excel > num_anterior_excel:
-                        excel_file = os.path.join(RESULTS_DIR, f"{base_excel}{num_nuevo_excel}.xlsx")
-                        screenshots_dir = os.path.join(RESULTS_DIR, f"{base_ss}{num_nuevo_excel}")
+                        _carpeta = results_dir_para(_es_t3)
+                        excel_file = os.path.join(_carpeta, f"{base_excel}{num_nuevo_excel}.xlsx")
+                        screenshots_dir = os.path.join(_carpeta, f"{base_ss}{num_nuevo_excel}")
                         resultado = {
                             "pais": _etiqueta_t3(pais_nombre) if excel_suffix else pais_nombre,
                             "navegador": navegador,

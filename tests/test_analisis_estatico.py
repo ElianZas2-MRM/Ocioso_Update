@@ -20,7 +20,9 @@ from osocio import paths
 
 
 # Avisos que quedan, verificados uno por uno. Si bajás alguno, bajá también este número.
-AVISOS_ESPERADOS = 17
+# 17 → 16: se fue el `_excel_empty` que se calculaba y nunca se usaba, al sacar la
+# generación de documentos del llenado.
+AVISOS_ESPERADOS = 16
 
 
 def _correr_pyflakes():

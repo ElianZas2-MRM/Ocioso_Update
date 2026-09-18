@@ -60,6 +60,7 @@ except ImportError:
     raise ImportError("openpyxl requerido: pip install openpyxl")
 
 from osocio.providers.lambdatest_mac.lt_excel_reader import read_osocio_excel, LeadRow
+from osocio.utils.scroll_dinamico import pre_scroll
 
 # Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
 _VISID_ID_ALIASES: dict = {
@@ -337,23 +338,12 @@ def _handle_cookie_popups(driver, log: Callable = print) -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _pre_scroll_for_dynamic_content(driver):
-    """Scroll progresivo para activar contenido dinámico. Igual que Osocio."""
-    total_height = driver.execute_script("return document.body.parentNode.scrollHeight")
-    viewport_height = driver.execute_script("return window.innerHeight")
-    current_pos = 0
-    scroll_step = viewport_height * 0.8
+    """Scroll progresivo para activar contenido diferido. Igual que Osocio: misma funcion.
 
-    while current_pos < total_height:
-        driver.execute_script(f"window.scrollTo(0, {current_pos});")
-        time.sleep(0.1)
-        current_pos += scroll_step
-        if current_pos > total_height * 3:
-            break
-
-    driver.execute_script("window.scrollTo(0, document.body.parentNode.scrollHeight);")
-    time.sleep(0.2)
-    driver.execute_script("window.scrollTo(0, 0);")
-    time.sleep(0.2)
+    Antes movia la ventana sin disparar el evento de scroll. Las esperas son mas cortas
+    que en local a proposito, porque cada paso ya paga la latencia de la sesion remota.
+    """
+    pre_scroll(driver, step_wait=0.1, end_wait=0.2)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

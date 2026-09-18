@@ -50,6 +50,7 @@ from osocio.core.screenshot_manager import ScreenshotManager
 from osocio.core.browser.browser_actions import BrowserActions
 
 from osocio.utils.field_id_aliases import VISID_ID_ALIASES
+from osocio.utils.omitir_campo import pide_omitir
 
 try:
     from osocio.utils.popup_logger import popup_log, log_runtime
@@ -84,6 +85,12 @@ def set_global_manual_input_callback(callback):
 
 class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMixin, DesplegablesMixin, CasillasYRadiosMixin, NavegacionDOMMixin):
     """Clase base unificada para todos los formularios de países"""
+
+    # Default de clase a proposito: hay codigo que lee esto antes de que empiece una
+    # fila (y tests que arman el motor sin __init__). Vacio y de solo lectura = nadie
+    # pidio omitir nada, que es la respuesta correcta en ese momento. La lista de
+    # verdad la crea __init__ y la resetea begin_row_tracking en cada fila.
+    _campos_omitidos = ()
 
     _EVENT_ID_PATTERNS = (
         "ocurrió un inconveniente al realizar el envío del formulario",
@@ -182,10 +189,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         """
         self.config = config
         self._browser_factory = browser_factory or BrowserManager.create_browser
-        from osocio.paths import BASE_DIR, DATA_DIR, RESULTS_DIR
+        from osocio.paths import BASE_DIR, DATA_DIR, results_dir_para
         self.BASE_DIR = BASE_DIR
         self.DATA_DIR = DATA_DIR
-        self.RESULTADOS_DIR = RESULTS_DIR
+        # T1 y T3 escriben en carpetas distintas: antes caian juntas y por el nombre del
+        # archivo no se podia saber de que tipo de formulario era cada corrida.
+        self.ES_T3 = bool(config.get('excel_suffix'))
+        self.RESULTADOS_DIR = results_dir_para(self.ES_T3)
         
         os.makedirs(self.DATA_DIR, exist_ok=True)
         os.makedirs(self.RESULTADOS_DIR, exist_ok=True)
@@ -248,6 +258,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         # Registro por fila de IDs de campos seleccionados (enfocado en dropdowns)
         self.current_row_field_values = {}
         self._dropdowns_sin_elegir = []
+        # Campos que el Excel pidio expresamente no completar (ver utils/omitir_campo.py)
+        self._campos_omitidos = []
         # Campos nuevos detectados durante la ejecución actual
         self._campos_nuevos_detectados = []
         # Callback para solicitar valores manuales (se inyecta desde la UI)
@@ -262,6 +274,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         # Dropdowns que quedaron en su placeholder: se reportan aparte para que no pasen
         # como "completados" en el Excel de resultado.
         self._dropdowns_sin_elegir = []
+        # Campos que el Excel pidio no completar en ESTA fila. Cada fila es un
+        # formulario distinto: sin este reset, omitir el concesionario en una URL lo
+        # omitiria en todas las siguientes.
+        self._campos_omitidos = []
         # Qué campos opcionales se completan en esta fila (se sortea uno por campo).
         self._decision_opcionales = {}
         self._campos_sin_mapeo_exitoso = []
@@ -557,7 +573,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             # lo que pasó. Se deja constancia del campo sin elegir y se sigue.
             if entry.get("tag") == "select" and self._is_placeholder_text(real_value):
                 self.current_row_field_values.pop(key, None)
-                if raw_id not in self._dropdowns_sin_elegir:
+                if raw_id not in self._dropdowns_sin_elegir and raw_id not in self._campos_omitidos:
                     self._dropdowns_sin_elegir.append(raw_id)
                 print(f"⚠ {raw_id}: el dropdown quedó en '{real_value}' (placeholder), "
                       f"no se eligió ninguna opción")
@@ -609,7 +625,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             except Exception:
                 expected = ""
             expected = "" if expected is None else str(expected).strip()
-            if not expected or self._is_placeholder_text(expected):
+            # La marca de omitir no es un valor pedido: comparar contra ella daría
+            # "dealer: pedido '-' pero quedó vacío", que es justo lo que se pidió.
+            if not expected or pide_omitir(expected) or self._is_placeholder_text(expected):
                 continue
             entry = _resolve(ids)
             if not entry:
@@ -628,12 +646,18 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         for fid in self._dropdowns_sin_elegir:
             mismatches.append(f"{fid}: quedó sin elegir (placeholder)")
 
+        # Lo omitido a pedido del Excel se deja dicho, pero NO ensucia la corrida: es
+        # lo que se pidió que pasara. Sin esta línea, una corrida con el CPF vacío a
+        # propósito se vería igual que una donde el CPF no se llegó a completar.
+        omitidos = (" (omitidos por el Excel: " + ", ".join(self._campos_omitidos) + ")"
+                    if self._campos_omitidos else "")
+
         if mismatches:
-            self._datos_vs_excel = " ; ".join(mismatches)
+            self._datos_vs_excel = " ; ".join(mismatches) + omitidos
             self._datos_mismatch = True
             print(f"⚠️ Datos distintos a los pedidos en el Excel: {self._datos_vs_excel}")
         else:
-            self._datos_vs_excel = "OK"
+            self._datos_vs_excel = "OK" + omitidos
             self._datos_mismatch = False
 
 
@@ -990,6 +1014,84 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 if fid and fid in fijos:
                     return fijos[fid]
         return ""
+
+    @staticmethod
+    def _usar_valor_fijo(field_id, field_value, ids_dinamicos):
+        """¿Corresponde usar el valor fijo de json/ids_dinamicos.json para este campo?
+
+        Solo si la celda del Excel vino vacía. **Lo que cargaste en el Excel gana
+        siempre**: es el invariante que ya declaraba el sembrador de autovalores y es lo
+        que espera cualquiera que escribe un dato en una celda.
+
+        Que no lo respetara se veía así: el campo `document` (el CPF de los forms
+        gm_frontend) tenía un autovalor sembrado por la app de cuando era un campo no
+        mapeado. El llenado lo consultaba ANTES del Excel y cortaba ahí, así que el CPF
+        cargado a mano no llegaba nunca al formulario.
+
+        Con la celda vacía el valor fijo sigue aplicándose, que es para lo que existe la
+        pestaña "IDs Dinámicos": campos que el Excel no cubre.
+        """
+        if str(field_value if field_value is not None else "").strip():
+            return False
+        return field_id in (ids_dinamicos or {})
+
+    @staticmethod
+    def _tipo_documento_brasil(*ids):
+        """¿Es un campo de documento brasileño? Devuelve cpf, cnpj, cep o None.
+
+        Recibe VARIOS ids a propósito: el del DOM y el del mapping. En los forms
+        gm_frontend el campo de CPF se llama `document`, donde no está la palabra
+        "cpf", así que mirando solo el id del DOM no se podría saber de qué se trata.
+        """
+        texto = " ".join(str(i or '').lower() for i in ids)
+        if "cnpj" in texto:
+            return "cnpj"
+        if any(x in texto for x in ("cep", "zip", "postal")):
+            return "cep"
+        if "cpf" in texto:
+            return "cpf"
+        return None
+
+    @staticmethod
+    def _normalizar_documento_brasil(tipo, valor):
+        """Deja el documento como lo espera el formulario: solo dígitos.
+
+        NO genera nada. Si la celda vino vacía, el campo queda vacío. Los documentos se
+        generan al crear el Excel (pestaña "Generar Excels con Datos"), nunca en medio
+        de una corrida: un documento generado en el momento hace que el lead viaje con
+        un número que no está en ninguna parte del Excel, y entonces el resultado no se
+        puede comparar contra lo que se pidió.
+        """
+        if valor is None:
+            return ""
+        crudo = str(int(valor)) if isinstance(valor, (int, float)) and not isinstance(valor, bool) else str(valor).strip()
+        digitos = "".join(c for c in crudo if c.isdigit())
+        if not digitos:
+            return crudo
+        largo = {"cnpj": 14, "cep": 8}.get(tipo, 11)
+        # Una celda numérica se come el cero inicial: CPF de 10 → 11, CNPJ de 13 → 14,
+        # CEP de 7 → 8. Es la causa más común de un documento rechazado. Solo cuando
+        # falta exactamente uno: rellenar más sería inventar datos.
+        if len(digitos) == largo - 1:
+            digitos = digitos.zfill(largo)
+        return digitos
+
+    def _pide_omitir_campo(self, field_id, field_value):
+        """¿El Excel pidió expresamente que este campo NO se complete?
+
+        Deja anotado cuál se omitió, porque después hay dos lugares que necesitan
+        saberlo: el chequeo de dropdowns en placeholder (un concesionario bloqueado no
+        es un dato que faltó) y el resumen del resultado.
+
+        Una celda vacía NO pide nada: el default sigue siendo completar como siempre.
+        """
+        if not pide_omitir(field_value):
+            return False
+        fid = str(field_id or '').strip()
+        if fid and fid not in self._campos_omitidos:
+            self._campos_omitidos.append(fid)
+            print(f"⊘ {fid}: el Excel pidió no completarlo")
+        return True
 
     def _resolve_field_value(self, form_data, field_config):
         """Resuelve el valor a usar para un campo según su mapping"""
@@ -1485,6 +1587,14 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             field_name = field_config.get("name", field_id)
             field_value = self._resolve_field_value(form_data, field_config)
 
+            # El Excel puede pedir que este campo no se complete: un opcional que se
+            # quiere probar vacío (CPF, CEP) o uno que el form tiene bloqueado (el
+            # concesionario de Cadillac). Va antes que todo lo demás para que no se
+            # genere un documento ni se toque el dropdown.
+            if self._pide_omitir_campo(field_id, field_value):
+                processed_ids.add(field_id)
+                return
+
             # Si el campo es select y tiene dependencias normales, usar la lógica robusta
             parent_id_normal = None
             for k, v in dependencies.items():
@@ -1507,9 +1617,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 if success:
                     processed_ids.add(field_id)
             else:
-                # Text, textarea, etc. Si es dinámico, completar con valor fijo si corresponde
+                # Text, textarea, etc. Si es dinámico, completar con valor fijo si corresponde.
+                # Ojo con el orden: esto va DESPUÉS de mirar el Excel, no antes. Un valor
+                # fijo solo se usa si la celda vino vacía.
                 ids_dinamicos = self._cargar_ids_dinamicos()
-                if field_id in ids_dinamicos:
+                if self._usar_valor_fijo(field_id, field_value, ids_dinamicos):
                     dynamic_candidates = self._resolve_dynamic_id_values(ids_dinamicos[field_id])
                     if dynamic_candidates:
                         fixed_value = dynamic_candidates[0]
@@ -1536,26 +1648,18 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 # Si no es dinámico, usar el valor normal.
                 # Acepta type="text", type="textarea" en el config, o detección automática
                 # por tag del DOM (input + textarea se tratan igual).
-                # Brasil: generar CPF/CNPJ/CEP solo si el Excel no trae un valor válido
+                # Brasil: el CPF/CNPJ/CEP sale del Excel, siempre. Se normaliza (solo
+                # dígitos, con el cero que Excel se come) pero no se genera: el
+                # generador vive en la pestaña "Generar Excels con Datos".
                 _fid_lower = field_id.lower()
                 _is_brasil = str(self.config.get("pais", "")).lower() in ("brasil", "brazil", "br")
-                if _is_brasil and any(x in _fid_lower for x in ("cpf", "cnpj", "cep", "zip", "postal")):
-                    _excel_empty = field_value in (None, "")
-                    if isinstance(field_value, (int, float)):
-                        _raw_str = str(int(field_value))
-                    else:
-                        _raw_str = str(field_value or "").strip()
-                    _digits = "".join(c for c in _raw_str if c.isdigit())
-                    _min_len = 14 if "cnpj" in _fid_lower else (8 if any(x in _fid_lower for x in ("cep", "zip", "postal")) else 11)
-                    # Excel numérico come el cero inicial: CPF de 10 → pad a 11, CNPJ de 13 → pad a 14, CEP de 7 → pad a 8
-                    if _digits and len(_digits) == _min_len - 1:
-                        _digits = _digits.zfill(_min_len)
-                    if _digits and len(_digits) >= _min_len:
-                        field_value = _digits
-                    else:
-                        generated = self._generate_brazil_document(field_id)
-                        if generated:
-                            field_value = generated
+                # Se le pasan los dos ids: el del DOM puede ser el alias ("document"),
+                # que no dice de qué documento se trata; el del mapping sí.
+                _ids_mapping = field_config.get("id")
+                _tipo_doc = self._tipo_documento_brasil(
+                    field_id, *(_ids_mapping if isinstance(_ids_mapping, list) else [_ids_mapping]))
+                if _is_brasil and _tipo_doc:
+                    field_value = self._normalizar_documento_brasil(_tipo_doc, field_value)
 
                 # Perú: sanitizar número de documento según tipo seleccionado.
                 # OJO con el id: en los forms visid / gm_front el 'ci' del mapping se resuelve
@@ -2464,6 +2568,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             field_id = field_config.get("__resolved_id") or field_config.get("id")
             field_name = field_config.get("name", field_id)
             field_value = self._resolve_field_value(form_data, field_config)
+
+            # Mismo criterio que en el llenado normal: si el Excel pidió omitirlo, no
+            # se toca. Son dos caminos distintos y los dos tienen que respetarlo.
+            if self._pide_omitir_campo(field_id, field_value):
+                continue
 
             if field_type != "select" and not field_value:
                 continue

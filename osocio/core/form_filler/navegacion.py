@@ -11,6 +11,8 @@ import time
 
 from selenium.webdriver.common.by import By
 
+from osocio.utils.scroll_dinamico import pre_scroll
+
 
 class NavegacionDOMMixin:
     """Scroll, iframes y popups. Se usa solo como mixin de BaseFormFiller."""
@@ -220,29 +222,18 @@ class NavegacionDOMMixin:
             return False
 
     def pre_scroll_for_dynamic_content(self):
-        """Realiza pre-scroll disparando eventos de scroll para activar IntersectionObserver y lazy-loading."""
-        total_height = self.driver.execute_script("return document.body.parentNode.scrollHeight")
-        viewport_height = self.driver.execute_script("return window.innerHeight")
-        scroll_step = max(viewport_height * 0.8, 800)
+        """Baja por la pagina para que cargue el contenido diferido.
 
+        La implementacion vive en osocio.utils.scroll_dinamico, compartida con Comparar
+        Dealers, Validacion de Campos y LambdaTest: eran cuatro copias de la misma funcion
+        y las cuatro arrastraban el mismo bug de medir la altura una sola vez.
+
+        Lo unico propio del motor son las esperas: en headless el navegador necesita mas
+        tiempo para procesar los eventos de scroll e inyectar lo que falta.
+        """
         headless = self.config.get('headless', False)
-        step_wait = 0.5 if headless else 0.15
-        end_wait = 1 if headless else 0.3
-
-        _SCROLL_JS = (
-            "window.scrollTo(0, arguments[0]);"
-            "window.dispatchEvent(new Event('scroll', {bubbles:true,cancelable:false}));"
-            "document.dispatchEvent(new Event('scroll', {bubbles:true}));"
+        pre_scroll(
+            self.driver,
+            step_wait=0.5 if headless else 0.15,
+            end_wait=1 if headless else 0.3,
         )
-
-        current_position = 0
-        while current_position < total_height:
-            self.driver.execute_script(_SCROLL_JS, current_position)
-            time.sleep(step_wait)
-            current_position += scroll_step
-
-        self.driver.execute_script(_SCROLL_JS, 999999)
-        time.sleep(end_wait)
-
-        self.driver.execute_script(_SCROLL_JS, 0)
-        time.sleep(end_wait)

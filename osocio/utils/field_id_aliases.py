@@ -25,6 +25,13 @@ VISID_ID_ALIASES = {
     "telephone":               "phone",
     "cellphone":               "phone",
     "ci":                      "document",
+    # Brasil sobre gm_frontend: el campo de CPF se llama "document" (el mismo id que
+    # usa el "ci" de Peru: es UN campo de documento, cambia que documento pide cada
+    # pais) y el de CEP se llama "zip_code". Sin estos dos, el CPF y el CEP del Excel
+    # no llegaban al formulario y los rellenaba el auto-descubrimiento con un valor
+    # inventado.
+    "cpf":                     "document",
+    "cep":                     "zip_code",
 }
 
 # Alias en el sentido inverso (id nuevo -> id clasico), para reglas escritas con el id nuevo

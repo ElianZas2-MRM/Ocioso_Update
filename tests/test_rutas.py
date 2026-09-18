@@ -131,7 +131,12 @@ def test_autonomous_runner_apunta_a_la_raiz():
     from osocio import autonomous_runner
     assert _es_la_raiz(autonomous_runner.PROJECT_ROOT)
     assert os.path.normpath(autonomous_runner.JSON_DIR) == os.path.normpath(paths.JSON_DIR)
-    assert os.path.normpath(autonomous_runner.RESULTS_DIR) == os.path.normpath(paths.RESULTS_DIR)
+    # Los resultados ya no salen de un RESULTS_DIR reexportado: desde que T1 y T3 se
+    # guardan por separado, el modulo elige la carpeta con results_dir_para(). Se verifica
+    # eso, que es lo que usa de verdad, y no que reexporte un nombre.
+    for es_t3 in (False, True):
+        carpeta = autonomous_runner.results_dir_para(es_t3)
+        assert carpeta.startswith(paths.RESULTS_DIR)
 
 
 def test_popup_logger_escribe_el_runtime_log_en_la_raiz():
