@@ -31,6 +31,7 @@ class ContextoFalso:
         por_defecto = {
             "var_t3": False,
             "var_t3_also": False,
+            "var_cdc_also": False,
             "var_sched_t3": False,
             "var_url_parallel": False,
             "url_max_var": 3,
@@ -144,3 +145,37 @@ def test_en_una_corrida_programada_manda_la_casilla_del_scheduler():
         ContextoFalso(var_t3=False, var_t3_also=True, var_sched_t3=False), scheduled=True
     )
     assert opciones.t3_also is False, "programada tiene que ignorar la casilla de pantalla"
+
+
+# --- Cadillac (CDC) --------------------------------------------------------------------
+#
+# Cadillac usa los mismos ids y el mismo generador de datos que Brasil, pero es T1: sus
+# resultados van a `resultados/t1/`, no a `t3/`. Por eso es una variante propia y no el
+# "T3 de Brasil", que es como habia quedado enredado.
+
+def test_cadillac_se_lee_de_su_casilla():
+    assert _leer_opciones(ContextoFalso(var_cdc_also=True), scheduled=False).cdc_also is True
+    assert _leer_opciones(ContextoFalso(var_cdc_also=False), scheduled=False).cdc_also is False
+
+
+def test_en_una_corrida_solo_t3_no_se_agrega_cadillac():
+    """Si la corrida entera es de formularios 2.0, sumarle Cadillac no tiene sentido:
+    son Excels distintos y Cadillac no es T3."""
+    opciones = _leer_opciones(ContextoFalso(var_t3=True, var_cdc_also=True), scheduled=False)
+    assert opciones.t3 is True
+    assert opciones.cdc_also is False
+
+
+def test_una_corrida_programada_todavia_no_corre_cadillac():
+    """La programacion no tiene casilla propia para Cadillac.
+
+    Leer la de la pantalla haria que una corrida automatica dependiera de lo que quedo
+    tildado a mano, que es el mismo problema que ya se cuido con los T3.
+    """
+    opciones = _leer_opciones(ContextoFalso(var_cdc_also=True), scheduled=True)
+    assert opciones.cdc_also is False
+
+
+def test_cadillac_es_una_opcion_congelada_mas():
+    campos = {f.name for f in dataclasses.fields(OpcionesEnvioLeads)}
+    assert "cdc_also" in campos
