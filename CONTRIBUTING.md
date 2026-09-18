@@ -226,6 +226,53 @@ hacer lo mismo. Antes de commitear, mirá `git status`.
 > originales; las gestiona GitHub y no se pueden pushear ni borrar. Si se filtra una
 > credencial, lo único que la vuelve inservible es **rotarla**.
 
+## Si clonaste antes de septiembre de 2026, no hagas `pull`
+
+El rewrite le cambió el SHA a **todos** los commits. Un clon viejo y el repo de hoy son, para
+git, dos historias que no se conocen. Si hacés `git pull`, git intenta fusionarlas y te
+devuelve esto en casi todos los archivos:
+
+```
+CONFLICT (add/add): Merge conflict in run.py
+CONFLICT (add/add): Merge conflict in requirements-dev.txt
+CONFLICT (add/add): Merge conflict in osocio/utils/scheduling.py
+...
+```
+
+**`add/add` es la firma del problema**: significa "este archivo lo crearon los dos lados por
+separado, no tienen ancestro en común". No es un conflicto de contenido — no hay nada que
+resolver a mano. Y como el merge deja los marcadores `<<<<<<< HEAD` adentro de los `.py`, la
+app deja de arrancar con un `SyntaxError`.
+
+Cómo salir, sin perder `venv/`, `drivers/` ni tus Excels (están ignorados, sobreviven a todo
+esto):
+
+```bash
+# 1. Cancelar el merge a medias
+git merge --abort
+
+# 2. ¿Tenías trabajo propio sin subir? Miralo antes de seguir
+git log --oneline origin/main..HEAD
+git status
+
+# 3. Si había algo, guardalo en una rama antes de tocar nada
+git branch respaldo-de-mi-clon-viejo
+
+# 4. Apuntar a la historia buena
+git fetch origin
+git checkout main
+git reset --hard origin/main
+```
+
+El paso 4 **descarta los cambios sin commitear**, así que mirá `git status` en el paso 2.
+
+Después de eso, borrá las ramas locales que sigan colgando de la historia vieja: si trabajás
+sobre una, el problema vuelve igual.
+
+> Si el trabajo que guardaste en el paso 3 lo querés traer, **no lo mergees**: sacá los
+> archivos sueltos (`git checkout respaldo-de-mi-clon-viejo -- ruta/al/archivo.py`) o copialos
+> a mano. Mergear vuelve a cruzar las dos historias.
+
 ## Al agregar código nuevo
 
 - **Un módulo nuevo** entra solo al `.exe`: el `.spec` usa `collect_submodules('osocio')`.
