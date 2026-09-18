@@ -148,6 +148,66 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 >
 > En ambos casos la solución es la misma: abrí **⚙ IDs Dinámicos → Campos detectados** y asignale valor(es) a esos campos.
 
+### De dónde sale el valor de cada campo
+
+Esta es **la regla que manda** sobre todo lo que sigue. Las secciones de abajo son el detalle de cada caso.
+
+Cuando la app llena un campo, busca el valor en este orden y se queda con el primero que encuentra:
+
+| # | De dónde | Cuándo aplica |
+|---|---|---|
+| 1 | **Valor forzado por formulario** | Solo para formularios puntuales que exigen un dato real (hoy: `clubemyev` fuerza el modelo). Está en el código, gana sobre todo. |
+| 2 | **La celda del Excel** | Siempre que tenga algo escrito. **Es lo que manda en el uso normal.** |
+| 3 | **IDs Dinámicos** (`json/ids_dinamicos.json`) | **Solo si la celda está vacía.** Para campos que el Excel no cubre. |
+| 4 | **Al azar** | Solo en `<select>`, y solo si no hubo nada de lo anterior: elige una opción válida del formulario. |
+| 5 | **Vacío** | Un campo de texto sin dato queda vacío. |
+
+> **Lo que escribiste en el Excel le gana a cualquier valor guardado.** Si un campo tiene dato en la celda, ni los IDs Dinámicos ni el sorteo lo pisan. (Esto estuvo roto hasta septiembre de 2026: un autovalor que la app se había guardado sola le ganaba al Excel, y el dato cargado a mano no llegaba nunca al formulario.)
+
+#### Qué significa dejar una celda vacía
+
+Depende del tipo de campo, y la diferencia importa:
+
+| | celda vacía | celda con un **`-`** |
+|---|---|---|
+| **Texto** (Nombre, CPF, CEP…) | queda vacío (o toma el valor de IDs Dinámicos, si hay uno) | queda vacío, y el resultado dice que fue a propósito |
+| **Dropdown** (Modelo, Concesionario…) | **elige una al azar** | no lo toca |
+| **Checkbox** | se marca si es obligatorio o de términos | — (usa `SI`/`NO`, ver abajo) |
+
+Por eso los Excels generados dejan **Modelo y Fecha estimada vacíos a propósito**: para que roten solos entre corridas.
+
+#### Campos que no están en el Excel
+
+El formulario puede tener campos que el mapping del país no conoce. Con esos la app hace algo distinto:
+
+- Solo toca los que están **visibles, habilitados, vacíos y no son de solo lectura**. Un buscador o un newsletter de la landing no son parte del lead.
+- Si hay un valor cargado en **IDs Dinámicos** para ese id, usa ese.
+- Si no, **inventa uno plausible** a partir de las reglas de validación del campo (su `pattern`, su `maxlength`, su etiqueta).
+- Si el campo es **obligatorio**, lo completa siempre. Si es **opcional**, lo echa a suerte (50%): un campo opcional a veces lo llena una persona y a veces no, y las corridas tienen que cubrir los dos casos. La decisión se toma una vez por campo y por fila, así que no queda lleno en un paso y vacío en el siguiente.
+
+> Si un campo importante te aparece con un valor inventado, es que **no está mapeado**. Agregalo desde la pestaña *IDs Dinámicos*, o —si el formulario usa un `id` distinto al del mapping— avisá para agregar el alias (ver abajo).
+
+#### Cuando el formulario llama distinto al campo
+
+El mapping de cada país está escrito con los `id` clásicos, pero los formularios nuevos (`gm_frontend`) usan otros. Si un `id` del mapping no aparece en el DOM, la app reintenta con su equivalente antes de dar el campo por ausente:
+
+| mapping | formularios nuevos |
+|---|---|
+| `firstname` | `name` |
+| `telephone` | `phone` |
+| `models` | `model` |
+| `ci` / `cpf` | `document` |
+| `cep` | `zip_code` |
+| `estimated-date-purchase` | `estimated-day` |
+
+La lista vive en `osocio/utils/field_id_aliases.py` y es la única fuente: si en una migración aparece un `id` nuevo, se agrega ahí. **Sin el alias, el campo cuenta como "no mapeado"** y le pasa lo de la sección anterior: se llena con un valor inventado y tu dato del Excel no se usa.
+
+#### Documentos de Brasil (CPF, CNPJ, CEP)
+
+- **No se generan durante la corrida.** Se generan al crear el Excel, en la pestaña *Generar Excels con Datos*, y la corrida usa exactamente lo que está ahí.
+- Lo único que les hace es **sacarles el formato** (puntos y guiones) y **devolverles el cero inicial** que Excel se come cuando la celda es numérica (CPF de 10 dígitos → 11, CNPJ de 13 → 14, CEP de 7 → 8).
+- Si el documento está mal cargado, **llega así al formulario y el formulario lo rechaza**. Eso es a propósito: taparlo con uno generado escondería el problema.
+
 ### Columnas especiales del Excel: marcar o no un checkbox
 
 Por defecto la app **marca todos los checkboxes** que reconoce (términos, privacidad, y cualquier otro que el formulario declare como obligatorio). Si un formulario tiene un checkbox **opcional** y querés decidir vos si se tilda o no, agregá una columna al Excel:

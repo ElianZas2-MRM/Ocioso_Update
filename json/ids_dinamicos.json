@@ -1130,18 +1130,6 @@
       "origen": "autovalor"
     },
     {
-      "id": "document",
-      "valor": [
-        "304593",
-        "6782860"
-      ],
-      "paises": [
-        "Brasil"
-      ],
-      "nombre_campo": "document",
-      "origen": "autovalor"
-    },
-    {
       "id": "vin-code",
       "valor": "LK6ADAE3XTB075680",
       "paises": [

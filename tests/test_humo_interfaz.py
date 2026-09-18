@@ -107,6 +107,10 @@ def _saltear_si_es_culpa_del_entorno(exc):
     es_del_entorno = (
         ("WindowsApps" in texto and ".tcl" in texto)
         or "Can't find a usable" in texto
+        # El mismo fallo a veces llega sin la ruta, con el mensaje pelado que describe el
+        # docstring de arriba. Sin esta linea el test FALLABA en vez de saltearse, que es
+        # peor: un test que falla cada tantas corridas se termina ignorando entero.
+        or texto.strip().lower() == "no error"
     )
     if es_del_entorno:
         pytest.skip(
