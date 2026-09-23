@@ -78,6 +78,8 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 4. **DISPOSITIVOS / NAVEGADORES**: selección múltiple — Chrome, Firefox, Edge, Mac LT, Android LT.
    - **⚡ Enviar en paralelo por URL (una sesión por URL)**: en vez de correr todo el Excel de un dispositivo como una sola sesión de a un lead por vez, abre **una ventana de navegador por cada fila** del Excel, todas al mismo tiempo — mucho más rápido para volúmenes grandes. Solo aplica a los navegadores locales (Chrome/Firefox/Edge); LambdaTest siempre corre como una sola sesión, ignora este modo. El campo **"máx. simultáneas"** (por defecto 6, límite real de 1 a 20) controla cuántas ventanas se abren a la vez para no saturar la PC. Este modo **se desactiva solo** cuando el envío lo dispara la Programación de Tests (ahí siempre corre secuencial, aunque hayas dejado la casilla tildada).
    - **🧩 Formularios T3 2.0 (usa los Excels …_T3)**: tildalo si los formularios de este envío son la versión nueva Adobe AEM — la app busca directamente los Excels con sufijo `_T3.xlsx` en vez de los normales. 
+   - **➕ Correr también los formularios T3 2.0 (AEM) del mercado**: corre el mercado normal **y además** su T3, en la misma tanda.
+   - **🚗 Correr también Cadillac (CDC) del mercado**: lo mismo para Cadillac. Ver *[Variantes de un mercado](#variantes-de-un-mercado-t3-y-cadillac)* acá abajo.
    - Al elegir **Mac LT** o **Android LT** aparece a la derecha el panel **CREDENCIALES LT** con los campos **User** y **Key** (la contraseña se ve enmascarada). Se auto-completa con lo que ya tengas guardado en `lambdatest_credentials.txt`; si lo cambiás y apretás **💾 Guardar**, se sobreescribe ese archivo. Es la única forma de cargar credenciales de LambdaTest desde la app (no hay otra pantalla de configuración para esto).
 
    ![Credenciales LT](docs/screenshots/06_credenciales_lt.png)
@@ -147,6 +149,35 @@ Arriba a la derecha de la pestaña Envío de Leads está el botón amarillo **�
 > - **Campos opcionales que quedaron vacíos** → la fila sigue PASS pero la columna Resultado suma el aviso *"campos opcionales vacíos (sin valor asignado): …"*, y el mail incluye la sección **⚠ CAMPOS SIN VALOR ASIGNADO** con línea y campos.
 >
 > En ambos casos la solución es la misma: abrí **⚙ IDs Dinámicos → Campos detectados** y asignale valor(es) a esos campos.
+
+### Variantes de un mercado: T3 y Cadillac
+
+Una **variante** es el mismo mercado corrido contra otro tipo de formulario. No es un mercado nuevo: comparte los ids, el mapeo de campos y el generador de datos. Lo único propio es contra qué formularios corre, y por eso se resuelve con un sufijo en el nombre del Excel.
+
+Hay dos:
+
+- **T3** — los formularios 2.0 de Adobe AEM. Se están migrando y van a terminar iguales a los T1, pero mientras tanto se corren aparte.
+- **CDC (Cadillac)** — usa los mismos ids que Brasil y el mismo generador de datos, pero **es T1**.
+
+Esa diferencia es la que decide dónde termina todo:
+
+| Excel de entrada | Resultado | En el mail |
+|---|---|---|
+| `…_Brasil_Chrome.xlsx` | `resultados/t1/resultados_Brasil_Chrome1.xlsx` | Brasil |
+| `…_Brasil_Chrome_T3.xlsx` | `resultados/`**`t3`**`/resultados_Brasil_T3_Chrome1.xlsx` | Brasil T3 |
+| `…_Brasil_Chrome_CDC.xlsx` | `resultados/`**`t1`**`/resultados_Brasil_CDC_Chrome1.xlsx` | CDC |
+
+**Cómo usarlo, en dos pasos:**
+
+1. En *Generar Excels con Datos*, tildá **🚗 Es Cadillac** (o **🧩 Es formulario T3 2.0**) antes de generar. El archivo sale con el sufijo correspondiente.
+2. En *Envío de Leads*, tildá **🚗 Correr también Cadillac (CDC) del mercado**. Por cada dispositivo elegido se agrega una sesión más, que usa ese Excel.
+
+> **La casilla se puede dejar tildada siempre.** Un mercado que no tiene Excel de esa variante simplemente no suma sesiones — no falla ni avisa de un "Excel faltante".
+
+Dos cosas para tener en cuenta:
+
+- **La programación todavía no corre Cadillac.** No tiene casilla propia en *Programación de Tests*, y leer la de la pantalla haría que una corrida automática dependiera de lo que quedaste tildando a mano. Si lo necesitás programado, hay que agregarle su casilla ahí.
+- **Cadillac no es "el T3 de Brasil".** Lo fue por un tiempo, porque era el único lugar donde se podía declarar una variante: en los mails, el T3 de Brasil aparecía como *"CADILLAC BR"*. Ahora son dos cosas distintas y el T3 de Brasil se llama *"Brasil T3"*.
 
 ### De dónde sale el valor de cada campo
 
@@ -427,13 +458,13 @@ Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo,
 **Paso a paso:**
 
 1. **MERCADO A GENERAR**: elegís un país a la vez (se genera un Excel por mercado).
-2. **DISPOSITIVOS PARA EL EXCEL**: selección múltiple (Chrome, Firefox, Edge, Mac LT, Android LT) — se genera un Excel por dispositivo elegido. Tildá **"Es formulario T3 2.0"** si el form es la versión nueva Adobe AEM (el archivo se genera con sufijo `_T3.xlsx`).
+2. **DISPOSITIVOS PARA EL EXCEL**: selección múltiple (Chrome, Firefox, Edge, Mac LT, Android LT) — se genera un Excel por dispositivo elegido. Tildá **"Es formulario T3 2.0"** si el form es la versión nueva Adobe AEM (sufijo `_T3.xlsx`), o **"Es Cadillac"** para la variante CDC (sufijo `_CDC.xlsx`). Son excluyentes: un Excel es de un mercado, o de su T3, o de Cadillac. Ver *[Variantes de un mercado](#variantes-de-un-mercado-t3-y-cadillac)*.
 3. **URLS A PROCESAR**: elegí el formato con las pills — **"URL Landing + URL Form"** (`url landing • url form • ...`) o **"Solo URL Form"** — y pegá las URLs en el cuadro de texto.
 4. Botones de la barra inferior:
    - **GENERAR EXCELS**: crea los archivos con datos aleatorios nuevos.
    - **REGENERAR DATOS**: recrea los datos manteniendo las URLs ya cargadas.
    - **Borrar URLs**: limpia el cuadro de texto.
-5. Los archivos quedan en `data/`, con el patrón `Lead_information_Formulario_<País>_<Dispositivo>.xlsx` (o `_T3.xlsx`).
+5. Los archivos quedan en `data/`, con el patrón `Lead_information_Formulario_<País>_<Dispositivo>.xlsx` (o `_T3.xlsx` / `_CDC.xlsx`).
 
 La parte de abajo de la pestaña, con el cuadro de URLs y la barra de acciones:
 

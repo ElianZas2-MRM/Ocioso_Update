@@ -13,6 +13,22 @@ el valor nuevo. Congelarlas acá rompería eso en silencio.
 """
 
 import os
+
+from osocio.core.variantes import CDC as VAR_CDC, T3 as VAR_T3, etiqueta_de_corrida
+
+
+def _variante_del_dispositivo(device_label):
+    """(dispositivo base, sufijo de variante) a partir de la etiqueta de la sesion.
+
+    La variante viaja pegada al dispositivo con un punto medio (Chrome·T3,
+    Chrome·CDC) porque esa etiqueta es lo que identifica una sesion de punta a
+    punta, incluido el reintento de fallidos.
+    """
+    for sufijo in (VAR_T3, VAR_CDC):
+        marca = "·" + sufijo.lstrip("_")
+        if device_label.endswith(marca):
+            return device_label[:-len(marca)], sufijo
+    return device_label, ""
 import threading
 import tkinter as tk
 from tkinter import messagebox
@@ -52,6 +68,7 @@ class ContextoEnvioLeads:
     # --- qué eligió el usuario ------------------------------------------------------
     var_t3: object                    # formularios 2.0 de AEM
     var_t3_also: object               # además de los normales
+    var_cdc_also: object              # ídem para Cadillac (CDC), que es T1
     var_sched_t3: object              # el equivalente para corridas programadas
     var_enviar_email: object
     var_modo_email: object            # "por_pais" | "consolidado"
@@ -108,6 +125,7 @@ class OpcionesEnvioLeads:
 
     t3: bool                 # correr los formularios 2.0 de AEM
     t3_also: bool            # ademas de los normales
+    cdc_also: bool           # correr tambien Cadillac (CDC). Es T1, no T3.
     url_paralelo: bool       # varias URLs a la vez
     url_max: int             # cuantas en paralelo (1 a 20)
     enviar_mail: bool
@@ -127,6 +145,10 @@ def _leer_opciones(ctx, scheduled):
         t3_also=(not t3) and bool(
             ctx.var_sched_t3.get() if scheduled else ctx.var_t3_also.get()
         ),
+        # Cadillac todavia no tiene casilla propia en la programacion, asi que en
+        # una corrida programada no entra. Se lee la de la pantalla solo en las
+        # manuales, por el mismo motivo que t3_also.
+        cdc_also=(not t3) and (not scheduled) and bool(ctx.var_cdc_also.get()),
         url_paralelo=bool(ctx.var_url_parallel.get()),
         url_max=max(1, min(20, int(ctx.url_max_var.get()))),
         enviar_mail=bool(ctx.var_enviar_email.get()),
@@ -153,7 +175,6 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         _APP_BASE,
         _BACKEND_IMPORT_ERROR,
         _ensure_serialized_setup,
-        _etiqueta_t3,
         _generic_excel_path_for,
         _lead_excel_name,
         get_button_icon,
@@ -203,7 +224,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             if not info:
                 continue
             original_excel = info.get("excel")
-            base_device = device_label[:-len("·T3")] if device_label.endswith("·T3") else device_label
+            base_device, _var_sesion = _variante_del_dispositivo(device_label)
             match = next((row for row in _RETRY_DEVICE_SUFFIX if row[0] == base_device), None)
             if not match:
                 continue
@@ -214,9 +235,10 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             by_pais.setdefault(r_pais, []).append({
                 "pais": r_pais, "dtype": r_dtype, "browser": r_browser, "device": device_label,
                 "excel": tmp_path,
-                # Mismo criterio que _t3_extra_sessions: sin esto, el T3 se fusiona
-                # con el mercado normal en el email y su resultado desaparece.
-                "email_label": _etiqueta_t3(r_pais) if device_label.endswith("·T3") else None,
+                # Sin esto la variante se fusiona con el mercado normal en el email
+                # y su resultado desaparece del reporte.
+                "email_label": etiqueta_de_corrida(r_pais, _var_sesion) if _var_sesion else None,
+                "variante": _var_sesion,
                 "_retry_source_excel": original_excel,
                 "_retry_row_map": row_map,
             })
@@ -240,25 +262,36 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     # manual (si no, el T3 nunca entraba en las corridas automáticas).
     t3_also = opciones.t3_also
 
-    def _t3_extra_sessions(sessions):
-        """Duplica cada sesión apuntando a su Excel …_T3.xlsx. Sólo devuelve las
-        que tienen Excel T3 real: un mercado sin form T3 no suma sesiones (y así
-        no dispara la validación de 'Excel faltante' más abajo)."""
-        if not t3_also:
+    def _sesiones_extra_de_variante(sessions, sufijo, activo):
+        """Duplica cada sesión apuntando al Excel de esa variante.
+
+        Sólo devuelve las que tienen Excel real: un mercado sin esa variante no suma
+        sesiones (y así no dispara la validación de 'Excel faltante' más abajo). Por
+        eso la casilla de Cadillac puede quedar tildada sin romper los mercados que no
+        lo tienen: simplemente no agregan nada.
+        """
+        if not activo:
             return []
+        etiqueta = sufijo.lstrip("_")
         extra = []
         for s in sessions:
-            t3_path = os.path.join(DATA_DIR, _lead_excel_name(s["pais"], s["device"], True))
-            if not os.path.exists(t3_path):
+            path = os.path.join(DATA_DIR, _lead_excel_name(s["pais"], s["device"], sufijo))
+            if not os.path.exists(path):
                 continue
             e = dict(s)
-            e["excel"] = t3_path
-            e["device"] = f"{s['device']}·T3"
-            # Nombre propio en el email: si va como "Brasil" se fusiona con el
-            # mercado normal y el resultado del T3 desaparece del reporte.
-            e["email_label"] = _etiqueta_t3(s["pais"])
+            e["excel"] = path
+            e["device"] = f"{s['device']}·{etiqueta}"
+            e["variante"] = sufijo
+            # Nombre propio en el email: si va como "Brasil" se fusiona con el mercado
+            # normal y el resultado de la variante desaparece del reporte.
+            e["email_label"] = etiqueta_de_corrida(s["pais"], sufijo)
             extra.append(e)
         return extra
+
+    def _sesiones_extra(sessions):
+        """Las sesiones que se suman por las variantes tildadas."""
+        return (_sesiones_extra_de_variante(sessions, VAR_T3, t3_also)
+                + _sesiones_extra_de_variante(sessions, VAR_CDC, opciones.cdc_also))
 
     def _sessions_for(pais):
         """Una sesión por dispositivo tildado. Cada dispositivo (desktop y LT)
@@ -272,8 +305,9 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             if not selected_disp.get(key):
                 continue
             path = gpath if shared else os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, t3))
-            out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix, "excel": path})
-        return out + _t3_extra_sessions(out)
+            out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix,
+                        "excel": path, "variante": VAR_T3 if t3 else ""})
+        return out + _sesiones_extra(out)
 
     if scheduled:
         disp_sched = scheduler_cfg_leads.get("dispositivo", "local")
@@ -301,7 +335,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                         "pais": p, "dtype": "desktop", "browser": nav, "device": suffix,
                         "excel": os.path.join(DATA_DIR, _lead_excel_name(p, suffix, t3))
                     })
-            sessions += _t3_extra_sessions(sessions)
+            sessions += _sesiones_extra(sessions)
             market_jobs.append((p, sessions))
             
         mercados_par = (p_mode == "paralelo") and (len(market_jobs) > 1)
@@ -1106,10 +1140,16 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 from osocio.core.generic_country_base import GenericCountryBase
                 _pausar = var_pausar_autenticacion.get()
                 _preview = bool(var_preview_navegador.get())
+                # La variante tiene que viajar como tal, no solo como ruta de Excel:
+                # de ella dependen en que carpeta caen los resultados (t1/ o t3/) y
+                # como se llama el archivo. Pisar EXCEL_PATH a secas alcanzaba para
+                # LEER el Excel correcto, pero dejaba al motor creyendo que era una
+                # corrida normal: los T3 lanzados desde la app escribian en t1/.
                 form = GenericCountryBase(pais, browser=browser, viewport="fullscreen",
                                           headless=False, background=background, is_scheduled=scheduled,
                                           pausar_autenticacion=_pausar,
-                                          preview_visible_browser=_preview)
+                                          preview_visible_browser=_preview,
+                                          excel_suffix=sess.get("variante", ""))
 
                 if excel:
                     form.EXCEL_PATH = excel  # ← una sesión por Excel generado

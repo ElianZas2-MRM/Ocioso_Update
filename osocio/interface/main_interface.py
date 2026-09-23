@@ -87,29 +87,38 @@ def _excel_path_for(pais):
     return os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_Chrome.xlsx")
 
 
-def _t3_tag(t3):
-    """Sufijo de nombre para Excels de formularios T3 2.0 (Adobe AEM)."""
-    return "_T3" if t3 else ""
+from osocio.core.variantes import CDC as VARIANTE_CDC, T3 as VARIANTE_T3
 
 
-# Marca de los formularios T3 en los reportes/emails. En el mail no se habla de "T3"
-# (no le dice nada a quien lo lee): se nombra la marca, que es lo que distingue.
-_T3_ETIQUETAS = {"Brasil": "CADILLAC BR"}
+def _tag_variante(variante):
+    """Sufijo de nombre del Excel segun la variante del mercado.
+
+    Acepta `True` como sinonimo de "_T3": asi lo llamaban los call sites de cuando T3
+    era la unica variante posible y el parametro era un booleano.
+    """
+    if variante is True:
+        return VARIANTE_T3
+    return str(variante or "")
 
 
 def _etiqueta_t3(pais):
-    """Nombre con el que aparece el formulario T3 de ese mercado en el email."""
-    return _T3_ETIQUETAS.get(pais, f"{pais} T3")
+    """Nombre con el que aparece el formulario T3 de ese mercado en el email.
+
+    Antes el T3 de Brasil se llamaba "CADILLAC BR". Cadillac dejo de ser el T3 de
+    Brasil: es una variante propia (_CDC) y es T1. Ver core/variantes.py.
+    """
+    from osocio.core.variantes import T3, etiqueta_de_corrida
+    return etiqueta_de_corrida(pais, T3)
 
 
-def _lead_excel_name(pais, suffix, t3=False):
-    """Nombre de archivo Excel de leads: …_{Pais}_{Dispositivo}[_T3].xlsx."""
-    return f"Lead_information_Formulario_{pais}_{suffix}{_t3_tag(t3)}.xlsx"
+def _lead_excel_name(pais, suffix, variante=""):
+    """Nombre de archivo Excel de leads: …_{Pais}_{Dispositivo}[_T3|_CDC].xlsx."""
+    return f"Lead_information_Formulario_{pais}_{suffix}{_tag_variante(variante)}.xlsx"
 
 
-def _generic_excel_path_for(pais, t3=False):
+def _generic_excel_path_for(pais, variante=""):
     """Excel único 'compartido' del país: mismos datos para todos los dispositivos."""
-    return os.path.join(DATA_DIR, _lead_excel_name(pais, "Generico", t3))
+    return os.path.join(DATA_DIR, _lead_excel_name(pais, "Generico", variante))
 
 
 def _device_excel_suffix(dev):
@@ -1614,6 +1623,17 @@ def iniciar_interfaz(autostart_leads=False):
     t3_also_hint = tk.Label(t3_also_row, text="", font=("Segoe UI", 8, "italic"),
                             bg=CARD_BG_COLOR, fg="#C5A9DF")
     t3_also_hint.pack(side="left", padx=(8, 0))
+
+    # Cadillac (CDC): usa los mismos ids y el mismo generador que Brasil, pero es T1.
+    # Igual que con T3, un mercado sin Excel …_CDC.xlsx simplemente no suma sesiones.
+    var_cdc_also = tk.BooleanVar(value=bool(_ui_prefs.get("cdc_also", False)))
+    cdc_also_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    cdc_also_row.pack(anchor="w", pady=(2, 0))
+    tk.Checkbutton(cdc_also_row, text="🚗 Correr también Cadillac (CDC) del mercado",
+                   variable=var_cdc_also,
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2").pack(side="left")
 
     def _refresh_t3_also_state(*_):
         """Con el modo 'sólo T3' activo, 'correr también T3' no tiene sentido: se apaga."""
@@ -3250,6 +3270,7 @@ def iniciar_interfaz(autostart_leads=False):
             var_preview_navegador=var_preview_navegador,
             var_sched_t3=var_sched_t3,
             var_t3=var_t3,
+            var_cdc_also=var_cdc_also,
             var_t3_also=var_t3_also,
             var_url_parallel=var_url_parallel,
             var_ver_navegador=var_ver_navegador,
@@ -4244,13 +4265,30 @@ def iniciar_interfaz(autostart_leads=False):
     tk.Label(excel_devices_card, text="Seleccioná en qué dispositivos vas a correr este form. El Excel generado incluirá una columna \"Dispositivo\" con esta info.",
              font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(0, 6))
 
-    # Formularios T3 2.0 (Adobe AEM): mismos datos, nombre …_T3.xlsx para diferenciar
+    # Variantes del mercado: mismos datos, otro nombre de archivo para diferenciarlas.
+    # Cadillac (CDC) usa los mismos ids y el mismo generador que Brasil, pero es T1.
+    var_gen_cdc = tk.BooleanVar(value=False)
+    tk.Checkbutton(excel_devices_card, text="🚗 Es Cadillac (genera los Excels como …_CDC.xlsx)", variable=var_gen_cdc,
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2").pack(anchor="w", padx=15, pady=(0, 2))
+
     var_gen_t3 = tk.BooleanVar(value=False)
     tk.Checkbutton(excel_devices_card, text="🧩 Es formulario T3 2.0 (genera los Excels como …_T3.xlsx)", variable=var_gen_t3,
                    bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
                    activebackground=CARD_BG_COLOR, activeforeground="white",
                    font=("Segoe UI", 8), cursor="hand2",
                    command=lambda: update_excel_calculation()).pack(anchor="w", padx=15, pady=(0, 6))
+
+    def _variante_a_generar():
+        """Que variante representan los checks de arriba.
+
+        Son excluyentes: un Excel es de un mercado, o de su T3, o de Cadillac. Si
+        estan los dos tildados manda Cadillac, que es la eleccion mas explicita.
+        """
+        if bool(var_gen_cdc.get()):
+            return VARIANTE_CDC
+        return VARIANTE_T3 if bool(var_gen_t3.get()) else ""
 
     # Documentos a generar (solo países con múltiples campos de documento, ej. Brasil).
     # Cada tipo tildado se genera en su columna (CPF/CNPJ/CEP); destildado → columna vacía.
@@ -4309,7 +4347,7 @@ def iniciar_interfaz(autostart_leads=False):
         is_pair_mode = (excel_url_mode.get() == "landing_form")
         effective_urls = num_urls // 2 if is_pair_mode else num_urls
 
-        t3 = bool(var_gen_t3.get())
+        t3 = _variante_a_generar()
 
         # Modo Excel compartido: un único Excel genérico para todos los dispositivos
         if excel_mode_holder[0] == "compartido":
@@ -4448,7 +4486,7 @@ def iniciar_interfaz(autostart_leads=False):
             import pandas as pd
             os.makedirs(DATA_DIR, exist_ok=True)
 
-            t3 = bool(var_gen_t3.get())
+            t3 = _variante_a_generar()
             doc_types = _selected_doc_types()  # None para países sin multi-documento
 
             # Modo compartido: un único Excel genérico con los mismos datos para todos.

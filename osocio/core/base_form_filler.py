@@ -50,6 +50,7 @@ from osocio.core.screenshot_manager import ScreenshotManager
 from osocio.core.browser.browser_actions import BrowserActions
 
 from osocio.utils.field_id_aliases import VISID_ID_ALIASES
+from osocio.core.variantes import basenames_de_corrida, es_t3
 from osocio.utils.omitir_campo import pide_omitir
 
 try:
@@ -194,7 +195,12 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.DATA_DIR = DATA_DIR
         # T1 y T3 escriben en carpetas distintas: antes caian juntas y por el nombre del
         # archivo no se podia saber de que tipo de formulario era cada corrida.
-        self.ES_T3 = bool(config.get('excel_suffix'))
+        #
+        # OJO: "es T3" NO es lo mismo que "tiene variante". Cadillac (_CDC) tiene sufijo
+        # y es T1. Preguntarlo con bool() mandaba sus resultados a resultados/t3/ sin que
+        # nadie se enterara. Ver core/variantes.py.
+        self.VARIANTE = config.get('excel_suffix') or ""
+        self.ES_T3 = es_t3(self.VARIANTE)
         self.RESULTADOS_DIR = results_dir_para(self.ES_T3)
         
         os.makedirs(self.DATA_DIR, exist_ok=True)
@@ -202,13 +208,16 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         
         # Configurar paths específicos del país
         self.EXCEL_PATH = os.path.join(self.DATA_DIR, config['excel_file'])
-        _b = str(config.get('browser', '') or '').strip().lower()
-        _dev = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}.get(_b, _b.capitalize() if _b else "")
-        _dev_sfx = f"_{_dev}" if _dev else ""
-        prefix = "Automatizacion_" if config.get('is_scheduled') else "resultados_"
-        prefix_ss = "Automatizacion_screenshots_" if config.get('is_scheduled') else "screenshots_"
-        self.SCREENSHOT_BASENAME = f"{prefix_ss}{config['pais']}{_dev_sfx}"
-        self.RESULTADOS_BASENAME = f"{prefix}{config['pais']}{_dev_sfx}"
+        # El nombre lo arma core/variantes.py, no este archivo: el ejecutor autonomo
+        # tiene que reconstruir exactamente el mismo para encontrar los resultados y
+        # adjuntarlos al mail. Estaba escrito en los dos lados y ya se desincronizaron
+        # una vez — el mail dejo de salir y nadie supo por que.
+        self.RESULTADOS_BASENAME, self.SCREENSHOT_BASENAME = basenames_de_corrida(
+            config['pais'],
+            config.get('browser', ''),
+            programada=bool(config.get('is_scheduled')),
+            sufijo=self.VARIANTE,
+        )
         
         # Inicializar en setup_directories_and_files
         self.SCREENSHOT_DIR = None

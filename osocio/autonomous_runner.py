@@ -18,6 +18,7 @@ from osocio.interface.helpers_interface import (
     enviar_email_resultados_consolidados,
     esperar_envios_pendientes,
 )
+from osocio.core.variantes import basenames_de_corrida, es_t3, etiqueta_de_corrida
 from osocio.utils.scheduling import cargar_programacion
 
 
@@ -149,7 +150,7 @@ def log_mensaje(mensaje):
         pass
 
 
-def _basenames_resultados(pais, navegador):
+def _basenames_resultados(pais, navegador, sufijo=""):
     """Prefijos reales de los archivos de una corrida PROGRAMADA.
 
     base_form_filler usa el prefijo "Automatizacion_" (no "resultados_") cuando
@@ -157,8 +158,7 @@ def _basenames_resultados(pais, navegador):
     Buscar con el prefijo equivocado hacía que el ejecutor nunca detectara los
     resultados y, por lo tanto, nunca enviara el email consolidado.
     """
-    dev = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}.get(navegador, "Chrome")
-    return f"Automatizacion_{pais}_{dev}", f"Automatizacion_screenshots_{pais}_{dev}"
+    return basenames_de_corrida(pais, navegador, programada=True, sufijo=sufijo)
 
 
 def obtener_numero_mayor_existente(pais, tipo="excel", basename=None, es_t3=False):
@@ -198,13 +198,14 @@ def _build_country_command(pais_nombre, env_param, excel_suffix=""):
             "--environment", env_param, "--scheduled"] + extra
 
 
-# En el email no se habla de "T3": se nombra la marca, que es lo que distingue.
-_T3_ETIQUETAS = {"Brasil": "CADILLAC BR"}
-
-
 def _etiqueta_t3(pais):
-    """Nombre con el que aparece el formulario T3 de ese mercado en el email."""
-    return _T3_ETIQUETAS.get(pais, f"{pais} T3")
+    """Nombre con el que aparece el formulario T3 de ese mercado en el email.
+
+    Antes el T3 de Brasil se llamaba "CADILLAC BR". Cadillac dejo de ser el T3 de
+    Brasil: es una variante propia (_CDC) y es T1. Ver core/variantes.py.
+    """
+    from osocio.core.variantes import T3
+    return etiqueta_de_corrida(pais, T3)
 
 
 def _t3_excel_existe(pais_nombre, navegador):
@@ -319,8 +320,8 @@ def ejecutar_tests(programacion):
                 runner_name = f"Formulario_{pais_nombre}_Main{excel_suffix}"
                 log_mensaje(f" Ejecutando {_idx}/{total_scripts}: {runner_name} ({env_param})")
 
-                base_excel, base_ss = _basenames_resultados(pais_nombre, navegador)
-                _es_t3 = bool(excel_suffix)
+                base_excel, base_ss = _basenames_resultados(pais_nombre, navegador, excel_suffix)
+                _es_t3 = es_t3(excel_suffix)
                 num_anterior_excel = obtener_numero_mayor_existente(pais_nombre, "excel", base_excel, es_t3=_es_t3)
                 num_anterior_screenshots = obtener_numero_mayor_existente(pais_nombre, "screenshots", base_ss, es_t3=_es_t3)
                 log_mensaje(f"    Números previos - Excel: {num_anterior_excel}, Screenshots: {num_anterior_screenshots}")
@@ -346,7 +347,7 @@ def ejecutar_tests(programacion):
                         excel_file = os.path.join(_carpeta, f"{base_excel}{num_nuevo_excel}.xlsx")
                         screenshots_dir = os.path.join(_carpeta, f"{base_ss}{num_nuevo_excel}")
                         resultado = {
-                            "pais": _etiqueta_t3(pais_nombre) if excel_suffix else pais_nombre,
+                            "pais": etiqueta_de_corrida(pais_nombre, excel_suffix),
                             "navegador": navegador,
                             "viewport": viewport_nombres.get(viewport, viewport),
                             "estado": "completado" if result.returncode == 0 else "con_errores",
