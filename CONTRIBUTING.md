@@ -213,13 +213,29 @@ símbolos públicos **existan**.
 ## Cosas que no van al repo
 
 `resultados/`, `temporales/`, `drivers/`, `venv/`, `build/`, `dist/` y los Excel de datos
-están en `.gitignore`.
+están en `.gitignore`. Además, **por nombre y estén donde estén**: los binarios de driver
+(`chromedriver*`, `geckodriver*`, `msedgedriver*`…), cualquier `.exe`, y los documentos de
+Office (`.docx`, `.pptx`). Esos van a SharePoint; en `docs/` quedan los links.
 
 Prestá atención a `dist/` en particular. El repo llegó a pesar **388 MB** porque en su
 momento se commitearon el `.exe`, un `.zip` de 91 MB, un `.rar` de 83 MB y cuatro copias de
 los drivers. En septiembre de 2026 se reescribió el historial para purgarlos y quedó en
-**13 MB**, pero eso obligó a que todos re-clonaran: no hay forma de deshacerlo sin volver a
+**14 MB**, pero eso obligó a que todos re-clonaran: no hay forma de deshacerlo sin volver a
 hacer lo mismo. Antes de commitear, mirá `git status`.
+
+**Por qué esto además se testea.** `.gitignore` solo es la primera capa: se puede saltear
+con `git add -f`, a veces sin querer, y hasta ahora solo cubría la *carpeta* `drivers/` —
+un binario suelto en cualquier otro lado entraba igual, que es exactamente como llegaron
+los 86 MB que hubo que purgar. `test_nada_pesado_versionado.py` mira lo que está realmente
+versionado: ningún driver, ningún formato que git no pueda delta-comprimir, y nada de más
+de 2 MB.
+
+Un `.docx` o un `.zip` ya vienen comprimidos, así que git no puede guardar solo las
+diferencias entre versiones: **cada versión pesa entera y para siempre**. Por eso un
+archivo así es mucho más caro que su tamaño. Y una vez adentro no sale sin otro rewrite.
+
+> Si alguna vez hace falta subir uno a propósito: `git add -f <archivo>` y sumalo a
+> `PERMITIDOS` en ese test, con el motivo escrito.
 
 > Una advertencia que quedó de ahí: reescribir el historial **no saca un secreto de
 > GitHub**. El repo tiene refs `refs/pull/*`, una por PR, que apuntan a los commits
