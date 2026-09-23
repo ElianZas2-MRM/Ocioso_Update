@@ -78,3 +78,29 @@ log/
 # desfasados cada vez que Chrome/Edge se autoactualizaban y habia que reemplazar a mano.
 drivers/
 json/driver_check.json
+
+# Binarios de driver, esten donde esten. Hasta ahora solo se ignoraba la carpeta
+# drivers/, asi que una copia suelta en la raiz o dentro de otra carpeta se podia
+# commitear sin que nada avisara — que es exactamente como llegaron los ~86 MB que
+# hubo que purgar del historial en septiembre de 2026.
+chromedriver*
+geckodriver*
+msedgedriver*
+operadriver*
+IEDriverServer*
+selenium-manager*
+*.exe
+
+# Documentos pesados (guias, presentaciones). Van a SharePoint; en docs/ quedan los
+# links. Un .docx ya viene comprimido, asi que git no lo puede delta-comprimir: cada
+# version que se suba pesa entera y para siempre. El Guia_de_Uso_Osocio.docx que quedo
+# en el historial son 12 versiones y 3,7 MB que ya no se pueden sacar sin volver a
+# reescribir el historial, y eso obliga a todo el equipo a re-clonar.
+#
+# OJO: esto NO desversiona lo que ya estaba trackeado. Queda uno adentro de
+# docs/como_se_usa/, y sigue igual: .gitignore solo aplica a archivos nuevos.
+# Si alguna vez hace falta subir uno a proposito: git add -f <archivo>
+*.docx
+*.pptx
+*.dotx
+*.potx
