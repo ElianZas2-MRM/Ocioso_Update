@@ -293,6 +293,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self._campos_dropdown_no_encontrados = []
         self._campos_sin_valor_asignado = []
         self._ids_din_cb_map = None  # re-elige SI/NO random por fila si hay varios valores
+        # Checkboxes que el form marcó con error en el envío vacío (requeridos por JS).
+        self._checkboxes_con_error = set()
         self._current_step = 1
         self._ty_cta = ""
         self._link_issue = "-"
@@ -1872,6 +1874,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     except Exception:
                         self.driver.execute_script("arguments[0].click();", boton_accion)
                     time.sleep(1.0)  # Esperar a que se pinten/activen los mensajes de error
+                    self._detectar_checkboxes_con_error()
 
                     # Captura de errores de este paso. En el paso 1 de un form de un solo paso ya
                     # la tomó el bloque de "click enviar vacío" (_errores_ss_taken).
@@ -4420,6 +4423,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 except Exception:
                                     self.driver.execute_script("arguments[0].click();", _btn_empty)
                                 time.sleep(0.5)  # esperar a que JS muestre los errores de validación
+                                self._detectar_checkboxes_con_error()
                                 if self.screenshot_manager:
                                     self.screenshot_manager.take_form_screenshot(ss_counter, "errores", full_page=True)
                                     self._errores_ss_taken = True

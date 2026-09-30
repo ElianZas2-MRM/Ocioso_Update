@@ -438,7 +438,95 @@ class CasillasYRadiosMixin:
                     for v in cls._identificadores_checkbox(name_attr, checkbox_id)),
                    default=0)
 
+    # Checkboxes que el form marcó con error de validación. Es la única señal de que un
+    # checkbox es obligatorio cuando el HTML no lo dice: jquery-validation (gm_forms) los
+    # valida por JS sin atributo required. Caso acdelco Chile: `product_info` no tiene
+    # required y el form no se envía sin él ("Seleccione el checkbox.").
+    _CHECKBOXES_CON_ERROR_JS = r"""
+        var out = [];
+        var tieneTexto = /[A-Za-zÀ-ÿ]{3,}/;
+        function visible(el) {
+            if (!el || !el.isConnected || !el.getClientRects().length) return false;
+            var cs = getComputedStyle(el);
+            return cs.display !== 'none' && cs.visibility !== 'hidden';
+        }
+        function esError(el) {
+            return visible(el) && tieneTexto.test(el.textContent || '');
+        }
+        document.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            if (cb.checked) return;
+            var clave = cb.id || cb.getAttribute('name') || '';
+            if (!clave) return;
+            var conError = false;
+            // 1) El propio input marcado como inválido por el validador.
+            if ((cb.getAttribute('aria-invalid') || '').toLowerCase() === 'true') conError = true;
+            if (!conError && /(^|\s)(is-invalid|invalid|error)(\s|$)/.test(cb.className || '')) conError = true;
+            // 2) aria-describedby apunta a un mensaje de error visible (jquery-validation).
+            if (!conError) {
+                (cb.getAttribute('aria-describedby') || '').split(/\s+/).forEach(function (id) {
+                    if (!id || conError) return;
+                    var el = document.getElementById(id);
+                    if (el && /error|invalid/i.test((el.className || '') + ' ' + id) && esError(el)) conError = true;
+                });
+            }
+            // 3) Mensaje de error en el contenedor propio del checkbox: se sube mientras el
+            //    contenedor no tenga otro campo, para no adjudicarle el error de un vecino.
+            if (!conError) {
+                var scope = cb, p = cb.parentElement;
+                for (var i = 0; i < 4 && p; i++) {
+                    if (p.querySelectorAll('input:not([type="hidden"]),select,textarea').length > 1) break;
+                    scope = p;
+                    p = p.parentElement;
+                }
+                var errs = scope.querySelectorAll('[class*="error"],[class*="invalid"],[role="alert"]');
+                for (var j = 0; j < errs.length && !conError; j++) {
+                    var e = errs[j];
+                    if (e.contains(cb) || e.tagName === 'LABEL') continue;
+                    if (esError(e)) conError = true;
+                }
+            }
+            if (conError) {
+                if (cb.id) out.push(cb.id.toLowerCase());
+                if (cb.getAttribute('name')) out.push(cb.getAttribute('name').toLowerCase());
+            }
+        });
+        return out;
+    """
+
+    def _detectar_checkboxes_con_error(self):
+        """Ids/names (en minúsculas) de los checkboxes sin marcar que muestran error de
+        validación en el contexto actual. Se acumulan por fila en
+        `_checkboxes_con_error` para que el marcado los trate como requeridos."""
+        try:
+            claves = set(self.driver.execute_script(self._CHECKBOXES_CON_ERROR_JS) or [])
+        except Exception as e:
+            print(f" Detección de checkboxes con error: no crítico — {e}")
+            return set()
+        if claves:
+            acumulado = getattr(self, "_checkboxes_con_error", None)
+            if acumulado is None:
+                acumulado = self._checkboxes_con_error = set()
+            nuevas = claves - acumulado
+            acumulado.update(claves)
+            if nuevas:
+                print(f" Checkboxes con error de validación (se tratan como requeridos): {sorted(nuevas)}")
+        return claves
+
     def _mark_required_checkboxes(self):
+        marked = self._mark_required_checkboxes_pasada()
+        # Un checkbox puede habilitar a otro: en acdelco Chile `terms` está disabled hasta
+        # que se marca `product_info`. Los deshabilitados se saltean en la primera pasada,
+        # así que si se marcó algo se hace una segunda para los que recién se habilitaron.
+        if marked:
+            marked += self._mark_required_checkboxes_pasada()
+        return marked
+
+    def _mark_required_checkboxes_pasada(self):
+        # Los errores del "click enviar vacío" siguen pintados al llegar acá; se vuelven a
+        # leer por si este paso/reintento no pasó por el click que los registra.
+        self._detectar_checkboxes_con_error()
+        con_error = getattr(self, "_checkboxes_con_error", None) or set()
+
         candidates = []
 
         try:
@@ -457,12 +545,15 @@ class CasillasYRadiosMixin:
                 value_attr = (checkbox.get_attribute("value") or "").strip()
 
                 is_known = self._es_checkbox_conocido(name_attr, checkbox_id)
+                # Requerido por JS: el envío vacío le pintó un error de validación.
+                is_js_required = any(v in con_error
+                                     for v in self._identificadores_checkbox(name_attr, checkbox_id))
 
                 # El Excel manda: una columna con el name/id del checkbox y valor SI/NO
                 pref = self._checkbox_pref_for(lower_name, checkbox_id)
                 accion = self._decidir_marca_checkbox(
                     is_known=is_known,
-                    is_required=is_html_required or is_aria_required,
+                    is_required=is_html_required or is_aria_required or is_js_required,
                     pref=pref,
                     tiene_identificador=bool(lower_name or checkbox_id),
                 )
