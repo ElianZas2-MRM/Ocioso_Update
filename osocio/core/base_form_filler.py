@@ -329,6 +329,8 @@ class BaseFormFiller:
         self._campos_dropdown_no_encontrados = []
         self._campos_sin_valor_asignado = []
         self._ids_din_cb_map = None  # re-elige SI/NO random por fila si hay varios valores
+        # Checkboxes que el form marcó con error en el envío vacío (requeridos por JS).
+        self._checkboxes_con_error = set()
         self._current_step = 1
         self._ty_cta = ""
         self._link_issue = "-"
@@ -2235,6 +2237,7 @@ class BaseFormFiller:
                     except Exception:
                         self.driver.execute_script("arguments[0].click();", boton_accion)
                     time.sleep(1.0)  # Esperar a que se pinten/activen los mensajes de error
+                    self._detectar_checkboxes_con_error()
 
                     # Captura de errores de este paso. En el paso 1 de un form de un solo paso ya
                     # la tomó el bloque de "click enviar vacío" (_errores_ss_taken).
@@ -5407,7 +5410,95 @@ class BaseFormFiller:
             return "skip"
         return "mark" if (is_known or is_required) else "skip"
 
+    # Checkboxes que el form marcó con error de validación. Es la única señal de que un
+    # checkbox es obligatorio cuando el HTML no lo dice: jquery-validation (gm_forms) los
+    # valida por JS sin atributo required. Caso acdelco Chile: `product_info` no tiene
+    # required y el form no se envía sin él ("Seleccione el checkbox.").
+    _CHECKBOXES_CON_ERROR_JS = r"""
+        var out = [];
+        var tieneTexto = /[A-Za-zÀ-ÿ]{3,}/;
+        function visible(el) {
+            if (!el || !el.isConnected || !el.getClientRects().length) return false;
+            var cs = getComputedStyle(el);
+            return cs.display !== 'none' && cs.visibility !== 'hidden';
+        }
+        function esError(el) {
+            return visible(el) && tieneTexto.test(el.textContent || '');
+        }
+        document.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            if (cb.checked) return;
+            var clave = cb.id || cb.getAttribute('name') || '';
+            if (!clave) return;
+            var conError = false;
+            // 1) El propio input marcado como inválido por el validador.
+            if ((cb.getAttribute('aria-invalid') || '').toLowerCase() === 'true') conError = true;
+            if (!conError && /(^|\s)(is-invalid|invalid|error)(\s|$)/.test(cb.className || '')) conError = true;
+            // 2) aria-describedby apunta a un mensaje de error visible (jquery-validation).
+            if (!conError) {
+                (cb.getAttribute('aria-describedby') || '').split(/\s+/).forEach(function (id) {
+                    if (!id || conError) return;
+                    var el = document.getElementById(id);
+                    if (el && /error|invalid/i.test((el.className || '') + ' ' + id) && esError(el)) conError = true;
+                });
+            }
+            // 3) Mensaje de error en el contenedor propio del checkbox: se sube mientras el
+            //    contenedor no tenga otro campo, para no adjudicarle el error de un vecino.
+            if (!conError) {
+                var scope = cb, p = cb.parentElement;
+                for (var i = 0; i < 4 && p; i++) {
+                    if (p.querySelectorAll('input:not([type="hidden"]),select,textarea').length > 1) break;
+                    scope = p;
+                    p = p.parentElement;
+                }
+                var errs = scope.querySelectorAll('[class*="error"],[class*="invalid"],[role="alert"]');
+                for (var j = 0; j < errs.length && !conError; j++) {
+                    var e = errs[j];
+                    if (e.contains(cb) || e.tagName === 'LABEL') continue;
+                    if (esError(e)) conError = true;
+                }
+            }
+            if (conError) {
+                if (cb.id) out.push(cb.id.toLowerCase());
+                if (cb.getAttribute('name')) out.push(cb.getAttribute('name').toLowerCase());
+            }
+        });
+        return out;
+    """
+
+    def _detectar_checkboxes_con_error(self):
+        """Ids/names (en minúsculas) de los checkboxes sin marcar que muestran error de
+        validación en el contexto actual. Se acumulan por fila en
+        `_checkboxes_con_error` para que el marcado los trate como requeridos."""
+        try:
+            claves = set(self.driver.execute_script(self._CHECKBOXES_CON_ERROR_JS) or [])
+        except Exception as e:
+            print(f" Detección de checkboxes con error: no crítico — {e}")
+            return set()
+        if claves:
+            acumulado = getattr(self, "_checkboxes_con_error", None)
+            if acumulado is None:
+                acumulado = self._checkboxes_con_error = set()
+            nuevas = claves - acumulado
+            acumulado.update(claves)
+            if nuevas:
+                print(f" Checkboxes con error de validación (se tratan como requeridos): {sorted(nuevas)}")
+        return claves
+
     def _mark_required_checkboxes(self):
+        marked = self._mark_required_checkboxes_pasada()
+        # Un checkbox puede habilitar a otro: en acdelco Chile `terms` está disabled hasta
+        # que se marca `product_info`. Los deshabilitados se saltean en la primera pasada,
+        # así que si se marcó algo se hace una segunda para los que recién se habilitaron.
+        if marked:
+            marked += self._mark_required_checkboxes_pasada()
+        return marked
+
+    def _mark_required_checkboxes_pasada(self):
+        # Los errores del "click enviar vacío" siguen pintados al llegar acá; se vuelven a
+        # leer por si este paso/reintento no pasó por el click que los registra.
+        self._detectar_checkboxes_con_error()
+        con_error = getattr(self, "_checkboxes_con_error", None) or set()
+
         known_names = {
             "terms",
             "terms-and-conditions",    # visid standard
@@ -5452,12 +5543,17 @@ class BaseFormFiller:
                 value_attr = (checkbox.get_attribute("value") or "").strip()
 
                 is_known = lower_name in known_names
+                # Requerido por JS: el envío vacío le pintó un error de validación.
+                is_js_required = bool(
+                    (lower_name and lower_name in con_error)
+                    or (checkbox_id and checkbox_id.lower() in con_error)
+                )
 
                 # El Excel manda: una columna con el name/id del checkbox y valor SI/NO
                 pref = self._checkbox_pref_for(lower_name, checkbox_id)
                 accion = self._decidir_marca_checkbox(
                     is_known=is_known,
-                    is_required=is_html_required or is_aria_required,
+                    is_required=is_html_required or is_aria_required or is_js_required,
                     pref=pref,
                     tiene_identificador=bool(lower_name or checkbox_id),
                 )
@@ -5986,6 +6082,100 @@ class BaseFormFiller:
                 print(f"  → No se pudo rellenar '{label}': {e}")
 
         return filled_any
+
+    # Valor actual de los campos de texto editables y visibles, por id y por name.
+    _VALORES_TEXTO_VISIBLES_JS = r"""
+        var out = {};
+        var sel = 'input:not([type]),input[type="text"],input[type="email"],input[type="tel"],' +
+                  'input[type="number"],input[type="search"],input[type="url"],textarea';
+        document.querySelectorAll(sel).forEach(function (el) {
+            if (el.disabled || el.readOnly || !el.getClientRects().length) return;
+            var v = String(el.value || '').trim();
+            if (el.id) out[el.id] = v;
+            var n = el.getAttribute('name');
+            if (n && !(n in out)) out[n] = v;
+        });
+        return out;
+    """
+
+    @staticmethod
+    def _campos_llenados_quedaron_vacios(ids_llenados, valores_dom, minimo=2):
+        """True si el form se reseteó después de llenarlo: de los campos de texto que el
+        robot llenó y que siguen visibles, hay al menos `minimo` y TODOS están vacíos.
+        Lógica pura (testeable sin navegador). Con menos de `minimo` campos no se opina:
+        un campo solo vacío puede ser un opcional o uno que el form limpió a propósito."""
+        presentes = [valores_dom[i] for i in ids_llenados if i in valores_dom]
+        if len(presentes) < minimo:
+            return False
+        return all(not str(v or "").strip() for v in presentes)
+
+    def _ids_llenados_paso_actual(self):
+        paso = getattr(self, "_current_step", 1)
+        prefijo = f"Paso{paso}::"
+        return [k[len(prefijo):] for k in (getattr(self, "current_row_field_values", None) or {})
+                if k.startswith(prefijo)]
+
+    def _form_se_reseteo_tras_llenar(self):
+        """¿Los campos que se acaban de llenar quedaron vacíos? Pasa cuando el form se
+        re-renderiza o recarga solo (p. ej. tras el error de event_id, o si terminaba de
+        inicializarse mientras se llenaba) y borra todo antes del envío."""
+        ids = self._ids_llenados_paso_actual()
+        if not ids:
+            return False
+        try:
+            valores = self.driver.execute_script(self._VALORES_TEXTO_VISIBLES_JS) or {}
+        except Exception:
+            return False
+        return self._campos_llenados_quedaron_vacios(ids, valores)
+
+    def _rellenar_si_form_se_reseteo(self, form_data, es_libro_reclamaciones=False):
+        """Si el form borró lo que se llenó, espera a que se estabilice y lo vuelve a
+        llenar (una sola vez). Devuelve el nombre de la captura 'completado' nueva, o
+        None si no hizo falta rellenar."""
+        if not self._form_se_reseteo_tras_llenar():
+            return None
+        print("  ↺ El formulario se vació después de llenarlo (se re-renderizó/recargó). "
+              "Esperando a que se estabilice y rellenando...")
+        try:
+            WebDriverWait(self.driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+        except Exception:
+            pass
+        time.sleep(1.5)
+        if es_libro_reclamaciones:
+            return self._fill_libro_reclamaciones_direct(form_data)
+        return self.fill_form_fields(form_data)
+
+    def _esperar_recarga_tras_event_id(self, use_iframe, expected_form_url, timeout=12):
+        """Tras el error de event_id el form se recarga solo. Espera a que esa recarga
+        haya pasado de verdad (los campos que se llenaron vuelven a estar vacíos en un
+        documento ya cargado) en vez de un sleep fijo: si se rellena antes de la recarga,
+        la recarga borra todo y el reintento se envía vacío. Si el form nunca se resetea,
+        se sigue igual al agotar el timeout (mismo comportamiento que antes)."""
+        fin = time.time() + timeout
+        time.sleep(1)
+        while time.time() < fin:
+            try:
+                if use_iframe:
+                    self.driver.switch_to.default_content()
+                    _ifr, _ = self._pick_gm_iframe(
+                        self.driver.find_elements(By.TAG_NAME, "iframe"),
+                        expected_url=expected_form_url)
+                    if _ifr is None:
+                        time.sleep(0.5)
+                        continue
+                    self.driver.switch_to.frame(_ifr)
+                listo = self.driver.execute_script("return document.readyState") == "complete"
+                if listo and self._form_se_reseteo_tras_llenar():
+                    print("  ✓ Formulario recargado tras error event_id")
+                    time.sleep(1)  # dejar que termine de montar dropdowns/validaciones
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.5)
+        print(f"  ⚠ No se detectó la recarga del formulario en {timeout}s; se rellena igual")
+        return False
 
     def _detect_event_id_error(self):
         """Detecta el cartel de error 'Lo siento / Ocurrió un inconveniente' (falta de event_id)."""
@@ -6570,6 +6760,7 @@ class BaseFormFiller:
                                 except Exception:
                                     self.driver.execute_script("arguments[0].click();", _btn_empty)
                                 time.sleep(0.5)  # esperar a que JS muestre los errores de validación
+                                self._detectar_checkboxes_con_error()
                                 if self.screenshot_manager:
                                     self.screenshot_manager.take_form_screenshot(ss_counter, "errores", full_page=True)
                                     self._errores_ss_taken = True
@@ -6589,6 +6780,13 @@ class BaseFormFiller:
                             form_completado_name = self.fill_form_fields(form_data)
                             self._log(f"fill_form_fields() OK — fila {i}")
 
+                        # 4b. Si el form se re-renderizó mientras se llenaba y borró todo, se
+                        #     rellena antes de enviar (si no, se envía vacío y falla la validación).
+                        if not (self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
+                            _relleno = self._rellenar_si_form_se_reseteo(form_data, _is_libro_reclamaciones)
+                            if _relleno:
+                                form_completado_name = _relleno
+
                         # 5. Enviar y verificar formulario
                         result_text, ty_page_name = self.submit_and_verify_form(ss_counter, expected_form_url)
 
@@ -6604,7 +6802,9 @@ class BaseFormFiller:
                             _event_id_retry_done = True
                             print(f"  ↺ Error event_id (intento 1). Esperando recarga automática del formulario...")
                             try:
-                                time.sleep(4)
+                                # Esperar la recarga real del form (antes: sleep(4) fijo, que a
+                                # veces rellenaba ANTES de la recarga y ésta borraba todo).
+                                self._esperar_recarga_tras_event_id(use_iframe, expected_form_url)
                                 if use_iframe:
                                     _ev_iframe = self.find_and_position_to_form(expected_form_url)
                                     if _ev_iframe:
@@ -6616,6 +6816,9 @@ class BaseFormFiller:
                                     form_completado_name = self._fill_libro_reclamaciones_direct(form_data)
                                 else:
                                     form_completado_name = self.fill_form_fields(form_data)
+                                _relleno = self._rellenar_si_form_se_reseteo(form_data, _is_libro_reclamaciones)
+                                if _relleno:
+                                    form_completado_name = _relleno
                                 if self.screenshot_manager:
                                     self.screenshot_manager.take_form_screenshot(ss_counter, "completado_intento2", full_page=True)
                                     print("Captura formulario completo (intento 2 tras error event_id)")
