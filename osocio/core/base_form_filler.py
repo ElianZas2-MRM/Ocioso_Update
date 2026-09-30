@@ -293,6 +293,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self._campos_dropdown_no_encontrados = []
         self._campos_sin_valor_asignado = []
         self._ids_din_cb_map = None  # re-elige SI/NO random por fila si hay varios valores
+        # Checkboxes que el form marcó con error en el envío vacío (requeridos por JS).
+        self._checkboxes_con_error = set()
         self._current_step = 1
         self._ty_cta = ""
         self._link_issue = "-"
@@ -1872,6 +1874,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     except Exception:
                         self.driver.execute_script("arguments[0].click();", boton_accion)
                     time.sleep(1.0)  # Esperar a que se pinten/activen los mensajes de error
+                    self._detectar_checkboxes_con_error()
 
                     # Captura de errores de este paso. En el paso 1 de un form de un solo paso ya
                     # la tomó el bloque de "click enviar vacío" (_errores_ss_taken).
@@ -3837,6 +3840,100 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
         return filled_any
 
+    # Valor actual de los campos de texto editables y visibles, por id y por name.
+    _VALORES_TEXTO_VISIBLES_JS = r"""
+        var out = {};
+        var sel = 'input:not([type]),input[type="text"],input[type="email"],input[type="tel"],' +
+                  'input[type="number"],input[type="search"],input[type="url"],textarea';
+        document.querySelectorAll(sel).forEach(function (el) {
+            if (el.disabled || el.readOnly || !el.getClientRects().length) return;
+            var v = String(el.value || '').trim();
+            if (el.id) out[el.id] = v;
+            var n = el.getAttribute('name');
+            if (n && !(n in out)) out[n] = v;
+        });
+        return out;
+    """
+
+    @staticmethod
+    def _campos_llenados_quedaron_vacios(ids_llenados, valores_dom, minimo=2):
+        """True si el form se reseteó después de llenarlo: de los campos de texto que el
+        robot llenó y que siguen visibles, hay al menos `minimo` y TODOS están vacíos.
+        Lógica pura (testeable sin navegador). Con menos de `minimo` campos no se opina:
+        un campo solo vacío puede ser un opcional o uno que el form limpió a propósito."""
+        presentes = [valores_dom[i] for i in ids_llenados if i in valores_dom]
+        if len(presentes) < minimo:
+            return False
+        return all(not str(v or "").strip() for v in presentes)
+
+    def _ids_llenados_paso_actual(self):
+        paso = getattr(self, "_current_step", 1)
+        prefijo = f"Paso{paso}::"
+        return [k[len(prefijo):] for k in (getattr(self, "current_row_field_values", None) or {})
+                if k.startswith(prefijo)]
+
+    def _form_se_reseteo_tras_llenar(self):
+        """¿Los campos que se acaban de llenar quedaron vacíos? Pasa cuando el form se
+        re-renderiza o recarga solo (p. ej. tras el error de event_id, o si terminaba de
+        inicializarse mientras se llenaba) y borra todo antes del envío."""
+        ids = self._ids_llenados_paso_actual()
+        if not ids:
+            return False
+        try:
+            valores = self.driver.execute_script(self._VALORES_TEXTO_VISIBLES_JS) or {}
+        except Exception:
+            return False
+        return self._campos_llenados_quedaron_vacios(ids, valores)
+
+    def _rellenar_si_form_se_reseteo(self, form_data, es_libro_reclamaciones=False):
+        """Si el form borró lo que se llenó, espera a que se estabilice y lo vuelve a
+        llenar (una sola vez). Devuelve el nombre de la captura 'completado' nueva, o
+        None si no hizo falta rellenar."""
+        if not self._form_se_reseteo_tras_llenar():
+            return None
+        print("  ↺ El formulario se vació después de llenarlo (se re-renderizó/recargó). "
+              "Esperando a que se estabilice y rellenando...")
+        try:
+            WebDriverWait(self.driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+        except Exception:
+            pass
+        time.sleep(1.5)
+        if es_libro_reclamaciones:
+            return self._fill_libro_reclamaciones_direct(form_data)
+        return self.fill_form_fields(form_data)
+
+    def _esperar_recarga_tras_event_id(self, use_iframe, expected_form_url, timeout=12):
+        """Tras el error de event_id el form se recarga solo. Espera a que esa recarga
+        haya pasado de verdad (los campos que se llenaron vuelven a estar vacíos en un
+        documento ya cargado) en vez de un sleep fijo: si se rellena antes de la recarga,
+        la recarga borra todo y el reintento se envía vacío. Si el form nunca se resetea,
+        se sigue igual al agotar el timeout (mismo comportamiento que antes)."""
+        fin = time.time() + timeout
+        time.sleep(1)
+        while time.time() < fin:
+            try:
+                if use_iframe:
+                    self.driver.switch_to.default_content()
+                    _ifr, _ = self._pick_gm_iframe(
+                        self.driver.find_elements(By.TAG_NAME, "iframe"),
+                        expected_url=expected_form_url)
+                    if _ifr is None:
+                        time.sleep(0.5)
+                        continue
+                    self.driver.switch_to.frame(_ifr)
+                listo = self.driver.execute_script("return document.readyState") == "complete"
+                if listo and self._form_se_reseteo_tras_llenar():
+                    print("  ✓ Formulario recargado tras error event_id")
+                    time.sleep(1)  # dejar que termine de montar dropdowns/validaciones
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.5)
+        print(f"  ⚠ No se detectó la recarga del formulario en {timeout}s; se rellena igual")
+        return False
+
     def _detect_event_id_error(self):
         """Detecta el cartel de error 'Lo siento / Ocurrió un inconveniente' (falta de event_id)."""
         try:
@@ -4420,6 +4517,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 except Exception:
                                     self.driver.execute_script("arguments[0].click();", _btn_empty)
                                 time.sleep(0.5)  # esperar a que JS muestre los errores de validación
+                                self._detectar_checkboxes_con_error()
                                 if self.screenshot_manager:
                                     self.screenshot_manager.take_form_screenshot(ss_counter, "errores", full_page=True)
                                     self._errores_ss_taken = True
@@ -4439,6 +4537,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             form_completado_name = self.fill_form_fields(form_data)
                             self._log(f"fill_form_fields() OK — fila {i}")
 
+                        # 4b. Si el form se re-renderizó mientras se llenaba y borró todo, se
+                        #     rellena antes de enviar (si no, se envía vacío y falla la validación).
+                        if not (self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
+                            _relleno = self._rellenar_si_form_se_reseteo(form_data, _is_libro_reclamaciones)
+                            if _relleno:
+                                form_completado_name = _relleno
+
                         # 5. Enviar y verificar formulario
                         result_text, ty_page_name = self.submit_and_verify_form(ss_counter, expected_form_url)
 
@@ -4454,7 +4559,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             _event_id_retry_done = True
                             print("  ↺ Error event_id (intento 1). Esperando recarga automática del formulario...")
                             try:
-                                time.sleep(4)
+                                # Esperar la recarga real del form (antes: sleep(4) fijo, que a
+                                # veces rellenaba ANTES de la recarga y ésta borraba todo).
+                                self._esperar_recarga_tras_event_id(use_iframe, expected_form_url)
                                 if use_iframe:
                                     _ev_iframe = self.find_and_position_to_form(expected_form_url)
                                     if _ev_iframe:
@@ -4466,6 +4573,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     form_completado_name = self._fill_libro_reclamaciones_direct(form_data)
                                 else:
                                     form_completado_name = self.fill_form_fields(form_data)
+                                _relleno = self._rellenar_si_form_se_reseteo(form_data, _is_libro_reclamaciones)
+                                if _relleno:
+                                    form_completado_name = _relleno
                                 if self.screenshot_manager:
                                     self.screenshot_manager.take_form_screenshot(ss_counter, "completado_intento2", full_page=True)
                                     print("Captura formulario completo (intento 2 tras error event_id)")
