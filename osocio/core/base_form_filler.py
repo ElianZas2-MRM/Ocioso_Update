@@ -1342,28 +1342,52 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return False
 
+    # Mismo criterio que _element_exists_by_id (id, name o selector CSS), para una lista
+    # de ids en un solo viaje al navegador.
+    _JS_IDS_EXISTENTES = r"""
+        return arguments[0].filter(function (id) {
+            if (!id) return false;
+            if (document.getElementById(id)) return true;
+            try { if (document.querySelector('[name="' + id + '"]')) return true; } catch (e) {}
+            if (/[\[.#]/.test(id)) {
+                try { if (document.querySelector(id)) return true; } catch (e) {}
+            }
+            return false;
+        });
+    """
+
+    def _ids_existentes(self, ids):
+        """Los ids de la lista que existen en el DOM actual, en el mismo orden."""
+        ids = [i for i in ids if isinstance(i, str) and i]
+        if not ids:
+            return []
+        try:
+            return list(self.driver.execute_script(self._JS_IDS_EXISTENTES, ids) or [])
+        except Exception:
+            return [i for i in ids if self._element_exists_by_id(i)]
+
     def _pick_first_visible_id(self, ids):
-        """Devuelve el primer id existente en DOM y visible (o None)."""
+        """Devuelve el primer id existente en DOM y visible (o None).
+
+        La existencia se resuelve de una vez para toda la lista (el mapping trae varios
+        ids por campo, y antes eran hasta 3 viajes al navegador por cada uno); la
+        visibilidad se sigue chequeando con Selenium, sólo para los que existen.
+        """
         if isinstance(ids, str):
             ids = [ids]
-        for fid in ids or []:
-            if fid and self._element_exists_by_id(fid):
-                try:
-                    el = self.driver.find_element(By.ID, fid)
-                    if el.is_displayed():
-                        return fid
-                except Exception:
-                    continue
-        # Fallback visid: si ningún ID del mapping fue encontrado, probar alias estandarizado
-        for fid in ids or []:
-            alias = self._VISID_ID_ALIASES.get(fid if isinstance(fid, str) else "")
-            if alias and self._element_exists_by_id(alias):
-                try:
-                    el = self.driver.find_element(By.ID, alias)
-                    if el.is_displayed():
-                        return alias
-                except Exception:
-                    continue
+        ids = list(ids or [])
+        aliases = [self._VISID_ID_ALIASES.get(fid if isinstance(fid, str) else "") for fid in ids]
+        existentes = set(self._ids_existentes(ids + [a for a in aliases if a]))
+        # Primero los ids del mapping; si ninguno sirve, el alias estandarizado (visid).
+        for candidatos in (ids, aliases):
+            for fid in candidatos:
+                if fid and fid in existentes:
+                    try:
+                        el = self.driver.find_element(By.ID, fid)
+                        if el.is_displayed():
+                            return fid
+                    except Exception:
+                        continue
         return None
 
     def _is_next_button_element(self, element):
@@ -1410,6 +1434,31 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return False
 
+    # Prefiltro de _find_next_button: en un solo viaje, los elementos de cada selector
+    # (en orden) cuyo texto o atributos contienen una palabra de "avanzar". El chequeo
+    # completo (_is_next_button_element) exige esa misma palabra, así que no se pierde
+    # ninguno; sólo se evita revisar con ~9 viajes cada botón y link del form.
+    _JS_CANDIDATOS_SIGUIENTE = r"""
+        var sels = arguments[0], claves = arguments[1], vistos = [], out = [];
+        function norm(s) {
+            return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
+        sels.forEach(function (sel) {
+            var els;
+            try { els = document.querySelectorAll(sel); } catch (e) { return; }
+            Array.prototype.forEach.call(els, function (el) {
+                if (vistos.indexOf(el) >= 0) return;
+                vistos.push(el);
+                var t = norm([el.innerText || el.textContent, el.getAttribute('data-dtm'),
+                              el.getAttribute('class'), el.getAttribute('aria-label'),
+                              el.getAttribute('title')].join(' '));
+                if (claves.some(function (k) { return t.indexOf(k) >= 0; })) out.push(el);
+            });
+        });
+        return out;
+    """
+    _CLAVES_SIGUIENTE = ("siguiente", "seguinte", "continuar", "continuacao", "proximo", "next")
+
     def _find_next_button(self):
         """Devuelve el primer botón visible que parezca avanzar al siguiente paso."""
         selectors = [
@@ -1419,25 +1468,23 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             "button[data-dtm*='next']",
             "button[type='button']",
             ".next-button",
+            # Barrido genérico final: cualquier button/a/role=button cuyo texto/atributos
+            # indiquen "Siguiente/Seguinte/Continuar/Próximo/Next".
+            "button, a, [role='button']",
         ]
-
-        for selector in selectors:
-            try:
-                btns = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                for btn in btns:
-                    if self._is_next_button_element(btn):
-                        return btn
-            except Exception:
-                continue
-
-        # Barrido genérico final: cualquier button/a/role=button visible cuyo texto/atributos
-        # indiquen "Siguiente/Seguinte/Continuar/Próximo/Next" (cubre markups fuera de la lista).
         try:
-            for btn in self.driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']"):
-                if self._is_next_button_element(btn):
-                    return btn
+            candidatos = self.driver.execute_script(
+                self._JS_CANDIDATOS_SIGUIENTE, selectors, list(self._CLAVES_SIGUIENTE)) or []
         except Exception:
-            pass
+            candidatos = []
+            for selector in selectors:
+                try:
+                    candidatos.extend(self.driver.find_elements(By.CSS_SELECTOR, selector))
+                except Exception:
+                    continue
+        for btn in candidatos:
+            if self._is_next_button_element(btn):
+                return btn
         return None
 
     def _has_next_button(self):
@@ -2894,12 +2941,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         (no mapeados o sin dato en el Excel). Cubre campos extra de ciertos forms
         (ej. Rua, Número, Data de Nascimento) sin tener que mapearlos uno por uno."""
         try:
-            els = self.driver.find_elements(
-                By.XPATH,
-                "//input[not(@type='hidden')][not(@type='submit')][not(@type='button')]"
-                "[not(@type='checkbox')][not(@type='radio')][not(@type='file')][not(@type='reset')]"
-                " | //textarea",
-            )
+            # Sólo los que están vacíos y no deshabilitados, en un solo viaje: lo habitual
+            # es que ya tengan dato, y antes eran 4 viajes por input para saltearlos.
+            els = self.driver.execute_script(
+                "return Array.prototype.filter.call(document.querySelectorAll("
+                "  'input:not([type=hidden]):not([type=submit]):not([type=button])"
+                ":not([type=checkbox]):not([type=radio]):not([type=file]):not([type=reset]), textarea'),"
+                "  function (e) { return !e.disabled && !(e.value || '').trim(); });") or []
         except Exception:
             return 0
         filled = 0
@@ -3237,20 +3285,25 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             already_filled_ids.add(raw)
         ids_dinamicos = self._cargar_ids_dinamicos()
         try:
-            select_elements = self.driver.find_elements(By.XPATH, "//select")
+            # id y name de todos los selects en un solo viaje: lo habitual es que estén
+            # todos mapeados, y antes se preguntaba atributo por atributo para saltearlos.
+            selects_info = self.driver.execute_script(
+                "return Array.prototype.map.call(document.querySelectorAll('select'), function (s) {"
+                "  return {el: s, id: s.id || '', name: s.getAttribute('name') || ''}; });") or []
         except Exception as e:
             print(f" Error buscando dropdowns no mapeados: {e}")
             return False
         filled_any = False
 
-        for select_element in select_elements:
+        for info in selects_info:
+            select_element = info.get("el")
             select_id = None
             try:
-                select_id = select_element.get_attribute("id") or select_element.get_attribute("name")
-                if not select_id:
+                select_id = info.get("id") or info.get("name")
+                if not select_id or select_element is None:
                     continue
                 # Solo saltear si tiene id Y ese id ya está en el mapping (campos por name nunca están en mapped_ids)
-                elem_real_id = select_element.get_attribute("id")
+                elem_real_id = info.get("id")
                 if elem_real_id and elem_real_id in mapped_ids:
                     continue
                 # Saltear si el mapping ya llenó este select en esta fila (id real ≠ id de config)

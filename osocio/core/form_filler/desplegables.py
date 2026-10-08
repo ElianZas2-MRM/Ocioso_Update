@@ -8,23 +8,62 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.remote.webelement import WebElement
 import random
 import re
 import time
+
+
+class _OpcionConTexto(WebElement):
+    """Un <option> con el texto ya leído: .text no hace otro viaje al navegador."""
+
+    @property
+    def text(self):
+        return self._texto
 
 
 class DesplegablesMixin:
     """Se usa solo como mixin de BaseFormFiller."""
 
     def _get_selected_text_for_select(self, select_element):
-        """Obtiene el texto seleccionado actual de un select simple."""
+        """Obtiene el texto seleccionado actual de un select simple.
+
+        Por JS en un solo viaje: Select.first_selected_option le pregunta a CADA option si
+        está seleccionada (un comando por option, lento en un device de la nube).
+        """
         try:
-            selected_option = Select(select_element).first_selected_option
-            if selected_option:
-                return (selected_option.text or "").strip()
+            return (self.driver.execute_script(
+                "var s = arguments[0];"
+                "return (s && s.selectedIndex >= 0) ? (s.options[s.selectedIndex].text || '') : '';",
+                select_element) or "").strip()
         except Exception:
             return ""
-        return ""
+
+    def _textos_de_opciones(self, select_element):
+        """El texto de todas las options del select, en orden, en un solo viaje."""
+        try:
+            return [str(t or "") for t in (self.driver.execute_script(
+                "return Array.prototype.map.call(arguments[0].options, function (o) {"
+                "  return (o.text || '').trim(); });", select_element) or [])]
+        except Exception:
+            return [(o.text or "").strip() for o in Select(select_element).options]
+
+    def _es_navegador_remoto(self):
+        return str(self.config.get("browser", "")).startswith("browserstack_")
+
+    def _elegir_opcion_por_indice(self, select, select_element, indice):
+        """Selecciona la option N. En la nube por JS (Select.select_by_index lee el
+        atributo 'index' de cada option hasta encontrarla: un viaje por option); en los
+        navegadores locales, con Selenium como siempre. Los eventos change/input los
+        dispara quien llama, igual en los dos casos."""
+        if self._es_navegador_remoto():
+            self.driver.execute_script(
+                "var s = arguments[0], i = arguments[1];"
+                "var d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');"
+                "if (d && d.set) { d.set.call(s, i); } else { s.selectedIndex = i; }",
+                select_element, int(indice))
+        else:
+            select.select_by_index(indice)
 
     def _is_option_disabled(self, option_element):
         """Determina si una option está deshabilitada de forma robusta."""
@@ -40,23 +79,36 @@ class DesplegablesMixin:
             return False
 
     def _get_valid_select_options(self, select_element):
-        """Retorna opciones seleccionables (no placeholder y no disabled)."""
-        valid_options = []
+        """Retorna opciones seleccionables (no placeholder y no disabled).
+
+        Un solo viaje al navegador: antes se leía el texto y el 'disabled' de cada
+        <option> por separado, y en un device de la nube (BrowserStack) eso eran cientos
+        de comandos de ~0,35 s por lead. Devuelve los mismos WebElement de <option>, con
+        el texto ya leído (leer .text no vuelve a viajar).
+        """
         try:
-            select = Select(select_element)
+            crudas = self.driver.execute_script(
+                "var s = arguments[0], out = [];"
+                "if (!s || !s.options) return out;"
+                "for (var i = 0; i < s.options.length; i++) {"
+                "  var o = s.options[i], t = (o.text || '').trim();"
+                "  if (t && !o.disabled) out.push({el: o, texto: t, indice: i});"
+                "}"
+                "return out;", select_element) or []
         except Exception:
-            return valid_options
-
-        for opt in select.options:
-            opt_text = (opt.text or "").strip()
-            if not opt_text:
+            return []
+        valid_options = []
+        for item in crudas:
+            texto = item.get("texto", "")
+            if self._is_placeholder_text(texto):
                 continue
-            if self._is_option_disabled(opt):
+            opcion = item.get("el")
+            if opcion is None:
                 continue
-            if self._is_placeholder_text(opt_text):
-                continue
-            valid_options.append(opt)
-
+            opcion.__class__ = _OpcionConTexto
+            opcion._texto = texto
+            opcion._indice = item.get("indice")
+            valid_options.append(opcion)
         return valid_options
 
     def _registrar_dropdowns_en_placeholder(self):
@@ -109,15 +161,9 @@ class DesplegablesMixin:
             select_element = self.safe_find_element(By.ID, select_id)
             if not select_element:
                 return False
-            select = Select(select_element)
-            selected_option = select.first_selected_option
-            if not selected_option:
-                return False
-
-            selected_text = (selected_option.text or "").strip()
+            selected_text = self._get_selected_text_for_select(select_element)
             if not selected_text:
                 return False
-
             return not self._is_placeholder_text(selected_text)
         except Exception:
             return False
@@ -288,14 +334,9 @@ class DesplegablesMixin:
                 return self._select_multiple_options(select_element, option_text, field_name)
 
             if is_empty:
-                try:
-                    selected_option = select.first_selected_option
-                except Exception:
-                    selected_option = None
-
-                if selected_option:
-                    selected_text = (selected_option.text or "").strip()
-                    if selected_text and not self._is_placeholder_text(selected_text):
+                selected_text = self._get_selected_text_for_select(select_element)
+                if selected_text:
+                    if not self._is_placeholder_text(selected_text):
                         print(f" {field_name} ya tiene valor válido ('{selected_text}'), se conserva")
                         self._record_field_value(select_id, selected_text)
                         return True
@@ -324,7 +365,10 @@ class DesplegablesMixin:
                 
                 if valid_options:
                     random_option = random.choice(valid_options)
-                    select.select_by_index(select.options.index(random_option))
+                    _idx = getattr(random_option, "_indice", None)
+                    if _idx is None:
+                        _idx = select.options.index(random_option)
+                    self._elegir_opcion_por_indice(select, select_element, _idx)
                     # Disparar evento change para actualizar dropdowns dependientes
                     self.driver.execute_script(
                         "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));"
@@ -344,45 +388,41 @@ class DesplegablesMixin:
             try:
                 norm_desired = self._normalize_text(option_text)
                 desired_plain = option_text.strip()
-                opts = list(select.options)
+                textos = self._textos_de_opciones(select_element)
                 chosen_idx = None
                 # 1) exacto tal cual (texto visible idéntico)
-                for i, o in enumerate(opts):
-                    if not self._is_placeholder_text(o.text) and (o.text or "").strip() == desired_plain:
+                for i, t in enumerate(textos):
+                    if not self._is_placeholder_text(t) and t == desired_plain:
                         chosen_idx = i
                         break
                 # 2) exacto normalizado (ignora nbsp/acentos/espacios)
                 if chosen_idx is None and norm_desired:
-                    for i, o in enumerate(opts):
-                        if not self._is_placeholder_text(o.text) and self._normalize_text(o.text) == norm_desired:
+                    for i, t in enumerate(textos):
+                        if not self._is_placeholder_text(t) and self._normalize_text(t) == norm_desired:
                             chosen_idx = i
                             break
                 # 3) contiene normalizado (último recurso tolerante)
                 if chosen_idx is None and norm_desired:
-                    for i, o in enumerate(opts):
-                        if not self._is_placeholder_text(o.text) and norm_desired in self._normalize_text(o.text):
+                    for i, t in enumerate(textos):
+                        if not self._is_placeholder_text(t) and norm_desired in self._normalize_text(t):
                             chosen_idx = i
                             break
 
                 if chosen_idx is not None:
-                    select.select_by_index(chosen_idx)
+                    self._elegir_opcion_por_indice(select, select_element, chosen_idx)
                     self.driver.execute_script(
                         "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));"
                         "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
                         select_element
                     )
-                    selected_text = (opts[chosen_idx].text or option_text).strip()
+                    selected_text = (textos[chosen_idx] or option_text).strip()
                     print(f" {field_name} seleccionado: {selected_text}")
                     self._record_field_value(select_id, selected_text)
                     return True
 
                 print(f"❌ [DEBUG-FILL] No se encontró opción para {field_name}: '{option_text}'.")
                 options_now = self._get_valid_select_options(select_element)
-                try:
-                    options = [o.text.strip() for o in select.options if o.text.strip()]
-                    print(f"   💡 Opciones disponibles en dropdown '{field_name}': {options}")
-                except Exception:
-                    pass
+                print(f"   💡 Opciones disponibles en dropdown '{field_name}': {[t for t in textos if t]}")
                 if not options_now:
                     raise ValueError(f"No se encontraron opciones en el dropdown '{field_name}'")
                 if not hasattr(self, "_campos_dropdown_no_encontrados"):

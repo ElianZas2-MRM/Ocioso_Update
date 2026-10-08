@@ -63,9 +63,20 @@ reglas de los navegadores (IDs dinámicos le ganaban al Excel, ignoraba el `-`, 
 documentos de Brasil, marcaba checkboxes opcionales, no conocía variantes ni t1/t3, no
 reintentaba event_id, entre otras).
 
-**Costo:** el motor de los navegadores fue escrito para un Chrome local y hace ~850
-comandos por lead; en la nube cada uno tarda ~0,35 s → **~3–6 min por lead** (iPhone ~3,
-Mac ~5,5, Android ~6). Optimizarlo es un paso pendiente (beneficia también a Chrome).
+**Velocidad:** cada comando a un device de la nube tarda ~0,35 s, así que lo que cuenta
+es cuántos hace el motor por lead. Se optimizaron los puntos que más viajes hacían, sin
+cambiar las reglas: leer las opciones de un desplegable, el texto elegido y los ids del
+mapping de una sola vez; prefiltrar el botón "Siguiente", el popup de cookies, los selects
+no mapeados, los requeridos vacíos y los checkboxes; y en la nube, elegir la opción del
+select por JS (en local sigue siendo Selenium). En el iPhone, leer la pantalla nativa sin el
+atributo "visible" (lo más caro de calcular).
+
+| | Comandos por lead | Mac | Android | iPhone |
+|---|---|---|---|---|
+| Antes | ~850 | 342 s | 377 s | 228 s |
+| Después | ~320 | 158 s | 185 s | 160 s |
+
+(tiempos de punta a punta de un lead de Colombia, con el arranque de la sesión incluido)
 
 ### `bs_driver.py`
 
@@ -254,7 +265,7 @@ sesiones a la vez.**
       documentos de Brasil, no mapeados).
 - [ ] Probar desde la app (UI) los tres dispositivos, un T3/CDC de Brasil y "Reintentar
       fallidos".
-- [ ] **Optimizar el motor en remoto** (menos comandos por lead).
+- [x] **Optimizar el motor en remoto**: ~850 → ~320 comandos por lead (ver "Velocidad").
 - [ ] Más mercados en iPhone, sobre todo Perú (tipo de documento) y un form en pasos.
 - [ ] iPhone: columnas SI/NO de checkboxes opcionales (la capa nativa no ve el `name` del
       checkbox) y envío vacío inicial.

@@ -132,9 +132,40 @@ class FormNativoIOS:
         time.sleep(1.2)
 
     # ── lectura de la pantalla ───────────────────────────────────────────────
+    def _fuente(self):
+        """La pantalla nativa como árbol XML.
+
+        Sin el atributo "visible": calcularlo para cada elemento es lo más caro de leer la
+        pantalla del iPhone (~4-5 s por lectura con él). La visibilidad se deduce de la
+        posición (ver _visible). Si el device no acepta la opción, se lee completa.
+        """
+        try:
+            xml = self.d.execute_script("mobile: source",
+                                        {"format": "xml", "excludedAttributes": "visible,accessible"})
+            if xml:
+                return ET.fromstring(xml)
+        except Exception:
+            pass
+        return ET.fromstring(self.d.page_source)
+
+    def _alto_pantalla(self) -> int:
+        if not getattr(self, "_alto", None):
+            try:
+                self._alto = int(self.d.get_window_size().get("height") or 932)
+            except Exception:
+                self._alto = 932
+        return self._alto
+
+    def _visible(self, e) -> bool:
+        """Visible = con tamaño y dentro de la pantalla (o el atributo, si vino)."""
+        if e.get("visible") is not None:
+            return e.get("visible") == "true"
+        y, h, w = _num(e, "y"), _num(e, "height"), _num(e, "width")
+        return w > 0 and h > 0 and y + h > 0 and y < self._alto_pantalla()
+
     def escanear(self) -> Dict:
         """Controles del form a la vista, de arriba a abajo. Hay que estar en NATIVE_APP."""
-        raiz = ET.fromstring(self.d.page_source)
+        raiz = self._fuente()
         web = raiz.find(f".//{_T}WebView")
         todos = list(web.iter()) if web is not None else []
         estaticos = [e for e in todos if e.tag == f"{_T}StaticText" and _texto(e)]
@@ -150,7 +181,7 @@ class FormNativoIOS:
         controles, enviar, siguiente = [], None, None
         for e in todos:
             tag = e.tag.replace(_T, "")
-            visible = e.get("visible") == "true"
+            visible = self._visible(e)
             if tag in ("TextField", "TextView", "SecureTextField") and visible:
                 controles.append({"tipo": "texto", "e": e, "valor": (e.get("value") or "").strip(),
                                   "etiqueta": etiqueta_de(e) or (e.get("placeholderValue") or "")})
@@ -244,7 +275,7 @@ class FormNativoIOS:
         """Elige en el menú de iOS la opción pedida o, si no hay, una real al azar."""
         from osocio.core.campos_inferencia import _is_placeholder
 
-        raiz = ET.fromstring(self.d.page_source)
+        raiz = self._fuente()
         menu = raiz.find(f".//{_T}CollectionView")
         etiquetas = [] if menu is None else [_texto(b) for b in menu.iter(f"{_T}Button") if _texto(b)]
         if not etiquetas:
@@ -455,7 +486,7 @@ class FormNativoIOS:
         while time.time() < limite:
             self._nativo()
             try:
-                raiz = ET.fromstring(self.d.page_source)
+                raiz = self._fuente()
                 for e in raiz.iter(f"{_T}StaticText"):
                     t = _texto(e)
                     if any(p in _norm(t) for p in patrones_eid):
@@ -507,7 +538,7 @@ class FormNativoIOS:
         de un tipo que no se reconoce."""
         self._nativo()
         try:
-            raiz = ET.fromstring(self.d.page_source)
+            raiz = self._fuente()
             caja = self._contenedor_del_form(raiz)
             if caja is None:
                 self.log(f"    (diagnóstico) no se encontró el contenedor del form '{self.titulo_iframe}'")
@@ -515,7 +546,7 @@ class FormNativoIOS:
             campos = sum(1 for e in caja.iter() if e.tag.replace(_T, "") in ("TextField", "TextView"))
             botones = [_texto(e) for e in caja.iter(f"{_T}Button") if _texto(e)]
             textos = [_texto(e) for e in caja.iter(f"{_T}StaticText")
-                      if _texto(e) and e.get("visible") == "true"]
+                      if _texto(e) and self._visible(e)]
             self.log(f"    (diagnóstico) campos de texto: {campos} | botones: {botones[:5]}")
             self.log(f"    (diagnóstico) textos visibles: {[t[:60] for t in textos[:12]]}")
         except Exception as e:

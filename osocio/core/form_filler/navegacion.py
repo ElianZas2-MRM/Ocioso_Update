@@ -119,8 +119,29 @@ class NavegacionDOMMixin:
             print(f"Error manejando popup GM: {e}")
             return False
 
+    # Todo lo que buscan handle_gm_cookie_popup y handle_cookie_popups.
+    _SELECTORES_COOKIES = (
+        "gb-legal-notification", ".js-close-icon", ".silent-consent", ".close-btn",
+        "button[onclick*='cookie']", "button[class*='cookie-accept']",
+        "button[id*='cookie-accept']", ".cookie-accept", "#cookie-accept",
+    )
+
+    def _hay_algun_popup_de_cookies(self):
+        """Chequeo previo en un solo viaje: si no existe ningún selector de cookies (lo
+        habitual), no hace falta probar uno por uno (cada uno es un viaje al navegador,
+        lento en un device de la nube). Ante la duda devuelve True."""
+        try:
+            return bool(self.driver.execute_script(
+                "return arguments[0].some(function (s) {"
+                "  try { return !!document.querySelector(s); } catch (e) { return false; } });",
+                list(self._SELECTORES_COOKIES)))
+        except Exception:
+            return True
+
     def handle_cookie_popups(self):
         """Maneja popups de cookies y legales que puedan aparecer"""
+        if not self._hay_algun_popup_de_cookies():
+            return False
         if self.handle_gm_cookie_popup():
             return True
         

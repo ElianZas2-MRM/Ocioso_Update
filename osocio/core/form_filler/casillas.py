@@ -530,19 +530,28 @@ class CasillasYRadiosMixin:
         candidates = []
 
         try:
-            raw_checkboxes = self.driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']")
+            # Los atributos de todos los checkboxes en un solo viaje (antes eran 6 por
+            # checkbox: lento en un device de la nube).
+            raw_checkboxes = self.driver.execute_script(
+                "return Array.prototype.map.call(document.querySelectorAll(\"input[type='checkbox']\"),"
+                "  function (c) { return {el: c, name: c.getAttribute('name') || '',"
+                "    id: c.id || '', required: !!c.required,"
+                "    aria: c.getAttribute('aria-required') || '',"
+                "    dtm: c.getAttribute('data-dtm') || '', value: c.getAttribute('value') || ''}; });"
+            ) or []
         except Exception:
             raw_checkboxes = []
 
-        for index, checkbox in enumerate(raw_checkboxes):
+        for index, info in enumerate(raw_checkboxes):
+            checkbox = info.get("el")
             try:
-                name_attr = (checkbox.get_attribute("name") or "").strip()
+                name_attr = (info.get("name") or "").strip()
                 lower_name = name_attr.lower()
-                checkbox_id = (checkbox.get_attribute("id") or "").strip()
-                is_html_required = bool(checkbox.get_attribute("required"))
-                is_aria_required = (checkbox.get_attribute("aria-required") or "").strip().lower() == "true"
-                data_dtm = (checkbox.get_attribute("data-dtm") or "").strip()
-                value_attr = (checkbox.get_attribute("value") or "").strip()
+                checkbox_id = (info.get("id") or "").strip()
+                is_html_required = bool(info.get("required"))
+                is_aria_required = (info.get("aria") or "").strip().lower() == "true"
+                data_dtm = (info.get("dtm") or "").strip()
+                value_attr = (info.get("value") or "").strip()
 
                 is_known = self._es_checkbox_conocido(name_attr, checkbox_id)
                 # Requerido por JS: el envío vacío le pintó un error de validación.
