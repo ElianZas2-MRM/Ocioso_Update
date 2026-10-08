@@ -2244,6 +2244,15 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
         return None
     
+    def _entrar_al_iframe(self, iframe):
+        """Pasa el driver al iframe del formulario.
+
+        Es un método aparte para que un motor que no puede entrar al iframe lo reemplace:
+        el iPhone de BrowserStack (Safari bloquea entrar a un iframe de otro dominio) se
+        queda en la landing y llena el form por la capa nativa del dispositivo.
+        """
+        self.driver.switch_to.frame(iframe)
+
     def wait_for_form_ready_in_iframe(self, timeout=3):
         """Espera a que el formulario dentro del iframe esté completamente listo"""
         try:
@@ -4431,7 +4440,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             except Exception:
                                 pass
 
-                            self.driver.switch_to.frame(target_iframe)
+                            self._entrar_al_iframe(target_iframe)
                             if self.screenshot_manager:
                                 self.screenshot_manager.current_frame = target_iframe
 
@@ -4571,7 +4580,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 if use_iframe:
                                     _ev_iframe = self.find_and_position_to_form(expected_form_url)
                                     if _ev_iframe:
-                                        self.driver.switch_to.frame(_ev_iframe)
+                                        self._entrar_al_iframe(_ev_iframe)
                                     else:
                                         self.driver.switch_to.default_content()
                                 self.wait_for_form_ready_in_iframe()
@@ -4638,7 +4647,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     except Exception:
                                         _retry_iframe = None
                                 if _retry_iframe:
-                                    self.driver.switch_to.frame(_retry_iframe)
+                                    self._entrar_al_iframe(_retry_iframe)
                                 else:
                                     self.driver.switch_to.default_content()
                             self.wait_for_form_ready_in_iframe()

@@ -34,6 +34,7 @@ ORDEN_RESULTADO = [
     "LINK ISSUE TYP",
     "Form URL esperada",
     "Form URL encontrada",
+    "Video",          # BrowserStack: link al video de la sesión (la evidencia en la nube)
     "Video LT",
     "Dashboard LT",
 ]

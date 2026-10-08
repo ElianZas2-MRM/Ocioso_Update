@@ -34,6 +34,12 @@ import tkinter as tk
 from tkinter import messagebox
 
 from osocio.paths import DATA_DIR
+from osocio.providers.browserstack.dispositivos import (
+    DISPOSITIVOS_BS, max_paralelo as bs_max_paralelo, por_cualquier_nombre as bs_dispositivo,
+)
+
+# Valor de "dispositivo" en programaciones guardadas cuando existía LambdaTest.
+_PROGRAMADO_LT_A_BS = {"lambdatest_mac": "mac", "lambdatest_android": "android"}
 from osocio.interface.helpers_interface import (
     cargar_config_global,
     guardar_config_global,
@@ -245,14 +251,13 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         return list(by_pais.items())
 
     # Sufijos de dispositivo ↔ tipo de ejecución (para localizar los Excels generados)
-    # (suffix Excel, dtype, browser, key en selected_disp)
+    # (suffix Excel, dtype, browser, key en selected_disp). Los de BrowserStack salen de
+    # su tabla única (providers/browserstack/dispositivos.py).
     _DEVICE_SUFFIX = [
         ("Chrome", "desktop", "chrome", "chrome"),
         ("Firefox", "desktop", "firefox", "firefox"),
         ("Edge", "desktop", "edge", "edge"),
-        ("Mac", "mac", None, "mac lt"),
-        ("Android", "android", None, "android lt"),
-    ]
+    ] + [(d.sufijo_excel, d.dtype, None, d.clave) for d in DISPOSITIVOS_BS]
 
     # Formularios T3 2.0 (Adobe AEM): usar los Excels con nombre …_T3.xlsx
     t3 = opciones.t3
@@ -294,10 +299,10 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 + _sesiones_extra_de_variante(sessions, VAR_CDC, opciones.cdc_also))
 
     def _sessions_for(pais):
-        """Una sesión por dispositivo tildado. Cada dispositivo (desktop y LT)
-        usa su propio Excel (…_Chrome/_Firefox/_Edge/_Mac/_Android[_T3].xlsx), que es
-        además donde LambdaTest guarda los resultados. No hay fallback: si falta
-        el Excel del dispositivo, se detecta luego y no ejecuta."""
+        """Una sesión por dispositivo tildado. Cada dispositivo (desktop y BrowserStack)
+        usa su propio Excel (…_Chrome/_Firefox/_Edge/_Iphone/_Android/_Mac[_T3].xlsx).
+        No hay fallback: si falta el Excel del dispositivo, se detecta luego y no
+        ejecuta."""
         shared = excel_mode_holder[0] == "compartido"
         gpath = _generic_excel_path_for(pais, t3)
         out = []
@@ -317,15 +322,13 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         market_jobs = []
         for p in paises_run:
             sessions = []
-            if disp_sched == "lambdatest_android":
+            # Programaciones guardadas con LambdaTest siguen andando: van a su
+            # equivalente en BrowserStack.
+            _bs = bs_dispositivo(_PROGRAMADO_LT_A_BS.get(disp_sched, disp_sched))
+            if _bs is not None:
                 sessions.append({
-                    "pais": p, "dtype": "android", "browser": None, "device": "Android",
-                    "excel": os.path.join(DATA_DIR, _lead_excel_name(p, "Android", t3))
-                })
-            elif disp_sched == "lambdatest_mac":
-                sessions.append({
-                    "pais": p, "dtype": "mac", "browser": None, "device": "Mac",
-                    "excel": os.path.join(DATA_DIR, _lead_excel_name(p, "Mac", t3))
+                    "pais": p, "dtype": _bs.dtype, "browser": None, "device": _bs.sufijo_excel,
+                    "excel": os.path.join(DATA_DIR, _lead_excel_name(p, _bs.sufijo_excel, t3))
                 })
             else: # local
                 navs = scheduler_cfg_leads.get("navegadores", []) or ["chrome"]
@@ -382,7 +385,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         for _pais, sessions in market_jobs:
             for s in sessions:
                 if s["dtype"] != "desktop" or not s["excel"] or not os.path.exists(s["excel"]):
-                    out.append(s)  # LT o sin Excel → sesión entera
+                    out.append(s)  # BrowserStack o sin Excel → sesión entera
                     continue
                 try:
                     df = pd.read_excel(s["excel"], dtype=str).fillna("")
@@ -807,10 +810,9 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         dev_name = _s.get("device") or ""
         if "·URL" in dev_name:
             dev_name = dev_name.split("·URL")[0]
-        if dev_name == "Mac":
-            dev_name = "Mac LT"
-        elif dev_name == "Android":
-            dev_name = "Android LT"
+        _bs_disp = next((d for d in DISPOSITIVOS_BS if d.sufijo_excel == dev_name), None)
+        if _bs_disp is not None:
+            dev_name = _bs_disp.etiqueta
             
         if _s["pais"] not in _pais_devices:
             _pais_devices[_s["pais"]] = []
@@ -899,7 +901,6 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         else:
             b["status"].config(text=f"{fdone}/{b['forms_total']} forms", fg=TEXT_SECONDARY)
 
-    _dev_label = {"desktop": None, "mac": "Mac LT (Safari)", "android": "Android LT"}
 
     def show_completed(ok_total, fail_total, detenido, err_msg):
         _exec_state["running"] = False
@@ -1044,10 +1045,10 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             run = [p for p in _pais_totals if p in _running_markets]
         run_str = ", ".join(run) if run else "—"
         return f"Ejecutando: {run_str}  ·  {gdone}/{total_leads} forms"
-    # LambdaTest Android suele permitir 1 sesión concurrente (device real): serializamos
-    # SOLO las sesiones Android para que TODOS los países se ejecuten (en cola), sin que
-    # una quede afuera. El resto (desktop / Mac) sigue en paralelo.
-    _android_sem = threading.Semaphore(1)
+    # BrowserStack: las sesiones en paralelo son del plan y las comparte todo el equipo.
+    # Se limita cuántas lanza la app a la vez (config_global -> browserstack.max_paralelo,
+    # 2 por defecto); el resto espera su turno, así todos los países se ejecutan.
+    _bs_sem = threading.Semaphore(bs_max_paralelo())
 
     def _bump(pais, sess_id=None, ok=0, fail=0, err="", fail_rows=None):
         """Cierra una sesión. ok/fail son FORMULARIOS de esa sesión; fail_rows son los
@@ -1100,8 +1101,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             else:
                 _lf.pop((pais, device), None)
 
-    def _collect_lt_email(pais, navegador, viewport, summary):
-        """Registra el resultado LT para email y, si es modo por país, lo envía ya."""
+    def _collect_bs_email(pais, navegador, viewport, summary):
+        """Registra el resultado de BrowserStack para email y, si es modo por país, lo envía ya."""
         if not (enviar_mail and not stop_event.is_set()):
             return
         _rp = summary.get("results_excel") if summary else None
@@ -1116,7 +1117,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 from osocio.interface.helpers_interface import enviar_email_resultados_consolidados
                 enviar_email_resultados_consolidados([_entry])
             except Exception as _e:
-                log_message(f"[ERROR] email LT {pais}: {_e}")
+                log_message(f"[ERROR] email BrowserStack {pais}: {_e}")
 
     def _run_session(sess):
         """Corre una sesión (un Excel de un mercado en un dispositivo)."""
@@ -1185,35 +1186,26 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                     _ok = int(sess.get("rows_count", 1) or 1)
                 _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_frows)
                 _record_retry_fails(pais, device, sess, excel, scheduled, _frows)
-            elif dtype == "mac":
-                from osocio.providers.lambdatest_mac import lt_controller
-                b_name = f"Osocio Automatizado LT MAC - {pais}" if scheduled else f"Osocio LT Mac - Envío Manual - {pais}"
-                summary = lt_controller.run(pais=pais, build_name=b_name, excel_path=excel, log_fn=log_message) or {}
-                _collect_lt_email(pais, "lambdatest_mac", "mac", summary)
-                _err = summary.get("error")
-                _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
-                _lt_frows = list(summary.get("fail_rows", []) or [])
-                if _err and _ok == 0 and _fail == 0:
-                    _bump(pais, _sid, fail=1, err=str(_err)[:200])
-                else:
-                    _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_lt_frows)
-                _record_retry_fails(pais, device, sess, excel, scheduled, _lt_frows)
-            elif dtype == "android":
-                from osocio.providers.lambdatest_android import lt_android_controller
-                with _android_sem:  # 1 sesión Android a la vez → todos los países corren
+            elif bs_dispositivo(dtype) is not None:
+                # BrowserStack (iPhone / Android / Mac): el mismo motor que los navegadores,
+                # con el driver de la nube. Ver providers/browserstack/runner.py.
+                from osocio.providers.browserstack import runner as bs_runner
+                _bs = bs_dispositivo(dtype)
+                with _bs_sem:  # tope de sesiones simultáneas en la nube
                     if stop_event.is_set():
                         return
-                    b_name = f"Osocio Automatizado LT ANDROID - {pais}" if scheduled else f"Osocio LT Android - Envío Manual - {pais}"
-                    summary = lt_android_controller.run(pais=pais, build_name=b_name, excel_path=excel, log_fn=log_message) or {}
-                _collect_lt_email(pais, "lambdatest_android", "android", summary)
+                    summary = bs_runner.run(pais=pais, plataforma=_bs.plataforma, excel_path=excel,
+                                            variante=sess.get("variante", ""), programada=scheduled,
+                                            log_fn=log_message) or {}
+                _collect_bs_email(sess.get("email_label") or pais, _bs.navegador, _bs.plataforma, summary)
                 _err = summary.get("error")
                 _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
-                _lt_frows = list(summary.get("fail_rows", []) or [])
+                _bs_frows = list(summary.get("fail_rows", []) or [])
                 if _err and _ok == 0 and _fail == 0:
                     _bump(pais, _sid, fail=1, err=str(_err)[:200])
                 else:
-                    _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_lt_frows)
-                _record_retry_fails(pais, device, sess, excel, scheduled, _lt_frows)
+                    _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_bs_frows)
+                _record_retry_fails(pais, device, sess, excel, scheduled, _bs_frows)
         except Exception as e:
             log_message(f"[ERROR] {pais}/{device}: {e}")
             # Crash de la sesión: contar como fallidos todos sus formularios.
@@ -1222,7 +1214,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     def _run_market(sessions):
         """Corre las sesiones de un mercado. Si mercados_par o excels_par están
         activos, lanza todos los dispositivos/Excels del mercado en paralelo
-        (Chrome local y LambdaTest no compiten, corren en máquinas distintas)."""
+        (Chrome local y BrowserStack no compiten, corren en máquinas distintas)."""
         _parallel = (excels_par or mercados_par) and len(sessions) > 1
         if _parallel:
             ts = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in sessions]

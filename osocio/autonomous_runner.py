@@ -215,18 +215,37 @@ def _t3_excel_existe(pais_nombre, navegador):
         PROJECT_ROOT, "data", f"Lead_information_Formulario_{pais_nombre}_{dev}_T3.xlsx"))
 
 
-def _build_lambdatest_command(lt_type, pais_nombre):
-    _lt_label = "MAC" if lt_type == "mac" else "ANDROID"
-    build_name = f"Osocio Automatizado LT {_lt_label} - {pais_nombre}"
+# Navegadores de la nube en una programación: los de BrowserStack y, por compatibilidad,
+# los que se guardaban cuando existía LambdaTest (van a su equivalente).
+_PROGRAMADO_LT_A_BS = {"lambdatest_mac": "mac", "lambdatest_android": "android"}
+
+
+def _dispositivo_bs(navegador):
+    from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
+    return por_cualquier_nombre(_PROGRAMADO_LT_A_BS.get(navegador, navegador))
+
+
+def _build_browserstack_command(plataforma, pais_nombre):
+    from osocio.providers.browserstack.runner import nombre_build
+    args = ["--run-browserstack", plataforma, "--pais", pais_nombre, "--scheduled",
+            "--build-name", nombre_build(pais_nombre, plataforma, programada=True)]
     if getattr(sys, 'frozen', False):
-        return [sys.executable, "--run-lambdatest", lt_type, "--pais", pais_nombre, "--build-name", build_name]
-    return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), "--run-lambdatest", lt_type, "--pais", pais_nombre, "--build-name", build_name]
+        return [sys.executable, *args]
+    return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), *args]
 
 
-def _get_lt_results_dir(lt_type):
-    """Devuelve el directorio de resultados de LambdaTest según el tipo."""
-    from osocio.paths import RESULTS_LT_ANDROID_DIR, RESULTS_LT_MAC_DIR
-    return RESULTS_LT_MAC_DIR if lt_type == "mac" else RESULTS_LT_ANDROID_DIR
+def _timeout_browserstack(pais_nombre, plataforma):
+    """En la nube cada lead tarda varios minutos: el timeout sale de las filas del Excel."""
+    from osocio.providers.browserstack.runner import excel_por_defecto
+    filas = 1
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(excel_por_defecto(pais_nombre, plataforma), read_only=True)
+        filas = max(1, (wb.active.max_row or 2) - 1)
+        wb.close()
+    except Exception:
+        pass
+    return 600 + 900 * filas
 
 
 def ejecutar_tests(programacion):
@@ -241,13 +260,12 @@ def ejecutar_tests(programacion):
         total_ejecutados = 0
         total_scripts = 0
 
-        _LT_TYPES = ("lambdatest_mac", "lambdatest_android")
         _corre_t3 = bool(programacion.get("t3_also"))
 
         for pais_nombre in programacion["paises"]:
             for navegador in programacion["navegadores"]:
-                if navegador in _LT_TYPES:
-                    total_scripts += 1  # LambdaTest: una ejecución por país (sin loop de viewports)
+                if _dispositivo_bs(navegador) is not None:
+                    total_scripts += 1  # BrowserStack: una ejecución por país (sin loop de viewports)
                 else:
                     for _ in programacion["viewports"]:
                         total_scripts += 1
@@ -262,48 +280,54 @@ def ejecutar_tests(programacion):
         modo_mercados = programacion.get("modo_mercados", "consecutivo")
         _lock = threading.Lock()
 
-        def _run_lt(pais_nombre, navegador):
-            # ── LambdaTest: no usa viewports. SIEMPRE secuencial ──────────────
+        def _run_bs(pais_nombre, navegador):
+            # ── BrowserStack: no usa viewports. Una ejecución por país ───────────
             nonlocal total_ejecutados
-            lt_type = "mac" if navegador == "lambdatest_mac" else "android"
+            disp = _dispositivo_bs(navegador)
             with _lock:
                 total_ejecutados += 1
                 _idx = total_ejecutados
-            log_mensaje(f" Ejecutando {_idx}/{total_scripts}: LambdaTest {lt_type} — {pais_nombre}")
+            etiqueta = f"BrowserStack {disp.etiqueta[:-3]} - {pais_nombre}"
+            log_mensaje(f" Ejecutando {_idx}/{total_scripts}: {etiqueta}")
 
-            lt_results_dir = _get_lt_results_dir(lt_type)
-            archivos_antes = set(os.listdir(lt_results_dir)) if os.path.isdir(lt_results_dir) else set()
+            # Mismo motor que los navegadores: los resultados caen en t1/ con el nombre
+            # Automatizacion_<Pais>_BS_<Disp><N>.xlsx (variantes.basenames_de_corrida).
+            from osocio.paths import results_dir_para
+            resultados_dir = results_dir_para(False)
+            prefijo = _basenames_resultados(pais_nombre, disp.navegador)[0]
+            archivos_antes = set(os.listdir(resultados_dir)) if os.path.isdir(resultados_dir) else set()
 
             try:
                 result = subprocess.run(
-                    _build_lambdatest_command(lt_type, pais_nombre),
-                    check=False, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600,
+                    _build_browserstack_command(disp.plataforma, pais_nombre),
+                    check=False, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    timeout=_timeout_browserstack(pais_nombre, disp.plataforma),
                     cwd=PROJECT_ROOT, env=_build_subprocess_env(),
                 )
                 if result.returncode == 0:
-                    log_mensaje(f" Completado: LambdaTest {lt_type} — {pais_nombre}")
+                    log_mensaje(f" Completado: {etiqueta}")
                 else:
-                    log_mensaje(f" Con errores: LambdaTest {lt_type} — {pais_nombre}")
+                    log_mensaje(f" Con errores: {etiqueta}")
                     if result.stderr:
                         log_mensaje(f"   Error: {result.stderr.strip()}")
 
-                if os.path.isdir(lt_results_dir):
-                    archivos_despues = set(os.listdir(lt_results_dir))
-                    nuevos_excels = [f for f in (archivos_despues - archivos_antes) if f.endswith(".xlsx")]
-                    if nuevos_excels:
-                        excel_file = os.path.join(lt_results_dir, sorted(nuevos_excels)[-1])
+                if os.path.isdir(resultados_dir):
+                    nuevos = [f for f in set(os.listdir(resultados_dir)) - archivos_antes
+                              if f.startswith(prefijo) and f.endswith(".xlsx")]
+                    if nuevos:
+                        excel_file = os.path.join(resultados_dir, sorted(nuevos)[-1])
                         resultado = {
-                            "pais": pais_nombre, "navegador": navegador, "viewport": lt_type,
+                            "pais": pais_nombre, "navegador": disp.navegador, "viewport": disp.plataforma,
                             "estado": "completado" if result.returncode == 0 else "con_errores",
                             "excel_path": excel_file, "screenshots_dir": None,
                         }
                         with _lock:
                             resultados_ejecucion.append(resultado)
-                        log_mensaje(f"    ✅ Resultado LambdaTest registrado: {os.path.basename(excel_file)}")
+                        log_mensaje(f"    ✅ Resultado BrowserStack registrado: {os.path.basename(excel_file)}")
             except subprocess.TimeoutExpired:
-                log_mensaje(f"⏰ Timeout: LambdaTest {lt_type} — {pais_nombre}")
+                log_mensaje(f"⏰ Timeout: {etiqueta}")
             except Exception as exc:
-                log_mensaje(f" Error en LambdaTest {lt_type} — {pais_nombre}: {exc}")
+                log_mensaje(f" Error en {etiqueta}: {exc}")
             time.sleep(2)
 
         def _run_browser_pais(pais_nombre):
@@ -365,7 +389,7 @@ def ejecutar_tests(programacion):
                 time.sleep(2)
 
             for navegador in programacion["navegadores"]:
-                if navegador in _LT_TYPES:
+                if _dispositivo_bs(navegador) is not None:
                     continue
                 for viewport in programacion["viewports"]:
                     _run_uno(navegador, viewport)
@@ -374,15 +398,15 @@ def ejecutar_tests(programacion):
                         _run_uno(navegador, viewport, "_T3")
 
         def _run_mercado_completo(pais_nombre):
-            """Corre LambdaTest + browsers locales para un país.
+            """Corre BrowserStack + browsers locales para un país.
             Si modo paralelo, todos los dispositivos corren a la vez
-            (LT y local no compiten — máquinas distintas)."""
+            (la nube y local no compiten — máquinas distintas)."""
             _threads = []
             for navegador in programacion["navegadores"]:
-                if navegador in _LT_TYPES:
+                if _dispositivo_bs(navegador) is not None:
                     _threads.append(threading.Thread(
-                        target=_run_lt, args=(pais_nombre, navegador), daemon=True))
-            _has_local = any(n not in _LT_TYPES for n in programacion["navegadores"])
+                        target=_run_bs, args=(pais_nombre, navegador), daemon=True))
+            _has_local = any(_dispositivo_bs(n) is None for n in programacion["navegadores"])
             if _has_local:
                 _threads.append(threading.Thread(
                     target=_run_browser_pais, args=(pais_nombre,), daemon=True))
@@ -393,10 +417,10 @@ def ejecutar_tests(programacion):
                 for t in _threads:
                     t.join()
             else:
-                # Secuencial: LT primero, después locales
+                # Secuencial: la nube primero, después locales
                 for navegador in programacion["navegadores"]:
-                    if navegador in _LT_TYPES:
-                        _run_lt(pais_nombre, navegador)
+                    if _dispositivo_bs(navegador) is not None:
+                        _run_bs(pais_nombre, navegador)
                 _run_browser_pais(pais_nombre)
 
         # Ejecución por mercado (país): consecutivo o paralelo según configuración.

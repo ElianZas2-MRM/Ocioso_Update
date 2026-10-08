@@ -63,6 +63,9 @@ def _patrones_event_id():
     return tuple(dict.fromkeys(_norm(p) for p in BaseFormFiller._EVENT_ID_PATTERNS))
 
 
+# valor_para() devuelve esto cuando el Excel pidió NO completar el campo ('-', 'omitir'...).
+OMITIR = object()
+
 # Franja de pantalla donde se actúa: arriba la tapa la barra de estado, abajo la barra de
 # Safari y el teclado / menú de los selects.
 _Y_MIN, _Y_MAX = 60, 620
@@ -300,10 +303,13 @@ class FormNativoIOS:
                                       or any(k in _norm(c["etiqueta"]) for k in _CHECKBOX_A_MARCAR))
 
     def llenar(self, valor_para: Callable[[str, str], Optional[str]],
-               limite_seg: int = 360) -> List[Dict]:
+               limite_seg: int = 360,
+               al_llenar: Optional[Callable[[Dict], None]] = None) -> List[Dict]:
         """Recorre el form de arriba a abajo y llena cada control que falte.
 
-        valor_para(tipo, etiqueta) -> valor de texto, opción de select (None = al azar).
+        valor_para(tipo, etiqueta) -> valor de texto, opción de select (None = al azar),
+        u OMITIR para no tocar el campo.
+        al_llenar(registro) se llama después de cada campo (para registrar lo que quedó).
         Devuelve un registro por acción: tipo, etiqueta, pedido, quedó.
         """
         self.ir_al_form()
@@ -328,8 +334,13 @@ class FormNativoIOS:
                     intentos[clave] = intentos.get(clave, 0) + 1
                     registro.append(self._accion(c, valor_para))
                     r = registro[-1]
-                    if r["quedo"] == "(sin dato)":
+                    if r["quedo"] in ("(sin dato)", "(omitido)"):
                         intentos[clave] = 99   # omitido a propósito: no volver a intentarlo
+                    if al_llenar is not None:
+                        try:
+                            al_llenar(r)
+                        except Exception:
+                            pass
                     self.log(f"    · {r['tipo']:8} {r['etiqueta'][:28]:28} "
                              f"pedido='{r['pedido']}' quedó='{r['quedo']}'")
                     continue
@@ -372,8 +383,13 @@ class FormNativoIOS:
     def _accion(self, c, valor_para) -> Dict:
         reg = {"tipo": c["tipo"], "etiqueta": c["etiqueta"], "pedido": "", "quedo": ""}
         try:
+            if c["tipo"] in ("texto", "select"):
+                pedido = valor_para(c["tipo"], c["etiqueta"])
+                if pedido is OMITIR:
+                    reg["pedido"], reg["quedo"] = "-", "(omitido)"
+                    return reg
             if c["tipo"] == "texto":
-                reg["pedido"] = valor_para("texto", c["etiqueta"]) or ""
+                reg["pedido"] = pedido or ""
                 reg["quedo"] = self._llenar_texto(c, reg["pedido"]) if reg["pedido"] else "(sin dato)"
             elif c["tipo"] == "select":
                 if not c.get("habilitado", True):
@@ -382,7 +398,6 @@ class FormNativoIOS:
                         reg["quedo"] = f"no se habilitó en {self._DEP_TIMEOUT:.0f}s (¿falta el campo padre?)"
                         return reg
                     c = listo
-                pedido = valor_para("select", c["etiqueta"])
                 reg["pedido"] = pedido or "(al azar)"
                 for intento in range(self._DEP_REINTENTOS + 1):
                     reg["quedo"] = self._elegir(c, pedido)

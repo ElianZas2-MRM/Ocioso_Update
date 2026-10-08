@@ -88,3 +88,60 @@ _NEXT_KEYWORDS = (
 _SUBMIT_KEYWORDS = (
     "enviar", "submit", "confirmar", "finalizar", "enviar dados",
 )
+
+
+# ── Etiqueta visible → ids del mapping ───────────────────────────────────────
+# Para los motores que no ven el DOM (iPhone por la capa nativa): ahí cada campo sólo
+# trae su etiqueta ("Cédula", "Concessionária"...) y hay que llegar al id del mapping del
+# país para usar la misma resolución de valores que la app. El ORDEN importa: lo más
+# específico primero ("tipo de documento" antes que "documento", "sobrenome" antes que
+# "nome", que está contenido en él).
+ETIQUETA_A_IDS = (
+    (("tipo de documento", "tipo documento", "tipo de doc"), ("document-type",)),
+    (("sobrenome", "apellido", "last name", "lastname", "surname"), ("lastname",)),
+    (("nombre", "nome", "name", "first name"), ("firstname", "name", "fullname")),
+    (("e-mail", "email", "correo"), ("email",)),
+    (("celular", "telefono", "telefone", "phone", "movil", "whatsapp"),
+     ("phone", "telephone", "cellphone")),
+    (("cnpj",), ("cnpj",)),
+    (("cep", "codigo postal", "zip"), ("cep", "zip_code")),
+    (("cedula", "documento", "cpf", "dni", "rut", "carnet", "pasaporte", "ruc"),
+     ("document", "ci", "cpf", "rut", "dni")),
+    (("departamento", "estado", "provincia", "region"), ("region", "state")),
+    (("ciudad", "cidade", "localidad", "comuna", "municipio"), ("city",)),
+    (("concesionario", "concessionaria", "distribuidor", "dealer", "agencia"), ("dealer",)),
+    (("fecha estimada", "data estimada", "fecha de compra", "data de compra", "plazo"),
+     ("estimated-day", "estimated-date-purchase", "estimated-date")),
+    (("modelo", "model", "vehiculo", "veiculo"), ("models", "model")),
+)
+
+
+def _norm_etiqueta(texto):
+    import unicodedata
+    s = unicodedata.normalize("NFKD", (texto or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(s.replace("*", " ").split())
+
+
+def ids_para_etiqueta(etiqueta):
+    """Ids de campo que corresponden a una etiqueta visible ('Cédula' -> document, ci...).
+    Tupla vacía si no se reconoce: el campo cuenta como "no mapeado"."""
+    import re
+    norm = _norm_etiqueta(etiqueta)
+    if not norm:
+        return ()
+    palabras = re.findall(r"[a-z0-9]+", norm)
+
+    def coincide(clave):
+        if " " in clave or "-" in clave:
+            return clave in norm
+        # Palabra entera (o su plural/variante para claves largas): "Acepto" no es "cep",
+        # ni "Username" es "name".
+        if len(clave) < 5:
+            return clave in palabras
+        return any(p == clave or p.startswith(clave) for p in palabras)
+
+    for claves, ids in ETIQUETA_A_IDS:
+        if any(coincide(k) for k in claves):
+            return ids
+    return ()

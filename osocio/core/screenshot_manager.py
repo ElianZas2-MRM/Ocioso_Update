@@ -818,6 +818,14 @@ class ScreenshotManagerNulo(ScreenshotManager):
     porque el motor los usa para el Excel de resultados.
     """
 
+    # El motor usa el nombre de la captura como señal ("hay TY" = tiene nombre) y lo
+    # escribe en Formulario Inserto / Completado / TY Page: acá no hay archivo, la
+    # evidencia está en la columna Video.
+    TEXTO_EVIDENCIA = "✓ ver Video"
+
+    def fname(self, kind, stage, ss_number):
+        return self.TEXTO_EVIDENCIA
+
     def take_full_page_screenshot(self, filename):
         return None
 
