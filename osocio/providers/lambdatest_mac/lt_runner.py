@@ -526,8 +526,13 @@ def _fill_text_sendkeys(driver, element, value: str):
     if not _hard_clear_input(driver, element, log=lambda *_a, **_k: None):
         _set_input_value_js(driver, element, str(value))
         return
+    # Safari 18 (BrowserStack) no le da el foco al campo de un iframe de otro dominio al
+    # hacer send_keys: las teclas no llegan y el campo queda vacío, sin error. Se enfoca
+    # antes a mano; preventScroll para que el foco no mueva la landing.
     try:
-        driver.execute_script("arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element)
+        driver.execute_script(
+            "arguments[0].focus({preventScroll:true});"
+            "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", element)
     except Exception:
         pass
     _send_keys_fast(element, value)
@@ -539,6 +544,73 @@ def _fill_text_sendkeys(driver, element, value: str):
         )
     except Exception:
         pass
+    # Si igual no quedó (send_keys falla en silencio), cargarlo con el setter de React en
+    # vez de dejarlo vacío: si no, después lo pisa el relleno de "requerido sin dato" y el
+    # lead viaja con datos inventados en vez de los del Excel.
+    try:
+        quedo = element.get_attribute("value") or ""
+    except Exception:
+        return
+    if "".join(quedo.split()) != "".join(str(value).split()) and \
+            "".join(c for c in quedo if c.isalnum()) != "".join(c for c in str(value) if c.isalnum()):
+        _set_input_value_js(driver, element, str(value))
+    _centrar_landing_en_campo(driver, element)
+
+
+def _centrar_landing_en_campo(driver, element):
+    """Mac/Safari: vuelve a dejar el campo recién llenado en el centro de la landing.
+
+    Sólo si el campo NO se ve: como en los navegadores locales, si está a la vista no se
+    mueve nada. Algunas landings scrollean solas hasta el footer mientras se llena el form
+    (pasa a veces, no siempre): así el form vuelve a la vista en el campo siguiente. Se
+    usa el iframe del form (misma URL, si no src GM), no el primero visible: la landing
+    puede tener otros (chat, marketing).
+    """
+    try:
+        actual = driver.execute_script(
+            "return window.self !== window.top ? location.origin + location.pathname : '';")
+    except Exception:
+        return
+    if not actual:
+        return  # form embebido en la landing (sin iframe): no hace falta
+    driver.switch_to.default_content()
+    iframe = None
+    try:
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        srcs = []
+        for f in iframes:
+            try:
+                srcs.append((f, f.get_attribute("src") or ""))
+            except Exception:
+                continue
+        # Primero el iframe en el que estábamos (misma URL), si no el iframe GM.
+        iframe = next((f for f, s in srcs if s.split("?")[0] == actual), None) \
+            or next((f for f, s in srcs if any(k in s for k in ("gm_forms", "gm_admin", "gm_front"))), None)
+    finally:
+        # Volver SIEMPRE adentro del form, aunque algo falle: el llenado sigue ahí.
+        driver.switch_to.frame(iframe if iframe is not None else 0)
+    if iframe is not None and not _campo_visible_en_landing(driver, element, iframe):
+        try:
+            _scroll_to(driver, element, known_iframe=iframe)
+        except Exception:
+            pass
+
+
+def _campo_visible_en_landing(driver, element, iframe) -> bool:
+    """¿El campo (dentro del iframe) se ve entero en la pantalla de la landing?
+    Hay que estar DENTRO del iframe; vuelve a dejar el driver ahí."""
+    try:
+        r = driver.execute_script(
+            "var r=arguments[0].getBoundingClientRect(); return [r.top, r.bottom];", element)
+        driver.switch_to.default_content()
+        try:
+            f, alto = driver.execute_script(
+                "var r=arguments[0].getBoundingClientRect(); return [r.top, window.innerHeight];", iframe)
+        finally:
+            driver.switch_to.frame(iframe)
+        return f + r[0] >= 0 and f + r[1] <= alto
+    except Exception:
+        return False
 
 
 def _fill_required_synthetic_lt(driver, log=print):
@@ -1270,11 +1342,18 @@ def _scroll_to_bottom_parent_aware(driver, log: Callable = print):
     except Exception:
         pass
 
-def _scroll_to_element_parent_aware(driver, element, log: Callable = print):
+def _scroll_to_element_parent_aware(driver, element, log: Callable = print,
+                                    desktop: bool = False):
     """
-    Scrollea incrementalmente hacia abajo a medida que se completan los campos
-    (evitando saltos a la parte superior en Safari Mac).
+    Mobile: scrollea incrementalmente hacia abajo a medida que se completan los campos
+    (evitando saltos a la parte superior).
+    Desktop (Mac/Safari): como en los navegadores locales, sólo se scrollea si el campo
+    no se ve. En desktop los campos van de a varios por fila y el +90 por campo se
+    acumulaba hasta dejar el footer en pantalla.
     """
+    if desktop:
+        _centrar_landing_en_campo(driver, element)
+        return
     try:
         from selenium.webdriver.common.action_chains import ActionChains
         ActionChains(driver).scroll_by_amount(0, 90).perform()
@@ -1282,10 +1361,12 @@ def _scroll_to_element_parent_aware(driver, element, log: Callable = print):
     except Exception as e:
         log(f"  ⚠ Error scroll element parent-aware: {e}")
 
+
 def _select_option(driver, select_id: str, value: str, field_name: str,
                    is_dependent: bool = False,
                    log: Callable = print,
-                   _out: Optional[list] = None) -> bool:
+                   _out: Optional[list] = None,
+                   desktop: bool = False) -> bool:
     """Un solo JS call por intento: busca, valida, selecciona y despacha eventos."""
     if is_dependent:
         if not _wait_for_dropdown_options(driver, select_id):
@@ -1307,7 +1388,7 @@ def _select_option(driver, select_id: str, value: str, field_name: str,
             try:
                 el_select = driver.find_element(By.ID, select_id)
                 if el_select:
-                    _scroll_to_element_parent_aware(driver, el_select, log)
+                    _scroll_to_element_parent_aware(driver, el_select, log, desktop=desktop)
             except Exception:
                 pass
             res = driver.execute_script(_SELECT_JS, select_id, value or "", is_empty)
@@ -1508,6 +1589,8 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
     else:
         # Mac/Safari desktop: send_keys real desde el arranque (ver _fill_text_sendkeys)
         fill_text = _fill_text_sendkeys
+    # Desktop: scrollear sólo si el campo no se ve (ver _scroll_to_element_parent_aware)
+    _desktop = not is_android and not is_mobile
     scroll_to  = _scroll_to_mobile     if is_mobile else _scroll_to
 
     child_to_parent = {v: k for k, v in dependencies.items()}
@@ -1694,7 +1777,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
                         tracked[fname] = value
                         processed.add(resolved)
                     continue
-                _scroll_to_element_parent_aware(driver, el, log)
+                _scroll_to_element_parent_aware(driver, el, log, desktop=_desktop)
                 ml = _get_maxlength(el)
                 if ml and len(value) > ml:
                     value = value[:ml]
@@ -1721,7 +1804,7 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
             _sel_result: list = []
             ok = _select_option(driver, resolved, value, fname,
                                  is_dependent=is_dep, log=log,
-                                 _out=_sel_result)
+                                 _out=_sel_result, desktop=_desktop)
             if ok:
                 tracked[fname] = _sel_result[0] if _sel_result else value
                 processed.add(resolved)
@@ -1745,10 +1828,10 @@ def fill_form_fields(driver, lead: LeadRow, pais: str,
             )
             if not el:
                 continue
-            _scroll_to_element_parent_aware(driver, el, log)
+            _scroll_to_element_parent_aware(driver, el, log, desktop=_desktop)
             tag = el.tag_name.lower()
             if tag == "select":
-                _select_option(driver, dyn_id, dyn_value, dyn_id, log=log)
+                _select_option(driver, dyn_id, dyn_value, dyn_id, log=log, desktop=_desktop)
             elif tag in ("input", "textarea"):
                 ml = _get_maxlength(el)
                 v = dyn_value[:ml] if ml and len(dyn_value) > ml else dyn_value

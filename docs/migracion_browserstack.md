@@ -165,26 +165,37 @@ python -m osocio.providers.browserstack.prueba_conexion --url https://... --form
 | Form | Tipo | iPhone | Android | Mac |
 |---|---|---|---|---|
 | Colombia `raq` | gm_front | ✅ | ✅ | ✅ |
-| Bolivia `model-overviews` (Tracker) | gm_front | ✅ | pendiente | pendiente |
+| Bolivia `model-overviews` (Tracker) | gm_front | ✅ | ✅ | ✅ |
 | Bolivia `raq` | gm_front | ✅ | pendiente | pendiente |
-| Brasil `myr2026` (S10) | gm_forms | ✅ (con reintento de event_id) | pendiente | pendiente |
+| Brasil `myr2026` (S10) | gm_forms | ✅ (con reintento de event_id) | ✅ | ✅ |
 
 ## Plan de BrowserStack
 
 `Automate - Desktop & Mobile Pro`: **10 sesiones en paralelo por cuenta** (compartidas
 por todo el equipo, no por build) y 10 más en cola. Se probaron 6 a la vez dentro del
 mismo build sin cola: se puede correr, por ejemplo, un build por mercado con sus forms en
-paralelo. Conviene un tope configurable para no acaparar las 10.
+paralelo. Conviene un tope configurable para no acaparar las 10. **En pruebas, máximo 2
+sesiones a la vez.**
 
 ## Cambios fuera de `browserstack/`
 
 - `base_form_filler.py`: `_EVENT_ID_PATTERNS` reconoce el cartel nuevo de Brasil
   (*"Não conseguimos concluir seu envio"*). Afecta también a Chrome, Firefox y Edge.
+- `lt_runner.py`, **solo el camino de Mac/Safari desktop** (Android e iPhone no cambian):
+  - `_fill_text_sendkeys`: Safari 18 (BrowserStack) no le da el foco a un campo de un
+    iframe de otro dominio al hacer `send_keys`, y las teclas no llegaban: el campo quedaba
+    vacío sin error, y después lo pisaba el relleno de "requerido sin dato" (el lead
+    viajaba con apellido y email inventados). Ahora se enfoca antes
+    (`focus({preventScroll:true})`) y, si igual no quedó, se carga con el setter de React.
+  - Scroll: en desktop ya no se baja 90 px por campo (se acumulaba hasta dejar el footer en
+    el video). Como en los navegadores locales, **solo se scrollea si el campo no se ve**
+    (`_centrar_landing_en_campo`); eso también corrige cuando la landing salta sola al
+    footer, cosa que pasa a veces. Mobile sigue scrolleando a medida que llena.
 - `.gitignore`: `browserstack_credentials.txt` y `browserstack.yml`.
 
 ## Pendiente
 
-- [ ] Bolivia y Brasil en Android y Mac.
+- [x] Bolivia y Brasil en Android y Mac.
 - [ ] Más mercados en iPhone, sobre todo Perú (tipo de documento) y un form en pasos.
 - [ ] ¿Reintento de event_id en `gm_forms` también para Android/Mac? Hoy siguen a
       LambdaTest: sin reintento.
