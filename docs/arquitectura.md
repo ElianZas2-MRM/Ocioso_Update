@@ -21,7 +21,7 @@ separación entre la capa visual (`interface/`) y el motor (`core/`, `validation
 python run.py                     -> interface/main_interface.py     abre la ventana
 python run.py --run-country X     -> forms/_runner_common.get_runner  un país, sin ventana
 python run.py --autonomous        -> autonomous_runner.main           el scheduler en background
-python run.py --run-lambdatest X  -> providers/lambdatest_*           dispositivos en la nube
+python run.py --run-browserstack X -> providers/browserstack/runner    dispositivos en la nube
 ```
 
 Los cuatro terminan en el mismo motor. La diferencia es quién dispara y si hay alguien
@@ -113,9 +113,19 @@ scheduler. Ese archivo son 4.900 líneas en **una sola función**: está mapeado
 
 ### `providers/` — ejecución en la nube
 
-`lambdatest_mac/` y `lambdatest_android/` corren los mismos formularios sobre dispositivos
-reales de LambdaTest en vez de un navegador local. Android reutiliza casi toda la lógica de
-Mac; lo único propio es el driver y la carpeta de resultados.
+`browserstack/` corre los mismos formularios sobre dispositivos reales de BrowserStack
+(iPhone, Android y Mac) **con el mismo motor**: `runner.run` arma `GenericCountryBase` y le
+pasa un driver de la nube por su `browser_factory`, así heredan todas las reglas, variantes,
+carpetas t1/t3 y columnas. Sin capturas (`ScreenshotManagerNulo`): la evidencia es el video.
+
+El iPhone es la excepción parcial: Safari en iPhone no deja entrar al iframe del form, así
+que `FormFillerIphone` (subclase del motor) reemplaza sólo los métodos que tocan el DOM del
+iframe —empezando por `_entrar_al_iframe`— y llena por la capa nativa del dispositivo
+(`ios_nativo.py`), detectando cada campo por su etiqueta (`core/campos_inferencia.py`). El
+resto del bucle (Excel, resultados, reintentos) es el de siempre.
+
+`lambdatest_mac/` y `lambdatest_android/` quedan en el repo hasta retirarlos; la app ya no
+los usa. Detalle de la migración en [`migracion_browserstack.md`](migracion_browserstack.md).
 
 ### `validation/` — verificación sin enviar
 
@@ -137,8 +147,8 @@ BASE_DIR                  la raiz (o la carpeta del .exe, si esta empaquetado)
 DATA_DIR                  data/         Excels de entrada
 JSON_DIR                  json/         configuracion persistente
 RESULTS_DIR               resultados/
-  RESULTS_LT_MAC_DIR        resultados/lambdatest_mac/
-  RESULTS_LT_ANDROID_DIR    resultados/lambdatest_android/
+  RESULTS_LT_MAC_DIR        resultados/lambdatest_mac/       (LambdaTest, a retirar)
+  RESULTS_LT_ANDROID_DIR    resultados/lambdatest_android/   (LambdaTest, a retirar)
   RESULTS_DEALERS_DIR       resultados/dealers/
   RESULTS_MASIVA_DIR        resultados/resultado_urlsinsertas/
 TEMPORALES_DIR            temporales/   logs y respaldos antes de pisar Excels

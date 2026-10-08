@@ -20,7 +20,6 @@ Uso (desde la raíz del proyecto):
 """
 
 import argparse
-import random
 import sys
 import time
 
@@ -141,148 +140,56 @@ def _pais_de(url: str, form_url: str) -> str:
     return ""
 
 
-def _resolvedor_de_valores(pais: str, url: str, form_url: str):
-    """Arma un lead con el generador de Excels y devuelve valor_para(tipo, etiqueta).
-
-    Es la misma cadena que usa la app para decidir qué va en cada campo
-    (_infer_data_key + _get_inferred_value), pero con la etiqueta visible del campo en vez
-    del id, que en el iPhone no se ve.
-    """
-    from osocio.utils.data_generator import generar_fila_datos, valor_plausible_por_nombre
-    from osocio.providers.lambdatest_mac.lt_excel_reader import LeadRow
-    from osocio.core.campos_inferencia import (
-        _infer_data_key, _get_inferred_value, _normalize_for_infer,
-    )
-
-    fila = generar_fila_datos(pais, device="iphone")
-    lead = LeadRow(index=2, public_url=url, secure_url=form_url, data=fila)
-    columnas = {_normalize_for_infer(k): v for k, v in fila.items()}
-    sorteo_opcionales = {}
-
-    def valor_para(tipo: str, etiqueta: str):
-        if tipo == "texto":
-            # 1) Columna del Excel con el mismo nombre que la etiqueta (CPF, CEP, Celular...).
-            exacto = columnas.get(_normalize_for_infer(etiqueta))
-            if exacto:
-                return exacto
-            # 2) Inferencia de la app. "Sobrenome" contiene "nome": el apellido se
-            #    resuelve antes, si no se tomaría como nombre (la app busca por id y no
-            #    tiene este problema; acá se busca por etiqueta).
-            n = _normalize_for_infer(etiqueta)
-            if any(k in n for k in ("sobrenome", "apellido", "lastname", "surname")):
-                clave = "lastname"
-            else:
-                clave = _infer_data_key(etiqueta, etiqueta, etiqueta)
-            valor = _get_inferred_value(clave, lead) if clave else ""
-            if valor:
-                return valor
-            # 3) Campo que el lead no conoce: misma regla que la app (README, "Campos que
-            #    no están en el Excel"): obligatorio -> valor plausible siempre; opcional ->
-            #    50%, decidido una vez por campo. En el iPhone "obligatorio" es el * del label.
-            if "*" not in etiqueta:
-                if n not in sorteo_opcionales:
-                    sorteo_opcionales[n] = random.random() < 0.5
-                if not sorteo_opcionales[n]:
-                    return None
-            return valor_plausible_por_nombre(etiqueta, etiqueta) or "Prueba"
-        # Select: la columna del Excel con ese nombre, si trae dato; si no, None = la app
-        # elige una opción real al azar (Modelo, Ciudad, Concesionario... vienen vacías).
-        valor = columnas.get(_normalize_for_infer(etiqueta)) or ""
-        return valor or None
-
-    return fila, valor_para
-
-
-def _flujo_app(driver, plataforma: str, url: str, form_url: str, pais: str, paso):
-    """Android / Mac: acá sí se puede entrar al iframe, así que se usa EXACTAMENTE el
-    flujo de la app en LambdaTest (lt_runner._run_single_lead, el mismo que llaman
-    run_lt_batch y run_lt_android_batch por cada lead). Sólo cambia el driver."""
+def _enviar_con_la_app(plataforma: str, url: str, form_url: str) -> int:
+    """Con --enviar: el MISMO camino que la app. Arma un Excel de 1 lead como "Generar
+    Excels" y lo corre con runner.run (motor de la app; iPhone por la capa nativa)."""
+    import os
+    import pandas as pd
+    from openpyxl import load_workbook
+    from osocio.paths import TEMPORALES_DIR
+    from osocio.providers.browserstack import runner
+    from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
     from osocio.utils.data_generator import generar_fila_datos
-    from osocio.providers.lambdatest_mac.lt_excel_reader import LeadRow
-    from osocio.providers.lambdatest_mac.lt_runner import (
-        _get_field_mapping_for_pais, _load_field_dependencies, _load_ids_dinamicos, _run_single_lead,
-    )
+    from osocio.utils.fixed_field_mapping_store import build_excel_columns_for_country
 
-    fila = generar_fila_datos(pais, device=plataforma)
-    lead = LeadRow(index=2, public_url=url, secure_url=form_url, data=fila)
-    _log(f"    lead ({pais or 'país desconocido'}): " + ", ".join(
-        f"{k}={v}" for k, v in fila.items() if v and k != "Dispositivo"))
-    field_mapping = _get_field_mapping_for_pais(pais)
-    result = _run_single_lead(
-        driver, pais, lead, field_mapping, _load_field_dependencies(), _load_ids_dinamicos(pais),
-        is_mobile=False,
-        is_android=(plataforma == "android"),
-        brasil_doc_type="cpf",
-        log=lambda m="": _log(f"    {m}"),
-    )
-    paso("5. Form encontrado dentro de la landing", bool(result.get("iframe_found")),
-         result.get("iframe_url_found", "")[:110])
-    paso("6. Enviado", bool(result.get("submitted")), result.get("result_text", "")[:150])
-    paso("7. Thank you page", bool(result.get("ty_confirmed")), result.get("motivo", "") or "")
-    _log(f"    datos vs Excel: {result.get('datos_vs_excel', '-')}")
+    pais = _pais_de(url, form_url)
+    if not pais:
+        _log("No se pudo deducir el país de la URL: --enviar necesita una URL de un mercado.")
+        return 1
+    columnas = build_excel_columns_for_country(pais)
+    datos = generar_fila_datos(pais, device=por_cualquier_nombre(plataforma).token_email)
+    fila = [url if c == "URL" else form_url if c == "Formulario" else datos.get(c, "") for c in columnas]
+    os.makedirs(TEMPORALES_DIR, exist_ok=True)
+    excel = os.path.join(TEMPORALES_DIR, f"_prueba_{pais}_{plataforma}.xlsx")
+    pd.DataFrame([fila], columns=columnas).astype(str).to_excel(excel, index=False)
+    _log(f"Lead de prueba ({pais}): " + ", ".join(f"{k}={v}" for k, v in zip(columnas, fila)
+                                                   if v and k not in ("URL", "Formulario")))
 
-
-def _reintenta_event_id(form_url: str) -> bool:
-    """El error de event_id sólo pasa en los forms gm_forms (no en gm_front/gm_frontend):
-    sólo ahí se reintenta el envío."""
-    return "gm_forms" in (form_url or "").lower()
+    res = runner.run(pais, plataforma, excel_path=excel, build_name="Prueba de conexion", log_fn=_log)
+    _log("\n" + "=" * 60)
+    _log(f"RESUMEN: {res['ok']}/{res['total']} OK" + (f" | error: {res['error']}" if res.get("error") else ""))
+    if res.get("results_excel") and os.path.exists(res["results_excel"]):
+        ws = load_workbook(res["results_excel"]).active
+        for h, v in zip([c.value for c in ws[1]], [c.value for c in ws[2]]):
+            if h in ("Resultado", "Motivo", "Form coincide", "Datos vs Excel", "TY Page", "Video") and v:
+                _log(f"  {h}: {str(v)[:120]}")
+        _log(f"  Excel: {res['results_excel']}")
+    _log("=" * 60)
+    return 0 if res.get("ok") and not res.get("failed") else 1
 
 
-def _llenar_iphone(driver, iframe, paso, enviar: bool, pais: str, url: str, form_url: str):
+def _diagnostico_iphone(driver, iframe, paso):
+    """Sin envío: qué campos del form ve el iPhone por la capa nativa (no llena nada)."""
     from osocio.providers.browserstack.ios_nativo import FormNativoIOS
-
-    fila, valor_para = _resolvedor_de_valores(pais, url, form_url)
-    _log(f"    lead ({pais or 'país desconocido'}): " + ", ".join(
-        f"{k}={v}" for k, v in fila.items() if v and k != "Dispositivo"))
-
     form = FormNativoIOS(driver, iframe, log=_log)
-    registro = form.llenar(valor_para)
-    if not registro:
-        paso("6. Detectar y llenar el form dentro de la landing", False, "no se detectó ningún control")
-        return
-
-    def ok(r):
-        if r["tipo"] == "texto":
-            return r["quedo"] == r["pedido"] or (
-                "".join(ch for ch in r["quedo"] if ch.isdigit()) == r["pedido"])
-        if r["tipo"] == "select":
-            return bool(r["quedo"]) and not r["quedo"].startswith(("no ", "sin ", "ERROR"))
-        return r["pedido"] != "marcar" or r["quedo"] in ("marcado", "ya estaba marcado")
-
-    malos = [r for r in registro if not ok(r)]
-    resumen = ", ".join(f"{r['etiqueta'] or r['tipo']}" for r in registro)
-    paso("6. Detectar y llenar el form dentro de la landing", not malos,
-         f"{len(registro) - len(malos)}/{len(registro)} OK | {resumen}"
-         + (f" | MAL: {', '.join(r['etiqueta'] or r['tipo'] for r in malos)}" if malos else ""))
-
-    if not enviar:
-        _log("    (sin --enviar: no se envía)")
-        time.sleep(8)
-        return
-    paso("7. Enviar", form.tocar_enviar())
-    estado, texto = form.esperar_ty()
-    if estado == "event_id" and not _reintenta_event_id(form_url):
-        paso("8. Thank you page", False, f"Error event_id (sin reintento en este tipo de form): '{texto[:80]}'")
-        return
-    if estado == "event_id":
-        # Igual que la app: un solo reintento. El form se recarga solo, se espera a que
-        # quede vacío, se vuelve a llenar todo y se reenvía.
-        _log(f"    ↺ Error event_id (intento 1): '{texto[:80]}'. Esperando recarga del formulario...")
-        form.esperar_recarga()
-        form.llenar(valor_para)
-        paso("7b. Reenviar tras error event_id", form.tocar_enviar())
-        estado, texto = form.esperar_ty()
-        if estado == "event_id":
-            paso("8. Thank you page", False,
-                 "Error event_id: formulario no pudo enviarse por falta de event_id (2 intentos fallidos)")
-            return
-    # El texto post envío queda en el log: sirve para saber qué mostró cada form.
-    paso("8. Thank you page", estado == "ty", texto[:120] if texto else "el form no fue reemplazado por una TY")
-    form.mostrar_ty()
-
-
-class _Terminado(Exception):
-    """El flujo de la app ya hizo todo: saltar los pasos manuales e ir al cierre."""
+    form.ir_al_form()
+    form._nativo()
+    try:
+        controles = form.escanear()["controles"]
+    finally:
+        form._webview()
+    paso("5. Campos del form vistos en el iPhone (capa nativa)", bool(controles),
+         ", ".join(f"{c['tipo']}:{c['etiqueta'] or '?'}" for c in controles))
 
 
 def correr(plataforma: str, url: str, form_url: str = "", os_version: str = "",
@@ -296,6 +203,8 @@ def correr(plataforma: str, url: str, form_url: str = "", os_version: str = "",
     username, access_key = load_credentials()
     _log(f"Credenciales OK: {username}")
     _log(f"Plataforma: {plataforma} | URL: {url}{' | ENVIA el form' if enviar else ''}\n")
+    if enviar:
+        return _enviar_con_la_app(plataforma, url, form_url)
 
 
     driver = None
@@ -316,14 +225,6 @@ def correr(plataforma: str, url: str, form_url: str = "", os_version: str = "",
             paso("1. Sesión creada", False, str(e).splitlines()[0][:200])
             return 1
 
-        if enviar and puede_entrar_a_iframe(plataforma):
-            # Android / Mac con envío: el flujo completo de la app (navega, llena, envía).
-            try:
-                _flujo_app(driver, plataforma, url, form_url, _pais_de(url, form_url), paso)
-            except Exception as e:
-                paso("Flujo de la app", False, str(e).splitlines()[0][:200])
-            raise _Terminado
-
         driver.get(url)
         cargo = _esperar_carga(driver)
         paso("2. Landing cargada", cargo, (driver.title or "")[:80])
@@ -335,13 +236,6 @@ def correr(plataforma: str, url: str, form_url: str = "", os_version: str = "",
             paso("3. Scroll dinámico", True)
         except Exception as e:
             paso("3. Scroll dinámico", False, str(e)[:150])
-        try:
-            from osocio.providers.lambdatest_mac.lt_runner import _handle_cookie_popups
-            cerrado = _handle_cookie_popups(driver, log=lambda *_a, **_k: None)
-            paso("3b. Popup de cookies", True, "cerrado" if cerrado else "no apareció")
-        except Exception as e:
-            paso("3b. Popup de cookies", False, str(e)[:150])
-
         iframe, src, total = _buscar_iframe_scrolleando(driver, form_url)
         if iframe:
             como = "el form esperado" if form_url and form_url in src else "otro iframe GM (fallback)"
@@ -351,12 +245,12 @@ def correr(plataforma: str, url: str, form_url: str = "", os_version: str = "",
         paso("4. Iframe del form encontrado", bool(iframe), detalle)
 
         if iframe and not puede_entrar_a_iframe(plataforma):
-            # iOS Safari bloquea switch_to.frame() a un iframe de otro dominio, y el form
-            # tiene que llenarse SÍ O SÍ dentro de la landing: se llena por la capa nativa.
+            # iOS Safari bloquea switch_to.frame() a un iframe de otro dominio: el form se
+            # maneja por la capa nativa, dentro de la landing.
             try:
-                _llenar_iphone(driver, iframe, paso, enviar, _pais_de(url, form_url), url, form_url)
+                _diagnostico_iphone(driver, iframe, paso)
             except Exception as e:
-                paso("Llenado iPhone", False, str(e).splitlines()[0][:200])
+                paso("Capa nativa del iPhone", False, str(e).splitlines()[0][:200])
         elif iframe:
             try:
                 driver.execute_script("arguments[0].scrollIntoView({block:'start'});", iframe)
@@ -376,8 +270,6 @@ def correr(plataforma: str, url: str, form_url: str = "", os_version: str = "",
                     paso("7. Volver a la landing", True)
                 except Exception as e:
                     paso("7. Volver a la landing", False, str(e)[:150])
-    except _Terminado:
-        pass
     finally:
         if driver:
             todo_ok = bool(pasos) and all(ok for _n, ok, _d in pasos)

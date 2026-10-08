@@ -358,7 +358,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     make_single_select(dev_row, BROWSER_OPTIONS, browser_var, default="chrome")
     lt_row = Frame(dev_col, bg=CARD_BG)
     lt_row.pack(anchor="w", padx=15, pady=(2, 2))
-    for _lt in ("Mac LT", "Android LT"):
+    from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS
+    for _lt in (d.etiqueta for d in DISPOSITIVOS_BS):
         Button(lt_row, text=_lt, font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg="#6E5A86",
                relief="flat", bd=0, state="disabled", disabledforeground="#6E5A86",
                highlightthickness=1, highlightbackground=BTN_INACTIVE,

@@ -115,12 +115,3 @@ def test_platform_name_correcto(plataforma, esperado):
     # SafariOptions trae "mac" de fábrica: el iPhone tiene que pedirse como iOS.
     assert bs_driver.DISPOSITIVOS[plataforma]["platformName"] == esperado
 
-
-@pytest.mark.parametrize("url,reintenta", [
-    ("https://secure-developments.com/commonwealth/brasil/gm_forms/myr2026?model=s10", True),
-    ("https://secure-developments.com/commonwealth/colombia/gm_front/form/raq", False),
-    ("https://secure-developments.com/commonwealth/chile/gm_frontend/form/raq", False),
-])
-def test_reintento_event_id_solo_en_gm_forms(url, reintenta):
-    from osocio.providers.browserstack.prueba_conexion import _reintenta_event_id
-    assert _reintenta_event_id(url) is reintenta

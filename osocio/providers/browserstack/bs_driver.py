@@ -151,6 +151,11 @@ def load_credentials(filepath: str = "") -> Tuple[str, str]:
 
     if not username or not access_key:
         raise ValueError("El archivo debe tener 'username' y 'access_key'.")
+    if username.upper().startswith("TU_") or access_key.upper().startswith("TU_"):
+        raise ValueError(
+            f"Completá {os.path.basename(filepath)} con tu usuario y access key de BrowserStack "
+            "(https://www.browserstack.com/accounts/settings). Si no tenés usuario, pedí que te "
+            "inviten a la organización de BrowserStack.")
     return username, access_key
 
 

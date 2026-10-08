@@ -14,7 +14,7 @@ Mapa de alto nivel — quién dispara qué y a dónde van los resultados:
 - **Interfaz gráfica** (`osocio/interface/`): la ventana con las pestañas de este README. Una pestaña por archivo; `main_interface.py` tiene la ventana principal y el scheduler.
 - **Programador autónomo** (`osocio/autonomous_runner.py`): corre en background según el calendario semanal, sin que nadie abra la app.
 - **Motor de formularios** (`osocio/core/`): el corazón de la automatización. `BaseFormFiller` abre el navegador, detecta el formulario paso a paso, lo completa y lo envía. Está partido por responsabilidad en `osocio/core/form_filler/` (navegación, casillas, desplegables, IDs dinámicos, reglas por mercado, formularios AEM).
-- **LambdaTest** (`osocio/providers/`): cuando el envío incluye Mac o Android, corre sobre dispositivos reales en la nube en vez de un navegador local.
+- **BrowserStack** (`osocio/providers/browserstack/`): cuando el envío incluye iPhone, Android o Mac, corre sobre dispositivos reales en la nube en vez de un navegador local, con el mismo motor y las mismas reglas que los navegadores.
 - **Validación & QA** (`osocio/validation/`, `osocio/core/dealer_comparator_runner.py`): la pestaña de Validación de Campos y el Comparador de Dealers. Abren el navegador para chequear reglas o dealers **sin llegar a enviar un lead real**.
 - **Configuración** (`data/` + `json/`): los datos de prueba y el mapeo de campos por país que el motor necesita para saber qué escribir y dónde.
 - **Resultados** (`resultados/`): el Excel de resultados, las capturas de cada lead y el mail final.
@@ -74,15 +74,18 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
 
 3. **MERCADOS** y **EXCELS POR DISPOSITIVO**: cada uno se pone en **Secuencial** (uno detrás del otro) o **Paralelo** (todos a la vez), y son independientes entre sí.
    - **MERCADOS** decide cómo se recorren los países: uno por vez (AR → BO → …) o todos juntos.
-   - **EXCELS POR DISPOSITIVO** decide, dentro de cada país, cómo se corren los Excels de los dispositivos que tildaste: Chrome → Firefox → Edge uno detrás del otro, o los tres a la vez. El modo Paralelo acá solo aplica a los navegadores locales (Chrome/Firefox/Edge); LambdaTest corre siempre secuencial.
-4. **DISPOSITIVOS / NAVEGADORES**: selección múltiple — Chrome, Firefox, Edge, Mac LT, Android LT.
-   - **⚡ Enviar en paralelo por URL (una sesión por URL)**: en vez de correr todo el Excel de un dispositivo como una sola sesión de a un lead por vez, abre **una ventana de navegador por cada fila** del Excel, todas al mismo tiempo — mucho más rápido para volúmenes grandes. Solo aplica a los navegadores locales (Chrome/Firefox/Edge); LambdaTest siempre corre como una sola sesión, ignora este modo. El campo **"máx. simultáneas"** (por defecto 6, límite real de 1 a 20) controla cuántas ventanas se abren a la vez para no saturar la PC. Este modo **se desactiva solo** cuando el envío lo dispara la Programación de Tests (ahí siempre corre secuencial, aunque hayas dejado la casilla tildada).
+   - **EXCELS POR DISPOSITIVO** decide, dentro de cada país, cómo se corren los Excels de los dispositivos que tildaste: Chrome → Firefox → Edge uno detrás del otro, o los tres a la vez. En Paralelo, los dispositivos de BrowserStack también arrancan a la vez, hasta el tope de sesiones simultáneas (2 por defecto, ver abajo).
+4. **DISPOSITIVOS / NAVEGADORES**: selección múltiple — Chrome, Firefox, Edge, iPhone BS, Android BS, Mac BS (los tres últimos son dispositivos reales de BrowserStack: iPhone 14 Pro Max con Safari, Samsung Galaxy S26 Ultra con Chrome y Mac con Safari).
+   - **⚡ Enviar en paralelo por URL (una sesión por URL)**: en vez de correr todo el Excel de un dispositivo como una sola sesión de a un lead por vez, abre **una ventana de navegador por cada fila** del Excel, todas al mismo tiempo — mucho más rápido para volúmenes grandes. Solo aplica a los navegadores locales (Chrome/Firefox/Edge); BrowserStack siempre corre cada Excel como una sola sesión, ignora este modo. El campo **"máx. simultáneas"** (por defecto 6, límite real de 1 a 20) controla cuántas ventanas se abren a la vez para no saturar la PC. Este modo **se desactiva solo** cuando el envío lo dispara la Programación de Tests (ahí siempre corre secuencial, aunque hayas dejado la casilla tildada).
    - **🧩 Formularios T3 2.0 (usa los Excels …_T3)**: tildalo si los formularios de este envío son la versión nueva Adobe AEM — la app busca directamente los Excels con sufijo `_T3.xlsx` en vez de los normales. 
    - **➕ Correr también los formularios T3 2.0 (AEM) del mercado**: corre el mercado normal **y además** su T3, en la misma tanda.
    - **🚗 Correr también Cadillac (CDC) del mercado**: lo mismo para Cadillac. Ver *[Variantes de un mercado](#variantes-de-un-mercado-t3-y-cadillac)* acá abajo.
-   - Al elegir **Mac LT** o **Android LT** aparece a la derecha el panel **CREDENCIALES LT** con los campos **User** y **Key** (la contraseña se ve enmascarada). Se auto-completa con lo que ya tengas guardado en `lambdatest_credentials.txt`; si lo cambiás y apretás **💾 Guardar**, se sobreescribe ese archivo. Es la única forma de cargar credenciales de LambdaTest desde la app (no hay otra pantalla de configuración para esto).
+   - Al elegir **iPhone BS**, **Android BS** o **Mac BS** aparece a la derecha el panel **CREDENCIALES BROWSERSTACK** con los campos **User** y **Key** (la key se ve enmascarada). Se auto-completa con tus credenciales (variables de entorno o `browserstack_credentials.txt`); si las cambiás y apretás **💾 Guardar**, se sobreescribe ese archivo. Cada persona usa **su propio** usuario y key: ver *[Seguridad — credenciales](#seguridad--credenciales)*.
+   - BrowserStack corre como máximo **2 sesiones a la vez** (las sesiones del plan las comparte todo el equipo); el resto espera su turno. Se cambia en `json/config_global.json` → `"browserstack": {"max_paralelo": N}` (de 1 a 10).
 
-   ![Credenciales LT](docs/screenshots/06_credenciales_lt.png)
+   ![Credenciales](docs/screenshots/06_credenciales_lt.png)
+
+   *(La captura es de cuando el panel era de LambdaTest; el de BrowserStack es igual.)*
 
 5. **PAÍSES A EJECUTAR**: hacé click en las tarjetas de los mercados que querés correr (AR/BO/BR/CL/CO/EC/PY/PE/UY) — se pueden elegir varios a la vez, cada tarjeta clickeada queda resaltada y el contador de arriba a la derecha suma. Los links **Todos** / **Ninguno** seleccionan o deseleccionan todos de un click. Recién ahí se habilita (se pone verde) el botón **EJECUTAR ENVÍO**; con 0 países elegidos queda gris y sin click.
 
@@ -100,9 +103,11 @@ Es la pestaña principal: rellena y envía los formularios reales usando los Exc
    ![Países a ejecutar y Datos por país](docs/screenshots/09_datos_por_pais.png)
 
 7. **EJECUTAR ENVÍO**: se habilita apenas elegís al menos un país. Antes de arrancar, la app **valida que exista un Excel con al menos un lead** para cada combinación país + dispositivo elegida; si alguno falta o está vacío, no ejecuta nada y te lo dice con el detalle (ej. *"Colombia · Chrome: … (vacío / sin leads)"*). Si está todo bien, abre el **modal de ejecución** (ver abajo).
-8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para LambdaTest, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda como una columna **"Video LT"** dentro del Excel de resultados — abrilo desde ahí y hacé click en el link.
+8. **Ver Resultados**: abre la carpeta `resultados/` con el Excel de resultados y las capturas de pantalla de esa corrida. Para BrowserStack, la app **no muestra el video dentro de la ventana**: el link al video de la sesión queda en la columna **"Video"** del Excel de resultados — abrilo desde ahí y hacé click en el link.
 
-> **Capturas: solo en los navegadores locales.** Chrome, Firefox y Edge guardan las capturas de cada lead (landing, formulario completado, Thank You) en `resultados/`. **Mac LT y Android LT no sacan capturas**: la evidencia es el **video completo de la sesión**, que se ve desde la columna **"Video LT"** del Excel de resultados. Cada captura contra un dispositivo real es lenta y no muestra nada que el video no muestre, así que la casilla "Adjuntar screenshots" no aplica a LambdaTest.
+> **Capturas: solo en los navegadores locales.** Chrome, Firefox y Edge guardan las capturas de cada lead (landing, formulario completado, Thank You) en `resultados/`. **BrowserStack no saca capturas**: la evidencia es el **video completo de la sesión**, que se ve desde la columna **"Video"** del Excel de resultados (en *Formulario Inserto / Completado / TY Page* dice "✓ ver Video"). Cada captura contra un dispositivo real es lenta y no muestra nada que el video no muestre, así que la casilla "Adjuntar screenshots" no aplica a BrowserStack.
+
+> **iPhone:** Safari en iPhone no deja que la automatización entre al iframe del formulario (es de otro dominio que la landing). La app igual lo llena **dentro de la landing**, tocando y tipeando cada campo como una persona, y detecta cada campo por su etiqueta visible ("Nombre", "Cédula", "Ciudad"…). Los datos, el `-`, los IDs dinámicos, los documentos de Brasil, los resultados y los reintentos siguen exactamente las mismas reglas que en Chrome.
 
 > Antes de ejecutar necesitás tener generado el Excel de datos correspondiente — si falta, andá primero a la pestaña **Generar Excels con Datos**.
 
@@ -259,7 +264,7 @@ Detalles:
 - Si la columna no corresponde a ningún checkbox del formulario, **se ignora sola** (no rompe nada).
 - Un `SI` tilda el checkbox aunque no sea obligatorio; un `NO` lo destilda y evita que la app lo vuelva a marcar antes de enviar.
 - No hace falta recompilar el portable: los Excels viven en `data/`, afuera del `.exe`.
-- Funciona en **todos los dispositivos**: Chrome, Firefox, Edge, Mac LT y Android LT.
+- Funciona en **todos los dispositivos**: Chrome, Firefox, Edge, iPhone BS, Android BS y Mac BS.
 
 > **Solo aplica a checkboxes.** Para campos de texto o selects el Excel funciona distinto: la columna se mapea al campo por el **nombre del campo** o por el **`id` del HTML**, pero el campo tiene que estar declarado en el `field_mapping` del país (`json/fixed_field_mappings.json`). Si querés que un campo se llene siempre con un valor fijo sin tocar el Excel, usá `json/ids_dinamicos.json` (ver la sección *Qué hay adentro de `json/`*).
 
@@ -270,7 +275,7 @@ Para los campos `<select>` mapeados (Modelo, Fecha estimada, Región, Ciudad, Co
 1. **Si la celda tiene valor** → busca esa opción en el dropdown y la selecciona. El match es por texto: primero exacto, y si no, tolerante ("contiene"), así `Onix` matchea con `Chevrolet Onix`.
 2. **Si la celda está vacía** → recién ahí elige una opción al azar (Modelo, Fecha) o la primera válida.
 
-Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), LambdaTest y los formularios **AEM / T3 2.0**. Por defecto los Excels generados dejan **Modelo y Fecha estimada vacíos a propósito** (para que roten al azar); si querés fijar uno, escribilo en su columna.
+Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), BrowserStack y los formularios **AEM / T3 2.0**. Por defecto los Excels generados dejan **Modelo y Fecha estimada vacíos a propósito** (para que roten al azar); si querés fijar uno, escribilo en su columna.
 
 **El modelo elegido queda en el Excel de resultados** (columna Modelo), sea el que pusiste vos o el aleatorio. Y si el formulario **no tiene dropdown de modelo** (el modelo viene fijado en la URL), la app toma el valor de `?model=` de la URL del form y lo escribe igual en esa columna — así siempre sabés con qué modelo se envió el lead.
 
@@ -355,7 +360,7 @@ Después de enviar el lead, la app no se queda solo con la captura de la TY page
 - **TYP con CTA**: busca los `<a>` dentro de la TY (`div#thank-you` / `div.rp-wrapper`). Si no hay ninguno queda en `NO`; si hay, los abre uno por uno y anota, por cada link, el texto, el `href`, el `target`, a qué URL terminó llegando y el nombre de la captura que dejó. Si hay varios, van todos separados por ` || ` (`SÍ (2 links) || …`).
 - **LINK ISSUE TYP**: detecta links **rotos por HTML mal escapado** — un `href`/`data-href`/`data-url`/`src` cuyo valor trae adentro un tag literal (`</span`, `&lt;`, etc.), típico de una inyección de contenido mal armada. Si aparece, marca `SÍ` con la descripción, una captura señalando dónde está el link, y adónde llevó al clickearlo. Si no hay nada raro, queda en `-`.
 
-Las capturas de este chequeo se guardan aparte, en `cta_evidence/`. En LambdaTest (Mac/Android) el CTA se reporta igual en el Excel, pero **sin** captura de evidencia.
+Las capturas de este chequeo se guardan aparte, en `cta_evidence/`. En BrowserStack el CTA se reporta igual en el Excel, pero **sin** captura de evidencia (en iPhone, *TYP con CTA* queda en `-`: la capa nativa no ve los links).
 
 ### 🔁 Reintentar Fallidos
 
@@ -366,7 +371,7 @@ Al lado de **EJECUTAR ENVÍO** está el botón **REINTENTAR FALLIDOS**. Sirve pa
 - Arma un Excel temporal solo con esas filas y corre el envío real apuntando a él — no vuelve a tocar los leads que ya salieron bien.
 - El resultado va a un **Excel nuevo, separado** del original, así conservás la evidencia de ambas corridas.
 - Si reintentás dos veces seguidas, la segunda vez **solo toma lo que sigue fallando**, no vuelve sobre lo que ya se arregló.
-- Cubre los tres navegadores locales (Chrome/Firefox/Edge) y también **Mac LT / Android LT**.
+- Cubre los tres navegadores locales (Chrome/Firefox/Edge) y también **iPhone BS / Android BS / Mac BS**.
 - Es una acción manual: no aplica a los envíos programados/desatendidos (ahí no hay nadie tildando pantalla).
 
 **La app recuerda tu configuración:** todo lo que elegís en esta pestaña (dispositivos tildados, modo Mercados/Excels, "enviar en paralelo por URL" + su máximo, "T3 2.0", y toda la config de email) se guarda solo, apenas lo cambiás, en `json/config_global.json`. Si cerrás la app y la volvés a abrir, la encontrás tal cual la dejaste — no hace falta volver a tildar todo de nuevo.
@@ -383,7 +388,7 @@ Esta pestaña cuenta con dos sub-pestañas internas:
 
 **Paso a paso:**
 
-1. **MERCADOS** y **DISPOSITIVOS / NAVEGADORES**: mismos selectores que en "Envío de Leads". Si elegís LambdaTest acá, aparece un aviso: *"Si corrés en paralelo con LambdaTest, asegurate de que tu plan soporte suficientes sesiones concurrentes."*
+1. **MERCADOS** y **DISPOSITIVOS / NAVEGADORES**: mismos selectores que en "Envío de Leads". La programación ofrece solo los navegadores locales (Chrome/Firefox/Edge).
 2. **⚙ Configurar automatización**: abre el calendario semanal.
    - **Días (Lun a Dom)**: hacé click en un día para abrir su panel de horarios (vuelve a hacer click para cerrarlo). Debajo de cada día ves un estado: `—` (nada programado), `N sel.` (N horarios elegidos), o `● abierto` (el que tenés desplegado ahora).
    - **Horarios del día abierto**: una grilla de botones cada 15 minutos (00:00 a 23:45) — click para tildar/destildar un horario, se pone de color y con relieve "apretado" cuando está activo. Podés elegir tantos horarios como quieras en el mismo día.
@@ -458,7 +463,7 @@ Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo,
 **Paso a paso:**
 
 1. **MERCADO A GENERAR**: elegís un país a la vez (se genera un Excel por mercado).
-2. **DISPOSITIVOS PARA EL EXCEL**: selección múltiple (Chrome, Firefox, Edge, Mac LT, Android LT) — se genera un Excel por dispositivo elegido. Tildá **"Es formulario T3 2.0"** si el form es la versión nueva Adobe AEM (sufijo `_T3.xlsx`), o **"Es Cadillac"** para la variante CDC (sufijo `_CDC.xlsx`). Son excluyentes: un Excel es de un mercado, o de su T3, o de Cadillac. Ver *[Variantes de un mercado](#variantes-de-un-mercado-t3-y-cadillac)*.
+2. **DISPOSITIVOS PARA EL EXCEL**: selección múltiple (Chrome, Firefox, Edge, iPhone BS, Android BS, Mac BS) — se genera un Excel por dispositivo elegido. Tildá **"Es formulario T3 2.0"** si el form es la versión nueva Adobe AEM (sufijo `_T3.xlsx`), o **"Es Cadillac"** para la variante CDC (sufijo `_CDC.xlsx`). Son excluyentes: un Excel es de un mercado, o de su T3, o de Cadillac. Ver *[Variantes de un mercado](#variantes-de-un-mercado-t3-y-cadillac)*.
 3. **URLS A PROCESAR**: elegí el formato con las pills — **"URL Landing + URL Form"** (`url landing • url form • ...`) o **"Solo URL Form"** — y pegá las URLs en el cuadro de texto.
 4. Botones de la barra inferior:
    - **GENERAR EXCELS**: crea los archivos con datos aleatorios nuevos.
@@ -483,7 +488,7 @@ La pestaña sigue una **mini-guía numerada ①→⑤**, toda arriba de la barra
 **Paso a paso:**
 
 1. **① MERCADO A CHEQUEAR** — tarjeta del país. Cada país guarda su propia configuración (columnas, Excels, filtro) automáticamente al cambiar de mercado.
-2. **② NAVEGADOR** — Chrome / Firefox / Edge. Mac LT / Android LT figuran como *próximamente* (el Comparador solo usa navegadores locales). Que el navegador se vea o no se controla globalmente con **⚙ Configurar**.
+2. **② NAVEGADOR** — Chrome / Firefox / Edge. iPhone BS / Android BS / Mac BS figuran como *próximamente* (el Comparador solo usa navegadores locales). Que el navegador se vea o no se controla globalmente con **⚙ Configurar**.
 3. **③ EXCEL DE URLs** — cargás un Excel (mismo formato que Envío de Leads) con columnas **`URL`** (landing) y **`Formulario`** (form). Por fila: si `URL` tiene valor → abre landing + form; si está vacía → solo form. Solo se toman filas cuyo `Formulario` es una URL real (así, si elegís otro Excel por error, no genera reportes basura). **Cada form del Excel genera su propia carpeta de reporte.**
 4. **④ EXCEL DE DEALERS A CHEQUEAR** — **"Seleccionar Excel"** (.xlsx/.xls), **"Fila encabezados"** (número de fila donde arrancan los títulos; el Excel real no siempre arranca en la 1), y el modo del Excel:
    - **Tiene columna de filtro**: definís **Columna filtro** (nombre o letra, ej. `K`), **Valor filtro** (ej. `No`) y la **Condición**:
@@ -629,7 +634,7 @@ osocio/
     browser/               acciones sobre el navegador
   interface/               la UI, una pestaña por archivo
   validation/              motor de la pestaña Validación de Campos
-  providers/               LambdaTest Mac y Android
+  providers/               BrowserStack (iPhone, Android y Mac); LambdaTest queda hasta retirarlo
   utils/                   rutas, datos, drivers, programación, scroll dinámico
   forms/                   runner compartido de los países
   autonomous_runner.py     el programador que corre en background
@@ -649,9 +654,7 @@ Las que la app crea y llena sola (no se versionan):
   ```
   resultados/
     screenshots_<Pais>/        capturas del envío de leads
-    resultados_<Pais>.xlsx     el Excel de resultados
-    lambdatest_mac/            corridas de LambdaTest Mac
-    lambdatest_android/        corridas de LambdaTest Android
+    resultados_<Pais>.xlsx     el Excel de resultados (BrowserStack: …_<Pais>_BS_iPhone1.xlsx, …_BS_Mac1.xlsx)
     dealers/                   reportes del Comparador de Dealers
     resultado_urlsinsertas/    reportes de Revisión Masiva
   ```
@@ -673,7 +676,7 @@ Es la memoria de la app: sin esta carpeta, la app abre pero **no sabe cómo llen
 
 | Archivo | Qué guarda |
 |---|---|
-| `config_global.json` | Email destinatario, dispositivos tildados y todas tus preferencias de la UI. **No guarda credenciales de LambdaTest** (ésas van en `lambdatest_credentials.txt` o en variables de entorno). Está en `.gitignore`: nunca se sube ni se distribuye. |
+| `config_global.json` | Email destinatario, dispositivos tildados y todas tus preferencias de la UI. **No guarda credenciales de BrowserStack** (ésas van en `browserstack_credentials.txt` o en variables de entorno). Puede tener `"browserstack": {"max_paralelo": N}`. Está en `.gitignore`: nunca se sube ni se distribuye. |
 | `programacion_test.json` | El calendario semanal de la pestaña Programación de Tests. |
 | `scheduler_triggered.json` | Marca qué horarios ya se dispararon hoy (para no repetir una corrida). |
 | `dealer_comparator_settings.json` | Los presets guardados del Comparador de Dealers, por país. |
@@ -723,7 +726,7 @@ Genera **solo la carpeta portable**:
 **Qué NO viaja en el portable:**
 
 - **Ningún Excel de datos**, salvo `data/Field_Validation_URLs.xlsx` (la pestaña de Validación de Campos lo espera ahí). Los Excels de leads los genera la propia app desde "Generar Excels con Datos", el Excel matriz de Revisión Masiva lo elige el usuario, y los listados de dealers son datos reales de clientes.
-- **Ningún resultado, captura ni reporte** de la PC donde se compiló: `resultados/` y `temporales/` se crean **vacías** (con sus subcarpetas de dealers y LambdaTest adentro).
+- **Ningún resultado, captura ni reporte** de la PC donde se compiló: `resultados/` y `temporales/` se crean **vacías** (con sus subcarpetas adentro).
 - El estado local del scheduler (`programacion_test/leads/masivo.json`, `scheduler_triggered.json`), `dealer_comparator_settings.json` y `config_global.json`.
 
 Los **drivers sí viajan** (`chromedriver`, `geckodriver`, `msedgedriver`): `build.bat` los actualiza justo antes de empaquetar, así el portable sale con los que corresponden. Si igual quedan desfasados en la PC de destino, el portable los actualiza solo al abrirse.
@@ -745,29 +748,31 @@ lado. Lo que se entrega es la carpeta portable (o su `.zip`), no el `.exe` suelt
 
 > **Ojo:** el `.exe` del portable se compila desde el código fuente **en el momento del build**. Si cambiás código, tenés que volver a correr `build.bat` para que el portable lo tome — abrir el `.exe` viejo sigue ejecutando la versión anterior. Para probar cambios al toque, corré `python run.py` desde la carpeta del proyecto.
 
-`osocio/providers/lambdatest_mac/` y `osocio/providers/lambdatest_android/` van empaquetados por PyInstaller **adentro del `.exe`**, no como carpetas sueltas al lado — no hace falta copiarlos a mano.
+`osocio/providers/browserstack/` va empaquetado por PyInstaller **adentro del `.exe`**, no como carpetas sueltas al lado — no hace falta copiarlos a mano.
 
 El portable arranca siempre limpio: sin schedule activo, sin configuración personal del Comparador Dealers, y sin `config_global.json` (evita llevarse el email del destinatario de la PC donde se compiló).
 
 ## Seguridad — credenciales
 
-- `lambdatest_credentials.txt` y `json/config_global.json` están en `.gitignore` — nunca se suben al repositorio. (`config_global.json` guarda el email destinatario y tus preferencias de UI; **no** guarda la access key.)
+- `browserstack_credentials.txt` y `json/config_global.json` están en `.gitignore` — nunca se suben al repositorio. (`config_global.json` guarda el email destinatario y tus preferencias de UI; **no** guarda la access key.)
 - El build portable tampoco los incluye (ver arriba).
 
-Las credenciales de LambdaTest se buscan **en este orden**:
+**Quién puede correr en BrowserStack:** cualquier persona **invitada a la organización de BrowserStack** (el plan Automate incluye usuarios ilimitados). Cada una usa **su propio** usuario y access key —se ven en *Account → Settings* de BrowserStack— y todas comparten las sesiones en paralelo del plan. No compartas una misma key entre varias personas. Las corridas de todos caen en el mismo proyecto del dashboard (*Osocio Form Automation [Local]*).
+
+Las credenciales de BrowserStack se buscan **en este orden**:
 
 1. **Variables de entorno** (recomendado): así la access key no queda escrita en claro en un archivo del disco.
    ```powershell
-   setx LT_USERNAME    "TU_USUARIO"
-   setx LT_ACCESS_KEY  "TU_ACCESS_KEY"
+   setx BROWSERSTACK_USERNAME    "TU_USUARIO"
+   setx BROWSERSTACK_ACCESS_KEY  "TU_ACCESS_KEY"
    ```
-   (también se aceptan `LAMBDATEST_USERNAME` / `LAMBDATEST_ACCESS_KEY`). Hay que **reabrir la terminal o la app** para que `setx` tome efecto. Si solo una de las dos está definida, se ignora el entorno y se pasa al archivo.
-2. **`lambdatest_credentials.txt`** en la raíz del proyecto — sigue funcionando igual que siempre:
+   Hay que **reabrir la terminal o la app** (si usás VS Code, VS Code entero) para que `setx` tome efecto. Si solo una de las dos está definida, se ignora el entorno y se pasa al archivo.
+2. **`browserstack_credentials.txt`** en la raíz del proyecto (o al lado del `.exe`):
    ```
    username=TU_USUARIO
    access_key=TU_ACCESS_KEY
    ```
-   o cargalas directo desde la app (panel **CREDENCIALES LT** en la pestaña Envío de Leads, ver arriba).
+   o cargalas directo desde la app (panel **CREDENCIALES BROWSERSTACK** en la pestaña Envío de Leads, ver arriba). Si el archivo quedó con la plantilla (`TU_USUARIO`), la corrida avisa que hay que completarlo.
 
 > Si usás el archivo, **no compartas la carpeta portable con el archivo lleno**: `build.bat` genera una plantilla vacía, pero si lo completaste ahí adentro viaja con la carpeta.
 

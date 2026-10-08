@@ -13,8 +13,9 @@ Reemplazar LambdaTest por **BrowserStack Automate (web)** en tres dispositivos:
 | Samsung Galaxy S26 Ultra (Android 16) | Chrome | ✅ llena, envía y detecta la TY |
 | Mac (macOS Sequoia) | Safari 18.4 | ✅ llena, envía y detecta la TY |
 
-Mientras dure la migración, LambdaTest **no se toca**: los dos proveedores conviven y
-BrowserStack vive en su propia carpeta.
+**Estado:** BrowserStack ya **reemplazó a LambdaTest en la app** (Envío de Leads, Generar
+Excels, Reintentar fallidos, mails, CLI y runner autónomo). El código de `lambdatest_*`
+sigue en el repo, sin uso, hasta retirarlo en un paso aparte.
 
 ## Decisiones tomadas
 
@@ -38,10 +39,33 @@ BrowserStack vive en su propia carpeta.
 
 ```
 osocio/providers/browserstack/
+  runner.py           punto de entrada: run(pais, plataforma, excel, variante...) -> resumen
+  dispositivos.py     tabla única iPhone BS / Android BS / Mac BS + tope de paralelo
   bs_driver.py        conexión: credenciales, dispositivos, driver, estado y video
-  ios_nativo.py       motor del iPhone (capa nativa, ver abajo)
-  prueba_conexion.py  prueba de punta a punta contra una landing real
+  sesion.py           ciclo de vida de una sesión (estado por API REST, video)
+  fabrica.py          le da al motor de la app un navegador de BrowserStack
+  iphone_runner.py    FormFillerIphone: el motor de la app con el llenado nativo
+  ios_nativo.py       la capa nativa del iPhone (ver abajo)
+  prueba_conexion.py  herramienta de desarrollo contra una landing real
+osocio/core/campos_inferencia.py  reconocer campos/botones por texto (neutro)
 ```
+
+**Todo corre con el motor de los navegadores** (`BaseFormFiller`). `runner.run` arma
+`GenericCountryBase(..., browser_factory=FabricaNavegadorBrowserStack(...), capturas=False)`
+y corre el Excel como si fuera Chrome: mapping, IDs dinámicos (sólo si la celda está
+vacía), `-` para omitir, documentos de Brasil normalizados, variantes CDC/T3 y carpetas
+t1/t3, reintentos (event_id incluido), columnas de resultado y `fail_rows` son los de la
+app, sin copia. Al terminar escribe la columna **Video**. El iPhone usa la subclase
+`FormFillerIphone` (ver abajo).
+
+Por qué no el motor de LambdaTest (`lt_runner`): un análisis mostró que no respetaba varias
+reglas de los navegadores (IDs dinámicos le ganaban al Excel, ignoraba el `-`, regeneraba
+documentos de Brasil, marcaba checkboxes opcionales, no conocía variantes ni t1/t3, no
+reintentaba event_id, entre otras).
+
+**Costo:** el motor de los navegadores fue escrito para un Chrome local y hace ~850
+comandos por lead; en la nube cada uno tarda ~0,35 s → **~3–6 min por lead** (iPhone ~3,
+Mac ~5,5, Android ~6). Optimizarlo es un paso pendiente (beneficia también a Chrome).
 
 ### `bs_driver.py`
 
@@ -57,13 +81,12 @@ osocio/providers/browserstack/
   `lambda-status`).
 - **Video**: `GET api.browserstack.com/automate/sessions/<id>.json` → `video_url`.
 
-### Android y Mac: el flujo de la app, tal cual
+### Resultados
 
-En estos dos se puede entrar al iframe con `switch_to.frame()`, así que se usa
-**exactamente** el flujo de LambdaTest: `lt_runner._run_single_lead`, el mismo que
-llaman `run_lt_batch` (Mac) y `run_lt_android_batch` (Android) por cada lead. Solo
-cambia el driver. Mapping por id, IDs dinámicos, dependencias, checkboxes, forms en
-pasos, puerta RAQ de Brasil, documentos de Brasil, TY y "Datos vs Excel" vienen solos.
+Mismas carpetas y nombres que los navegadores (`core/variantes.py`):
+`resultados/t1/resultados_Brasil_BS_Mac1.xlsx`, `…_CDC_BS_iPhone1.xlsx`,
+`resultados/t3/Automatizacion_Brasil_T3_BS_Android1.xlsx`. Sin capturas: en *Formulario
+Inserto / Completado / TY Page* dice "✓ ver Video" y el link está en **Video**.
 
 ### iPhone: por qué hace falta un motor aparte
 
@@ -85,7 +108,20 @@ Es una restricción de Apple, no de BrowserStack ni del código. Lo que se prob�
 | JavaScript desde la landing | ❌ bloqueado por la misma regla |
 | **Capa nativa del iPhone (`NATIVE_APP`)** | ✅ ve el form dentro de la landing, sin importar el dominio |
 
-### iPhone: cómo funciona `ios_nativo.py`
+### iPhone: `FormFillerIphone` + `ios_nativo.py`
+
+`FormFillerIphone` es el motor de la app con un solo cambio de fondo: en vez de entrar al
+iframe (`_entrar_al_iframe`, un punto de extensión de `BaseFormFiller`) se queda en la
+landing y llena por la capa nativa. Reemplaza sólo los métodos que tocan el DOM del iframe
+(llenado, envío/TY, espera de recarga por event_id, foto para "Datos vs Excel"). Si el form
+**no** está en un iframe, no hay bloqueo y usa el motor normal por DOM.
+
+El valor de cada campo sale del mismo camino que en Chrome: la etiqueta visible se traduce a
+los ids del mapping del país (`campos_inferencia.ids_para_etiqueta`) y de ahí
+`_resolve_field_value`, `_pide_omitir_campo`, IDs dinámicos, `_normalizar_documento_brasil`,
+`_sanitize_peru_document` y la regla de no mapeados (obligatorio → plausible, opcional → 50%).
+
+#### La capa nativa (`ios_nativo.py`)
 
 La capa nativa ve la pantalla como la ve el sistema del iPhone. No ve ids, pero cada
 control trae **su etiqueta visible** adentro ("Nombre", "Cédula", "Ciudad"…):
@@ -143,24 +179,31 @@ Detalles técnicos que costaron encontrar:
 
 ## Cómo probar
 
-Desde la raíz del proyecto, con las credenciales cargadas:
+Desde la app: *Envío de Leads* → tildar **iPhone BS / Android BS / Mac BS** → cargar las
+credenciales en el panel **CREDENCIALES BROWSERSTACK** → ejecutar. Necesita el Excel del
+dispositivo (`…_Iphone.xlsx`, `…_Android.xlsx`, `…_Mac.xlsx`), que se genera en *Generar
+Excels con Datos*.
+
+Por línea de comandos (con envío, leads REALES en producción):
 
 ```powershell
-# iPhone, form de Colombia, SIN enviar
-python -m osocio.providers.browserstack.prueba_conexion
-
-# con envío (lead REAL en producción, email @mrm.com)
-python -m osocio.providers.browserstack.prueba_conexion --enviar
-
-# otra plataforma / otra landing
-python -m osocio.providers.browserstack.prueba_conexion --plataforma android --enviar
-python -m osocio.providers.browserstack.prueba_conexion --url https://... --form-url https://secure-developments.com/...
+python run.py --run-browserstack iphone --pais Colombia
+python run.py --run-browserstack mac --pais Brasil --excel-suffix _CDC
 ```
 
-`--enviar` es lo único que manda un lead. Tests sin red:
-`pytest tests/test_estructura_browserstack.py`.
+Herramienta de desarrollo, para una landing puntual (sólo envía con `--enviar`):
+
+```powershell
+python -m osocio.providers.browserstack.prueba_conexion --url https://... --form-url https://...
+```
+
+Tests sin red: `pytest tests/test_estructura_browserstack.py tests/test_browserstack_integracion.py`.
+**En pruebas, máximo 2 sesiones de BrowserStack a la vez.**
 
 ## Resultados hasta ahora
+
+Con el motor de LambdaTest (primeras pruebas) y, desde la integración, con el motor de la
+app (`runner.run`): Colombia `raq` en iPhone, Android y Mac.
 
 | Form | Tipo | iPhone | Android | Mac |
 |---|---|---|---|---|
@@ -192,18 +235,28 @@ sesiones a la vez.**
     (`_centrar_landing_en_campo`); eso también corrige cuando la landing salta sola al
     footer, cosa que pasa a veces. Mobile sigue scrolleando a medida que llena.
 - `.gitignore`: `browserstack_credentials.txt` y `browserstack.yml`.
+- `base_form_filler.py`: `_entrar_al_iframe()` (punto de extensión para el iPhone) y
+  `capturas=False` → `ScreenshotManagerNulo`.
+- `variantes.py`: nombres `BS_iPhone` / `BS_Android` / `BS_Mac` para los resultados.
+- `excel_layout.py`: columna **Video**.
+- UI (`main_interface.py`, `envio_leads.py`, `helpers_interface.py`,
+  `dealer_comparator_ui.py`), `run.py` (`--run-browserstack`; `--run-lambdatest` sigue
+  aceptado y va a BrowserStack), `autonomous_runner.py` (las programaciones guardadas con
+  LambdaTest van a su equivalente), `build.bat` (plantilla `browserstack_credentials.txt`).
 
 ## Pendiente
 
 - [x] Bolivia y Brasil en Android y Mac.
+- [x] Integración a la app: UI, CLI, runner autónomo, mails, columna "Video", resultados,
+      build.
+- [x] Código común fuera de `lambdatest_mac/` (`core/campos_inferencia.py`).
+- [x] iPhone con las reglas de datos de la app (`-`, Excel antes que IDs dinámicos,
+      documentos de Brasil, no mapeados).
+- [ ] Probar desde la app (UI) los tres dispositivos, un T3/CDC de Brasil y "Reintentar
+      fallidos".
+- [ ] **Optimizar el motor en remoto** (menos comandos por lead).
 - [ ] Más mercados en iPhone, sobre todo Perú (tipo de documento) y un form en pasos.
-- [ ] ¿Reintento de event_id en `gm_forms` también para Android/Mac? Hoy siguen a
-      LambdaTest: sin reintento.
-- [ ] Integración a la app: UI, CLI, runner autónomo, Excel con la columna "Video",
-      carpetas de resultados, build (`.spec`).
-- [ ] Sacar el código común de `lambdatest_mac/` a un módulo neutro, para que
-      BrowserStack no dependa de archivos que se llaman "lambdatest".
-- [ ] En el iPhone, lo que depende del Excel real: `-` para omitir campos, columnas
-      SI/NO de checkboxes opcionales, IDs dinámicos, envío vacío inicial para capturar
-      errores.
+- [ ] iPhone: columnas SI/NO de checkboxes opcionales (la capa nativa no ve el `name` del
+      checkbox) y envío vacío inicial.
+- [ ] Probar el `.exe` en otra PC con las credenciales de otra persona.
 - [ ] Retirar LambdaTest cuando BrowserStack esté validado.
