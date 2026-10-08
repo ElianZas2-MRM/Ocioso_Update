@@ -13,6 +13,7 @@
 
 | Documento | Contenido |
 |---|---|
+| [`migracion_browserstack.md`](migracion_browserstack.md) | **En curso.** Migración de LambdaTest a BrowserStack: decisiones, cómo se llena el form en iPhone y qué falta. |
 | [`mapa_interfaz.md`](mapa_interfaz.md) | Mapa de `main_interface.py`, que son 4.900 líneas en una sola función. Dice en qué rango de líneas está cada cosa. |
 | [`historial_build.md`](historial_build.md) | Historial de cambios del script de build. Vivía dentro de `build.bat`. |
 | [`README_HISTORIAL_ANTERIOR.md`](README_HISTORIAL_ANTERIOR.md) | Historial de versiones anteriores de la app. |

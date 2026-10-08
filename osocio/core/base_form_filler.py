@@ -99,6 +99,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         "ocorreu um problema ao enviar o formulario neste momento",
         "lo sentimos, ocurrió",
         "lo siento, ocurrió",
+        # Cartel nuevo de Brasil (gm_forms): "A bola bateu na trave, mas seguimos na
+        # estrada. Não conseguimos concluir seu envio neste momento..."
+        "não conseguimos concluir seu envio",
+        "nao conseguimos concluir seu envio",
     )
 
     # Marcadores de URL de los formularios GM hechos por DEV (NO los AEM): el iframe del
