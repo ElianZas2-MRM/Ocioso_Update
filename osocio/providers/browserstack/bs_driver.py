@@ -196,8 +196,13 @@ def create_bs_driver(username: str, access_key: str,
     # la sesión queda pedida como Mac y BrowserStack la resuelve sólo por el deviceName.
     options.set_capability("platformName", DISPOSITIVOS[platform]["platformName"])
     options.set_capability("bstack:options", bstack)
+    # Igual que los navegadores locales: no esperar trackers/píxeles de terceros. Con
+    # "normal", en un device real la landing puede tardar más que el timeout de red.
+    options.page_load_strategy = "eager"
 
-    cfg = ClientConfig(remote_server_addr=BS_HUB, username=username, password=access_key)
+    # Devices reales: algunos comandos tardan más que en un navegador local.
+    cfg = ClientConfig(remote_server_addr=BS_HUB, username=username, password=access_key,
+                       timeout=300)
     driver = Remote(command_executor=BS_HUB, options=options, client_config=cfg)
     if platform == "mac":
         driver.maximize_window()
@@ -223,6 +228,22 @@ def mark_bs_status(driver, passed: bool = True, reason: str = "") -> None:
         driver.execute_script(status_script(passed, reason))
     except Exception:
         pass
+
+
+def mark_bs_status_api(session_id: str, username: str, access_key: str,
+                       passed: bool, reason: str = "") -> bool:
+    """Igual que mark_bs_status pero por la API REST: sirve cuando el driver ya se
+    cerró (el motor de los navegadores lo cierra en su cleanup)."""
+    if not session_id:
+        return False
+    try:
+        import requests
+        resp = requests.put(f"{BS_API}/sessions/{session_id}.json", auth=(username, access_key),
+                            json={"status": "passed" if passed else "failed",
+                                  "reason": (reason or "")[:255]}, timeout=15)
+        return resp.ok
+    except Exception:
+        return False
 
 
 def fetch_bs_session(session_id: str, username: str, access_key: str) -> Dict[str, str]:

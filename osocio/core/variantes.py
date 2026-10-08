@@ -36,7 +36,12 @@ _ETIQUETAS = {
 }
 
 # Nombre con el que cada navegador aparece en los archivos de salida.
-_DISPOSITIVOS = {"chrome": "Chrome", "firefox": "Firefox", "edge": "Edge"}
+_DISPOSITIVOS = {
+    "chrome": "Chrome", "firefox": "Firefox", "edge": "Edge",
+    # Corridas en la nube: resultados_Brasil_CDC_BS_Mac1.xlsx, en las mismas carpetas t1/t3.
+    "browserstack_iphone": "BS_iPhone", "browserstack_android": "BS_Android",
+    "browserstack_mac": "BS_Mac",
+}
 
 
 def normalizar(sufijo):

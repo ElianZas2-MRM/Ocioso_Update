@@ -807,3 +807,25 @@ def enforce_screenshot_budget(screenshot_dir, max_mb=48, log=print):
             files = [p for p in files if p != f]
 
     log(f"Capturas: total final {_total()/1e6:.1f} MB")
+
+
+class ScreenshotManagerNulo(ScreenshotManager):
+    """Misma interfaz que ScreenshotManager, pero sin sacar capturas.
+
+    Para las corridas en la nube (BrowserStack): la evidencia es el video de la sesión,
+    y cada captura es un viaje de ida y vuelta al device remoto que no aporta nada que el
+    video no muestre. Igual que hacía LambdaTest. Los nombres (fname) se siguen armando
+    porque el motor los usa para el Excel de resultados.
+    """
+
+    def take_full_page_screenshot(self, filename):
+        return None
+
+    def take_landing_screenshot(self, ss_number, stage):
+        return None
+
+    def take_form_area_screenshot(self, filename):
+        return None
+
+    def take_form_screenshot(self, ss_number, stage, full_page=False):
+        return None

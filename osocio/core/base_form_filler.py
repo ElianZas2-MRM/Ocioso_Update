@@ -46,7 +46,7 @@ from osocio.core.form_filler.ids_dinamicos import IdsDinamicosMixin
 from osocio.core.form_filler.por_mercado import ReglasPorMercadoMixin
 from osocio.core.form_filler.aem import FormulariosAEMMixin
 from osocio.core.form_filler.navegacion import NavegacionDOMMixin
-from osocio.core.screenshot_manager import ScreenshotManager
+from osocio.core.screenshot_manager import ScreenshotManager, ScreenshotManagerNulo
 from osocio.core.browser.browser_actions import BrowserActions
 
 from osocio.utils.field_id_aliases import VISID_ID_ALIASES
@@ -1204,7 +1204,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             headless=self.config.get('headless', False),
             background=self.config.get('background', True),
         )
-        self.screenshot_manager = ScreenshotManager(self.driver, self.SCREENSHOT_DIR)
+        # capturas=False en las corridas en la nube: la evidencia es el video.
+        _gestor = ScreenshotManager if self.config.get("capturas", True) else ScreenshotManagerNulo
+        self.screenshot_manager = _gestor(self.driver, self.SCREENSHOT_DIR)
         self.actions = BrowserActions(self.driver)
 
         # Monkey patch find_element and find_elements to support name & CSS fallback for By.ID

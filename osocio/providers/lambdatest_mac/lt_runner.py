@@ -61,6 +61,13 @@ except ImportError:
 
 from osocio.providers.lambdatest_mac.lt_excel_reader import read_osocio_excel, LeadRow
 from osocio.utils.scroll_dinamico import pre_scroll
+# Reglas de reconocimiento de campos/botones: viven en un módulo neutro y se reexportan
+# acá con el mismo nombre (otros módulos y tests las importan desde lt_runner).
+from osocio.core.campos_inferencia import (
+    _PLACEHOLDER_KW, _is_placeholder, _INFER_DATAKEY_MAP, _normalize_for_infer,
+    _infer_data_key, _get_inferred_value, _NEXT_KEYWORDS, _SUBMIT_KEYWORDS,
+)
+_REEXPORTADOS = (_PLACEHOLDER_KW, _INFER_DATAKEY_MAP, _normalize_for_infer, _SUBMIT_KEYWORDS)
 
 # Aliases ID para formularios del estándar visid (coexistencia con forms actuales)
 _VISID_ID_ALIASES: dict = {
@@ -350,13 +357,7 @@ def _pre_scroll_for_dynamic_content(driver):
 # PLACEHOLDERS Y OPCIONES VÁLIDAS
 # ══════════════════════════════════════════════════════════════════════════════
 
-_PLACEHOLDER_KW = (
-    "seleccione", "selecciona", "seleccionar", "seleccion",
-    "selecione", "selecionar", "selecao", "escolha", "escolher",
-    "elija", "elegir", "opcao", "opciones", "opcion",
-    "porfavor", "favor", "obrigatorio", "required",
-    "select", "choose", "please",
-)
+
 
 
 # Mapeo flexible de encabezados Excel → IDs HTML (compartido por el llenado y por la
@@ -396,11 +397,6 @@ _HEADER_TO_IDS = {
 }
 
 
-def _is_placeholder(text: str) -> bool:
-    t = (text or "").lower().strip()
-    if not t or "--" in t:
-        return True
-    return any(kw in t for kw in _PLACEHOLDER_KW)
 
 
 def _get_valid_options(select_el) -> List:
@@ -2671,56 +2667,6 @@ def _ensure_fields_filled_before_submit(driver, field_mapping: List[Dict], all_t
             break
 
 
-_INFER_DATAKEY_MAP = {
-    "firstname":  ("nombre", "name", "first", "fname", "nome", "given"),
-    "lastname":   ("apellido", "lastname", "surname", "lname", "sobrenome", "family"),
-    "email":      ("email", "correo", "mail", "e-mail", "emailaddress"),
-    "phone":      ("telefono", "celular", "phone", "mobile", "cel", "tel", "fono", "movil",
-                   "whatsapp", "celphone", "telefone"),
-    "document":   ("documento", "doc", "cedula", "dni", "rut", "ci", "cpf",
-                   "rfc", "identif", "passport", "pasaporte"),
-    "model":      ("modelo", "model", "vehiculo", "veiculo", "auto", "car"),
-}
-
-
-def _normalize_for_infer(text):
-    import unicodedata
-    nfkd = unicodedata.normalize("NFKD", (text or "").lower())
-    ascii_str = "".join(c for c in nfkd if not unicodedata.combining(c))
-    return ascii_str.replace(" ", "").replace("-", "").replace("_", "")
-
-
-def _infer_data_key(field_id, field_name, field_placeholder=""):
-    tokens = [
-        _normalize_for_infer(field_id),
-        _normalize_for_infer(field_name),
-        _normalize_for_infer(field_placeholder),
-    ]
-    for data_key, keywords in _INFER_DATAKEY_MAP.items():
-        for token in tokens:
-            if token and any(kw in token or token in kw for kw in keywords):
-                return data_key
-    return None
-
-
-def _get_inferred_value(inferred_key: str, lead) -> str:
-    if not lead or not inferred_key:
-        return ""
-    lead_lower = {k.lower().strip(): v for k, v in lead.data.items()}
-    INFERRED_TO_HEADERS = {
-        "firstname": ["firstname", "name", "nombre", "nombres", "fullname", "full_name"],
-        "lastname":  ["lastname", "apellido", "apellidos", "last_name"],
-        "email":     ["email", "correo", "e-mail"],
-        "phone":     ["phone", "celular", "telefono", "cellphone", "telephone", "telephone-mask"],
-        "document":  ["document", "documento", "cpf", "cnpj", "dni", "rut", "ci"],
-        "model":     ["model", "modelo", "models"],
-    }
-    headers = INFERRED_TO_HEADERS.get(inferred_key, [inferred_key])
-    for h in headers:
-        val = lead_lower.get(h, "")
-        if val and str(val).strip().lower() not in ("", "none"):
-            return str(val)
-    return str(lead_lower.get(inferred_key, ""))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3286,14 +3232,6 @@ def _auto_fill_unmapped_dropdowns_lt(driver, field_mapping: List[Dict],
 # _click_next_button, submit_and_verify_form
 # ══════════════════════════════════════════════════════════════════════════════
 
-_NEXT_KEYWORDS = (
-    "siguiente", "seguinte", "continuar", "continuacao",
-    "proximo", "próximo", "next",
-)
-
-_SUBMIT_KEYWORDS = (
-    "enviar", "submit", "confirmar", "finalizar", "enviar dados",
-)
 
 # Selectores CSS para encontrar el botón Siguiente (igual que Osocio)
 _NEXT_SELECTORS = [

@@ -46,7 +46,7 @@ _BOTONES_CERRAR = ("Done", "Listo", "OK", "Aceptar")
 
 def _kw_botones():
     """Textos de botón Siguiente / Enviar: los mismos que usa la app (lt_runner)."""
-    from osocio.providers.lambdatest_mac.lt_runner import _NEXT_KEYWORDS, _SUBMIT_KEYWORDS
+    from osocio.core.campos_inferencia import _NEXT_KEYWORDS, _SUBMIT_KEYWORDS
     return (tuple(_norm(k) for k in _NEXT_KEYWORDS), tuple(_norm(k) for k in _SUBMIT_KEYWORDS))
 # Checkbox que se marcan: términos, privacidad, autorizaciones (mismo criterio que
 # _handle_terms_checkboxes de la app, por texto en vez de por name).
@@ -239,7 +239,7 @@ class FormNativoIOS:
 
     def _elegir_en_menu(self, opcion: Optional[str]) -> str:
         """Elige en el menú de iOS la opción pedida o, si no hay, una real al azar."""
-        from osocio.providers.lambdatest_mac.lt_runner import _is_placeholder
+        from osocio.core.campos_inferencia import _is_placeholder
 
         raiz = ET.fromstring(self.d.page_source)
         menu = raiz.find(f".//{_T}CollectionView")
@@ -289,7 +289,7 @@ class FormNativoIOS:
     def _pendiente(self, c) -> bool:
         """Un control falta llenar según lo que MUESTRA (no según una lista de hechos):
         así el zoom de Safari o un re-render no hacen que se llene dos veces."""
-        from osocio.providers.lambdatest_mac.lt_runner import _is_placeholder
+        from osocio.core.campos_inferencia import _is_placeholder
         if c["tipo"] == "texto":
             return not c["valor"].strip()
         if c["tipo"] == "select":

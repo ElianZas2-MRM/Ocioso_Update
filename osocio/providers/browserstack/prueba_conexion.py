@@ -150,7 +150,7 @@ def _resolvedor_de_valores(pais: str, url: str, form_url: str):
     """
     from osocio.utils.data_generator import generar_fila_datos, valor_plausible_por_nombre
     from osocio.providers.lambdatest_mac.lt_excel_reader import LeadRow
-    from osocio.providers.lambdatest_mac.lt_runner import (
+    from osocio.core.campos_inferencia import (
         _infer_data_key, _get_inferred_value, _normalize_for_infer,
     )
 
