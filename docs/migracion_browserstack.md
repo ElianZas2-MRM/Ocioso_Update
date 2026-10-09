@@ -227,9 +227,20 @@ app (`runner.run`): Colombia `raq` en iPhone, Android y Mac.
 
 `Automate - Desktop & Mobile Pro`: **10 sesiones en paralelo por cuenta** (compartidas
 por todo el equipo, no por build) y 10 más en cola. Se probaron 6 a la vez dentro del
-mismo build sin cola: se puede correr, por ejemplo, un build por mercado con sus forms en
-paralelo. Conviene un tope configurable para no acaparar las 10. **En pruebas, máximo 2
-sesiones a la vez.**
+mismo build sin cola.
+
+**Cómo lo usa la app:** un **build por mercado y por corrida**
+(`runner.nombre_build_mercado` → *Osocio BS - Envio Manual - Colombia - 2026-10-09 12:04*),
+con una sesión por dispositivo (*iPhone - Colombia - …*, *Mac - …*, *Android - …*). Los
+dispositivos de BrowserStack de un mercado **arrancan siempre juntos**, aunque "Excels por
+dispositivo" esté en Consecutivo (`envio_leads._run_market`; igual en el runner autónomo).
+Tope de sesiones simultáneas: `dispositivos.max_paralelo()`, **3 por defecto**, configurable
+en `config_global.json → browserstack.max_paralelo`. Probado: iPhone, Mac y Android de
+Colombia en un mismo build, arrancando al mismo segundo; el mercado tardó ~3 min (lo del
+más lento) en vez de ~8 uno detrás del otro.
+
+Para probar sin cargar leads: `runner.run(..., enviar=False)` (modo `chequeo_campos`; la
+sesión queda *passed* con motivo "Prueba sin envío").
 
 ## Cambios fuera de `browserstack/`
 

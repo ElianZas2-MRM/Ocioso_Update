@@ -1664,15 +1664,14 @@ def iniciar_interfaz(autostart_leads=False):
     def _refresh_excel_par_warning(*_):
         try:
             _bs_sel = _hay_bs_seleccionado()
-            _par = (excels_mode[0] == "paralelo")
         except Exception:
             return
-        if _par and _bs_sel:
+        if _bs_sel:
             from osocio.providers.browserstack.dispositivos import max_paralelo
             excel_par_warn_lbl.config(
-                text=f"⚠ BrowserStack corre como máximo {max_paralelo()} sesiones a la vez (las sesiones "
-                     "del plan las comparte todo el equipo); el resto espera su turno. Se cambia en "
-                     "config_global.json → browserstack.max_paralelo.")
+                text=f"ℹ BrowserStack: los dispositivos de cada mercado corren a la vez, en un mismo build "
+                     f"(máximo {max_paralelo()} sesiones simultáneas; las del plan las comparte todo el "
+                     "equipo). Se cambia en config_global.json → browserstack.max_paralelo.")
         else:
             excel_par_warn_lbl.config(text="")
     _refresh_excel_par_warning()

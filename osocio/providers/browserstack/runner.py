@@ -18,6 +18,7 @@ Mismo contrato de resumen que tenía lt_controller.run, así la UI no cambia de 
 
 import os
 import threading
+from datetime import datetime
 from typing import Callable, Dict, Optional
 
 from osocio.paths import DATA_DIR
@@ -36,11 +37,28 @@ def excel_por_defecto(pais: str, plataforma: str, variante: str = "") -> str:
         DATA_DIR, f"Lead_information_Formulario_{pais}_{SUFIJO_EXCEL[plataforma]}{variante or ''}.xlsx")
 
 
+_NOMBRE_DISP = {"iphone": "iPhone", "android": "Android", "mac": "Mac"}
+
+
+def nombre_build_mercado(pais: str, programada: bool, inicio: Optional[datetime] = None) -> str:
+    """Un build por mercado y por corrida: iPhone, Android y Mac de ese mercado van juntos.
+
+    La hora de inicio de la corrida hace que cada corrida sea un build nuevo. Sin guiones
+    largos ni paréntesis: BrowserStack los descarta del nombre.
+    """
+    modo = "Automatizado" if programada else "Envio Manual"
+    return f"Osocio BS - {modo} - {pais} - {(inicio or datetime.now()):%Y-%m-%d %H:%M}"
+
+
 def nombre_build(pais: str, plataforma: str, programada: bool) -> str:
-    # Sin guiones largos ni paréntesis: BrowserStack los descarta del nombre.
-    disp = {"iphone": "iPhone", "android": "Android", "mac": "Mac"}[plataforma]
-    modo = "Automatizado" if programada else "Envío Manual"
-    return f"Osocio BS {disp} - {modo} - {pais}"
+    """Build de un dispositivo suelto (CLI sin --build-name)."""
+    modo = "Automatizado" if programada else "Envio Manual"
+    return f"Osocio BS {_NOMBRE_DISP[plataforma]} - {modo} - {pais}"
+
+
+def nombre_sesion(pais: str, plataforma: str, excel_path: str) -> str:
+    """Dentro del build del mercado, cada sesión se distingue por el dispositivo."""
+    return f"{_NOMBRE_DISP[plataforma]} - {pais} - {os.path.basename(excel_path)}"
 
 
 def _resumen_vacio(pais: str, error: str = "") -> Dict:
@@ -73,8 +91,12 @@ def escribir_video(results_path: str, video_url: str, log: Callable = print) -> 
 
 def run(pais: str, plataforma: str, excel_path: Optional[str] = None, variante: str = "",
         programada: bool = False, build_name: str = "", log_fn: Callable = print,
-        stop_event: Optional[threading.Event] = None) -> Dict:
-    """Corre el Excel de un mercado en un dispositivo de BrowserStack."""
+        stop_event: Optional[threading.Event] = None, enviar: bool = True) -> Dict:
+    """Corre el Excel de un mercado en un dispositivo de BrowserStack.
+
+    enviar=False llena todo y no toca Enviar (modo chequeo_campos del motor): para probar
+    sin cargar leads en la base.
+    """
     if plataforma not in PLATAFORMAS:
         return _resumen_vacio(pais, f"Plataforma de BrowserStack desconocida: {plataforma}")
     excel_path = excel_path or excel_por_defecto(pais, plataforma, variante)
@@ -87,7 +109,8 @@ def run(pais: str, plataforma: str, excel_path: Optional[str] = None, variante: 
     except Exception as e:
         return _resumen_vacio(pais, str(e))
 
-    return _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn)
+    return _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn,
+                      enviar)
 
 
 def _clase_motor(plataforma):
@@ -100,15 +123,17 @@ def _clase_motor(plataforma):
     return GenericCountryBase
 
 
-def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn):
+def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn, enviar=True):
     from osocio.providers.browserstack.fabrica import FabricaNavegadorBrowserStack
 
     resumen = _resumen_vacio(pais)
-    fab = FabricaNavegadorBrowserStack(plataforma, build_name, f"{pais} - {os.path.basename(excel_path)}",
-                                       log=log_fn)
+    fab = FabricaNavegadorBrowserStack(plataforma, build_name,
+                                       nombre_sesion(pais, plataforma, excel_path), log=log_fn)
     form = _clase_motor(plataforma)(pais, browser=f"browserstack_{plataforma}", browser_factory=fab,
                               is_scheduled=programada, excel_suffix=variante, capturas=False)
     form.EXCEL_PATH = excel_path
+    if not enviar:
+        form.config["chequeo_campos"] = True
     try:
         form.run()
     except Exception as e:
@@ -120,8 +145,15 @@ def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, l
                        total=int(summ.get("total", 0)), fail_rows=list(summ.get("fail_rows") or []),
                        results_excel=getattr(form, "RESULTADOS_PATH", None))
         if fab.sesion is not None:
-            todo_ok = resumen["failed"] == 0 and resumen["ok"] > 0 and not resumen["error"]
-            info = fab.sesion.cerrar(todo_ok, f"ok={resumen['ok']} fallidos={resumen['failed']}")
+            if enviar:
+                todo_ok = resumen["failed"] == 0 and resumen["ok"] > 0 and not resumen["error"]
+                motivo = f"ok={resumen['ok']} fallidos={resumen['failed']}"
+            else:
+                # Sin envío el motor anota "Verificación visual", no "Lead enviado": eso no
+                # es un fallo de la sesión.
+                todo_ok = not resumen["error"]
+                motivo = "Prueba sin envío (chequeo de campos)"
+            info = fab.sesion.cerrar(todo_ok, motivo)
             resumen["session_id"] = fab.sesion.session_id
             resumen["video_url"] = info.get("video_url", "")
             if resumen["video_url"]:

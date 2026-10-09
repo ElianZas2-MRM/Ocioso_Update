@@ -225,10 +225,10 @@ def _dispositivo_bs(navegador):
     return por_cualquier_nombre(_PROGRAMADO_LT_A_BS.get(navegador, navegador))
 
 
-def _build_browserstack_command(plataforma, pais_nombre):
+def _build_browserstack_command(plataforma, pais_nombre, build_name=""):
     from osocio.providers.browserstack.runner import nombre_build
     args = ["--run-browserstack", plataforma, "--pais", pais_nombre, "--scheduled",
-            "--build-name", nombre_build(pais_nombre, plataforma, programada=True)]
+            "--build-name", build_name or nombre_build(pais_nombre, plataforma, programada=True)]
     if getattr(sys, 'frozen', False):
         return [sys.executable, *args]
     return [sys.executable, os.path.join(PROJECT_ROOT, "run.py"), *args]
@@ -279,9 +279,18 @@ def ejecutar_tests(programacion):
 
         modo_mercados = programacion.get("modo_mercados", "consecutivo")
         _lock = threading.Lock()
+        # BrowserStack: un build por mercado (con la hora de esta corrida) y tope de sesiones.
+        from datetime import datetime as _dt
+        from osocio.providers.browserstack.dispositivos import max_paralelo
+        _inicio_corrida = _dt.now()
+        _bs_sem = threading.Semaphore(max_paralelo())
 
-        def _run_bs(pais_nombre, navegador):
+        def _run_bs(pais_nombre, navegador, build_name=""):
             # ── BrowserStack: no usa viewports. Una ejecución por país ───────────
+            with _bs_sem:  # tope de sesiones simultáneas en la nube (compartidas por el equipo)
+                _run_bs_sin_tope(pais_nombre, navegador, build_name)
+
+        def _run_bs_sin_tope(pais_nombre, navegador, build_name):
             nonlocal total_ejecutados
             disp = _dispositivo_bs(navegador)
             with _lock:
@@ -299,7 +308,7 @@ def ejecutar_tests(programacion):
 
             try:
                 result = subprocess.run(
-                    _build_browserstack_command(disp.plataforma, pais_nombre),
+                    _build_browserstack_command(disp.plataforma, pais_nombre, build_name),
                     check=False, capture_output=True, text=True, encoding="utf-8", errors="replace",
                     timeout=_timeout_browserstack(pais_nombre, disp.plataforma),
                     cwd=PROJECT_ROOT, env=_build_subprocess_env(),
@@ -399,29 +408,22 @@ def ejecutar_tests(programacion):
 
         def _run_mercado_completo(pais_nombre):
             """Corre BrowserStack + browsers locales para un país.
-            Si modo paralelo, todos los dispositivos corren a la vez
-            (la nube y local no compiten — máquinas distintas)."""
-            _threads = []
-            for navegador in programacion["navegadores"]:
-                if _dispositivo_bs(navegador) is not None:
-                    _threads.append(threading.Thread(
-                        target=_run_bs, args=(pais_nombre, navegador), daemon=True))
+
+            Los dispositivos de BrowserStack del país arrancan SIEMPRE juntos y en un mismo
+            build (corren en la nube, no compiten con la PC). Los locales, después o a la vez
+            según el modo de mercados.
+            """
+            from osocio.providers.browserstack.runner import nombre_build_mercado
+            build = nombre_build_mercado(pais_nombre, True, _inicio_corrida)
+            _nube = [threading.Thread(target=_run_bs, args=(pais_nombre, n, build), daemon=True)
+                     for n in programacion["navegadores"] if _dispositivo_bs(n) is not None]
+            for t in _nube:
+                t.start()
             _has_local = any(_dispositivo_bs(n) is None for n in programacion["navegadores"])
             if _has_local:
-                _threads.append(threading.Thread(
-                    target=_run_browser_pais, args=(pais_nombre,), daemon=True))
-
-            if modo_mercados == "paralelo" and len(_threads) > 1:
-                for t in _threads:
-                    t.start()
-                for t in _threads:
-                    t.join()
-            else:
-                # Secuencial: la nube primero, después locales
-                for navegador in programacion["navegadores"]:
-                    if _dispositivo_bs(navegador) is not None:
-                        _run_bs(pais_nombre, navegador)
                 _run_browser_pais(pais_nombre)
+            for t in _nube:
+                t.join()
 
         # Ejecución por mercado (país): consecutivo o paralelo según configuración.
         if modo_mercados == "paralelo" and len(programacion["paises"]) > 1:

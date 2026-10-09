@@ -13,6 +13,7 @@ el valor nuevo. Congelarlas acá rompería eso en silencio.
 """
 
 import os
+from datetime import datetime
 
 from osocio.core.variantes import CDC as VAR_CDC, T3 as VAR_T3, etiqueta_de_corrida
 
@@ -523,6 +524,9 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
     background = not opciones.ver_navegador  # ver navegador → visible
     stop_event = threading.Event()
+    # BrowserStack: un build por mercado y por corrida (iPhone, Android y Mac del mismo
+    # mercado juntos). La hora de inicio es la misma para todas las sesiones de la corrida.
+    _inicio_corrida = datetime.now()
 
     if not scheduled:
         btn_enviar.config(state="disabled", text=" EN CURSO...", bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY)
@@ -1196,6 +1200,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                         return
                     summary = bs_runner.run(pais=pais, plataforma=_bs.plataforma, excel_path=excel,
                                             variante=sess.get("variante", ""), programada=scheduled,
+                                            build_name=bs_runner.nombre_build_mercado(
+                                                pais, scheduled, _inicio_corrida),
                                             log_fn=log_message) or {}
                 _collect_bs_email(sess.get("email_label") or pais, _bs.navegador, _bs.plataforma, summary)
                 _err = summary.get("error")
@@ -1212,21 +1218,32 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             _bump(pais, _sid, fail=int(sess.get("rows_count", 1) or 1), err=str(e)[:200])
 
     def _run_market(sessions):
-        """Corre las sesiones de un mercado. Si mercados_par o excels_par están
-        activos, lanza todos los dispositivos/Excels del mercado en paralelo
-        (Chrome local y BrowserStack no compiten, corren en máquinas distintas)."""
-        _parallel = (excels_par or mercados_par) and len(sessions) > 1
+        """Corre las sesiones de un mercado.
+
+        Las de BrowserStack (iPhone / Android / Mac) arrancan SIEMPRE juntas, en el mismo
+        build: corren en la nube, no compiten con la PC (el tope de sesiones simultáneas lo
+        pone _bs_sem). Las locales (Chrome/Firefox/Edge) respetan Consecutivo/Paralelo: en
+        paralelo si mercados_par o excels_par están activos.
+        """
+        nube = [s for s in sessions if bs_dispositivo(s.get("dtype")) is not None]
+        locales = [s for s in sessions if bs_dispositivo(s.get("dtype")) is None]
+        hilos_nube = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in nube]
+        for t in hilos_nube:
+            t.start()
+        _parallel = (excels_par or mercados_par) and len(locales) > 1
         if _parallel:
-            ts = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in sessions]
+            ts = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in locales]
             for t in ts:
                 t.start()
             for t in ts:
                 t.join()
         else:
-            for s in sessions:
+            for s in locales:
                 if stop_event.is_set():
                     break
                 _run_session(s)
+        for t in hilos_nube:
+            t.join()
 
     def _worker():
         _ensure_serialized_setup()  # evita choque de resultados en paralelo

@@ -38,7 +38,7 @@ def test_la_seleccion_guardada_con_lambdatest_pasa_a_browserstack():
                                                     "android bs": False}
 
 
-@pytest.mark.parametrize("configurado,esperado", [(None, 2), (1, 1), (5, 5), (50, 10), (0, 1)])
+@pytest.mark.parametrize("configurado,esperado", [(None, 3), (1, 1), (5, 5), (50, 10), (0, 1)])
 def test_tope_de_sesiones_en_paralelo(monkeypatch, tmp_path, configurado, esperado):
     cfg = {} if configurado is None else {"browserstack": {"max_paralelo": configurado}}
     (tmp_path / "config_global.json").write_text(json.dumps(cfg), encoding="utf-8")
@@ -68,10 +68,30 @@ def test_nombre_de_los_resultados(navegador, sufijo, programada, esperado):
     assert excel == esperado
 
 
-def test_el_build_no_lleva_caracteres_que_browserstack_descarta():
-    nombre = runner.nombre_build("Colombia", "iphone", programada=False)
-    assert nombre == "Osocio BS iPhone - Envío Manual - Colombia"
-    assert "—" not in nombre and "(" not in nombre
+def _solo_caracteres_que_acepta_browserstack(nombre):
+    # Letras sin acento, dígitos, espacio y . : - [ ] / @ & ' _ (lo demás lo descarta).
+    import re
+    return re.fullmatch(r"[A-Za-z0-9 .:\-\[\]/@&'_]+", nombre) is not None
+
+
+def test_un_build_por_mercado_y_por_corrida():
+    from datetime import datetime
+    inicio = datetime(2026, 10, 9, 10, 32)
+    nombre = runner.nombre_build_mercado("Colombia", False, inicio)
+    assert nombre == "Osocio BS - Envio Manual - Colombia - 2026-10-09 10:32"
+    assert _solo_caracteres_que_acepta_browserstack(nombre)
+    # Mismo mercado y misma corrida -> mismo build, para los tres dispositivos.
+    assert runner.nombre_build_mercado("Colombia", False, inicio) == nombre
+    # Otra corrida (otra hora) u otro mercado -> otro build.
+    assert runner.nombre_build_mercado("Colombia", False, datetime(2026, 10, 9, 11, 0)) != nombre
+    assert runner.nombre_build_mercado("Brasil", False, inicio) != nombre
+    assert runner.nombre_build_mercado("Colombia", True, inicio).startswith("Osocio BS - Automatizado")
+
+
+def test_dentro_del_build_cada_sesion_dice_su_dispositivo():
+    sesion = runner.nombre_sesion("Colombia", "iphone", "data/Lead_information_Formulario_Colombia_Iphone.xlsx")
+    assert sesion == "iPhone - Colombia - Lead_information_Formulario_Colombia_Iphone.xlsx"
+    assert _solo_caracteres_que_acepta_browserstack(runner.nombre_build("Colombia", "mac", False))
 
 
 # --- sin capturas en la nube ----------------------------------------------------------
@@ -224,3 +244,22 @@ def test_iphone_campo_opcional_no_mapeado_se_decide_una_vez(iphone_brasil):
 def test_iphone_campo_obligatorio_no_mapeado_siempre_se_completa(iphone_brasil):
     datos = _form_data(iphone_brasil, {})
     assert iphone_brasil._valor_para_etiqueta(datos, "texto", "Endereço*")
+
+
+# --- los dispositivos de la nube de un mercado arrancan juntos ---------------------------
+
+def test_la_nube_arranca_junta_aunque_los_excels_esten_en_consecutivo():
+    """iPhone, Android y Mac del mismo mercado tienen que estar corriendo a la vez aunque
+    "Excels por dispositivo" esté en Consecutivo: en la nube no compiten con la PC."""
+    import ast
+    import inspect
+    import textwrap
+    from osocio.interface import envio_leads
+    fuente = textwrap.dedent(inspect.getsource(envio_leads))
+    arbol = ast.parse(fuente)
+    run_market = next(n for n in ast.walk(arbol)
+                      if isinstance(n, ast.FunctionDef) and n.name == "_run_market")
+    codigo = ast.get_source_segment(fuente, run_market)
+    # Las sesiones de la nube se separan y se lanzan en hilos ANTES de mirar el modo.
+    assert "bs_dispositivo" in codigo
+    assert codigo.index("for t in hilos_nube:") < codigo.index("_parallel = (")

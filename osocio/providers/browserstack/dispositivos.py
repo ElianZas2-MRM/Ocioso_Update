@@ -75,9 +75,9 @@ def migrar_seleccion(guardada: Dict[str, bool]) -> Dict[str, bool]:
 
 
 # Sesiones de BrowserStack simultáneas que lanza la app. El plan tiene 10 en paralelo
-# COMPARTIDAS por todo el equipo: por defecto 2, para no acaparar.
+# COMPARTIDAS por todo el equipo: por defecto 3 (iPhone, Android y Mac de un mercado juntos).
 # Configurable en json/config_global.json -> {"browserstack": {"max_paralelo": N}}.
-MAX_PARALELO_DEFAULT = 2
+MAX_PARALELO_DEFAULT = 3
 _MAX_PARALELO_PLAN = 10
 
 
