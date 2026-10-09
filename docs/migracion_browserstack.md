@@ -231,13 +231,14 @@ mismo build sin cola.
 
 **Cómo lo usa la app:** un **build por mercado y por corrida**
 (`runner.nombre_build_mercado` → *Osocio BS - Envio Manual - Colombia - 2026-10-09 12:04*),
-con una sesión por dispositivo (*iPhone - Colombia - …*, *Mac - …*, *Android - …*). Los
-dispositivos de BrowserStack de un mercado **arrancan siempre juntos**, aunque "Excels por
-dispositivo" esté en Consecutivo (`envio_leads._run_market`; igual en el runner autónomo).
-Tope de sesiones simultáneas: `dispositivos.max_paralelo()`, **3 por defecto**, configurable
-en `config_global.json → browserstack.max_paralelo`. Probado: iPhone, Mac y Android de
-Colombia en un mismo build, arrancando al mismo segundo; el mercado tardó ~3 min (lo del
-más lento) en vez de ~8 uno detrás del otro.
+con una sesión por dispositivo (*iPhone - Colombia - …*, *Mac - …*, *Android - …*). Corren
+uno tras otro o a la vez según "Excels por dispositivo" (Consecutivo / Paralelo), con la
+misma regla que los navegadores locales (`envio_leads._run_market`; igual en el runner
+autónomo con el modo de mercados). Tope de sesiones simultáneas:
+`dispositivos.max_paralelo()`, **3 por defecto**, configurable en
+`config_global.json → browserstack.max_paralelo`. Probado en Paralelo: iPhone, Mac y
+Android de Colombia en un mismo build, arrancando al mismo segundo; el mercado tardó ~3 min
+(lo del más lento) en vez de ~8 uno detrás del otro.
 
 Para probar sin cargar leads: `runner.run(..., enviar=False)` (modo `chequeo_campos`; la
 sesión queda *passed* con motivo "Prueba sin envío").

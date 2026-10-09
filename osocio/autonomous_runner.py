@@ -408,22 +408,32 @@ def ejecutar_tests(programacion):
 
         def _run_mercado_completo(pais_nombre):
             """Corre BrowserStack + browsers locales para un país.
-
-            Los dispositivos de BrowserStack del país arrancan SIEMPRE juntos y en un mismo
-            build (corren en la nube, no compiten con la PC). Los locales, después o a la vez
-            según el modo de mercados.
-            """
+            Si modo paralelo, todos los dispositivos corren a la vez
+            (la nube y local no compiten — máquinas distintas).
+            Los de BrowserStack van todos al mismo build del país."""
             from osocio.providers.browserstack.runner import nombre_build_mercado
             build = nombre_build_mercado(pais_nombre, True, _inicio_corrida)
-            _nube = [threading.Thread(target=_run_bs, args=(pais_nombre, n, build), daemon=True)
-                     for n in programacion["navegadores"] if _dispositivo_bs(n) is not None]
-            for t in _nube:
-                t.start()
+            _threads = []
+            for navegador in programacion["navegadores"]:
+                if _dispositivo_bs(navegador) is not None:
+                    _threads.append(threading.Thread(
+                        target=_run_bs, args=(pais_nombre, navegador, build), daemon=True))
             _has_local = any(_dispositivo_bs(n) is None for n in programacion["navegadores"])
             if _has_local:
+                _threads.append(threading.Thread(
+                    target=_run_browser_pais, args=(pais_nombre,), daemon=True))
+
+            if modo_mercados == "paralelo" and len(_threads) > 1:
+                for t in _threads:
+                    t.start()
+                for t in _threads:
+                    t.join()
+            else:
+                # Secuencial: la nube primero, después locales
+                for navegador in programacion["navegadores"]:
+                    if _dispositivo_bs(navegador) is not None:
+                        _run_bs(pais_nombre, navegador, build)
                 _run_browser_pais(pais_nombre)
-            for t in _nube:
-                t.join()
 
         # Ejecución por mercado (país): consecutivo o paralelo según configuración.
         if modo_mercados == "paralelo" and len(programacion["paises"]) > 1:

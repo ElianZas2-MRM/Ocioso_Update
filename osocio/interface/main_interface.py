@@ -1669,9 +1669,9 @@ def iniciar_interfaz(autostart_leads=False):
         if _bs_sel:
             from osocio.providers.browserstack.dispositivos import max_paralelo
             excel_par_warn_lbl.config(
-                text=f"ℹ BrowserStack: los dispositivos de cada mercado corren a la vez, en un mismo build "
-                     f"(máximo {max_paralelo()} sesiones simultáneas; las del plan las comparte todo el "
-                     "equipo). Se cambia en config_global.json → browserstack.max_paralelo.")
+                text=f"ℹ BrowserStack: los dispositivos de cada mercado van a un mismo build; en Paralelo "
+                     f"corren a la vez (máximo {max_paralelo()} sesiones simultáneas, las del plan las "
+                     "comparte todo el equipo). Se cambia en config_global.json → browserstack.max_paralelo.")
         else:
             excel_par_warn_lbl.config(text="")
     _refresh_excel_par_warning()

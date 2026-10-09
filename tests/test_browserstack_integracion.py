@@ -246,11 +246,11 @@ def test_iphone_campo_obligatorio_no_mapeado_siempre_se_completa(iphone_brasil):
     assert iphone_brasil._valor_para_etiqueta(datos, "texto", "Endereço*")
 
 
-# --- los dispositivos de la nube de un mercado arrancan juntos ---------------------------
+# --- BrowserStack respeta Consecutivo / Paralelo, igual que los navegadores ----------------
 
-def test_la_nube_arranca_junta_aunque_los_excels_esten_en_consecutivo():
-    """iPhone, Android y Mac del mismo mercado tienen que estar corriendo a la vez aunque
-    "Excels por dispositivo" esté en Consecutivo: en la nube no compiten con la PC."""
+def test_la_nube_respeta_consecutivo_y_paralelo():
+    """iPhone, Android y Mac corren uno tras otro en Consecutivo y a la vez en Paralelo,
+    con la MISMA regla que Chrome/Firefox/Edge: _run_market no les da un trato aparte."""
     import ast
     import inspect
     import textwrap
@@ -260,6 +260,5 @@ def test_la_nube_arranca_junta_aunque_los_excels_esten_en_consecutivo():
     run_market = next(n for n in ast.walk(arbol)
                       if isinstance(n, ast.FunctionDef) and n.name == "_run_market")
     codigo = ast.get_source_segment(fuente, run_market)
-    # Las sesiones de la nube se separan y se lanzan en hilos ANTES de mirar el modo.
-    assert "bs_dispositivo" in codigo
-    assert codigo.index("for t in hilos_nube:") < codigo.index("_parallel = (")
+    assert "_parallel = (excels_par or mercados_par) and len(sessions) > 1" in codigo
+    assert "bs_dispositivo" not in codigo

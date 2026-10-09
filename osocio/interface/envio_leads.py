@@ -1218,32 +1218,23 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             _bump(pais, _sid, fail=int(sess.get("rows_count", 1) or 1), err=str(e)[:200])
 
     def _run_market(sessions):
-        """Corre las sesiones de un mercado.
-
-        Las de BrowserStack (iPhone / Android / Mac) arrancan SIEMPRE juntas, en el mismo
-        build: corren en la nube, no compiten con la PC (el tope de sesiones simultáneas lo
-        pone _bs_sem). Las locales (Chrome/Firefox/Edge) respetan Consecutivo/Paralelo: en
-        paralelo si mercados_par o excels_par están activos.
-        """
-        nube = [s for s in sessions if bs_dispositivo(s.get("dtype")) is not None]
-        locales = [s for s in sessions if bs_dispositivo(s.get("dtype")) is None]
-        hilos_nube = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in nube]
-        for t in hilos_nube:
-            t.start()
-        _parallel = (excels_par or mercados_par) and len(locales) > 1
+        """Corre las sesiones de un mercado. Si mercados_par o excels_par están
+        activos, lanza todos los dispositivos/Excels del mercado en paralelo
+        (Chrome local y BrowserStack no compiten, corren en máquinas distintas).
+        Las de BrowserStack van todas al mismo build del mercado, en paralelo o una
+        detrás de la otra; el tope de sesiones simultáneas lo pone _bs_sem."""
+        _parallel = (excels_par or mercados_par) and len(sessions) > 1
         if _parallel:
-            ts = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in locales]
+            ts = [threading.Thread(target=_run_session, args=(s,), daemon=True) for s in sessions]
             for t in ts:
                 t.start()
             for t in ts:
                 t.join()
         else:
-            for s in locales:
+            for s in sessions:
                 if stop_event.is_set():
                     break
                 _run_session(s)
-        for t in hilos_nube:
-            t.join()
 
     def _worker():
         _ensure_serialized_setup()  # evita choque de resultados en paralelo
