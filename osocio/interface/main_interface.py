@@ -2875,6 +2875,7 @@ def iniciar_interfaz(autostart_leads=False):
         _close_cell_editor()
         n = len(tree["columns"]) or 1
         iid = tree.insert("", "end", values=[""] * n)
+        _marcar_tabla_sucia()
         _stripe_rows()
         tree.selection_set(iid)
         tree.focus(iid)
@@ -2889,6 +2890,7 @@ def iniciar_interfaz(autostart_leads=False):
         if selected:
             for item in selected:
                 tree.delete(item)
+            _marcar_tabla_sucia()
             _stripe_rows()
             show_table_msg(f"🗑 {len(selected)} fila(s) eliminada(s). Guardá para persistir.", TEXT_DELETE)
             log_message(f"[INFO] {len(selected)} fila(s) eliminada(s) de la tabla.")
@@ -2902,6 +2904,7 @@ def iniciar_interfaz(autostart_leads=False):
             last = None
             for item in selected:
                 last = tree.insert("", "end", values=tree.item(item, "values"))
+            _marcar_tabla_sucia()
             _stripe_rows()
             if last:
                 tree.see(last)
@@ -2920,10 +2923,20 @@ def iniciar_interfaz(autostart_leads=False):
         path = current_preview_path[0] or _excel_path_for(pais)
         cols = list(tree["columns"])
         rows = [list(tree.item(i, "values")) for i in tree.get_children()]
+        if _tabla_excel["mtime"] is not None and _mtime(path) != _tabla_excel["mtime"]:
+            if not messagebox.askyesno(
+                    "Guardar Leads",
+                    f"{os.path.basename(path)} se modificó afuera de la app después de cargarlo "
+                    "en la tabla.\n\nSi guardás, se reemplaza por lo que muestra la tabla y se "
+                    "pierden esos cambios. ¿Guardar igual?"):
+                return
         try:
             import pandas as pd
             os.makedirs(DATA_DIR, exist_ok=True)
             pd.DataFrame(rows, columns=cols).astype(str).to_excel(path, index=False)
+            _tabla_excel["mtime"] = _mtime(path)
+            _tabla_excel["sucio"] = False
+            _tabla_excel["avisado"] = False
             show_table_msg(f"💾 Guardado {len(rows)} fila(s) en {os.path.basename(path)}.", TEXT_SAVE)
             log_message(f"[SUCCESS] Guardadas {len(rows)} filas en {path}.")
             _refresh_tab_count(pais, len(rows))
@@ -3041,6 +3054,7 @@ def iniciar_interfaz(autostart_leads=False):
                     if col_index < len(vals) and vals[col_index] != editor.get():
                         vals[col_index] = editor.get()
                         tree.item(row, values=vals)
+                        _marcar_tabla_sucia()
                         show_table_msg("✏ Estás editando el Excel — recordá Guardar para no perder los cambios.", TEXT_EXCEL)
             except Exception:
                 pass
@@ -3139,8 +3153,42 @@ def iniciar_interfaz(autostart_leads=False):
 
         _stripe_rows()
         _refresh_tab_count(pais, n)
+        _tabla_excel["mtime"] = _mtime(path)
+        _tabla_excel["sucio"] = False
+        _tabla_excel["avisado"] = False
+
+    # La tabla refleja SIEMPRE el Excel del disco: si se edita en Excel (u otro programa)
+    # y se guarda, la tabla se recarga sola. Antes quedaba mostrando la versión vieja
+    # hasta tocar "Actualizar", y un "Guardar" desde la tabla pisaba lo editado afuera.
+    _tabla_excel = {"mtime": None, "sucio": False, "avisado": False}
+
+    def _mtime(path):
+        try:
+            return os.path.getmtime(path) if path and os.path.exists(path) else None
+        except OSError:
+            return None
+
+    def _marcar_tabla_sucia():
+        _tabla_excel["sucio"] = True
+
+    def _vigilar_excel_de_la_tabla():
+        try:
+            path = current_preview_path[0]
+            actual = _mtime(path)
+            if actual is not None and actual != _tabla_excel["mtime"]:
+                if not _tabla_excel["sucio"] and _active_editor[0] is None:
+                    update_table_data(active_p_tab[0], path=path)
+                    show_table_msg("🔄 El Excel cambió: tabla actualizada.", TEXT_SAVE)
+                elif not _tabla_excel["avisado"]:
+                    _tabla_excel["avisado"] = True
+                    show_table_msg("⚠ El Excel cambió afuera y tenés cambios sin guardar en la tabla. "
+                                   "Guardá o tocá Actualizar.", WARN_TEXT)
+        except Exception:
+            pass
+        root.after(2000, _vigilar_excel_de_la_tabla)
 
     update_table_data("Argentina")
+    root.after(2000, _vigilar_excel_de_la_tabla)
 
     # Contadores reales en las pestañas de país (según filas del Excel)
     for _pais in paises_list:
