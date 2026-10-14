@@ -3196,7 +3196,14 @@ def iniciar_interfaz(autostart_leads=False):
         os.makedirs(tmp_dir, exist_ok=True)
         tmp_path = os.path.join(tmp_dir, f"_retry_{pais}_{device}.xlsx")
         try:
-            df.iloc[valid_positions].to_excel(tmp_path, index=False)
+            # "Fila original" (al final, el motor lee los campos por posición y no la
+            # toca) queda en el Excel de resultados del reintento: así el próximo
+            # "Reintentar fallidos" sabe a qué fila corresponde cada resultado aunque
+            # después se cambie la URL (ver utils/reintento_fallidos.py).
+            from osocio.utils.reintento_fallidos import COLUMNA_FILA_ORIGINAL
+            sub = df.iloc[valid_positions].copy()
+            sub[COLUMNA_FILA_ORIGINAL] = [str(pos + 2) for pos in valid_positions]
+            sub.to_excel(tmp_path, index=False)
         except Exception:
             return None, {}
         row_map = {temp_idx + 2: pos + 2 for temp_idx, pos in enumerate(valid_positions)}
@@ -3300,9 +3307,10 @@ def iniciar_interfaz(autostart_leads=False):
     btn_enviar.bind("<Leave>", lambda e: btn_enviar.config(bg=EXECUTE_BG) if btn_enviar['state'] == "normal" else None)
 
     def _completar_fallos_desde_resultados():
-        """Para cada país y dispositivo tildados sin fallos en memoria (la app se reabrió,
-        o la corrida fue en otra sesión): los toma del último Excel de resultados. Las
-        filas en rojo se ubican en el Excel de entrada por URL + Formulario."""
+        """Para cada país y dispositivo tildados, las filas a reintentar salen de los
+        Excels de resultados (última corrida completa + reintentos posteriores), no de la
+        memoria: así funciona aunque la app se haya reabierto. Ver utils/reintento_fallidos.
+        Si no hay resultados en disco, queda lo que haya en memoria."""
         from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
         from osocio.utils.reintento_fallidos import fallidas_desde_resultados
         variante = VARIANTE_T3 if var_t3.get() else ""
@@ -3314,7 +3322,7 @@ def iniciar_interfaz(autostart_leads=False):
                 continue
             for suffix, _dtype, browser, key in _RETRY_DEVICE_SUFFIX:
                 device_label = suffix + etiqueta_var
-                if not selected_disp.get(key) or (pais, device_label) in lf:
+                if not selected_disp.get(key):
                     continue
                 bs = por_cualquier_nombre(suffix) if browser is None else None
                 navegador = bs.navegador if bs is not None else browser
@@ -3324,10 +3332,14 @@ def iniciar_interfaz(autostart_leads=False):
                     entrada = os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, variante))
                 res, filas = fallidas_desde_resultados(carpeta, pais, navegador, entrada, variante,
                                                        log=log_message)
+                if res is None:
+                    continue          # sin resultados en disco: lo que haya en memoria
                 if filas:
                     lf[(pais, device_label)] = {"excel": entrada, "rows": filas}
                     log_message(f"[INFO] Reintentar fallidos: {pais} · {device_label}: filas "
-                                f"{filas} (de {os.path.basename(res)})")
+                                f"{filas} (última corrida completa: {os.path.basename(res)})")
+                else:
+                    lf.pop((pais, device_label), None)
 
     def _retry_failed_leads():
         """Reintenta SOLO las filas que fallaron la última corrida manual, para los

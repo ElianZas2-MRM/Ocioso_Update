@@ -1,13 +1,22 @@
 """
 reintento_fallidos.py
 =====================
-Qué filas fallaron la última vez, leído del Excel de resultados (no de memoria).
+Qué filas fallaron, leído de los Excels de resultados (no de memoria).
 
 "Reintentar fallidos" usaba sólo lo que la app recordaba de la última corrida de ESTA
-sesión: si la app se cerró (o se reabrió para tomar una actualización) el botón decía que
-no había nada para reintentar. Con esto se toma el último Excel de resultados del país y
-dispositivo, sus filas en rojo, y se ubican en el Excel de entrada por URL + Formulario
-(así sirve aunque el último resultado sea de un reintento, con otra numeración).
+sesión: si la app se cerraba (o se reabría para tomar una actualización) el botón decía
+que no había nada para reintentar. Ahora, para un país y dispositivo:
+
+  1. Base: la última corrida COMPLETA (un resultado sin columna "Fila original"). Sus
+     filas en rojo son las que fallaron, por número de fila.
+  2. Los reintentos posteriores ajustan esa lista: su columna "Fila original" (la agrega
+     el Excel temporal del reintento) dice a qué fila corresponde cada resultado. Si salió
+     bien, sale de la lista; si sigue en rojo, queda.
+  3. Se reintenta con lo que dice el Excel de entrada AHORA: si después de la corrida se
+     corrigió una URL (o cualquier dato) de una fila que falló, va lo corregido.
+
+Reintentos viejos sin "Fila original" (anteriores a este cambio) se ubican por URL; si
+la URL se cambió después, simplemente no ajustan nada.
 """
 
 import glob
@@ -18,101 +27,121 @@ from typing import List, Optional, Tuple
 from osocio.core.variantes import basenames_de_corrida
 
 ROJO_FALLA = "FFC7CE"   # el color con el que el motor pinta "Resultado" si el lead falló
+COLUMNA_FILA_ORIGINAL = "Fila original"
 
 
-def ultimo_resultado(carpeta_resultados: str, pais: str, navegador: str,
-                     sufijo: str = "") -> Optional[str]:
-    """El Excel de resultados más reciente de esa corrida (resultados_<Pais>_<Disp>N.xlsx)."""
+def resultados_de(carpeta_resultados: str, pais: str, navegador: str, sufijo: str = "") -> List[str]:
+    """Los Excels de resultados de esa corrida (resultados_<Pais>_<Disp>N.xlsx), del más
+    viejo al más nuevo."""
     base = basenames_de_corrida(pais, navegador, False, sufijo)[0]
     patron = re.compile(re.escape(base) + r"\d+\.xlsx$", re.IGNORECASE)
     candidatos = [p for p in glob.glob(os.path.join(carpeta_resultados, "**", f"{base}*.xlsx"),
                                        recursive=True)
-                  if patron.match(os.path.basename(p)) and not os.path.basename(p).startswith("~$")]
-    return max(candidatos, key=os.path.getmtime) if candidatos else None
+                  if patron.match(os.path.basename(p))]
+    return sorted(candidatos, key=os.path.getmtime)
+
+
+def ultimo_resultado(carpeta_resultados: str, pais: str, navegador: str,
+                     sufijo: str = "") -> Optional[str]:
+    """El Excel de resultados más reciente de esa corrida."""
+    todos = resultados_de(carpeta_resultados, pais, navegador, sufijo)
+    return todos[-1] if todos else None
 
 
 def _norm(url) -> str:
     return str(url or "").strip().rstrip("/").lower()
 
 
-def urls_fallidas(resultados_path: str) -> List[Tuple[str, str]]:
-    """(URL, Formulario) de cada fila con "Resultado" en rojo."""
-    return [(u, f) for _, u, f in _fallidas_con_fila(resultados_path)[0]]
-
-
-def _fallidas_con_fila(resultados_path: str):
-    """([(fila, URL, Formulario) en rojo], cantidad de filas de datos del resultado)."""
+def _leer(resultados_path: str):
+    """Filas del resultado: [(fila, fila_original|None, en_rojo, URL, Formulario)] y si es
+    de un reintento (tiene la columna "Fila original")."""
     from openpyxl import load_workbook
-    wb = load_workbook(resultados_path, read_only=False)
-    ws = wb.active
+    ws = load_workbook(resultados_path).active
     hdr = [str(c.value or "").strip() for c in ws[1]]
     if "Resultado" not in hdr or "URL" not in hdr:
-        return [], 0
-    c_res, c_url = hdr.index("Resultado") + 1, hdr.index("URL") + 1
-    c_form = hdr.index("Formulario") + 1 if "Formulario" in hdr else None
-    out, filas_datos = [], 0
+        return [], False
+    col = {n: hdr.index(n) + 1 for n in ("Resultado", "URL", "Formulario", COLUMNA_FILA_ORIGINAL) if n in hdr}
+    filas = []
     for fila in range(2, ws.max_row + 1):
-        if any(ws.cell(row=fila, column=c).value not in (None, "") for c in range(1, len(hdr) + 1)):
-            filas_datos = fila - 1
-        celda = ws.cell(row=fila, column=c_res)
-        color = str(getattr(celda.fill.fgColor, "rgb", "") or "")
-        if not str(celda.value or "").strip() or not color.upper().endswith(ROJO_FALLA):
+        celda = ws.cell(row=fila, column=col["Resultado"])
+        if not str(celda.value or "").strip():
             continue
-        out.append((fila, str(ws.cell(row=fila, column=c_url).value or ""),
-                    str(ws.cell(row=fila, column=c_form).value or "") if c_form else ""))
-    return out, filas_datos
+        color = str(getattr(celda.fill.fgColor, "rgb", "") or "").upper()
+        orig = None
+        if COLUMNA_FILA_ORIGINAL in col:
+            v = str(ws.cell(row=fila, column=col[COLUMNA_FILA_ORIGINAL]).value or "").strip()
+            orig = int(float(v)) if v.replace(".", "", 1).isdigit() else None
+        filas.append((fila, orig, color.endswith(ROJO_FALLA),
+                      str(ws.cell(row=fila, column=col["URL"]).value or ""),
+                      str(ws.cell(row=fila, column=col["Formulario"]).value or "") if "Formulario" in col else ""))
+    return filas, COLUMNA_FILA_ORIGINAL in col
+
+
+def urls_fallidas(resultados_path: str) -> List[Tuple[str, str]]:
+    """(URL, Formulario) de cada fila con "Resultado" en rojo."""
+    return [(u, f) for _, _, rojo, u, f in _leer(resultados_path)[0] if rojo]
+
+
+def _filas_entrada_por_url(excel_entrada: str):
+    """{(url, form): [filas]} del Excel de entrada, para ubicar reintentos viejos."""
+    import pandas as pd
+    df = pd.read_excel(excel_entrada, dtype=str).fillna("")
+    cols = list(df.columns)
+    c_url = "URL" if "URL" in cols else cols[0]
+    c_form = "Formulario" if "Formulario" in cols else (cols[1] if len(cols) > 1 else None)
+    idx = {}
+    for i, r in df.iterrows():
+        idx.setdefault((_norm(r[c_url]), _norm(r[c_form]) if c_form else ""), []).append(i + 2)
+    return idx, len(df)
 
 
 def filas_en_entrada(excel_entrada: str, fallidas: List[Tuple[str, str]]) -> List[int]:
-    """Filas físicas (2 = primera de datos) del Excel de entrada con esas URL + Formulario.
-
-    Si una misma URL aparece varias veces, cada falla toma una fila distinta, en orden.
-    """
-    import pandas as pd
+    """Filas del Excel de entrada con esas URL + Formulario (cada falla, una fila distinta)."""
     if not fallidas or not os.path.exists(excel_entrada):
         return []
-    df = pd.read_excel(excel_entrada, dtype=str).fillna("")
-    cols = list(df.columns)
-    c_url = cols[0] if "URL" not in cols else "URL"
-    c_form = "Formulario" if "Formulario" in cols else (cols[1] if len(cols) > 1 else None)
-    libres = [(i + 2, _norm(r[c_url]), _norm(r[c_form]) if c_form else "") for i, r in df.iterrows()]
-    filas = []
+    idx, _ = _filas_entrada_por_url(excel_entrada)
+    libres = {k: list(v) for k, v in idx.items()}
+    out = []
     for url, form in fallidas:
-        u, f = _norm(url), _norm(form)
-        hit = next((x for x in libres if x[1] == u and (not f or x[2] == f)), None) \
-            or next((x for x in libres if x[1] == u), None)
-        if hit is not None:
-            libres.remove(hit)
-            filas.append(hit[0])
-    return sorted(filas)
+        k = (_norm(url), _norm(form))
+        cands = libres.get(k) or next((v for (u, _f), v in libres.items() if u == k[0] and v), None)
+        if cands:
+            out.append(cands.pop(0))
+    return sorted(out)
 
 
 def fallidas_desde_resultados(carpeta_resultados: str, pais: str, navegador: str,
                               excel_entrada: str, sufijo: str = "",
                               log=None) -> Tuple[Optional[str], List[int]]:
-    """(Excel de resultados usado, filas del Excel de entrada a reintentar).
-
-    Se reintenta con lo que dice el Excel de entrada AHORA (si se corrigió la URL de una
-    fila que falló, va la corregida):
-      - Resultado de una corrida completa (mismas filas que la entrada): por número de
-        fila, como el reintento en memoria. La fila 3 que falló es la fila 3 de hoy.
-      - Resultado de un reintento anterior (otra numeración): por URL + Formulario. Una
-        fila que ya no se encuentra (se cambió la URL) se avisa en el log.
-    """
-    res = ultimo_resultado(carpeta_resultados, pais, navegador, sufijo)
-    if not res or not os.path.exists(excel_entrada):
-        return res, []
+    """(Excel de resultados de la última corrida completa, filas del Excel de entrada a
+    reintentar). Ver el docstring del módulo."""
+    if not os.path.exists(excel_entrada):
+        return None, []
     try:
-        import pandas as pd
-        fallidas, filas_res = _fallidas_con_fila(res)
-        filas_entrada = len(pd.read_excel(excel_entrada, dtype=str))
-        if filas_res == filas_entrada:
-            return res, sorted(f for f, _, _ in fallidas)
-        filas = filas_en_entrada(excel_entrada, [(u, f) for _, u, f in fallidas])
-        if len(filas) < len(fallidas) and log is not None:
-            log(f"[WARN] Reintentar fallidos: {len(fallidas) - len(filas)} fila(s) de "
-                f"{os.path.basename(res)} ya no están en el Excel de entrada (¿se cambió la URL?). "
-                "Corré el envío normal para esas filas.")
-        return res, filas
-    except Exception:
-        return res, []
+        idx_url, n_entrada = _filas_entrada_por_url(excel_entrada)
+        todos = [(p, *_leer(p)) for p in resultados_de(carpeta_resultados, pais, navegador, sufijo)]
+        # Reintento = tiene "Fila original"; los de antes de ese cambio no la tienen, pero
+        # tienen menos filas que el Excel de entrada.
+        completos = [i for i, (_, filas, con_col) in enumerate(todos)
+                     if not con_col and len(filas) >= n_entrada]
+        if not completos:
+            return None, []
+        base = completos[-1]
+        fallan = {fila for fila, _, rojo, _, _ in todos[base][1] if rojo}
+        for _path, filas, _ in todos[base + 1:]:      # reintentos posteriores
+            for _fila, orig, rojo, url, form in filas:
+                if orig is None:                      # reintento viejo: por URL
+                    cands = idx_url.get((_norm(url), _norm(form))) or []
+                    if len(cands) != 1:
+                        continue
+                    orig = cands[0]
+                (fallan.add if rojo else fallan.discard)(orig)
+        filas = sorted(f for f in fallan if 2 <= f <= n_entrada + 1)
+        if log is not None and len(filas) < len(fallan):
+            log(f"[WARN] Reintentar fallidos: {len(fallan) - len(filas)} fila(s) que fallaron ya no "
+                f"existen en {os.path.basename(excel_entrada)} (¿se borraron filas?).")
+        return todos[base][0], filas
+    except Exception as e:
+        if log is not None:
+            log(f"[WARN] Reintentar fallidos: no se pudieron leer los resultados de {pais}: {e}")
+        return None, []
