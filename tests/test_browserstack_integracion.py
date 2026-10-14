@@ -307,3 +307,79 @@ def test_el_link_del_video_lleva_a_la_sesion_dentro_de_su_build(monkeypatch):
     monkeypatch.setattr(requests, "get", lambda *a, **k: _Resp())
     assert bs_driver.fetch_bs_session("abc", "u", "k")["video_url"] == \
         "https://automate.browserstack.com/builds/b1/sessions/abc"
+
+
+# --- radios (form de OnStar Argentina, "¿Tu vehículo es Chevrolet?") ---------------------
+
+def test_iphone_arma_una_pregunta_de_radio_con_sus_opciones():
+    from osocio.providers.browserstack.ios_nativo import FormNativoIOS
+    titulo = _nodo("StaticText", 36, 237, 195, 20, "¿Tu vehículo es Chevrolet?")
+    patente = _nodo("StaticText", 46, 164, 51, 18, "Patente")
+    si_txt, no_txt = _nodo("StaticText", 41, 305, 14, 18, "Si"), _nodo("StaticText", 94, 305, 20, 18, "No")
+    si = _nodo("Other", 36, 267, 36, 58, valor="0")
+    no = _nodo("Other", 79, 254, 49, 71, valor="1")
+    estaticos = [patente, titulo, si_txt, no_txt]
+    radios = [(e, FormNativoIOS._opcion_de_radio(e, estaticos)) for e in (si, no)]
+    assert [_texto_de(s) for _, s in radios] == ["Si", "No"]
+    [g] = FormNativoIOS._grupos_de_radios(radios, estaticos)
+    assert (g["tipo"], g["etiqueta"], g["valor"]) == ("radio", "¿Tu vehículo es Chevrolet?", "No")
+    assert [o["texto"] for o in g["opciones"]] == ["Si", "No"]
+    # Un select (value = opción elegida) no es un radio.
+    assert FormNativoIOS._opcion_de_radio(_nodo("Other", 36, 100, 300, 50, valor="Seleccionar"), estaticos) is None
+
+
+def _texto_de(e):
+    from osocio.providers.browserstack.ios_nativo import _texto
+    return _texto(e)
+
+
+class _Radio:
+    def __init__(self, sel=False):
+        self.sel = sel
+
+    def is_selected(self):
+        return self.sel
+
+
+def _motor_radios(prefs=None):
+    from osocio.core.form_filler.casillas import CasillasYRadiosMixin
+
+    class _M(CasillasYRadiosMixin):
+        def _pide_omitir_campo(self, fid, valor):
+            from osocio.utils.omitir_campo import pide_omitir
+            return pide_omitir(valor)
+    m = _M()
+    m.radio_prefs = prefs or {}
+    m._decision_opcionales = {}
+    return m
+
+
+def _grupo(nombre, *valores, marcada=None):
+    return {"name": nombre, "original_name": nombre,
+            "options": [{"value": v, "index": i, "element": _Radio(v == marcada)} for i, v in enumerate(valores)]}
+
+
+def test_radio_al_azar_varia_y_se_mantiene_en_la_fila():
+    elegidas = set()
+    for _ in range(40):
+        m = _motor_radios()
+        g = _grupo("have-chevrolet", "Si", "No")
+        primera = m._choose_radio_option(g)["value"]
+        assert m._choose_radio_option(g)["value"] == primera   # misma fila: misma opción
+        elegidas.add(primera)
+    assert elegidas == {"Si", "No"}
+    # Aunque el form traiga una marcada de entrada, también se sortea.
+    vistas = {_motor_radios()._choose_radio_option(_grupo("have-interest", "Renovar", "Suscribir",
+                                                          marcada="Renovar"))["value"] for _ in range(40)}
+    assert vistas == {"Renovar", "Suscribir"}
+
+
+def test_radio_el_excel_manda_y_el_guion_lo_omite():
+    assert _motor_radios({"have-chevrolet": "no"})._choose_radio_option(
+        _grupo("have-chevrolet", "Si", "No"))["value"] == "No"
+    assert _motor_radios({"have-chevrolet": "-"})._choose_radio_option(
+        _grupo("have-chevrolet", "Si", "No")) is None
+    # Libro de Reclamaciones: nunca "menor de edad" al azar.
+    for _ in range(10):
+        assert _motor_radios()._choose_radio_option(_grupo(
+            "cc-younger-status", "Soy menor de edad", "Soy mayor de edad"))["value"] == "Soy mayor de edad"

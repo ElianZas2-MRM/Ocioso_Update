@@ -108,6 +108,9 @@ class FormNativoIOS:
         self.web = next(c for c in contextos if c != "NATIVE_APP")
         # En la capa nativa el iframe aparece como un contenedor con su title.
         self.titulo_iframe = (iframe.get_attribute("title") or "").strip()
+        # Preguntas de radio ya decididas en este form (aunque el form traiga una marcada
+        # de entrada, se sortea igual, como en los navegadores).
+        self._radios_hechos = set()
 
     # ── contextos y scroll ───────────────────────────────────────────────────
     def _nativo(self):
@@ -180,11 +183,14 @@ class FormNativoIOS:
             return ""
 
         kw_siguiente, kw_enviar = _kw_botones()
-        controles, enviar, siguiente = [], None, None
+        controles, enviar, siguiente, radios = [], None, None, []
         for e in todos:
             tag = e.tag.replace(_T, "")
             visible = self._visible(e)
-            if tag in ("TextField", "TextView", "SecureTextField") and visible:
+            opcion_radio = self._opcion_de_radio(e, estaticos) if tag == "Other" and visible else None
+            if opcion_radio is not None:
+                radios.append((e, opcion_radio))
+            elif tag in ("TextField", "TextView", "SecureTextField") and visible:
                 controles.append({"tipo": "texto", "e": e, "valor": (e.get("value") or "").strip(),
                                   "etiqueta": etiqueta_de(e) or (e.get("placeholderValue") or "")})
             elif tag == "Other" and visible and (e.get("value") or "").strip() \
@@ -200,6 +206,7 @@ class FormNativoIOS:
                 enviar = e
             elif tag == "Button" and visible and _norm(_texto(e)).startswith(kw_siguiente):
                 siguiente = e
+        controles += self._grupos_de_radios(radios, estaticos)
         # Duplicados (el mismo control anidado dos veces). Un checkbox se ubica por SU fila:
         # los de un grupo empiezan todos en la misma línea (el título del grupo).
         vistos, out = set(), []
@@ -212,6 +219,43 @@ class FormNativoIOS:
             out.append(c)
         textos = [{"texto": _texto(s), "x": _num(s, "x"), "y": _num(s, "y")} for s in estaticos]
         return {"controles": out, "enviar": enviar, "siguiente": siguiente, "textos": textos}
+
+    @staticmethod
+    def _opcion_de_radio(e, estaticos):
+        """Si e es una opción de radio, su texto (StaticText). Si no, None.
+
+        En la capa nativa una opción de radio es un Other con value '0'/'1' (marcada) y
+        sin label, con el texto de la opción ("Si", "Renovar") abajo de todo, adentro.
+        """
+        if (e.get("value") or "").strip() not in ("0", "1") or (e.get("label") or "").strip() \
+                not in ("", "0", "1"):
+            return None
+        abajo = _num(e, "y") + _num(e, "height")
+        return next((s for s in estaticos if _adentro(s, e) and _texto(s) not in ("0", "1")
+                     and abs(_num(s, "y") + _num(s, "height") - abajo) <= 12), None)
+
+    @staticmethod
+    def _grupos_de_radios(radios, estaticos) -> List[Dict]:
+        """Un control por pregunta: título, opciones (texto, dónde tocar) y la marcada.
+
+        El título es el texto que está justo arriba de las opciones (hasta 60 px), que no
+        sea el texto de una opción. Las opciones de una misma pregunta comparten título.
+        """
+        textos_opcion = {id(s) for _, s in radios}
+        grupos: Dict[str, Dict] = {}
+        for e, s in radios:
+            y = _num(e, "y")
+            arriba = [t for t in estaticos if id(t) not in textos_opcion
+                      and _num(t, "y") < y and y - _num(t, "y") <= 60]
+            titulo = _texto(max(arriba, key=lambda t: _num(t, "y"))) if arriba else f"radio@{y // 40}"
+            fila = _num(s, "y") + _num(s, "height") // 2
+            g = grupos.setdefault(titulo, {"tipo": "radio", "e": e, "etiqueta": titulo, "valor": "",
+                                           "opciones": [], "fila": fila})
+            g["opciones"].append({"texto": _texto(s), "marcada": e.get("value") == "1",
+                                  "tap": (_num(s, "x") + _num(s, "width") // 2, fila)})
+            if e.get("value") == "1":
+                g["valor"] = _texto(s)
+        return list(grupos.values())
 
     @staticmethod
     def _checkbox(e, estaticos) -> Dict:
@@ -356,6 +400,33 @@ class FormNativoIOS:
                 return "marcado"
         return f"sigue en {nuevo['valor']}"
 
+    # Opciones que nunca se eligen al azar: abren un bloque obligatorio que el lead no
+    # tiene cómo completar (Libro de Reclamaciones: "menor de edad" pide responsable legal).
+    _RADIO_SEGURA = ("mayor de edad",)
+
+    def _elegir_radio(self, c, pedido: Optional[str]) -> str:
+        """Toca una opción de la pregunta: la del Excel, o una al azar. Hay que estar en
+        NATIVE_APP. Devuelve la opción que quedó marcada en pantalla."""
+        self._radios_hechos.add(c["etiqueta"])
+        opciones = c["opciones"]
+        elegida = None
+        if pedido:
+            p = _norm(pedido)
+            elegida = next((o for o in opciones if _norm(o["texto"]) == p), None) \
+                or next((o for o in opciones if p in _norm(o["texto"]) or _norm(o["texto"]) in p), None)
+        elegida = elegida or next((o for o in opciones
+                                   if any(k in _norm(o["texto"]) for k in self._RADIO_SEGURA)), None)
+        elegida = elegida or random.choice(opciones)
+        for _intento in range(2):
+            self.d.execute_script("mobile: tap", {"x": elegida["tap"][0], "y": elegida["tap"][1]})
+            time.sleep(0.6)
+            ahora = next((n for n in self.escanear()["controles"]
+                          if n["tipo"] == "radio" and n["etiqueta"] == c["etiqueta"]), None)
+            if ahora is None or ahora["valor"] == elegida["texto"]:
+                return elegida["texto"]
+            elegida = next((o for o in ahora["opciones"] if o["texto"] == elegida["texto"]), elegida)
+        return f"no quedó marcada '{elegida['texto']}'"
+
     def checkboxes_pendientes(self) -> List[Dict]:
         """Los checkboxes sin marcar que la regla de la app manda marcar (términos, *)."""
         self._nativo()
@@ -428,6 +499,8 @@ class FormNativoIOS:
             return not c["valor"].strip()
         if c["tipo"] == "select":
             return _is_placeholder(c["valor"])
+        if c["tipo"] == "radio":
+            return c["etiqueta"] not in self._radios_hechos
         # Checkbox: se marca si es de términos/privacidad o si es obligatorio (* en el label),
         # igual que la app ("se marca si es obligatorio o de términos").
         texto = f"{c['etiqueta']} {c.get('grupo', '')}"
@@ -515,11 +588,17 @@ class FormNativoIOS:
     def _accion(self, c, valor_para) -> Dict:
         reg = {"tipo": c["tipo"], "etiqueta": c["etiqueta"], "pedido": "", "quedo": ""}
         try:
-            if c["tipo"] in ("texto", "select"):
+            if c["tipo"] in ("texto", "select", "radio"):
                 pedido = valor_para(c["tipo"], c["etiqueta"])
                 if pedido is OMITIR:
+                    if c["tipo"] == "radio":
+                        self._radios_hechos.add(c["etiqueta"])
                     reg["pedido"], reg["quedo"] = "-", "(omitido)"
                     return reg
+            if c["tipo"] == "radio":
+                reg["pedido"] = pedido or "(al azar)"
+                reg["quedo"] = self._elegir_radio(c, pedido)
+                return reg
             if c["tipo"] == "texto":
                 reg["pedido"] = pedido or ""
                 reg["quedo"] = self._llenar_texto(c, reg["pedido"]) if reg["pedido"] else "(sin dato)"

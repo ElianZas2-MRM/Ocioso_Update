@@ -242,6 +242,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.effective_data_keys = self._build_effective_data_keys()
         # Preferencias SI/NO de checkbox del lead actual (se recarga por fila del Excel)
         self.checkbox_prefs = {}
+        # Opción pedida por el Excel para cada grupo de radios (columna = name del radio)
+        self.radio_prefs = {}
         # Cargar timeouts desde config_global.json (con defaults si no existe)
         _global_timeouts = {}
         try:
@@ -4344,6 +4346,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 self.checkbox_prefs = self.build_checkbox_prefs(raw_headers, row)
                 if self.checkbox_prefs:
                     print(f"  ☑ Preferencias de checkbox (Excel): {self.checkbox_prefs}")
+                # Columnas con el name de un grupo de radios (ver build_radio_prefs)
+                self.radio_prefs = self.build_radio_prefs(raw_headers, row)
                 if len(row) < 2:
                     print(f"Saltando fila {i}: no tiene suficientes columnas")
                     continue

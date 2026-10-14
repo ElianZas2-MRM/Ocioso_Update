@@ -97,6 +97,10 @@ class FormFillerIphone(GenericCountryBase):
 
     def _valor_para_etiqueta(self, form_data, tipo, etiqueta):
         """El mismo camino de decisión que fill_form_fields, partiendo de la etiqueta."""
+        if tipo == "radio":
+            # Una opción al azar (la capa nativa no ve el name del grupo, así que la
+            # columna del Excel con el name todavía no aplica en iPhone; ver README).
+            return None
         ids = ids_para_etiqueta(etiqueta)
         fc = self._config_para_ids(ids) if ids else None
         fid = self._id_principal(ids, fc) or etiqueta
@@ -147,7 +151,7 @@ class FormFillerIphone(GenericCountryBase):
     def _registrar_campo_ios(self, reg):
         """Lo que quedó en cada campo: tracking del Excel y foto para 'Datos vs Excel'."""
         quedo = reg.get("quedo") or ""
-        if quedo.startswith(("(", "no ", "sin ", "ERROR")) or reg.get("tipo") == "checkbox":
+        if quedo.startswith(("(", "no ", "sin ", "ERROR")) or reg.get("tipo") in ("checkbox", "radio"):
             return
         ids = ids_para_etiqueta(reg.get("etiqueta", ""))
         fc = self._config_para_ids(ids) if ids else None
