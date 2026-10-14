@@ -2218,30 +2218,6 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
 
     
-    _JS_ACTIVAR_IFRAMES_LAZY = """
-        var esperado = (arguments[0] || '').toLowerCase().split('?')[0], forzar = arguments[1];
-        var gm = /gm_forms|gm_formns|gm_front|gm_admin/i, n = 0;
-        document.querySelectorAll('iframe[data-src]').forEach(function (f) {
-            var ds = f.getAttribute('data-src') || '';
-            if (f.getAttribute('src') || !ds) return;
-            if (!gm.test(ds) && !(esperado && ds.toLowerCase().indexOf(esperado) >= 0)) return;
-            f.scrollIntoView({block: 'center'});
-            if (forzar) f.setAttribute('src', ds);
-            n++;
-        });
-        return n;"""
-
-    def _activar_iframes_lazy(self, expected_form_url, forzar=False) -> int:
-        """Iframes del form con data-src y sin src (carga diferida, ej. chevrolet.com.br
-        "gb-iframe"): los trae a la vista para que la landing les ponga el src y, con
-        forzar, se lo pone (src = data-src). Devuelve cuántos había."""
-        try:
-            self.driver.switch_to.default_content()
-            return int(self.driver.execute_script(self._JS_ACTIVAR_IFRAMES_LAZY,
-                                                  expected_form_url or "", bool(forzar)) or 0)
-        except Exception:
-            return 0
-
     def find_and_position_to_form(self, expected_form_url):
         """Encuentra el iframe del formulario y posiciona el viewport sobre él.
         Usa 2 intentos: el primero espera activamente el iframe específico; el segundo
@@ -2269,7 +2245,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 return cand
             return None
 
-        max_attempts = 3
+        max_attempts = 2
         for attempt in range(max_attempts):
             try:
                 # Esperar el iframe GM del formulario (no cualquier iframe). Espera corta el
@@ -2281,22 +2257,12 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     target_iframe = None
 
                 if not target_iframe:
-                    if attempt == 0:
-                        # Iframe lazy (data-src sin src): la landing le pone el src cuando
-                        # entra en pantalla. Traerlo a la vista, además del pre-scroll.
-                        self._activar_iframes_lazy(_url, forzar=False)
+                    if attempt < max_attempts - 1:
                         try:
                             self.pre_scroll_for_dynamic_content()
                         except Exception:
                             pass
-                        self._activar_iframes_lazy(_url, forzar=False)
                         time.sleep(3)
-                    elif attempt == 1:
-                        # Sigue sin src (a veces el script de la landing no reacciona, más en
-                        # Safari remoto): hacer lo mismo que él, src = data-src. El form se
-                        # carga igual adentro de la landing.
-                        if self._activar_iframes_lazy(_url, forzar=True):
-                            print("  ↻ Iframe del form sin src (lazy): se carga desde su data-src")
                     continue
 
                 # Posicionar viewport sobre el iframe
