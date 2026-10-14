@@ -3322,7 +3322,8 @@ def iniciar_interfaz(autostart_leads=False):
                     entrada = _generic_excel_path_for(pais, variante)
                 else:
                     entrada = os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, variante))
-                res, filas = fallidas_desde_resultados(carpeta, pais, navegador, entrada, variante)
+                res, filas = fallidas_desde_resultados(carpeta, pais, navegador, entrada, variante,
+                                                       log=log_message)
                 if filas:
                     lf[(pais, device_label)] = {"excel": entrada, "rows": filas}
                     log_message(f"[INFO] Reintentar fallidos: {pais} · {device_label}: filas "

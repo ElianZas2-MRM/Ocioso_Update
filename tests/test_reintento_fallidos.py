@@ -69,3 +69,17 @@ def test_no_mezcla_otro_dispositivo_ni_otra_variante(tmp_path):
     assert os.path.basename(ultimo_resultado(carpeta, "Argentina", "chrome")) == \
         "resultados_Argentina_Chrome10.xlsx"
     assert ultimo_resultado(carpeta, "Argentina", "browserstack_iphone") is None
+
+
+def test_si_se_corrigio_la_url_reintenta_con_la_del_excel_de_hoy(tmp_path):
+    entrada = str(tmp_path / "entrada.xlsx")
+    carpeta = str(tmp_path / "resultados")
+    _resultado(os.path.join(carpeta, "t1", "resultados_Argentina_Chrome1.xlsx"),
+               [("https://a.com/1", "https://f.com/1", VERDE),
+                ("https://a.com/vieja-404", "https://f.com/2", ROJO)])
+    # Después de la corrida, la persona corrige la URL de la fila que falló.
+    _entrada(entrada, [("https://a.com/1", "https://f.com/1", "Ana"),
+                       ("https://a.com/nueva", "https://f.com/2", "Bea")])
+    _, filas = fallidas_desde_resultados(carpeta, "Argentina", "chrome", entrada)
+    assert filas == [3]   # la fila 3, que hoy dice https://a.com/nueva
+    assert pd.read_excel(entrada).iloc[filas[0] - 2]["URL"] == "https://a.com/nueva"
