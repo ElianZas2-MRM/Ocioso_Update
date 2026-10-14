@@ -3299,6 +3299,35 @@ def iniciar_interfaz(autostart_leads=False):
     btn_enviar.bind("<Enter>", lambda e: btn_enviar.config(bg=EXECUTE_HOVER) if btn_enviar['state'] == "normal" else None)
     btn_enviar.bind("<Leave>", lambda e: btn_enviar.config(bg=EXECUTE_BG) if btn_enviar['state'] == "normal" else None)
 
+    def _completar_fallos_desde_resultados():
+        """Para cada país y dispositivo tildados sin fallos en memoria (la app se reabrió,
+        o la corrida fue en otra sesión): los toma del último Excel de resultados. Las
+        filas en rojo se ubican en el Excel de entrada por URL + Formulario."""
+        from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
+        from osocio.utils.reintento_fallidos import fallidas_desde_resultados
+        variante = VARIANTE_T3 if var_t3.get() else ""
+        etiqueta_var = ("·" + variante.lstrip("_")) if variante else ""
+        carpeta = os.path.join(BASE_DIR, "resultados")
+        lf = _exec_state.setdefault("last_fails", {})
+        for pais, tildado in selected_countries.items():
+            if not tildado:
+                continue
+            for suffix, _dtype, browser, key in _RETRY_DEVICE_SUFFIX:
+                device_label = suffix + etiqueta_var
+                if not selected_disp.get(key) or (pais, device_label) in lf:
+                    continue
+                bs = por_cualquier_nombre(suffix) if browser is None else None
+                navegador = bs.navegador if bs is not None else browser
+                if excel_mode_holder[0] == "compartido":
+                    entrada = _generic_excel_path_for(pais, variante)
+                else:
+                    entrada = os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, variante))
+                res, filas = fallidas_desde_resultados(carpeta, pais, navegador, entrada, variante)
+                if filas:
+                    lf[(pais, device_label)] = {"excel": entrada, "rows": filas}
+                    log_message(f"[INFO] Reintentar fallidos: {pais} · {device_label}: filas "
+                                f"{filas} (de {os.path.basename(res)})")
+
     def _retry_failed_leads():
         """Reintenta SOLO las filas que fallaron la última corrida manual, para los
         países/dispositivos que estén tildados ahora mismo (desktop y Mac/Android LT) —
@@ -3306,6 +3335,7 @@ def iniciar_interfaz(autostart_leads=False):
         resultados (no pisa el de la corrida original)."""
         if _exec_state.get("running"):
             return
+        _completar_fallos_desde_resultados()
         targets = _eligible_retry_targets(selected_countries, selected_disp,
                                            _exec_state.get("last_fails", {}), _RETRY_DEVICE_SUFFIX)
         if not targets:
