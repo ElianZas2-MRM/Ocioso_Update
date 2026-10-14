@@ -255,7 +255,10 @@ def fetch_bs_session(session_id: str, username: str, access_key: str) -> Dict[st
     """Datos de la sesión terminada vía API REST.
 
     Devuelve (vacíos si la API no responde):
-      video_url   — link al video grabado: es la evidencia que va al Excel de resultados
+      video_url   — la evidencia que va al Excel de resultados: la página de la sesión
+                    DENTRO de su build (video, logs y el build del día, con la cuenta
+                    de BrowserStack). El link crudo al archivo de video vence y no lleva
+                    a la corrida: queda sólo como respaldo.
       device / os_version / status
     """
     vacio = {"video_url": "", "device": "", "os_version": "", "status": ""}
@@ -268,4 +271,6 @@ def fetch_bs_session(session_id: str, username: str, access_key: str) -> Dict[st
         data = resp.json().get("automation_session", {}) or {}
     except Exception:
         return vacio
-    return {k: str(data.get(k) or "") for k in vacio}
+    info = {k: str(data.get(k) or "") for k in vacio}
+    info["video_url"] = str(data.get("browser_url") or "") or info["video_url"]
+    return info

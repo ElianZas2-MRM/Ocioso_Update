@@ -410,9 +410,9 @@ def ejecutar_tests(programacion):
             """Corre BrowserStack + browsers locales para un país.
             Si modo paralelo, todos los dispositivos corren a la vez
             (la nube y local no compiten — máquinas distintas).
-            Los de BrowserStack van todos al mismo build del país."""
-            from osocio.providers.browserstack.runner import nombre_build_mercado
-            build = nombre_build_mercado(pais_nombre, True, _inicio_corrida)
+            Los de BrowserStack van todos al build del día."""
+            from osocio.providers.browserstack.runner import nombre_build_del_dia
+            build = nombre_build_del_dia(True, _inicio_corrida)
             _threads = []
             for navegador in programacion["navegadores"]:
                 if _dispositivo_bs(navegador) is not None:

@@ -40,14 +40,21 @@ def excel_por_defecto(pais: str, plataforma: str, variante: str = "") -> str:
 _NOMBRE_DISP = {"iphone": "iPhone", "android": "Android", "mac": "Mac"}
 
 
-def nombre_build_mercado(pais: str, programada: bool, inicio: Optional[datetime] = None) -> str:
-    """Un build por mercado y por corrida: iPhone, Android y Mac de ese mercado van juntos.
+_DIAS = ("Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo")
 
-    La hora de inicio de la corrida hace que cada corrida sea un build nuevo. Sin guiones
-    largos ni paréntesis: BrowserStack los descarta del nombre.
+
+def nombre_build_del_dia(programada: bool, dia: Optional[datetime] = None) -> str:
+    """Un build por día: todos los mercados y dispositivos de ese día van juntos.
+
+    Ej.: "Osocio BS - Envio Manual - Miercoles 2026-10-14". BrowserStack junta en el
+    mismo build las sesiones con el mismo nombre aunque lleguen en corridas distintas
+    (probado con horas de diferencia), y cada sesión se distingue por su nombre
+    (dispositivo - mercado - Excel). Manual y automatizado van en builds separados.
+    Sin acentos, guiones largos ni paréntesis: BrowserStack los descarta del nombre.
     """
+    dia = dia or datetime.now()
     modo = "Automatizado" if programada else "Envio Manual"
-    return f"Osocio BS - {modo} - {pais} - {(inicio or datetime.now()):%Y-%m-%d %H:%M}"
+    return f"Osocio BS - {modo} - {_DIAS[dia.weekday()]} {dia:%Y-%m-%d}"
 
 
 def nombre_build(pais: str, plataforma: str, programada: bool) -> str:

@@ -74,18 +74,17 @@ def _solo_caracteres_que_acepta_browserstack(nombre):
     return re.fullmatch(r"[A-Za-z0-9 .:\-\[\]/@&'_]+", nombre) is not None
 
 
-def test_un_build_por_mercado_y_por_corrida():
+def test_un_build_por_dia():
     from datetime import datetime
-    inicio = datetime(2026, 10, 9, 10, 32)
-    nombre = runner.nombre_build_mercado("Colombia", False, inicio)
-    assert nombre == "Osocio BS - Envio Manual - Colombia - 2026-10-09 10:32"
+    nombre = runner.nombre_build_del_dia(False, datetime(2026, 10, 14, 11, 9))
+    assert nombre == "Osocio BS - Envio Manual - Miercoles 2026-10-14"
     assert _solo_caracteres_que_acepta_browserstack(nombre)
-    # Mismo mercado y misma corrida -> mismo build, para los tres dispositivos.
-    assert runner.nombre_build_mercado("Colombia", False, inicio) == nombre
-    # Otra corrida (otra hora) u otro mercado -> otro build.
-    assert runner.nombre_build_mercado("Colombia", False, datetime(2026, 10, 9, 11, 0)) != nombre
-    assert runner.nombre_build_mercado("Brasil", False, inicio) != nombre
-    assert runner.nombre_build_mercado("Colombia", True, inicio).startswith("Osocio BS - Automatizado")
+    # Otra corrida el mismo día (todos los mercados) -> mismo build.
+    assert runner.nombre_build_del_dia(False, datetime(2026, 10, 14, 17, 45)) == nombre
+    # Otro día -> otro build; las programadas van aparte.
+    assert runner.nombre_build_del_dia(False, datetime(2026, 10, 15, 9, 0)) == \
+        "Osocio BS - Envio Manual - Jueves 2026-10-15"
+    assert runner.nombre_build_del_dia(True, datetime(2026, 10, 14)).startswith("Osocio BS - Automatizado")
 
 
 def test_dentro_del_build_cada_sesion_dice_su_dispositivo():
@@ -293,3 +292,18 @@ def test_checkbox_de_grupo_y_superindice_de_terminos():
     sup = _nodo("StaticText", 387, 587, 6, 10, "1")
     c = FormNativoIOS._checkbox(_nodo("Switch", 84, 587, 307, 25, valor="0"), [sup, texto])
     assert (c["grupo"], c["etiqueta"]) == ("", "Acepto términos y condiciones de registro")
+
+
+def test_el_link_del_video_lleva_a_la_sesion_dentro_de_su_build(monkeypatch):
+    import requests
+    from osocio.providers.browserstack import bs_driver
+
+    class _Resp:
+        def json(self):
+            return {"automation_session": {
+                "video_url": "https://automate.browserstack.com/sessions/abc/video?token=x",
+                "browser_url": "https://automate.browserstack.com/builds/b1/sessions/abc",
+                "device": "", "os_version": "", "status": "done"}}
+    monkeypatch.setattr(requests, "get", lambda *a, **k: _Resp())
+    assert bs_driver.fetch_bs_session("abc", "u", "k")["video_url"] == \
+        "https://automate.browserstack.com/builds/b1/sessions/abc"

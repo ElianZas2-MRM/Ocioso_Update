@@ -90,7 +90,7 @@ atributo "visible" (lo más caro de calcular).
   pisarlo el iPhone quedaba pedido como Mac.
 - **Estado de la sesión**: `browserstack_executor: setSessionStatus` (el equivalente a
   `lambda-status`).
-- **Video**: `GET api.browserstack.com/automate/sessions/<id>.json` → `video_url`.
+- **Video**: `GET api.browserstack.com/automate/sessions/<id>.json` → `browser_url` (la sesión dentro de su build, con video y logs; pide la cuenta de BrowserStack). El `video_url` crudo vence y no lleva a la corrida: queda sólo de respaldo.
 
 ### Resultados
 
@@ -241,8 +241,8 @@ app (`runner.run`): Colombia `raq` en iPhone, Android y Mac.
 por todo el equipo, no por build) y 10 más en cola. Se probaron 6 a la vez dentro del
 mismo build sin cola.
 
-**Cómo lo usa la app:** un **build por mercado y por corrida**
-(`runner.nombre_build_mercado` → *Osocio BS - Envio Manual - Colombia - 2026-10-09 12:04*),
+**Cómo lo usa la app:** un **build por día** (todos los mercados; manual y automatizado aparte)
+(`runner.nombre_build_del_dia` → *Osocio BS - Envio Manual - Miercoles 2026-10-14*; BrowserStack junta en el mismo build las sesiones con el mismo nombre aunque lleguen en corridas distintas, probado),
 con una sesión por dispositivo (*iPhone - Colombia - …*, *Mac - …*, *Android - …*). Corren
 uno tras otro o a la vez según "Excels por dispositivo" (Consecutivo / Paralelo), con la
 misma regla que los navegadores locales (`envio_leads._run_market`; igual en el runner

@@ -1200,8 +1200,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                         return
                     summary = bs_runner.run(pais=pais, plataforma=_bs.plataforma, excel_path=excel,
                                             variante=sess.get("variante", ""), programada=scheduled,
-                                            build_name=bs_runner.nombre_build_mercado(
-                                                pais, scheduled, _inicio_corrida),
+                                            build_name=bs_runner.nombre_build_del_dia(
+                                                scheduled, _inicio_corrida),
                                             log_fn=log_message) or {}
                 _collect_bs_email(sess.get("email_label") or pais, _bs.navegador, _bs.plataforma, summary)
                 _err = summary.get("error")
