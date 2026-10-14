@@ -125,6 +125,40 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         s = (src or "").lower()
         return any(m in s for m in self.GM_FORM_URL_MARKERS)
 
+    # src y "se ve" de todos los iframes en UN viaje al navegador. Uno por uno eran dos
+    # comandos por iframe, y en BrowserStack is_displayed() (un script pesado) tarda ~4 s
+    # en Safari: con los iframes de una landing (form, ads, trackers) eran ~20 s por lead.
+    _JS_SRC_Y_VISIBILIDAD = """
+        return arguments[0].map(function (f) {
+            try {
+                var r = f.getBoundingClientRect(), s = window.getComputedStyle(f);
+                var ve = r.width > 0 && r.height > 0 && f.getClientRects().length > 0
+                         && s.visibility !== 'hidden' && s.display !== 'none'
+                         && parseFloat(s.opacity || '1') > 0;
+                return [f.src || f.getAttribute('src') || '', ve];
+            } catch (e) { return ['', false]; }
+        });"""
+
+    def _src_y_visibilidad_de_iframes(self, iframes):
+        """[(src, visible)] de cada iframe, en un solo execute_script (con respaldo uno
+        por uno si el script falla)."""
+        if not iframes:
+            return []
+        try:
+            datos = self.driver.execute_script(self._JS_SRC_Y_VISIBILIDAD, iframes)
+            if isinstance(datos, list) and len(datos) == len(iframes):
+                return [(str(d[0] or ""), bool(d[1])) for d in datos]
+        except Exception:
+            pass
+        out = []
+        for f in iframes:
+            try:
+                disp = f.is_displayed()
+            except Exception:
+                disp = False
+            out.append((self._iframe_src_of(f), disp))
+        return out
+
     def _pick_gm_iframe(self, iframes, expected_url=None):
         """
         Elige el iframe correcto entre varios candidatos.
@@ -137,12 +171,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         """
         exp = (expected_url or "").strip().lower()
         gm_visible, gm_any, first_visible = [], [], None
-        for f in (iframes or []):
-            src = self._iframe_src_of(f)
-            try:
-                disp = f.is_displayed()
-            except Exception:
-                disp = False
+        iframes = list(iframes or [])
+        datos = self._src_y_visibilidad_de_iframes(iframes)
+        for f, (src, disp) in zip(iframes, datos):
             if disp and first_visible is None:
                 first_visible = f
             if self._is_gm_form_src(src):
