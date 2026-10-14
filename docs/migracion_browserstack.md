@@ -279,6 +279,23 @@ sesión queda *passed* con motivo "Prueba sin envío").
   aceptado y va a BrowserStack), `autonomous_runner.py` (las programaciones guardadas con
   LambdaTest van a su equivalente), `build.bat` (plantilla `browserstack_credentials.txt`).
 
+## Si hace falta algo de LambdaTest
+
+El código de LambdaTest (`osocio/providers/lambdatest_mac/` y `lambdatest_android/`) se
+borró del repo, pero no se pierde: queda en el historial de git. El último commit que lo
+tiene completo es **`262cdec`** (rama `feat/browserstack`); en `main` está hasta que se
+mergea este cambio.
+
+- Ver un archivo sin traer nada:
+  `git show 262cdec:osocio/providers/lambdatest_mac/lt_runner.py`
+- Traer la carpeta entera de vuelta a la copia de trabajo:
+  `git checkout 262cdec -- osocio/providers/lambdatest_mac osocio/providers/lambdatest_android`
+- En GitHub: abrir el commit `262cdec` y navegar los archivos ("Browse files").
+
+Lo que se mantiene a propósito: las programaciones y selecciones guardadas con LambdaTest
+(`lambdatest_mac`, `mac lt`) se pasan solas a su equivalente en BrowserStack, y
+`run.py --run-lambdatest` sigue aceptado como alias de `--run-browserstack`.
+
 ## Pendiente
 
 - [x] Bolivia y Brasil en Android y Mac.
@@ -294,4 +311,4 @@ sesión queda *passed* con motivo "Prueba sin envío").
 - [ ] iPhone: columnas SI/NO de checkboxes opcionales (la capa nativa no ve el `name` del
       checkbox) y envío vacío inicial.
 - [ ] Probar el `.exe` en otra PC con las credenciales de otra persona.
-- [ ] Retirar LambdaTest cuando BrowserStack esté validado.
+- [x] Retirar LambdaTest (ver "Si hace falta algo de LambdaTest").

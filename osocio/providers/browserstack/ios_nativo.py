@@ -45,7 +45,7 @@ _T = "XCUIElementType"
 _BOTONES_CERRAR = ("Done", "Listo", "OK", "Aceptar")
 
 def _kw_botones():
-    """Textos de botón Siguiente / Enviar: los mismos que usa la app (lt_runner)."""
+    """Textos de botón Siguiente / Enviar: los mismos que usa la app (core/campos_inferencia)."""
     from osocio.core.campos_inferencia import _NEXT_KEYWORDS, _SUBMIT_KEYWORDS
     return (tuple(_norm(k) for k in _NEXT_KEYWORDS), tuple(_norm(k) for k in _SUBMIT_KEYWORDS))
 # Checkbox que se marcan: términos, privacidad, autorizaciones (mismo criterio que
@@ -655,7 +655,7 @@ class FormNativoIOS:
           ("event_id", texto)  apareció el cartel de error de event_id (hay que reintentar)
           ("nada", "")         ninguna de las dos (se deja diagnóstico en el log)
 
-        TY con el mismo criterio que la app (lt_runner, _ty_visible): el form REEMPLAZADO
+        TY con el mismo criterio que la app (_ty_visible del motor): el form REEMPLAZADO
         por otro contenido (div.rp-wrapper / div#thank-you), no un texto fijo, porque cada
         form dice otra cosa. En la capa nativa el iframe es un contenedor con su title: si
         adentro ya no quedan campos ni botones de avanzar/enviar y hay texto, es la TY.

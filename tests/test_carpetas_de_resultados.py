@@ -17,8 +17,6 @@ from osocio import paths
 
 
 SUBCARPETAS = [
-    "RESULTS_LT_MAC_DIR",
-    "RESULTS_LT_ANDROID_DIR",
     "RESULTS_DEALERS_DIR",
     "RESULTS_MASIVA_DIR",
 ]
@@ -45,17 +43,6 @@ def test_no_hay_dos_tipos_apuntando_a_la_misma_carpeta():
     rutas = {n: os.path.normpath(getattr(paths, n)) for n in SUBCARPETAS}
     assert len(set(rutas.values())) == len(rutas), (
         f"hay subcarpetas repetidas: {rutas}"
-    )
-
-
-def test_los_modulos_usan_las_rutas_centralizadas():
-    """Cada runner tiene que tomar su carpeta de paths.py, no armarla por su cuenta."""
-    from osocio.providers.lambdatest_mac import lt_runner
-    from osocio.providers.lambdatest_android import lt_android_runner
-
-    assert os.path.normpath(lt_runner._RESULTADOS_DIR) == os.path.normpath(paths.RESULTS_LT_MAC_DIR)
-    assert os.path.normpath(lt_android_runner._ANDROID_RESULTADOS_DIR) == os.path.normpath(
-        paths.RESULTS_LT_ANDROID_DIR
     )
 
 

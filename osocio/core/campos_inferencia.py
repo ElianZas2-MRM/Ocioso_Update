@@ -2,14 +2,13 @@
 campos_inferencia.py
 ====================
 Reglas para reconocer un campo o un botón de un form por su texto, compartidas por los
-motores remotos (antes vivían en lambdatest_mac/lt_runner.py, que las reexporta).
+motores remotos (antes vivían en lambdatest_mac/lt_runner.py, ya retirado).
 
 - Qué dato del lead va en un campo, a partir de su id / name / etiqueta.
 - Qué opción de un desplegable es un placeholder ("Seleccionar", "Escolha"...) y no vale.
 - Qué texto de botón es "Siguiente" y cuál es "Enviar".
 
-Neutro a propósito: el iPhone de BrowserStack lo usa sin depender de archivos de
-LambdaTest, que se van a retirar.
+Neutro a propósito: lo usa el iPhone de BrowserStack (llenado por la capa nativa).
 """
 
 _PLACEHOLDER_KW = (

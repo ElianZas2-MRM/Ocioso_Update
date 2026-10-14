@@ -12,7 +12,7 @@ en un dispositivo de la nube y devuelve el resumen.
 - iPhone: el mismo motor (iphone_runner.FormFillerIphone), con el llenado por la capa
   nativa porque Safari en iPhone no deja entrar al iframe del form.
 
-Mismo contrato de resumen que tenía lt_controller.run, así la UI no cambia de forma:
+Mismo contrato de resumen que tenía LambdaTest, así la UI no cambió de forma:
   pais, ok, failed, total, results_excel, video_url, session_id, error, fail_rows
 """
 

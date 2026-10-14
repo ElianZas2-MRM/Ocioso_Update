@@ -124,8 +124,9 @@ iframe —empezando por `_entrar_al_iframe`— y llena por la capa nativa del di
 (`ios_nativo.py`), detectando cada campo por su etiqueta (`core/campos_inferencia.py`). El
 resto del bucle (Excel, resultados, reintentos) es el de siempre.
 
-`lambdatest_mac/` y `lambdatest_android/` quedan en el repo hasta retirarlos; la app ya no
-los usa. Detalle de la migración en [`migracion_browserstack.md`](migracion_browserstack.md).
+LambdaTest (`lambdatest_mac/`, `lambdatest_android/`) se retiró: BrowserStack lo reemplaza
+en todos los lugares. El código viejo queda en el historial de git (ver
+[`migracion_browserstack.md`](migracion_browserstack.md), "Si hace falta algo de LambdaTest").
 
 ### `validation/` — verificación sin enviar
 
@@ -147,8 +148,7 @@ BASE_DIR                  la raiz (o la carpeta del .exe, si esta empaquetado)
 DATA_DIR                  data/         Excels de entrada
 JSON_DIR                  json/         configuracion persistente
 RESULTS_DIR               resultados/
-  RESULTS_LT_MAC_DIR        resultados/lambdatest_mac/       (LambdaTest, a retirar)
-  RESULTS_LT_ANDROID_DIR    resultados/lambdatest_android/   (LambdaTest, a retirar)
+  RESULTS_T1_DIR / T3_DIR   resultados/t1/ y t3/  Envío de Leads (navegadores y BrowserStack)
   RESULTS_DEALERS_DIR       resultados/dealers/
   RESULTS_MASIVA_DIR        resultados/resultado_urlsinsertas/
 TEMPORALES_DIR            temporales/   logs y respaldos antes de pisar Excels

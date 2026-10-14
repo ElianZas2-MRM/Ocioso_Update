@@ -28,11 +28,10 @@ ASSET_DIR = os.path.join(BUNDLE_DIR, "Asset")
 RESULTS_DIR = os.path.join(BASE_DIR, "resultados")
 
 # Todo lo que la app produce vive adentro de resultados/, cada cosa en su subcarpeta.
-# Antes estas tres colgaban sueltas de la raiz (resultados_lambdatestmac/,
-# resultados_lambdatest_android/ y Dealerscheck_resultados/), que ensuciaba la raiz
-# y obligaba a buscar los resultados de una corrida en cuatro lugares distintos.
-RESULTS_LT_MAC_DIR = os.path.join(RESULTS_DIR, "lambdatest_mac")
-RESULTS_LT_ANDROID_DIR = os.path.join(RESULTS_DIR, "lambdatest_android")
+# Antes había carpetas sueltas en la raiz (resultados_lambdatestmac/,
+# resultados_lambdatest_android/ y Dealerscheck_resultados/), que ensuciaban la raiz
+# y obligaban a buscar los resultados de una corrida en varios lugares. BrowserStack
+# escribe con el motor de los navegadores, en t1/ y t3/ como Chrome.
 RESULTS_DEALERS_DIR = os.path.join(RESULTS_DIR, "dealers")
 RESULTS_MASIVA_DIR = os.path.join(RESULTS_DIR, "resultado_urlsinsertas")
 
