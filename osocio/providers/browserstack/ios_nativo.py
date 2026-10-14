@@ -169,6 +169,8 @@ class FormNativoIOS:
         web = raiz.find(f".//{_T}WebView")
         todos = list(web.iter()) if web is not None else []
         estaticos = [e for e in todos if e.tag == f"{_T}StaticText" and _texto(e)]
+        # Los checkboxes que cuentan son los del form (la landing puede tener otros).
+        contenedor = self._contenedor_del_form(raiz)
 
         def etiqueta_de(ctrl, excluir=""):
             for s in estaticos:
@@ -192,26 +194,55 @@ class FormNativoIOS:
                 if etiqueta:   # sin label adentro no es un select del form
                     controles.append({"tipo": "select", "e": e, "valor": valor, "etiqueta": etiqueta,
                                       "habilitado": e.get("enabled") == "true"})
-            elif tag == "Switch":
-                # El switch suele venir "invisible" (lo tapa su texto): se toca su texto.
-                texto = next((_texto(s) for s in estaticos if _num(s, "y") >= _num(e, "y") - 5
-                              and _adentro(s, e)), "")
-                controles.append({"tipo": "checkbox", "e": e, "valor": (e.get("value") or "0"),
-                                  "etiqueta": texto})
+            elif tag == "Switch" and (contenedor is None or _adentro(e, contenedor)):
+                controles.append(self._checkbox(e, estaticos))
             elif tag == "Button" and visible and _norm(_texto(e)).startswith(kw_enviar):
                 enviar = e
             elif tag == "Button" and visible and _norm(_texto(e)).startswith(kw_siguiente):
                 siguiente = e
-        # Duplicados (el mismo control anidado dos veces) y fuera de la franja útil.
+        # Duplicados (el mismo control anidado dos veces). Un checkbox se ubica por SU fila:
+        # los de un grupo empiezan todos en la misma línea (el título del grupo).
         vistos, out = set(), []
-        for c in sorted(controles, key=lambda c: _num(c["e"], "y")):
-            clave = (c["tipo"], _num(c["e"], "y") // 8)
+        for c in sorted(controles, key=lambda c: c.get("fila", _num(c["e"], "y"))):
+            c["y"] = c.get("fila", _num(c["e"], "y"))
+            clave = (c["tipo"], c["y"] // 8)
             if clave in vistos:
                 continue
             vistos.add(clave)
-            c["y"] = _num(c["e"], "y")
             out.append(c)
-        return {"controles": out, "enviar": enviar, "siguiente": siguiente}
+        textos = [{"texto": _texto(s), "x": _num(s, "x"), "y": _num(s, "y")} for s in estaticos]
+        return {"controles": out, "enviar": enviar, "siguiente": siguiente, "textos": textos}
+
+    @staticmethod
+    def _checkbox(e, estaticos) -> Dict:
+        """Un checkbox (XCUIElementTypeSwitch) con su opción, su grupo y dónde tocarlo.
+
+        En los grupos ("Preferencia de contacto": E-mail / Llamada / WhatsApp) cada opción es
+        un Switch que EMPIEZA en el título del grupo y se estira hasta su fila: su opción es
+        el texto que termina donde termina el Switch, no el primero que tiene adentro. Se
+        toca el cuadradito (entre el borde del Switch y el texto), no el centro: el centro
+        cae en el título del grupo, o en el link de "términos y condiciones".
+        """
+        x, y = _num(e, "x"), _num(e, "y")
+        abajo = y + _num(e, "height")
+        adentro = [s for s in estaticos if _adentro(s, e)]
+        opcion = min(adentro, key=lambda s: abs(_num(s, "y") + _num(s, "height") - abajo), default=None)
+        if opcion is not None and abs(_num(opcion, "y") + _num(opcion, "height") - abajo) > 20:
+            opcion = None
+        etiqueta = _texto(opcion) if opcion is not None else ""
+        # El título del grupo está ARRIBA de la opción (un superíndice "1" de la misma
+        # línea, como en "términos y condiciones¹", no es un título).
+        tope = _num(opcion, "y") - 8 if opcion is not None else y + _num(e, "height")
+        titulo = next((_texto(s) for s in adentro
+                       if s is not opcion and abs(_num(s, "y") - y) <= 4 and _num(s, "y") < tope
+                       and len(_texto(s)) > 2 and not _texto(s).isdigit()), "")
+        if opcion is not None:
+            fila = _num(opcion, "y") + _num(opcion, "height") // 2
+            tap_x = (x + _num(opcion, "x")) // 2 if _num(opcion, "x") > x + 8 else x + 12
+        else:
+            fila, tap_x = y + _num(e, "height") // 2, x + 12
+        return {"tipo": "checkbox", "e": e, "valor": (e.get("value") or "0"), "etiqueta": etiqueta,
+                "grupo": titulo, "fila": fila, "abajo": abajo, "tap": (tap_x, fila)}
 
     def _elemento(self, e):
         """El WebElement de un nodo del page_source, por tipo y posición actual."""
@@ -310,14 +341,83 @@ class FormNativoIOS:
             pass
 
     def _marcar_checkbox(self, c) -> str:
+        """Hay que estar en NATIVE_APP y con el checkbox a la vista."""
         if c["valor"] == "1":
             return "ya estaba marcado"
-        self._tocar_centro(c["e"])
-        time.sleep(0.6)
-        for nuevo in self.escanear()["controles"]:
-            if nuevo["tipo"] == "checkbox" and abs(nuevo["y"] - c["y"]) < 15:
-                return "marcado" if nuevo["valor"] == "1" else f"sigue en {nuevo['valor']}"
-        return "tocado"
+        nuevo = c
+        for _intento in range(2):   # a veces el primer toque después de scrollear no entra
+            tap_x, tap_y = nuevo.get("tap") or (_num(nuevo["e"], "x") + 12, nuevo["y"])
+            self.d.execute_script("mobile: tap", {"x": tap_x, "y": tap_y})
+            time.sleep(0.6)
+            nuevo = self._mismo_checkbox(c)
+            if nuevo is None:
+                return "tocado"
+            if nuevo["valor"] == "1":
+                return "marcado"
+        return f"sigue en {nuevo['valor']}"
+
+    def checkboxes_pendientes(self) -> List[Dict]:
+        """Los checkboxes sin marcar que la regla de la app manda marcar (términos, *)."""
+        self._nativo()
+        try:
+            return [c for c in self.escanear()["controles"]
+                    if c["tipo"] == "checkbox" and self._pendiente(c)]
+        finally:
+            self._webview()
+
+    def _mismo_checkbox(self, c):
+        """El checkbox c en la pantalla actual (por etiqueta y grupo; si no, por posición)."""
+        cbs = [n for n in self.escanear()["controles"] if n["tipo"] == "checkbox"]
+        if c.get("etiqueta"):
+            for n in cbs:
+                if n["etiqueta"] == c["etiqueta"] and n.get("grupo") == c.get("grupo"):
+                    return n
+        return next((n for n in cbs if abs(n["y"] - c["y"]) < 15), None)
+
+    def checkboxes_rechazados(self) -> List[Dict]:
+        """Después de tocar Enviar: los checkboxes sin marcar que el form exige.
+
+        Es la lógica de la app para los checkboxes obligatorios por JS (#27), con lo que se
+        ve en el iPhone: el form frena el envío y pone un aviso justo DEBAJO del checkbox o
+        de su grupo ("Seleccione al menos una opción.", "Acepta términos y condiciones.").
+        Si el aviso es de un grupo, se devuelven todas sus opciones sin marcar (como en
+        Chrome, que marca todos los checkboxes con error).
+        """
+        self._nativo()
+        try:
+            pantalla = self.escanear()
+        finally:
+            self._webview()
+        # Sin texto propio ni de grupo no es una casilla del form que se pueda pedir
+        # (en Chile hay una así, invisible, que no se deja marcar).
+        cbs = [c for c in pantalla["controles"]
+               if c["tipo"] == "checkbox" and (c["etiqueta"] or c.get("grupo"))]
+        etiquetas = {c["etiqueta"] for c in cbs} | {c.get("grupo", "") for c in cbs}
+        grupos: Dict[str, List[Dict]] = {}
+        for c in cbs:
+            grupos.setdefault(c.get("grupo") or c["etiqueta"] or str(c["y"]), []).append(c)
+        rechazados = []
+        for opciones in grupos.values():
+            abajo = max(c.get("abajo", c["y"]) for c in opciones)
+            x_min = min(_num(c["e"], "x") for c in opciones)
+            aviso = next((t for t in pantalla["textos"]
+                          if t["texto"] not in etiquetas and len(t["texto"]) > 3
+                          and abajo - 2 <= t["y"] <= abajo + 45 and abs(t["x"] - x_min) <= 60), None)
+            if aviso is not None:
+                rechazados += [c for c in opciones if c["valor"] != "1"]
+        return rechazados
+
+    def marcar(self, c) -> str:
+        """Marca un checkbox desde la capa web/nativa: lo trae a la vista si hace falta."""
+        try:
+            self._webview()
+            if not (_Y_MIN <= c["y"] <= _Y_MAX):
+                self._scroll_por(int(c["y"] - 300))
+            self._nativo()
+            actual = self._mismo_checkbox(c) or c
+            return self._marcar_checkbox(actual)
+        finally:
+            self._webview()
 
     # ── recorrido completo ───────────────────────────────────────────────────
     def _pendiente(self, c) -> bool:
@@ -330,8 +430,9 @@ class FormNativoIOS:
             return _is_placeholder(c["valor"])
         # Checkbox: se marca si es de términos/privacidad o si es obligatorio (* en el label),
         # igual que la app ("se marca si es obligatorio o de términos").
-        return c["valor"] != "1" and ("*" in c["etiqueta"]
-                                      or any(k in _norm(c["etiqueta"]) for k in _CHECKBOX_A_MARCAR))
+        texto = f"{c['etiqueta']} {c.get('grupo', '')}"
+        return c["valor"] != "1" and ("*" in texto
+                                      or any(k in _norm(texto) for k in _CHECKBOX_A_MARCAR))
 
     def llenar(self, valor_para: Callable[[str, str], Optional[str]],
                limite_seg: int = 360,

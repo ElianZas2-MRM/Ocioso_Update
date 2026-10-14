@@ -262,3 +262,34 @@ def test_la_nube_respeta_consecutivo_y_paralelo():
     codigo = ast.get_source_segment(fuente, run_market)
     assert "_parallel = (excels_par or mercados_par) and len(sessions) > 1" in codigo
     assert "bs_dispositivo" not in codigo
+
+
+# --- placeholders y checkboxes del iPhone (form de Chile, gm-envolve) -------------------
+
+@pytest.mark.parametrize("texto", ["Seleccione", "Seleccionar", "Seleccioná", "SELECCIONE UNA OPCIÓN",
+                                   "-- Elegí --", "Selecione", "Escolha", "Choose"])
+def test_nunca_se_elige_un_placeholder(texto):
+    from osocio.core.campos_inferencia import _is_placeholder
+    assert _is_placeholder(texto)
+
+
+def _nodo(tag, x, y, w, h, texto="", valor=None):
+    import xml.etree.ElementTree as ET
+    e = ET.Element("XCUIElementType" + tag, x=str(x), y=str(y), width=str(w), height=str(h), label=texto)
+    if valor is not None:
+        e.set("value", valor)
+    return e
+
+
+def test_checkbox_de_grupo_y_superindice_de_terminos():
+    from osocio.providers.browserstack.ios_nativo import FormNativoIOS
+    # Grupo: el Switch empieza en el título y termina en su opción.
+    titulo = _nodo("StaticText", 30, 420, 200, 20, "PREFERENCIA DE CONTACTO")
+    whatsapp = _nodo("StaticText", 74, 510, 90, 20, "WhatsApp")
+    c = FormNativoIOS._checkbox(_nodo("Switch", 30, 420, 300, 112, valor="0"), [titulo, whatsapp])
+    assert (c["grupo"], c["etiqueta"], c["fila"]) == ("PREFERENCIA DE CONTACTO", "WhatsApp", 520)
+    # Términos: el "1" del superíndice (misma línea) no es el título de un grupo.
+    texto = _nodo("StaticText", 119, 587, 260, 22, "Acepto términos y condiciones de registro")
+    sup = _nodo("StaticText", 387, 587, 6, 10, "1")
+    c = FormNativoIOS._checkbox(_nodo("Switch", 84, 587, 307, 25, valor="0"), [sup, texto])
+    assert (c["grupo"], c["etiqueta"]) == ("", "Acepto términos y condiciones de registro")

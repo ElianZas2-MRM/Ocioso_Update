@@ -20,6 +20,7 @@ normal por DOM, igual que en cualquier navegador.
 """
 
 import random
+import time
 from typing import Dict, Optional
 
 from osocio.core.campos_inferencia import ids_para_etiqueta
@@ -179,6 +180,7 @@ class FormFillerIphone(GenericCountryBase):
             print(f"  ⚠ Datos vs Excel: {e}")
         if not nativo.tocar_enviar():
             return "Error al enviar: no se encontró el botón Enviar", None
+        self._marcar_checkboxes_que_pide_el_form(nativo)
         estado, texto = nativo.esperar_ty()
         if estado == "ty":
             print(f"✓ TY: {texto}")
@@ -190,6 +192,37 @@ class FormFillerIphone(GenericCountryBase):
             print(f"  ⚠ Error event_id: {texto}")
             return "ERROR_EVENT_ID: Error de servidor al envío - formulario recargado automáticamente", None
         return "Formulario sigue visible (TY Page no detectada)", None
+
+    def _marcar_checkboxes_que_pide_el_form(self, nativo) -> bool:
+        """Checkboxes obligatorios por JS (la lógica de la app, #27, en el iPhone).
+
+        En Chrome se detectan con el "enviar vacío" del principio. En el iPhone se hace al
+        revés, para no arriesgar un envío vacío en un form sin obligatorios: se llena todo,
+        se toca Enviar y, si el form frena con un aviso debajo de un checkbox o de su grupo,
+        se marcan esos (todas las opciones del grupo, como en Chrome) y se reenvía una vez.
+        Si nada frena el envío, es que no eran obligatorios. Pendiente: las columnas SI/NO
+        del Excel para checkboxes opcionales (la capa nativa no ve el name del checkbox).
+        """
+        time.sleep(2)
+        try:
+            rechazados = nativo.checkboxes_rechazados()
+        except Exception as e:
+            print(f"  ⚠ No se pudo revisar si el form pidió checkboxes: {e}")
+            return False
+        if not rechazados:
+            return False
+        print("  ↺ El form pide marcar: " + ", ".join(
+            f"{c.get('grupo') + ' > ' if c.get('grupo') else ''}{c['etiqueta'] or '?'}" for c in rechazados))
+        for c in rechazados:
+            print(f"    · checkbox {c['etiqueta'] or '?':28} -> {nativo.marcar(c)}")
+        # Hay forms (Chile) que dejan "términos" deshabilitado hasta que todo lo demás es
+        # válido: el toque del llenado no entró. Ahora que el resto está, se vuelve a marcar.
+        try:
+            for c in nativo.checkboxes_pendientes():
+                print(f"    · checkbox {c['etiqueta'] or '?':28} -> {nativo.marcar(c)}")
+        except Exception as e:
+            print(f"  ⚠ No se pudieron revisar los checkboxes de términos: {e}")
+        return nativo.tocar_enviar()
 
     def _esperar_recarga_tras_event_id(self, use_iframe, expected_form_url, timeout=12):
         if self._nativo is None:

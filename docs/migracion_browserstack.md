@@ -161,7 +161,18 @@ Qué hace con cada cosa, **con la lógica de la app** (no reglas propias):
 - **Campos que el lead no conoce**: obligatorio (`*` en la etiqueta) → valor plausible
   siempre; opcional → 50%, una vez por campo (README, "Campos que no están en el Excel").
 - **Checkbox**: se marca si es de términos/privacidad o obligatorio, y se verifica que
-  quede en `1`.
+  quede en `1` (si el primer toque no entra, se toca de nuevo).
+- **Checkboxes obligatorios por JS** (la lógica de #27 en Chrome): en el iPhone no se ve
+  el `required`, así que se hace al revés: se llena todo, se toca Enviar y, si el form
+  frena con un aviso justo debajo de un checkbox o de su grupo (*"Seleccione al menos una
+  opción."*), se marcan todas las opciones sin marcar de ese grupo, después se vuelve a
+  intentar con los de términos, y se reenvía una vez. Caso real: Chile `gm-envolve`, donde
+  *"Acepto términos"* queda **deshabilitado** hasta que todo lo demás es válido
+  (`_app.js`, "SOLUCIÓN PARA IOS": el toque se ignora) y "Preferencia de contacto" no
+  tiene `*`. Un checkbox de grupo en iOS es un `Switch` que empieza en el título del grupo
+  y termina en su opción: la opción es el texto del final, se toca el cuadradito y no el
+  centro. Sólo cuentan los checkboxes dentro del contenedor del form, y los que no tienen
+  texto propio ni de grupo se ignoran.
 - **Forms en pasos**: avanza con los mismos textos de botón que la app
   (`_NEXT_KEYWORDS`, `_SUBMIT_KEYWORDS`).
 - **TY**: mismo criterio que `_ty_visible` de la app: el form **reemplazado** por otro
@@ -222,6 +233,7 @@ app (`runner.run`): Colombia `raq` en iPhone, Android y Mac.
 | Bolivia `model-overviews` (Tracker) | gm_front | ✅ | ✅ | ✅ |
 | Bolivia `raq` | gm_front | ✅ | pendiente | pendiente |
 | Brasil `myr2026` (S10) | gm_forms | ✅ (con reintento de event_id) | ✅ | ✅ |
+| Chile `gm-envolve` | gm_forms | ✅ llena todo y marca contacto + términos (sin envío) | — | ✅ (sin envío) |
 
 ## Plan de BrowserStack
 
