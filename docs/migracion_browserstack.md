@@ -173,6 +173,12 @@ Qué hace con cada cosa, **con la lógica de la app** (no reglas propias):
   y termina en su opción: la opción es el texto del final, se toca el cuadradito y no el
   centro. Sólo cuentan los checkboxes dentro del contenedor del form, y los que no tienen
   texto propio ni de grupo se ignoran.
+- **Dos layouts de form**: con el label ADENTRO del campo (vsid) y con el label AFUERA,
+  arriba (layout default, ej. Colombia `socios_negocio`). Si el control no tiene label
+  adentro, se toma el texto justo arriba (hasta 30 px, alineado a la izquierda). Un
+  placeholder de un espacio no cuenta como label.
+- **CTA antes del form** (RAQ de Brasil): "Solicitar Contato" se toca por la capa nativa
+  (`FormNativoIOS.tocar_texto`), con las mismas condiciones que `_maybe_click_raq_cta`.
 - **Forms en pasos**: avanza con los mismos textos de botón que la app
   (`_NEXT_KEYWORDS`, `_SUBMIT_KEYWORDS`).
 - **TY**: mismo criterio que `_ty_visible` de la app: el form **reemplazado** por otro
@@ -233,6 +239,10 @@ app (`runner.run`): Colombia `raq` en iPhone, Android y Mac.
 | Bolivia `model-overviews` (Tracker) | gm_front | ✅ | ✅ | ✅ |
 | Bolivia `raq` | gm_front | ✅ | pendiente | pendiente |
 | Brasil `myr2026` (S10) | gm_forms | ✅ (con reintento de event_id) | ✅ | ✅ |
+| Brasil `solicitar-contato` (RAQ con CTA) | gm_forms | ✅ (toca "Solicitar Contato") | — | ✅ |
+| Colombia `socios_negocio` (en pasos, layout default) | gm_front | ✅ | — | ✅ |
+| Argentina `verano-testdrive` (layout default) | gm_front | ✅ | — | ✅ |
+| Ecuador `evento-autoshow-onstar` y `raq` ("C.I.") | gm_front | ✅ | — | ✅ |
 | Chile `gm-envolve` | gm_forms | ✅ llena todo y marca contacto + términos (sin envío) | — | ✅ (sin envío) |
 
 ## Plan de BrowserStack
