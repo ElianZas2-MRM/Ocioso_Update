@@ -55,6 +55,25 @@ class FormFillerIphone(GenericCountryBase):
     def _verificar_cta_eletricos_br(self, landing_url, form_url):
         return None if self._nativo else super()._verificar_cta_eletricos_br(landing_url, form_url)
 
+    def _maybe_click_raq_cta(self, *urls):
+        """RAQ de Brasil: antes del form hay una pantalla con cards y el CTA "Solicitar
+        Contato" (#contact-by-form) que hay que tocar. En los navegadores se clickea por DOM
+        adentro del iframe; en el iPhone se toca por la capa nativa, con las mismas
+        condiciones (Brasil + RAQ, no eléctricos)."""
+        if not self._nativo:
+            return super()._maybe_click_raq_cta(*urls)
+        blob = " ".join((u or "").lower() for u in urls)
+        if str(self.config.get("pais", "")).lower() not in ("brasil", "brazil", "br"):
+            return
+        if "raq" not in blob or "eletricos" in blob:
+            return
+        if not ("solicitar-contato" in blob or "gm_forms/raq" in blob or "raq-revamp" in blob):
+            return
+        if self._nativo.tocar_texto("Solicitar Contato"):
+            print("Tocado 'Solicitar Contato' (RAQ Brasil)")
+        else:
+            print("⚠ No se encontró el CTA 'Solicitar Contato' del RAQ de Brasil")
+
     def _rellenar_si_form_se_reseteo(self, form_data, es_libro_reclamaciones=False):
         if self._nativo:
             return None

@@ -104,7 +104,7 @@ ETIQUETA_A_IDS = (
      ("phone", "telephone", "cellphone")),
     (("cnpj",), ("cnpj",)),
     (("cep", "codigo postal", "zip"), ("cep", "zip_code")),
-    (("cedula", "documento", "cpf", "dni", "rut", "carnet", "pasaporte", "ruc"),
+    (("cedula", "documento", "cpf", "dni", "rut", "carnet", "pasaporte", "ruc", "ci"),
      ("document", "ci", "cpf", "rut", "dni")),
     (("departamento", "estado", "provincia", "region"), ("region", "state")),
     (("ciudad", "cidade", "localidad", "comuna", "municipio"), ("city",)),
@@ -130,6 +130,8 @@ def ids_para_etiqueta(etiqueta):
     if not norm:
         return ()
     palabras = re.findall(r"[a-z0-9]+", norm)
+    # La etiqueta entera sin puntos ni espacios: "C.I." (cédula en Ecuador) -> "ci".
+    compacta = "".join(palabras)
 
     def coincide(clave):
         if " " in clave or "-" in clave:
@@ -137,7 +139,7 @@ def ids_para_etiqueta(etiqueta):
         # Palabra entera (o su plural/variante para claves largas): "Acepto" no es "cep",
         # ni "Username" es "name".
         if len(clave) < 5:
-            return clave in palabras
+            return clave in palabras or clave == compacta
         return any(p == clave or p.startswith(clave) for p in palabras)
 
     for claves, ids in ETIQUETA_A_IDS:

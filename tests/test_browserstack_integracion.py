@@ -383,3 +383,13 @@ def test_radio_el_excel_manda_y_el_guion_lo_omite():
     for _ in range(10):
         assert _motor_radios()._choose_radio_option(_grupo(
             "cc-younger-status", "Soy menor de edad", "Soy mayor de edad"))["value"] == "Soy mayor de edad"
+
+
+# --- etiquetas de los forms con layout default (label afuera del campo) ---------------
+
+@pytest.mark.parametrize("etiqueta, campo", [
+    ("C.I.", "document"), ("CI *", "document"), ("CÉDULA", "document"), ("DNI", "document"),
+    ("Ciudad", "city"), ("CIUDAD", "city"), ("MODELOS", "models"), ("FECHA ESTIMADA DE COMPRA", "estimated-day"),
+])
+def test_etiquetas_de_forms_con_layout_default(etiqueta, campo):
+    assert campo in ids_para_etiqueta(etiqueta)

@@ -182,6 +182,15 @@ class FormNativoIOS:
                     return t
             return ""
 
+        def etiqueta_arriba(ctrl):
+            """El label puesto ARRIBA del control (no adentro), ej. "MODELOS" sobre el select
+            en los forms en pasos de Colombia: el texto más cercano por encima, pegado
+            (hasta 30 px) y alineado con su borde izquierdo."""
+            y, x = _num(ctrl, "y"), _num(ctrl, "x")
+            cerca = [s for s in estaticos
+                     if 0 <= y - (_num(s, "y") + _num(s, "height")) <= 30 and abs(_num(s, "x") - x) <= 20]
+            return _texto(max(cerca, key=lambda s: _num(s, "y"))) if cerca else ""
+
         kw_siguiente, kw_enviar = _kw_botones()
         controles, enviar, siguiente, radios = [], None, None, []
         for e in todos:
@@ -192,12 +201,13 @@ class FormNativoIOS:
                 radios.append((e, opcion_radio))
             elif tag in ("TextField", "TextView", "SecureTextField") and visible:
                 controles.append({"tipo": "texto", "e": e, "valor": (e.get("value") or "").strip(),
-                                  "etiqueta": etiqueta_de(e) or (e.get("placeholderValue") or "")})
+                                  "etiqueta": etiqueta_de(e) or (e.get("placeholderValue") or "").strip()
+                                  or etiqueta_arriba(e)})
             elif tag == "Other" and visible and (e.get("value") or "").strip() \
                     and not (e.get("label") or "").strip() and 30 <= _num(e, "height") <= 100:
                 valor = e.get("value").strip()
-                etiqueta = etiqueta_de(e, excluir=valor)
-                if etiqueta:   # sin label adentro no es un select del form
+                etiqueta = etiqueta_de(e, excluir=valor) or etiqueta_arriba(e)
+                if etiqueta:   # sin label (adentro o justo arriba) no es un select del form
                     controles.append({"tipo": "select", "e": e, "valor": valor, "etiqueta": etiqueta,
                                       "habilitado": e.get("enabled") == "true"})
             elif tag == "Switch" and (contenedor is None or _adentro(e, contenedor)):
@@ -631,6 +641,30 @@ class FormNativoIOS:
         except Exception as e:
             reg["quedo"] = f"ERROR {str(e).splitlines()[0][:120]}"
         return reg
+
+    def tocar_texto(self, texto: str, intentos: int = 8) -> bool:
+        """Toca, dentro del form, el link/botón con ese texto (ej. el CTA "Solicitar
+        Contato" del RAQ de Brasil, que hay que tocar para que aparezca el form). Baja de a
+        poco hasta encontrarlo a la vista."""
+        buscado = _norm(texto)
+        self.ir_al_form()
+        for _ in range(intentos):
+            self._nativo()
+            try:
+                raiz = self._fuente()
+                caja = self._contenedor_del_form(raiz)
+                for e in (caja.iter() if caja is not None else raiz.iter()):
+                    if e.tag.replace(_T, "") in ("Link", "Button", "StaticText") \
+                            and _norm(_texto(e)) == buscado and self._visible(e) \
+                            and _Y_MIN <= _num(e, "y") <= _Y_MAX:
+                        self._tocar_centro(e)
+                        time.sleep(1.5)
+                        return True
+            finally:
+                self._webview()
+            if not self._scroll_por(250):
+                break
+        return False
 
     def tocar_enviar(self) -> bool:
         self._webview()
