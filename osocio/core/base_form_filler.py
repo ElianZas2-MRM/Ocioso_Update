@@ -1184,15 +1184,26 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
         return self._normalize_resolved_value(val, field_config)
 
+    # Números de corrida tomados por corridas SIN capturas (BrowserStack) de este proceso.
+    # Las locales reservan su número creando la carpeta screenshots_<...>N; las de la nube
+    # no crean esa carpeta (la evidencia es el video), así que reservan acá. Sin esto, dos
+    # sesiones en paralelo del mismo país y dispositivo (una sesión por URL) tomarían el
+    # mismo resultados_<...>N.xlsx.
+    _NUMEROS_RESERVADOS = set()
+
     def setup_directories_and_files(self):
         """Configura carpetas y archivos con rutas relativas"""
         run_number = self._get_next_available_number()
-        
+
         self.SCREENSHOT_DIR = os.path.join(self.RESULTADOS_DIR, f"{self.SCREENSHOT_BASENAME}{run_number}")
         self.RESULTADOS_PATH = os.path.join(self.RESULTADOS_DIR, f"{self.RESULTADOS_BASENAME}{run_number}.xlsx")
-        
-        os.makedirs(self.SCREENSHOT_DIR, exist_ok=True)
-        
+
+        if self.config.get("capturas", True):
+            os.makedirs(self.SCREENSHOT_DIR, exist_ok=True)
+        else:
+            # BrowserStack: nunca carpeta de capturas (ver _NUMEROS_RESERVADOS).
+            BaseFormFiller._NUMEROS_RESERVADOS.add(os.path.normcase(self.RESULTADOS_PATH))
+
         print(f"Carpeta de screenshots: {self.SCREENSHOT_DIR}")
         print(f"Archivo de resultados: {self.RESULTADOS_PATH}")
         print(f"Archivo Excel de datos: {self.EXCEL_PATH}")
@@ -1220,8 +1231,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         i = 1
         while True:
             folder_exists = os.path.exists(os.path.join(self.RESULTADOS_DIR, f"{self.SCREENSHOT_BASENAME}{i}"))
-            file_exists = os.path.exists(os.path.join(self.RESULTADOS_DIR, f"{self.RESULTADOS_BASENAME}{i}.xlsx"))
-            
+            _archivo = os.path.join(self.RESULTADOS_DIR, f"{self.RESULTADOS_BASENAME}{i}.xlsx")
+            file_exists = os.path.exists(_archivo) or \
+                os.path.normcase(_archivo) in BaseFormFiller._NUMEROS_RESERVADOS
+
             if not folder_exists and not file_exists:
                 return i
             i += 1
@@ -4275,7 +4288,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 from osocio.utils.ty_cta import investigate_ty_cta, format_ty_cta, format_link_issue
                 _cta_info = investigate_ty_cta(
                     self.driver, log=print,
-                    evidence_dir=self.SCREENSHOT_DIR, take_screenshot=True,
+                    evidence_dir=self.SCREENSHOT_DIR,
+                    take_screenshot=bool(self.config.get("capturas", True)),
                 )
                 self._ty_cta = format_ty_cta(_cta_info)
                 self._link_issue = format_link_issue(_cta_info)
@@ -5022,6 +5036,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             print(f"Se capturaron {ss_counter-1} sets completos de screenshots")
 
             # Limpiar temporales de captura que hayan quedado sueltos (no deben viajar al email).
+            # Sin capturas (BrowserStack) no hay carpeta: nada que limpiar ni recomprimir.
+            if not self.config.get("capturas", True):
+                return
             try:
                 import glob as _g
                 for _t in _g.glob(os.path.join(self.SCREENSHOT_DIR, "temp_*.png")):

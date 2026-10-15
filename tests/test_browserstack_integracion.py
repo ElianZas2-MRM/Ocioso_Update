@@ -393,3 +393,23 @@ def test_radio_el_excel_manda_y_el_guion_lo_omite():
 ])
 def test_etiquetas_de_forms_con_layout_default(etiqueta, campo):
     assert campo in ids_para_etiqueta(etiqueta)
+
+
+def test_browserstack_no_crea_carpeta_de_capturas_y_no_repite_numero(tmp_path):
+    """En la nube la evidencia es el video: nunca carpeta screenshots_<...>N."""
+    from osocio.core.generic_country_base import GenericCountryBase
+    nube = GenericCountryBase("Colombia", browser="browserstack_mac", capturas=False)
+    entrada = tmp_path / "entrada.xlsx"
+    entrada.write_bytes(b"")
+    nube.RESULTADOS_DIR, nube.EXCEL_PATH = str(tmp_path / "res"), str(entrada)
+    os.makedirs(nube.RESULTADOS_DIR)
+    nube.setup_directories_and_files()
+    primero = nube.RESULTADOS_PATH
+    nube.setup_directories_and_files()          # otra sesión, en paralelo, antes del Excel
+    assert nube.RESULTADOS_PATH != primero
+    assert not any(n.startswith("screenshots_") for n in os.listdir(nube.RESULTADOS_DIR))
+    # Los navegadores locales siguen creando su carpeta.
+    local = GenericCountryBase("Colombia", browser="chrome")
+    local.RESULTADOS_DIR, local.EXCEL_PATH = nube.RESULTADOS_DIR, str(entrada)
+    local.setup_directories_and_files()
+    assert os.path.isdir(local.SCREENSHOT_DIR)
