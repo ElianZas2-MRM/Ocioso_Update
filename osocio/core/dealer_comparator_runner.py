@@ -45,7 +45,8 @@ MODEL_FIELD_ID_ALIASES = ("models", "model")
 # cualquier nivel: es el primer campo del form, y aplica igual aunque el form no tenga
 # selector de Modelo.
 PURCHASE_FIELD_ID = "buy_pda"
-PURCHASE_FIELD_ID_ALIASES = ("buy_pda",)
+# Los forms con layout visid (ej. .../gm_front/form/movs-pda-visid) lo llaman "purchase-type".
+PURCHASE_FIELD_ID_ALIASES = ("buy_pda", "purchase-type")
 PURCHASE_MODE_OPTIONS = ("Compra al contado/Financiación", "Plan de ahorro")
 PURCHASE_FIELD_COUNTRIES = ("Argentina",)
 
@@ -604,10 +605,16 @@ def resolve_purchase_field_id(driver, field_id=None):
     que resolve_model_field_id, con sus alias). None si el form no lo tiene."""
     candidates = [field_id] if field_id else []
     candidates += [alias for alias in PURCHASE_FIELD_ID_ALIASES if alias != field_id]
-    for idx, candidate in enumerate(candidates):
-        if _get_select(driver, candidate, timeout=10 if idx == 0 else 2) is not None:
-            return candidate
-    return None
+    # Todos los ids a la vez (hasta 10 s), no uno detrás del otro: con el layout visid
+    # ("purchase-type") se perdían 10 s esperando un "buy_pda" que ese form no tiene.
+    limite = time.time() + 10
+    while True:
+        for candidate in candidates:
+            if _get_select(driver, candidate, timeout=0) is not None:
+                return candidate
+        if time.time() >= limite:
+            return None
+        time.sleep(0.3)
 
 
 def select_purchase_mode(driver, value, field_id=None, anchor_id=None, log_cb=None):
@@ -765,16 +772,21 @@ def _locate_form_iframe(driver, form_url, wait_seconds=0):
     iframe = None
     if form_url:
         if wait_seconds > 0:
+            # src o data-src: un iframe lazy (data-src, sin src todavía) también es "el form",
+            # y no tiene sentido esperar a que cargue solo sin scrollear hasta él.
             try:
                 iframe = WebDriverWait(driver, wait_seconds).until(
                     lambda d: next(
                         (f for f in d.find_elements(By.TAG_NAME, "iframe")
-                         if form_url in (f.get_attribute("src") or "")),
+                         if form_url in (f.get_attribute("src") or "")
+                         or form_url in (f.get_attribute("data-src") or "")),
                         None
                     )
                 )
             except Exception:
                 iframe = None
+            if iframe is not None and form_url not in (iframe.get_attribute("src") or ""):
+                iframe = _cargar_iframe_lazy(driver, form_url)
         else:
             iframe = _find_form_iframe(driver, form_url)
         if iframe is None:
