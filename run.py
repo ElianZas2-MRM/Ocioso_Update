@@ -92,21 +92,19 @@ def _run_autonomous(once=False):
     return autonomous_main()
 
 
-def _run_lambdatest(lt_type, pais, build_name=""):
-    """Ejecuta LambdaTest Mac o Android para un país y muestra el resumen."""
-    if lt_type == "mac":
-        from osocio.providers.lambdatest_mac import lt_controller
-        summary = lt_controller.run(pais=pais, build_name=build_name)
-    elif lt_type == "android":
-        from osocio.providers.lambdatest_android import lt_android_controller
-        summary = lt_android_controller.run(pais=pais, build_name=build_name)
-    else:
-        raise ValueError(f"Tipo LambdaTest no reconocido: {lt_type!r}")
-
+def _run_browserstack(plataforma, pais, build_name="", variante="", programada=False):
+    """Corre el Excel del país en un dispositivo de BrowserStack y muestra el resumen."""
+    from osocio.providers.browserstack import runner
+    summary = runner.run(pais=pais, plataforma=plataforma, variante=variante,
+                         programada=programada, build_name=build_name)
     ok = summary.get("ok", 0)
     failed = summary.get("failed", 0)
     total = summary.get("total", 0)
-    print(f"LambdaTest {lt_type} — {pais}: {ok}/{total} OK, {failed} errores")
+    if summary.get("error"):
+        print(f"BrowserStack {plataforma} - {pais}: ERROR {summary['error']}")
+    print(f"BrowserStack {plataforma} - {pais}: {ok}/{total} OK, {failed} errores")
+    if summary.get("results_excel"):
+        print(f"Resultados: {summary['results_excel']}")
     return summary
 
 
@@ -125,11 +123,14 @@ def _parse_args():
     parser.add_argument("--environment", default="chrome_desktop", choices=sorted(ENVIRONMENTS.keys()))
     parser.add_argument("--no-email", action="store_true", help="No envía email al finalizar")
     parser.add_argument("--scheduled", action="store_true", help="Indica que es una ejecución programada")
+    parser.add_argument("--run-browserstack", dest="bs_type", choices=["iphone", "android", "mac"],
+                        help="Corre el Excel del país (--pais) en BrowserStack: iphone, android o mac")
+    # Compatibilidad: tareas viejas que llamaban a LambdaTest van a su equivalente.
     parser.add_argument("--run-lambdatest", dest="lt_type", choices=["mac", "android"],
-                        help="Ejecuta LambdaTest (mac o android) para el país indicado con --pais")
-    parser.add_argument("--pais", dest="lt_pais", help="País para --run-lambdatest")
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--pais", dest="lt_pais", help="País para --run-browserstack")
     parser.add_argument("--build-name", dest="lt_build_name", default="",
-                        help="Nombre del build en LambdaTest (opcional)")
+                        help="Nombre del build en BrowserStack (opcional)")
     return parser.parse_args()
 
 
@@ -177,16 +178,18 @@ if __name__ == "__main__":
             set_unattended(True)
         except Exception:
             pass
-    # LambdaTest corre en la nube: no usa los drivers locales, no tiene sentido chequearlos.
-    if not args.lt_type:
+    bs_type = args.bs_type or args.lt_type
+    # BrowserStack corre en la nube: no usa los drivers locales, no tiene sentido chequearlos.
+    if not bs_type:
         _ensure_drivers(show_ui=not (args.autonomous or args.country_name))
     if args.autonomous:
         _run_autonomous(once=args.once)
-    elif args.lt_type:
+    elif bs_type:
         if not args.lt_pais:
-            print("Error: --run-lambdatest requiere también --pais <nombre_país>")
+            print("Error: --run-browserstack requiere también --pais <nombre_país>")
             sys.exit(1)
-        _run_lambdatest(args.lt_type, args.lt_pais, build_name=args.lt_build_name)
+        _run_browserstack(bs_type, args.lt_pais, build_name=args.lt_build_name,
+                          variante=args.excel_suffix, programada=args.scheduled)
     elif args.country_name:
         _run_country(
             args.country_name,

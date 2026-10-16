@@ -110,20 +110,18 @@ def _motor(driver, headless=False):
 
 
 def _implementaciones():
-    """Los cuatro accesos al pre-scroll, uno por cada cosa que abre un navegador."""
+    """Los tres accesos al pre-scroll, uno por cada cosa que abre un navegador."""
     from osocio.core.dealer_comparator_runner import _pre_scroll_for_dynamic_content as dealers
-    from osocio.providers.lambdatest_mac.lt_runner import _pre_scroll_for_dynamic_content as lt
     from osocio.validation.selenium_validation_runner import _pre_scroll_for_dynamic_content as val
 
     return {
         "envio_de_leads": lambda d: _motor(d).pre_scroll_for_dynamic_content(),
         "comparar_dealers": dealers,
         "validacion_de_campos": val,
-        "lambdatest": lt,
     }
 
 
-CUALES = ["comparar_dealers", "envio_de_leads", "lambdatest", "validacion_de_campos"]
+CUALES = ["comparar_dealers", "envio_de_leads", "validacion_de_campos"]
 
 
 def _correr(cual, driver):

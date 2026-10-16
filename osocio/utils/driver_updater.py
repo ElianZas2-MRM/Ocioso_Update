@@ -29,6 +29,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import zipfile
 from datetime import datetime, timedelta
 
@@ -434,6 +435,39 @@ _RESOLVERS = {
 
 
 # ── Descarga e instalacion ────────────────────────────────────────────────────
+_PS_HUERFANOS = r"""
+$ruta = $args[0]
+$vivos = @{}; Get-CimInstance Win32_Process | ForEach-Object { $vivos[[int]$_.ProcessId] = $true }
+Get-CimInstance Win32_Process | Where-Object {
+    $_.ExecutablePath -and ($_.ExecutablePath -ieq $ruta) -and -not $vivos.ContainsKey([int]$_.ParentProcessId)
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $_.ProcessId }
+"""
+
+
+def _cerrar_drivers_huerfanos(driver_path):
+    """Cierra los procesos de ESE driver (misma ruta en /drivers/) cuyo programa padre ya no
+    existe: quedaron colgados de una corrida que se cortó y bloquean el .exe. Un driver de
+    una corrida en curso tiene su padre vivo y no se toca. Devuelve True si cerró alguno."""
+    if os.name != "nt":
+        return False
+    try:
+        ruta = os.path.abspath(driver_path).replace("'", "''")   # comillas simples de PowerShell
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "& {" + _PS_HUERFANOS + "} '" + ruta + "'"],
+            capture_output=True, text=True, timeout=30,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+        cerrados = [l.strip() for l in (out or "").splitlines() if l.strip().isdigit()]
+        if cerrados:
+            log_runtime(f"{os.path.basename(driver_path)}: se cerraron procesos huérfanos "
+                        f"que lo tenían tomado ({', '.join(cerrados)})", level="WARN")
+        return bool(cerrados)
+    except Exception as exc:
+        log_runtime(f"No se pudieron revisar procesos huérfanos de {driver_path}: {exc}", level="WARN")
+        return False
+
+
 def _download_and_install(status, url, on_progress=None):
     """Baja el zip, saca el .exe y lo deja en /drivers/. La descarga va a una carpeta temporal
     dentro de /drivers/ para que el reemplazo final sea un os.replace() en el mismo volumen
@@ -471,7 +505,15 @@ def _download_and_install(status, url, on_progress=None):
 
         final_path = os.path.join(DRIVERS_DIR, status.driver_name)
         try:
-            os.replace(extracted, final_path)
+            try:
+                os.replace(extracted, final_path)
+            except PermissionError:
+                # Un driver huérfano de una corrida anterior (su programa ya se cerró) tiene
+                # tomado el .exe: se cierra y se reintenta una vez.
+                if not _cerrar_drivers_huerfanos(final_path):
+                    raise
+                time.sleep(1)
+                os.replace(extracted, final_path)
         except PermissionError as exc:
             # Windows no deja pisar un .exe en ejecucion. Pasa si quedo un driver zombie de una
             # corrida anterior; el mensaje tiene que decir eso y no "acceso denegado" pelado.

@@ -17,8 +17,6 @@ from osocio import paths
 
 
 SUBCARPETAS = [
-    "RESULTS_LT_MAC_DIR",
-    "RESULTS_LT_ANDROID_DIR",
     "RESULTS_DEALERS_DIR",
     "RESULTS_MASIVA_DIR",
 ]
@@ -48,17 +46,6 @@ def test_no_hay_dos_tipos_apuntando_a_la_misma_carpeta():
     )
 
 
-def test_los_modulos_usan_las_rutas_centralizadas():
-    """Cada runner tiene que tomar su carpeta de paths.py, no armarla por su cuenta."""
-    from osocio.providers.lambdatest_mac import lt_runner
-    from osocio.providers.lambdatest_android import lt_android_runner
-
-    assert os.path.normpath(lt_runner._RESULTADOS_DIR) == os.path.normpath(paths.RESULTS_LT_MAC_DIR)
-    assert os.path.normpath(lt_android_runner._ANDROID_RESULTADOS_DIR) == os.path.normpath(
-        paths.RESULTS_LT_ANDROID_DIR
-    )
-
-
 def test_el_comparador_de_dealers_escribe_adentro_de_resultados():
     from osocio.interface.dealer_comparator_ui import _get_results_dir
 
@@ -66,13 +53,18 @@ def test_el_comparador_de_dealers_escribe_adentro_de_resultados():
 
 
 def test_el_ejecutor_autonomo_busca_donde_se_escribe():
-    """Si el autónomo mirara la carpeta vieja, los mails saldrían sin adjuntos."""
-    from osocio.autonomous_runner import _get_lt_results_dir
+    """Si el autónomo buscara otro nombre que el que escribe el motor, los mails saldrían
+    sin adjuntos. BrowserStack corre con el motor de los navegadores: mismo prefijo."""
+    from osocio.autonomous_runner import _basenames_resultados, _dispositivo_bs
+    from osocio.core.variantes import basenames_de_corrida
 
-    assert os.path.normpath(_get_lt_results_dir("mac")) == os.path.normpath(paths.RESULTS_LT_MAC_DIR)
-    assert os.path.normpath(_get_lt_results_dir("android")) == os.path.normpath(
-        paths.RESULTS_LT_ANDROID_DIR
-    )
+    for navegador in ("browserstack_iphone", "browserstack_android", "browserstack_mac"):
+        disp = _dispositivo_bs(navegador)
+        assert _basenames_resultados("Brasil", disp.navegador) == basenames_de_corrida(
+            "Brasil", navegador, programada=True)
+    # Programaciones guardadas con LambdaTest van a su equivalente de BrowserStack.
+    assert _dispositivo_bs("lambdatest_mac").navegador == "browserstack_mac"
+    assert _dispositivo_bs("lambdatest_android").navegador == "browserstack_android"
 
 
 def test_nadie_escribe_en_las_carpetas_viejas_de_la_raiz():

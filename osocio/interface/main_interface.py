@@ -78,9 +78,9 @@ except Exception as _imp_err:  # noqa: BLE001
 
 def _excel_path_for(pais):
     """Excel principal (editable / previsualización / scheduler) del país: el del
-    primer dispositivo disponible (Chrome→Firefox→Edge→Mac→Android) o el genérico.
+    primer dispositivo disponible (Chrome→Firefox→Edge→iPhone→Android→Mac) o el genérico.
     Si ninguno existe, devuelve la ruta de Chrome (para creación por defecto)."""
-    for suf in ("Chrome", "Firefox", "Edge", "Mac", "Android", "Generico"):
+    for suf in ("Chrome", "Firefox", "Edge", "Iphone", "Android", "Mac", "Generico"):
         p = os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_{suf}.xlsx")
         if os.path.exists(p):
             return p
@@ -122,13 +122,13 @@ def _generic_excel_path_for(pais, variante=""):
 
 
 def _device_excel_suffix(dev):
-    """Sufijo de archivo Excel por dispositivo. LT usa el mismo nombre que leen
-    los controllers de LambdaTest (…_Mac.xlsx / …_Android.xlsx)."""
-    d = str(dev).strip().lower()
-    if d in ("mac lt", "mac"):
-        return "Mac"
-    if d in ("android lt", "android"):
-        return "Android"
+    """Sufijo de archivo Excel por dispositivo: …_Chrome/_Firefox/_Edge y, para
+    BrowserStack, …_Iphone/_Android/_Mac (los de Mac/Android son los mismos que se
+    generaban para LambdaTest, así siguen sirviendo)."""
+    from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
+    bs = por_cualquier_nombre(dev)
+    if bs is not None:
+        return bs.sufijo_excel
     return str(dev).strip().capitalize()  # Chrome / Firefox / Edge
 
 
@@ -1435,8 +1435,11 @@ def iniciar_interfaz(autostart_leads=False):
     disp_btn_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
     disp_btn_row.pack(anchor="w")
 
-    dispositivos = ["Chrome", "Firefox", "Edge", "Mac LT", "Android LT"]
-    saved_disp = _ui_prefs.get("selected_disp", {})
+    from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS, migrar_seleccion
+    dispositivos = ["Chrome", "Firefox", "Edge"] + [d.etiqueta for d in DISPOSITIVOS_BS]
+    _claves_bs = [d.clave for d in DISPOSITIVOS_BS]
+    # Una selección guardada con LambdaTest ("mac lt") pasa a su equivalente BrowserStack.
+    saved_disp = migrar_seleccion(_ui_prefs.get("selected_disp", {}))
     selected_disp = {d.lower(): False for d in dispositivos}
     if saved_disp:
         for k in selected_disp:
@@ -1448,25 +1451,16 @@ def iniciar_interfaz(autostart_leads=False):
 
     status_lbl = tk.Label(disp_frame, text="1 dispositivo seleccionado.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF")
 
-    def _load_lt_creds():
-        path = os.path.join(BASE_DIR, "lambdatest_credentials.txt")
-        u = ak = ""
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if "=" not in line or line.startswith("#"):
-                            continue
-                        k, v = line.split("=", 1)
-                        k = k.strip().lower()
-                        if k == "username":
-                            u = v.strip()
-                        elif k == "access_key":
-                            ak = v.strip()
-            except Exception:
-                pass
-        return u, ak
+    def _load_bs_creds():
+        """Usuario y key de BrowserStack (variables de entorno o browserstack_credentials.txt)."""
+        try:
+            from osocio.providers.browserstack.bs_driver import load_credentials
+            return load_credentials()
+        except Exception:
+            return "", ""
+
+    def _hay_bs_seleccionado():
+        return any(selected_disp.get(k) for k in _claves_bs)
 
     def toggle_disp(name):
         key = name.lower()
@@ -1477,17 +1471,16 @@ def iniciar_interfaz(autostart_leads=False):
         else:
             btn.config(bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY, highlightthickness=1, highlightbackground=BUTTON_INACTIVE)
         
-        # Panel LT dinámico
-        if selected_disp["mac lt"] or selected_disp["android lt"]:
-            # Recargar credenciales desde el archivo cuando se selecciona mac o android
-            u, ak = _load_lt_creds()
-            lt_user_ent.delete(0, tk.END)
-            lt_user_ent.insert(0, u)
-            lt_key_ent.delete(0, tk.END)
-            lt_key_ent.insert(0, ak)
-            lt_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
+        # Panel de credenciales de BrowserStack: visible si hay un dispositivo de la nube
+        if _hay_bs_seleccionado():
+            u, ak = _load_bs_creds()
+            bs_user_ent.delete(0, tk.END)
+            bs_user_ent.insert(0, u)
+            bs_key_ent.delete(0, tk.END)
+            bs_key_ent.insert(0, ak)
+            bs_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
         else:
-            lt_creds_frame.pack_forget()
+            bs_creds_frame.pack_forget()
             
         count = sum(1 for v in selected_disp.values() if v)
         status_lbl.config(text=f"{count} dispositivo{'s' if count != 1 else ''} seleccionado{'s' if count != 1 else ''}.")
@@ -1663,64 +1656,65 @@ def iniciar_interfaz(autostart_leads=False):
     var_modo_email.trace_add("write", _save_ui_prefs)
     email_entry.bind("<FocusOut>", lambda e: _save_ui_prefs())
 
-    # Disclaimer dinámico: "Excels en paralelo" no aplica a LambdaTest.
+    # Disclaimer dinámico: en BrowserStack el paralelo tiene tope (sesiones compartidas).
     excel_par_warn_lbl = tk.Label(config_card, text="", font=("Segoe UI", 8, "bold"),
                                   bg=CARD_BG_COLOR, fg=WARN_TEXT, wraplength=760, justify="left")
     excel_par_warn_lbl.pack(anchor="w", padx=15, pady=(2, 0))
 
     def _refresh_excel_par_warning(*_):
         try:
-            _lt_sel = bool(selected_disp.get("mac lt") or selected_disp.get("android lt"))
-            _par = (excels_mode[0] == "paralelo")
+            _bs_sel = _hay_bs_seleccionado()
         except Exception:
             return
-        if _par and _lt_sel:
+        if _bs_sel:
+            from osocio.providers.browserstack.dispositivos import max_paralelo
             excel_par_warn_lbl.config(
-                text="⚠ 'Excels en paralelo' NO aplica a LambdaTest (Mac/Android): esos dispositivos se "
-                     "ejecutan igual de forma consecutiva. El paralelo sólo acelera los browsers locales "
-                     "(Chrome/Firefox/Edge).")
+                text=f"ℹ BrowserStack: los dispositivos de cada mercado van a un mismo build; en Paralelo "
+                     f"corren a la vez (máximo {max_paralelo()} sesiones simultáneas, las del plan las "
+                     "comparte todo el equipo). Se cambia en config_global.json → browserstack.max_paralelo.")
         else:
             excel_par_warn_lbl.config(text="")
     _refresh_excel_par_warning()
 
-    # CREDENCIALES LAMBDATEST INLINE
-    lt_creds_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
-    if selected_disp["mac lt"] or selected_disp["android lt"]:
-        lt_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
+    # CREDENCIALES BROWSERSTACK INLINE (cada persona usa su usuario y su access key)
+    bs_creds_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
+    if _hay_bs_seleccionado():
+        bs_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
     else:
-        lt_creds_frame.pack_forget()
+        bs_creds_frame.pack_forget()
 
-    tk.Label(lt_creds_frame, text="CREDENCIALES LT", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, columnspan=3, sticky="w")
-    
-    tk.Label(lt_creds_frame, text="User:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=1, column=0, sticky="w", pady=1)
-    lt_user_ent = tk.Entry(lt_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28)
-    lt_user_ent.grid(row=1, column=1, sticky="w", padx=4, pady=1)
+    tk.Label(bs_creds_frame, text="CREDENCIALES BROWSERSTACK", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, columnspan=3, sticky="w")
+
+    tk.Label(bs_creds_frame, text="User:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=1, column=0, sticky="w", pady=1)
+    bs_user_ent = tk.Entry(bs_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28)
+    bs_user_ent.grid(row=1, column=1, sticky="w", padx=4, pady=1)
     # Cargar credenciales al inicializar
-    _u_init, _ak_init = _load_lt_creds()
-    lt_user_ent.insert(0, _u_init)
+    _u_init, _ak_init = _load_bs_creds()
+    bs_user_ent.insert(0, _u_init)
 
-    tk.Label(lt_creds_frame, text="Key:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=2, column=0, sticky="w", pady=1)
-    lt_key_ent = tk.Entry(lt_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28, show="*")
-    lt_key_ent.grid(row=2, column=1, sticky="w", padx=4, pady=1)
-    lt_key_ent.insert(0, _ak_init)
+    tk.Label(bs_creds_frame, text="Key:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=2, column=0, sticky="w", pady=1)
+    bs_key_ent = tk.Entry(bs_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28, show="*")
+    bs_key_ent.grid(row=2, column=1, sticky="w", padx=4, pady=1)
+    bs_key_ent.insert(0, _ak_init)
 
-    # CTA de guardado de credenciales LambdaTest
-    def _save_lt_creds():
-        user_val = lt_user_ent.get().strip()
-        key_val = lt_key_ent.get().strip()
-        path = os.path.join(BASE_DIR, "lambdatest_credentials.txt")
+    # CTA de guardado de credenciales BrowserStack
+    def _save_bs_creds():
+        from osocio.providers.browserstack.bs_driver import CREDENTIALS_FILENAME
+        user_val = bs_user_ent.get().strip()
+        key_val = bs_key_ent.get().strip()
+        path = os.path.join(BASE_DIR, CREDENTIALS_FILENAME)
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(f"username={user_val}\n")
                 f.write(f"access_key={key_val}\n")
-            messagebox.showinfo("LambdaTest", "✓ Credenciales de LambdaTest guardadas con éxito en lambdatest_credentials.txt")
-            log_message("[INFO] Credenciales de LambdaTest actualizadas en lambdatest_credentials.txt.")
+            messagebox.showinfo("BrowserStack", f"✓ Credenciales de BrowserStack guardadas en {CREDENTIALS_FILENAME}")
+            log_message(f"[INFO] Credenciales de BrowserStack actualizadas en {CREDENTIALS_FILENAME}.")
         except Exception as e:
-            messagebox.showerror("LambdaTest", f"Error al guardar credenciales:\n{e}")
-    
+            messagebox.showerror("BrowserStack", f"Error al guardar credenciales:\n{e}")
+
     # Debajo de User/Key (antes iba a la derecha en una 3ra columna y quedaba cortado)
-    lt_save_btn = make_icon_btn(lt_creds_frame, "💾 Guardar", TEXT_SAVE, command=_save_lt_creds, pack_btn=False)
-    lt_save_btn.grid(row=3, column=0, columnspan=2, padx=4, pady=(5, 1), sticky="ew")
+    bs_save_btn = make_icon_btn(bs_creds_frame, "💾 Guardar", TEXT_SAVE, command=_save_bs_creds, pack_btn=False)
+    bs_save_btn.grid(row=3, column=0, columnspan=2, padx=4, pady=(5, 1), sticky="ew")
 
     # ADVERTENCIA DINÁMICA DE MÚLTIPLES DISPOSITIVOS (Figma Style)
     warning_box = tk.Frame(config_card, bg=WARN_BG, bd=1, highlightthickness=1, highlightbackground=WARN_BORDER)
@@ -1774,7 +1768,7 @@ def iniciar_interfaz(autostart_leads=False):
                        font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
                        selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR,
                        activeforeground=TEXT_PRIMARY, anchor="w").pack(anchor="w", pady=2)
-        tk.Label(opts_frame, text="Cada dispositivo usa su propio Excel con datos únicos (…_Chrome/_Firefox/_Edge/_Mac/_Android.xlsx).",
+        tk.Label(opts_frame, text="Cada dispositivo usa su propio Excel con datos únicos (…_Chrome/_Firefox/_Edge/_Iphone/_Android/_Mac.xlsx).",
                  font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, wraplength=500, justify="left").pack(anchor="w", padx=(24, 0), pady=(0, 8))
 
         tk.Radiobutton(opts_frame, variable=mode_var, value="compartido",
@@ -1782,7 +1776,7 @@ def iniciar_interfaz(autostart_leads=False):
                        font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
                        selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR,
                        activeforeground=TEXT_PRIMARY, anchor="w").pack(anchor="w", pady=2)
-        tk.Label(opts_frame, text="Todos los dispositivos (incluido LambdaTest) corren los MISMOS datos desde un único Excel genérico (…_Generico.xlsx).",
+        tk.Label(opts_frame, text="Todos los dispositivos (incluido BrowserStack) corren los MISMOS datos desde un único Excel genérico (…_Generico.xlsx).",
                  font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, wraplength=500, justify="left").pack(anchor="w", padx=(24, 0), pady=(0, 4))
 
         disc = tk.Label(win, text="⚠ Al compartir los mismos datos, los leads pueden duplicarse o ser rechazados por el formulario.",
@@ -2822,8 +2816,10 @@ def iniciar_interfaz(autostart_leads=False):
     def _available_device_excels(pais):
         t3 = bool(var_t3.get())
         t3_tag = "_T3" if t3 else ""
-        specs = [("Chrome", "Chrome"), ("Firefox", "Firefox"), ("Edge", "Edge"),
-                 ("Mac LT", "Mac"), ("Android LT", "Android"), ("Genérico (compartido)", "Generico")]
+        from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS
+        specs = ([("Chrome", "Chrome"), ("Firefox", "Firefox"), ("Edge", "Edge")]
+                 + [(d.etiqueta, d.sufijo_excel) for d in DISPOSITIVOS_BS]
+                 + [("Genérico (compartido)", "Generico")])
         out = []
         for label, suf in specs:
             p = os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_{suf}{t3_tag}.xlsx")
@@ -2879,6 +2875,7 @@ def iniciar_interfaz(autostart_leads=False):
         _close_cell_editor()
         n = len(tree["columns"]) or 1
         iid = tree.insert("", "end", values=[""] * n)
+        _marcar_tabla_sucia()
         _stripe_rows()
         tree.selection_set(iid)
         tree.focus(iid)
@@ -2893,6 +2890,7 @@ def iniciar_interfaz(autostart_leads=False):
         if selected:
             for item in selected:
                 tree.delete(item)
+            _marcar_tabla_sucia()
             _stripe_rows()
             show_table_msg(f"🗑 {len(selected)} fila(s) eliminada(s). Guardá para persistir.", TEXT_DELETE)
             log_message(f"[INFO] {len(selected)} fila(s) eliminada(s) de la tabla.")
@@ -2906,6 +2904,7 @@ def iniciar_interfaz(autostart_leads=False):
             last = None
             for item in selected:
                 last = tree.insert("", "end", values=tree.item(item, "values"))
+            _marcar_tabla_sucia()
             _stripe_rows()
             if last:
                 tree.see(last)
@@ -2924,10 +2923,20 @@ def iniciar_interfaz(autostart_leads=False):
         path = current_preview_path[0] or _excel_path_for(pais)
         cols = list(tree["columns"])
         rows = [list(tree.item(i, "values")) for i in tree.get_children()]
+        if _tabla_excel["mtime"] is not None and _mtime(path) != _tabla_excel["mtime"]:
+            if not messagebox.askyesno(
+                    "Guardar Leads",
+                    f"{os.path.basename(path)} se modificó afuera de la app después de cargarlo "
+                    "en la tabla.\n\nSi guardás, se reemplaza por lo que muestra la tabla y se "
+                    "pierden esos cambios. ¿Guardar igual?"):
+                return
         try:
             import pandas as pd
             os.makedirs(DATA_DIR, exist_ok=True)
             pd.DataFrame(rows, columns=cols).astype(str).to_excel(path, index=False)
+            _tabla_excel["mtime"] = _mtime(path)
+            _tabla_excel["sucio"] = False
+            _tabla_excel["avisado"] = False
             show_table_msg(f"💾 Guardado {len(rows)} fila(s) en {os.path.basename(path)}.", TEXT_SAVE)
             log_message(f"[SUCCESS] Guardadas {len(rows)} filas en {path}.")
             _refresh_tab_count(pais, len(rows))
@@ -3045,6 +3054,7 @@ def iniciar_interfaz(autostart_leads=False):
                     if col_index < len(vals) and vals[col_index] != editor.get():
                         vals[col_index] = editor.get()
                         tree.item(row, values=vals)
+                        _marcar_tabla_sucia()
                         show_table_msg("✏ Estás editando el Excel — recordá Guardar para no perder los cambios.", TEXT_EXCEL)
             except Exception:
                 pass
@@ -3143,8 +3153,42 @@ def iniciar_interfaz(autostart_leads=False):
 
         _stripe_rows()
         _refresh_tab_count(pais, n)
+        _tabla_excel["mtime"] = _mtime(path)
+        _tabla_excel["sucio"] = False
+        _tabla_excel["avisado"] = False
+
+    # La tabla refleja SIEMPRE el Excel del disco: si se edita en Excel (u otro programa)
+    # y se guarda, la tabla se recarga sola. Antes quedaba mostrando la versión vieja
+    # hasta tocar "Actualizar", y un "Guardar" desde la tabla pisaba lo editado afuera.
+    _tabla_excel = {"mtime": None, "sucio": False, "avisado": False}
+
+    def _mtime(path):
+        try:
+            return os.path.getmtime(path) if path and os.path.exists(path) else None
+        except OSError:
+            return None
+
+    def _marcar_tabla_sucia():
+        _tabla_excel["sucio"] = True
+
+    def _vigilar_excel_de_la_tabla():
+        try:
+            path = current_preview_path[0]
+            actual = _mtime(path)
+            if actual is not None and actual != _tabla_excel["mtime"]:
+                if not _tabla_excel["sucio"] and _active_editor[0] is None:
+                    update_table_data(active_p_tab[0], path=path)
+                    show_table_msg("🔄 El Excel cambió: tabla actualizada.", TEXT_SAVE)
+                elif not _tabla_excel["avisado"]:
+                    _tabla_excel["avisado"] = True
+                    show_table_msg("⚠ El Excel cambió afuera y tenés cambios sin guardar en la tabla. "
+                                   "Guardá o tocá Actualizar.", WARN_TEXT)
+        except Exception:
+            pass
+        root.after(2000, _vigilar_excel_de_la_tabla)
 
     update_table_data("Argentina")
+    root.after(2000, _vigilar_excel_de_la_tabla)
 
     # Contadores reales en las pestañas de país (según filas del Excel)
     for _pais in paises_list:
@@ -3162,16 +3206,14 @@ def iniciar_interfaz(autostart_leads=False):
     # Sufijos de dispositivo (copia estática de la tabla que usa execute_send_leads)
     # — la necesitan tanto el botón de reintento (fuera de execute_send_leads) como
     # _build_retry_market_jobs (adentro), y es una lista fija que no depende de
-    # ningún estado de UI, así que se define una sola vez acá. Incluye Mac/Android LT:
-    # lt_runner.py / lt_android_runner.py ya reportan fail_rows con detalle de fila,
-    # igual que base_form_filler.py para desktop.
+    # ningún estado de UI, así que se define una sola vez acá. Incluye BrowserStack: su
+    # runner usa el mismo motor que desktop, así que reporta fail_rows igual.
+    from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS as _BS_RETRY
     _RETRY_DEVICE_SUFFIX = [
         ("Chrome", "desktop", "chrome", "chrome"),
         ("Firefox", "desktop", "firefox", "firefox"),
         ("Edge", "desktop", "edge", "edge"),
-        ("Mac", "mac", None, "mac lt"),
-        ("Android", "android", None, "android lt"),
-    ]
+    ] + [(d.sufijo_excel, d.dtype, None, d.clave) for d in _BS_RETRY]
 
     def _build_retry_excel(original_excel, fail_row_numbers, tmp_dir, pais, device):
         """Arma un Excel temporal con SOLO las filas que fallaron en la última corrida.
@@ -3202,7 +3244,14 @@ def iniciar_interfaz(autostart_leads=False):
         os.makedirs(tmp_dir, exist_ok=True)
         tmp_path = os.path.join(tmp_dir, f"_retry_{pais}_{device}.xlsx")
         try:
-            df.iloc[valid_positions].to_excel(tmp_path, index=False)
+            # "Fila original" (al final, el motor lee los campos por posición y no la
+            # toca) queda en el Excel de resultados del reintento: así el próximo
+            # "Reintentar fallidos" sabe a qué fila corresponde cada resultado aunque
+            # después se cambie la URL (ver utils/reintento_fallidos.py).
+            from osocio.utils.reintento_fallidos import COLUMNA_FILA_ORIGINAL
+            sub = df.iloc[valid_positions].copy()
+            sub[COLUMNA_FILA_ORIGINAL] = [str(pos + 2) for pos in valid_positions]
+            sub.to_excel(tmp_path, index=False)
         except Exception:
             return None, {}
         row_map = {temp_idx + 2: pos + 2 for temp_idx, pos in enumerate(valid_positions)}
@@ -3212,7 +3261,7 @@ def iniciar_interfaz(autostart_leads=False):
         """Combos (país, dispositivo) tildados AHORA MISMO en la pantalla — igual que si se
         fuera a correr por primera vez — que además tienen fails guardados de la última
         corrida MANUAL. Todos los dispositivos con detalle de fila por fila (desktop y
-        Mac/Android LT)."""
+        BrowserStack)."""
         suffix_to_key = {suffix: key for suffix, _dtype, _browser, key in device_suffix_table}
         targets = {}
         for (pais, device_label), info in (last_fails or {}).items():
@@ -3228,7 +3277,7 @@ def iniciar_interfaz(autostart_leads=False):
             targets[(pais, device_label)] = list(rows)
         return targets
 
-    # Ejecución real de leads (desktop + LambdaTest) con el modal de progreso
+    # Ejecución real de leads (desktop + BrowserStack) con el modal de progreso
     def execute_send_leads(scheduled=False, retry_only=None):
         """Delegado a osocio/interface/envio_leads.py.
 
@@ -3305,6 +3354,41 @@ def iniciar_interfaz(autostart_leads=False):
     btn_enviar.bind("<Enter>", lambda e: btn_enviar.config(bg=EXECUTE_HOVER) if btn_enviar['state'] == "normal" else None)
     btn_enviar.bind("<Leave>", lambda e: btn_enviar.config(bg=EXECUTE_BG) if btn_enviar['state'] == "normal" else None)
 
+    def _completar_fallos_desde_resultados():
+        """Para cada país y dispositivo tildados, las filas a reintentar salen de los
+        Excels de resultados (última corrida completa + reintentos posteriores), no de la
+        memoria: así funciona aunque la app se haya reabierto. Ver utils/reintento_fallidos.
+        Si no hay resultados en disco, queda lo que haya en memoria."""
+        from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
+        from osocio.utils.reintento_fallidos import fallidas_desde_resultados
+        variante = VARIANTE_T3 if var_t3.get() else ""
+        etiqueta_var = ("·" + variante.lstrip("_")) if variante else ""
+        carpeta = os.path.join(BASE_DIR, "resultados")
+        lf = _exec_state.setdefault("last_fails", {})
+        for pais, tildado in selected_countries.items():
+            if not tildado:
+                continue
+            for suffix, _dtype, browser, key in _RETRY_DEVICE_SUFFIX:
+                device_label = suffix + etiqueta_var
+                if not selected_disp.get(key):
+                    continue
+                bs = por_cualquier_nombre(suffix) if browser is None else None
+                navegador = bs.navegador if bs is not None else browser
+                if excel_mode_holder[0] == "compartido":
+                    entrada = _generic_excel_path_for(pais, variante)
+                else:
+                    entrada = os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, variante))
+                res, filas = fallidas_desde_resultados(carpeta, pais, navegador, entrada, variante,
+                                                       log=log_message)
+                if res is None:
+                    continue          # sin resultados en disco: lo que haya en memoria
+                if filas:
+                    lf[(pais, device_label)] = {"excel": entrada, "rows": filas}
+                    log_message(f"[INFO] Reintentar fallidos: {pais} · {device_label}: filas "
+                                f"{filas} (última corrida completa: {os.path.basename(res)})")
+                else:
+                    lf.pop((pais, device_label), None)
+
     def _retry_failed_leads():
         """Reintenta SOLO las filas que fallaron la última corrida manual, para los
         países/dispositivos que estén tildados ahora mismo (desktop y Mac/Android LT) —
@@ -3312,6 +3396,7 @@ def iniciar_interfaz(autostart_leads=False):
         resultados (no pisa el de la corrida original)."""
         if _exec_state.get("running"):
             return
+        _completar_fallos_desde_resultados()
         targets = _eligible_retry_targets(selected_countries, selected_disp,
                                            _exec_state.get("last_fails", {}), _RETRY_DEVICE_SUFFIX)
         if not targets:
@@ -4437,9 +4522,10 @@ def iniciar_interfaz(autostart_leads=False):
         return [(lines[i], lines[i + 1]) for i in range(0, len(lines), 2)], None
 
     def _email_device_token(dev):
-        """Token de dispositivo para el email: chrome/firefox/edge/ltmac/ltandroid."""
-        suf = _device_excel_suffix(dev)
-        return {"Mac": "ltmac", "Android": "ltandroid"}.get(suf, suf.lower())
+        """Token de dispositivo para el email: chrome/firefox/edge/bsiphone/bsandroid/bsmac."""
+        from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
+        bs = por_cualquier_nombre(dev)
+        return bs.token_email if bs is not None else _device_excel_suffix(dev).lower()
 
     def _rows_for_pais(pais, pares, columnas, device=None, doc_types=None):
         try:

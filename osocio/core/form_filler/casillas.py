@@ -34,6 +34,20 @@ class CasillasYRadiosMixin:
                 prefs[key] = False
         return prefs
 
+    def build_radio_prefs(self, raw_headers, row):
+        """
+        Opción de radio pedida por el Excel: una columna cuyo encabezado es el `name` del
+        grupo de radios y la opción como valor. Ej: columna "have-chevrolet" = "No".
+        Se resuelve contra el DOM por name, así que una columna que no sea de un grupo de
+        radios no hace nada acá. Un '-' (u otra marca de omitir) deja el grupo sin tocar.
+        """
+        prefs = {}
+        for idx, header in enumerate(raw_headers or []):
+            key = str(header or "").strip().lower()
+            if key and idx < len(row) and str(row[idx] or "").strip():
+                prefs[key] = str(row[idx]).strip()
+        return prefs
+
     def _checkbox_pref_for(self, lower_name, checkbox_id):
         """Preferencia para este checkbox: primero el Excel (por name o id), si no hay
         columna, IDs dinámicos con valor SI/NO. None = sin preferencia."""
@@ -224,45 +238,49 @@ class CasillasYRadiosMixin:
         if not options:
             return None
 
-        for option in options:
-            try:
-                element = option.get("element")
-                if element and element.is_selected():
-                    return option
-            except StaleElementReferenceException:
-                continue
-
-        priority_values = {
-            "si": 10,
-            "sí": 10,
-            "yes": 9,
-            "true": 9,
-            "1": 9,
-            "renovar": 8,
-            "suscribir": 6,
-            "no": 2,
-        }
-
+        from osocio.core.campos_inferencia import _is_placeholder, _normalize_for_infer
         name_key = group.get("name", "")
-        specific_priority = {
-            "have_interest": ["renovar", "suscribir"],
-            "have-chevrolet": ["si", "sí", "no"],
-            "client": ["si", "sí"],
+
+        # 1) Lo que pide el Excel (columna = name del grupo): la opción por valor o texto.
+        pedido = (getattr(self, "radio_prefs", None) or {}).get(name_key)
+        if pedido:
+            if self._pide_omitir_campo(group.get("original_name") or name_key, pedido):
+                return None
+            buscado = _normalize_for_infer(pedido)
+            textos = [(o, _normalize_for_infer(f"{o.get('value', '')}")) for o in options]
+            elegida = next((o for o, t in textos if t == buscado), None) \
+                or next((o for o, t in textos if buscado and (buscado in t or t in buscado)), None)
+            if elegida:
+                return elegida
+            print(f" Radio '{name_key}': el Excel pide '{pedido}' y no está entre "
+                  f"{[o.get('value') for o in options]}; se elige al azar")
+
+        # 2) Grupos donde una opción rompe el lead: siempre la segura.
+        forzadas = {
             # Libro de Reclamaciones: elegir "menor de edad" abre un bloque extra obligatorio
             # (responsable legal) que el lead no tiene cómo completar.
-            "cc-younger-status": ["soy mayor de edad"],
+            "cc-younger-status": "soy mayor de edad",
         }
+        if name_key in forzadas:
+            segura = next((o for o in options
+                           if (o.get("value") or "").strip().lower() == forzadas[name_key]), None)
+            if segura:
+                return segura
 
-        preferred_values = specific_priority.get(name_key, [])
-
-        def option_priority(option):
-            value = option.get("value", "").strip().lower()
-            if preferred_values and value in preferred_values:
-                return 100 - preferred_values.index(value)
-            return priority_values.get(value, 1)
-
-        sorted_options = sorted(options, key=lambda opt: (-option_priority(opt), opt.get("index", 0)))
-        return sorted_options[0]
+        # 3) Al azar entre las opciones reales, decidido una vez por grupo y por fila (si el
+        #    form se resetea y se vuelve a llenar, queda la misma). Una opción que el form
+        #    trae marcada de entrada también entra en el sorteo: así varía entre corridas.
+        reales = [o for o in options
+                  if (o.get("value") or "").strip() and not _is_placeholder(o.get("value") or "")] \
+            or options
+        decisiones = getattr(self, "_decision_opcionales", None)
+        if decisiones is None:
+            decisiones = self._decision_opcionales = {}
+        clave = f"radio::{name_key}"
+        valores = [o.get("value") for o in reales]
+        if decisiones.get(clave) not in valores:
+            decisiones[clave] = random.choice(valores)
+        return next(o for o in reales if o.get("value") == decisiones[clave])
 
     def _locate_radio_candidate(self, group, target_option):
         name_original = group.get("original_name")
@@ -326,10 +344,16 @@ class CasillasYRadiosMixin:
                     if (rb.checked) {
                         return true;
                     }
-                    rb.focus && rb.focus();
-                    rb.checked = true;
-                    rb.dispatchEvent(new Event('input', { bubbles: true }));
-                    rb.dispatchEvent(new Event('change', { bubbles: true }));
+                    // click() y no checked=true: los forms en React (gm_front) no se
+                    // enteran de un checked puesto a mano (el radio queda marcado en el
+                    // HTML pero el form lo da por vacío). click() dispara sus eventos.
+                    rb.focus && rb.focus({preventScroll: true});
+                    rb.click();
+                    if (!rb.checked) {
+                        rb.checked = true;
+                        rb.dispatchEvent(new Event('input', { bubbles: true }));
+                        rb.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                     return rb.checked === true;
                 """,
                 radio,
@@ -530,19 +554,28 @@ class CasillasYRadiosMixin:
         candidates = []
 
         try:
-            raw_checkboxes = self.driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']")
+            # Los atributos de todos los checkboxes en un solo viaje (antes eran 6 por
+            # checkbox: lento en un device de la nube).
+            raw_checkboxes = self.driver.execute_script(
+                "return Array.prototype.map.call(document.querySelectorAll(\"input[type='checkbox']\"),"
+                "  function (c) { return {el: c, name: c.getAttribute('name') || '',"
+                "    id: c.id || '', required: !!c.required,"
+                "    aria: c.getAttribute('aria-required') || '',"
+                "    dtm: c.getAttribute('data-dtm') || '', value: c.getAttribute('value') || ''}; });"
+            ) or []
         except Exception:
             raw_checkboxes = []
 
-        for index, checkbox in enumerate(raw_checkboxes):
+        for index, info in enumerate(raw_checkboxes):
+            checkbox = info.get("el")
             try:
-                name_attr = (checkbox.get_attribute("name") or "").strip()
+                name_attr = (info.get("name") or "").strip()
                 lower_name = name_attr.lower()
-                checkbox_id = (checkbox.get_attribute("id") or "").strip()
-                is_html_required = bool(checkbox.get_attribute("required"))
-                is_aria_required = (checkbox.get_attribute("aria-required") or "").strip().lower() == "true"
-                data_dtm = (checkbox.get_attribute("data-dtm") or "").strip()
-                value_attr = (checkbox.get_attribute("value") or "").strip()
+                checkbox_id = (info.get("id") or "").strip()
+                is_html_required = bool(info.get("required"))
+                is_aria_required = (info.get("aria") or "").strip().lower() == "true"
+                data_dtm = (info.get("dtm") or "").strip()
+                value_attr = (info.get("value") or "").strip()
 
                 is_known = self._es_checkbox_conocido(name_attr, checkbox_id)
                 # Requerido por JS: el envío vacío le pintó un error de validación.
