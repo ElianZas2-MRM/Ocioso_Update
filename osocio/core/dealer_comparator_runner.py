@@ -734,6 +734,28 @@ def _pre_scroll_for_dynamic_content(driver):
     pre_scroll(driver)
 
 
+def _cargar_iframe_lazy(driver, form_url, timeout=12):
+    """Iframe del form con carga diferida: la landing lo trae con data-src y sin src, y le
+    pone el src recién cuando entra en pantalla (ej. chevrolet.com.ar). Igual que en Envío
+    de Leads: se lo reconoce por su data-src (sin espacios de más), se scrollea hasta él y se
+    espera a que cargue. Devuelve el iframe, o None si no hay ninguno así."""
+    try:
+        for f in driver.find_elements(By.TAG_NAME, "iframe"):
+            data_src = (f.get_attribute("data-src") or "").strip()
+            if not data_src or form_url not in data_src:
+                continue
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", f)
+            try:
+                WebDriverWait(driver, timeout).until(
+                    lambda _d: form_url in (f.get_attribute("src") or ""))
+            except Exception:
+                pass
+            return f
+    except Exception:
+        pass
+    return None
+
+
 def _locate_form_iframe(driver, form_url, wait_seconds=0):
     """Encuentra el iframe del form DENTRO de la landing (mismo criterio que 'Envío de Leads'):
     primero busca el que matchea la URL esperada (con espera activa si wait_seconds>0, para
@@ -755,6 +777,8 @@ def _locate_form_iframe(driver, form_url, wait_seconds=0):
                 iframe = None
         else:
             iframe = _find_form_iframe(driver, form_url)
+        if iframe is None:
+            iframe = _cargar_iframe_lazy(driver, form_url)
     if iframe is None:
         try:
             for f in driver.find_elements(By.TAG_NAME, "iframe"):
@@ -824,6 +848,28 @@ def _page_shows_load_error(driver):
     return any(k in normalized for k in _LOAD_ERROR_KEYWORDS)
 
 
+def tiene_espacios_de_mas(url):
+    """True si la URL trae espacios (o saltos de línea) al principio o al final. Se toma
+    igual —se compara sin ellos— pero vale avisarlo: suele ser un error al copiarla."""
+    url = url or ""
+    return bool(url) and url != url.strip()
+
+
+def _avisar_espacios_en_iframe(iframe, log):
+    """La landing declara el iframe del form con espacios de más (ej. data-src="...?model=onix ",
+    caso real de chevrolet.com.ar). El navegador los saca al cargarlo y el form se encuentra
+    igual: es sólo un aviso, no un fallo."""
+    try:
+        for attr in ("data-src", "src"):
+            valor = iframe.get_attribute(attr)
+            if tiene_espacios_de_mas(valor):
+                log(f"  ⚠ La landing declara el iframe del form con un espacio de más ({attr}="
+                    f"{valor!r}). Se toma igual, pero conviene avisar para corregirlo.", "warn")
+                return
+    except Exception:
+        pass
+
+
 def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeout=30, log_cb=None):
     """Abre el form real, igual criterio que 'Envío de Leads':
     - url_mode='landing_form': abre la landing y hace el chequeo DENTRO de ella — espera
@@ -866,6 +912,7 @@ def open_target(driver, url_mode, landing_url="", form_url="", page_ready_timeou
             iframe = _locate_form_iframe(driver, form_url, wait_seconds=8)
 
         if iframe is not None:
+            _avisar_espacios_en_iframe(iframe, log)
             driver.switch_to.frame(iframe)
             handle_cookie_popups(driver)
 

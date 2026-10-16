@@ -413,3 +413,20 @@ def test_browserstack_no_crea_carpeta_de_capturas_y_no_repite_numero(tmp_path):
     local.RESULTADOS_DIR, local.EXCEL_PATH = nube.RESULTADOS_DIR, str(entrada)
     local.setup_directories_and_files()
     assert os.path.isdir(local.SCREENSHOT_DIR)
+
+
+# --- Comparador de Dealers: URLs con espacio de más (aviso, no fallo) ---------------
+
+def test_comparador_avisa_espacios_de_mas_sin_tratarlos_como_otra_url():
+    from osocio.core.dealer_comparator_runner import _avisar_espacios_en_iframe, tiene_espacios_de_mas
+    assert tiene_espacios_de_mas("https://x.com/form?model=onix ")
+    assert tiene_espacios_de_mas(" https://x.com/form")
+    assert not tiene_espacios_de_mas("https://x.com/form")
+    assert not tiene_espacios_de_mas("")
+
+    class _Iframe:
+        def get_attribute(self, nombre):
+            return {"data-src": "https://x.com/form?model=onix ", "src": ""}.get(nombre)
+    avisos = []
+    _avisar_espacios_en_iframe(_Iframe(), lambda msg, nivel="info": avisos.append((nivel, msg)))
+    assert len(avisos) == 1 and avisos[0][0] == "warn" and "espacio de más" in avisos[0][1]

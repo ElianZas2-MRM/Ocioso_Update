@@ -423,10 +423,18 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         def _es_url(txt):
             return txt.lower().startswith(("http://", "https://"))
 
+        from osocio.core.dealer_comparator_runner import tiene_espacios_de_mas
         pairs = []
-        for r in rows:
-            form_url = (r.get(form_key, "") or "").strip()
-            landing_url = (r.get(landing_key, "") or "").strip()
+        # URLs con espacios de más al principio/final: se toman igual (sin el espacio) y se
+        # avisa, sin contarlo como error. state["urls_con_espacio"]: form_url -> filas.
+        con_espacio = {}
+        for n_fila, r in enumerate(rows, start=2):
+            form_raw, landing_raw = r.get(form_key, "") or "", r.get(landing_key, "") or ""
+            form_url = form_raw.strip()
+            landing_url = landing_raw.strip()
+            for columna, raw in (("Formulario", form_raw), ("URL", landing_raw)):
+                if tiene_espacios_de_mas(raw) and _es_url(raw.strip()):
+                    con_espacio.setdefault(form_url, []).append(f"fila {n_fila} ({columna})")
             # Sólo filas con URLs reales: si el usuario elige por error otro Excel (ej. el
             # de dealers), sus celdas de texto no deben tratarse como formularios.
             if not _es_url(form_url):
@@ -434,7 +442,16 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             if landing_url and not _es_url(landing_url):
                 landing_url = ""
             pairs.append((landing_url, form_url))  # landing "" si la columna viene vacía
+        state["urls_con_espacio"] = con_espacio
         return pairs
+
+    def _aviso_espacios():
+        """Texto del aviso de URLs con espacio de más ('' si no hay)."""
+        filas = [f for lst in (state.get("urls_con_espacio") or {}).values() for f in lst]
+        if not filas:
+            return ""
+        return (f"⚠ URL con un espacio de más al principio/final en {', '.join(filas)}: "
+                "se toma igual, pero conviene corregirla en el Excel.")
 
     def _refresh_url_excel_preview(*_a):
         pairs = _read_url_pairs_from_excel()
@@ -448,6 +465,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         if detected and detected != state["pais"]:
             url_warn_var.set(f"⚠ Las URLs parecen de {detected} pero tenés seleccionado {state['pais']}. "
                              "Verificá el mercado antes de ejecutar.")
+        elif _aviso_espacios():
+            url_warn_var.set(f"✓ {len(pairs)} form(s) detectados en el Excel. {_aviso_espacios()}")
         else:
             url_warn_var.set(f"✓ {len(pairs)} form(s) detectados en el Excel.")
 
@@ -1558,6 +1577,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                     ui_log(f"\n=== Form {pair_idx}/{total_pairs}: {form_url} ===", "info")
                     if landing_url:
                         ui_log(f"    Landing: {landing_url}", "info")
+                    _filas_esp = (state.get("urls_con_espacio") or {}).get(form_url)
+                    if _filas_esp:
+                        ui_log(f"    ⚠ En el Excel esta URL tiene un espacio de más ({', '.join(_filas_esp)}). "
+                               "Se toma igual, sin el espacio; no cuenta como error.", "warn")
 
                     pair_dir = _pair_output_dir(form_url, stamp)
                     state["pair_info"][form_url] = {
