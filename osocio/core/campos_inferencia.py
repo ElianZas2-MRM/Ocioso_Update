@@ -103,6 +103,9 @@ ETIQUETA_A_IDS = (
     (("celular", "telefono", "telefone", "phone", "movil", "whatsapp"),
      ("phone", "telephone", "cellphone")),
     (("cnpj",), ("cnpj",)),
+    # Patente del auto: cada mercado la llama distinto (PLACA en Colombia, MATRÍCULA en
+    # Uruguay). Va antes que "documento" para que "matrícula" no se lea como otra cosa.
+    (("patente", "placa", "matricula", "plate", "dominio"), ("patent",)),
     (("cep", "codigo postal", "zip"), ("cep", "zip_code")),
     (("cedula", "documento", "cpf", "dni", "rut", "carnet", "pasaporte", "ruc", "ci"),
      ("document", "ci", "cpf", "rut", "dni")),

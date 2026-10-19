@@ -1704,6 +1704,32 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 print(f" Error con kit (intento {intento}): {e}")
         print(" No se pudo seleccionar el kit en paso final")
 
+    # "¿Cómo deseas realizar la compra?" (Plan de ahorro / Contado). No es un campo más: hasta
+    # que se elige, Región, Ciudad y Concesionario vienen deshabilitados, y cambiarlo repuebla
+    # la cascada. Por eso va ANTES que todo (mismo criterio que el Comparador de Dealers).
+    _IDS_FORMA_DE_COMPRA = ("buy_pda", "purchase-type")
+
+    def _elegir_forma_de_compra(self, form_data):
+        """Si el form tiene el selector de forma de compra sin elegir, lo elige primero: lo
+        que diga la columna "¿Cómo desea realizar la compra?" del Excel o, si está vacía, una
+        opción real al azar."""
+        select_id = self._pick_first_visible_id(list(self._IDS_FORMA_DE_COMPRA))
+        if not select_id:
+            return
+        try:
+            actual = self._get_selected_text_for_select(self.driver.find_element(By.ID, select_id)) or ""
+        except Exception:
+            actual = ""
+        if not self._is_placeholder_text(actual):
+            return   # ya viene elegido
+        config = next((fc for fc in self.field_mapping or []
+                       if "realizar la compra" in str(fc.get("name", "")).lower()), None)
+        valor = self._resolve_field_value(form_data, config) if config else ""
+        if self._pide_omitir_campo(select_id, valor):
+            return
+        if self.safe_select_option_if_visible(select_id, valor or "", "Forma de compra"):
+            time.sleep(1)   # la cascada se habilita y se repuebla
+
     def _fill_visible_fields_from_mapping(self, form_data, dependencies):
         """
         Igual que fill_form_fields pero solo campos cuyo id resuelto está visible.
@@ -1888,6 +1914,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 else:
                     print(f"⚠️ [DEBUG-FILL] Omitiendo '{field_name}' ({field_id}) porque su valor en Excel está vacío o es None.")
             processed_ids.add(field_id)
+
+        if not solo_verificar_visual:
+            self._elegir_forma_de_compra(form_data)
 
         for field_config in resolved_field_configs:
             if solo_verificar_visual and len(processed_ids) >= 2:
@@ -2319,6 +2348,27 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
 
     
+    def _scrollear_a_iframe_sin_cargar(self, expected_form_url):
+        """Lleva a la vista el iframe del form que todavía no cargó (tiene data-src y no src).
+        Algunas landings (ej. chevrolet.com.ar) le ponen el src recién cuando entra en
+        pantalla; si nadie scrollea hasta él, el form nunca aparece."""
+        try:
+            self.driver.switch_to.default_content()
+            self.driver.execute_script("""
+                var esperado = (arguments[0] || '').toLowerCase().split('?')[0];
+                var gm = /gm_forms|gm_formns|gm_front|gm_admin/i;
+                var lista = document.querySelectorAll('iframe[data-src]');
+                for (var i = 0; i < lista.length; i++) {
+                    var f = lista[i], ds = (f.getAttribute('data-src') || '').trim();
+                    if (f.getAttribute('src') || !ds) continue;
+                    if (gm.test(ds) || (esperado && ds.toLowerCase().indexOf(esperado) >= 0)) {
+                        f.scrollIntoView({block: 'center'});
+                        return;
+                    }
+                }""", expected_form_url or "")
+        except Exception:
+            pass
+
     def find_and_position_to_form(self, expected_form_url):
         """Encuentra el iframe del formulario y posiciona el viewport sobre él.
         Usa 2 intentos: el primero espera activamente el iframe específico; el segundo
@@ -2363,6 +2413,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             self.pre_scroll_for_dynamic_content()
                         except Exception:
                             pass
+                        # Iframe que la landing carga recién al verlo (data-src sin src):
+                        # scrollear hasta él, como haría una persona, y esperar que cargue.
+                        self._scrollear_a_iframe_sin_cargar(_url)
                         time.sleep(3)
                     continue
 
@@ -4904,6 +4957,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         self._form_dif_menor = _difs
                 if form_url_mismatch:
                     _found_for_msg = getattr(self, "_url_form_encontrado", "") or ""
+                    # Un iframe vacío (about:blank) no es "otro form": es que la landing no
+                    # tiene el form cargado (iframe sin src). Se reporta como FORM NO INSERTO.
+                    if _found_for_msg.strip().lower() in ("about:blank", "about:srcdoc"):
+                        _found_for_msg = ""
+                        self._url_form_encontrado = ""
                     self._form_mismatch_enviado = bool(_lead_ok)
                     self._form_inserto_estado = "inserto_otro" if _found_for_msg else "no_inserto"
                     _lead_str = "se envió lead igualmente" if _lead_ok else "lead no enviado"

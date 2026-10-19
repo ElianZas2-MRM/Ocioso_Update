@@ -176,18 +176,28 @@ class FormNativoIOS:
         contenedor = self._contenedor_del_form(raiz)
 
         def etiqueta_de(ctrl, excluir=""):
-            for s in estaticos:
+            for s in estaticos_form:
                 t = _texto(s)
                 if t != excluir and _adentro(s, ctrl):
                     return t
             return ""
 
+        # Textos del form (no de la landing): el menú fijo de la landing ("Cotizá ya",
+        # "Accesorios") queda encima del form al scrollear y no es label de ningún campo.
+        # Por pertenencia al árbol del iframe, no por posición: el menú fijo queda ENCIMA
+        # del form, así que por coordenadas parecería estar adentro.
+        if contenedor is not None:
+            del_form = {id(e) for e in contenedor.iter()}
+            estaticos_form = [s for s in estaticos if id(s) in del_form]
+        else:
+            estaticos_form = estaticos
+
         def etiqueta_arriba(ctrl):
             """El label puesto ARRIBA del control (no adentro), ej. "MODELOS" sobre el select
             en los forms en pasos de Colombia: el texto más cercano por encima, pegado
-            (hasta 30 px) y alineado con su borde izquierdo."""
+            (hasta 30 px) y alineado con su borde izquierdo. Sólo textos del form."""
             y, x = _num(ctrl, "y"), _num(ctrl, "x")
-            cerca = [s for s in estaticos
+            cerca = [s for s in estaticos_form
                      if 0 <= y - (_num(s, "y") + _num(s, "height")) <= 30 and abs(_num(s, "x") - x) <= 20]
             return _texto(max(cerca, key=lambda s: _num(s, "y"))) if cerca else ""
 
