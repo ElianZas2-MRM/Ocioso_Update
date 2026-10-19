@@ -121,6 +121,61 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return ""
 
+    @staticmethod
+    def _diferencia_url_form(encontrada, esperada):
+        """(¿es el mismo form?, [diferencias]) entre la URL del iframe y la del Excel.
+
+        Mismo form = misma dirección sin importar mayúsculas, tildes, codificación (%20),
+        la "/" final ni los parámetros (?model=...). Si no son idénticas, las diferencias
+        dicen en qué difieren: el lead cuenta como OK, pero la fila queda ámbar para que
+        se corrija la URL esperada.
+        """
+        import unicodedata
+        from urllib.parse import unquote
+        a, b = (encontrada or "").strip(), (esperada or "").strip()
+        if not a or not b:
+            return False, []
+        if a == b:
+            return True, []
+
+        def partes(u):
+            base, _, query = u.split("#")[0].partition("?")
+            return base, query
+
+        def sin_tildes(u):
+            u = unicodedata.normalize("NFKD", u)
+            return "".join(c for c in u if not unicodedata.combining(c))
+
+        (ba, qa), (bb, qb) = partes(a), partes(b)
+        difs = []
+        if ba.endswith("/") != bb.endswith("/"):
+            difs.append("barra final")
+        ba, bb = ba.rstrip("/"), bb.rstrip("/")
+        if (ba, qa) != (bb, qb) and (unquote(ba), unquote(qa)) == (unquote(bb), unquote(qb)):
+            difs.append("codificación (%20…)")
+        ba, bb, qa, qb = unquote(ba), unquote(bb), unquote(qa), unquote(qb)
+        if ba != bb and ba.lower() == bb.lower():
+            difs.append("mayúsculas")
+        elif ba.lower() != bb.lower() and sin_tildes(ba.lower()) == sin_tildes(bb.lower()):
+            difs.append("tildes")
+        mismo = sin_tildes(ba.lower()) == sin_tildes(bb.lower())
+        # Parámetros: sólo cuentan los que pide el Excel. Los que agrega la landing por su
+        # cuenta (utm_, gclid... que el iframe hereda) no son un error de la URL esperada.
+        from urllib.parse import parse_qsl
+        pedidos = dict(parse_qsl(qb, keep_blank_values=True))
+        tiene = dict(parse_qsl(qa, keep_blank_values=True))
+        if any(tiene.get(k) != v for k, v in pedidos.items()):
+            iguales_sin_mayus = all(
+                any(k2.lower() == k.lower() and v2.lower() == v.lower() for k2, v2 in tiene.items())
+                for k, v in pedidos.items())
+            difs.append("mayúsculas en los parámetros" if iguales_sin_mayus else "parámetros (?…)")
+        return mismo, difs
+
+    @classmethod
+    def _mismas_urls_de_form(cls, encontrada, esperada):
+        """¿Es el mismo form? (criterio de la columna "Form coincide")."""
+        return cls._diferencia_url_form(encontrada, esperada)[0]
+
     def _is_gm_form_src(self, src):
         s = (src or "").lower()
         return any(m in s for m in self.GM_FORM_URL_MARKERS)
@@ -324,6 +379,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         # formulario distinto: sin este reset, omitir el concesionario en una URL lo
         # omitiria en todas las siguientes.
         self._campos_omitidos = []
+        # Diferencias menores entre la URL del form esperada y la encontrada (fila ámbar).
+        self._form_dif_menor = []
         # Qué campos opcionales se completan en esta fila (se sortea uno por campo).
         self._decision_opcionales = {}
         self._campos_sin_mapeo_exitoso = []
@@ -4828,6 +4885,23 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 # igual pese al form equivocado (eso va en naranja, no en rojo).
                 self._form_inserto_estado = "inserto_ok"
                 self._form_mismatch_enviado = False
+                # El "no coincide" se marca al BUSCAR el form; si después se entró al iframe y
+                # su URL es la esperada, era el form correcto (mismo criterio que la columna
+                # "Form coincide"). Pasaba en BrowserStack Android con el segundo lead de la
+                # sesión: el form tardaba en aparecer, se tomaba por la vía de respaldo y la
+                # fila quedaba ámbar con URL esperada == URL encontrada.
+                # Si es el mismo form pero la URL no es idéntica (mayúsculas, tildes, %20, "/",
+                # parámetros), el lead cuenta como OK y la fila queda ámbar con el aviso: la URL
+                # esperada del Excel hay que corregirla.
+                self._form_dif_menor = []
+                _encontrada = getattr(self, "_url_form_encontrado", "") or ""
+                if expected_form_url and _encontrada:
+                    _mismo_form, _difs = self._diferencia_url_form(_encontrada, expected_form_url)
+                    if _mismo_form:
+                        if form_url_mismatch:
+                            print("ℹ El form encontrado es el esperado (se ubicó por la vía de respaldo)")
+                        form_url_mismatch = False
+                        self._form_dif_menor = _difs
                 if form_url_mismatch:
                     _found_for_msg = getattr(self, "_url_form_encontrado", "") or ""
                     self._form_mismatch_enviado = bool(_lead_ok)
@@ -4880,6 +4954,12 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     _li = getattr(self, "_link_issue", "") or ""
                     result_text = (result_text or "") + f" | LINK ISSUE TYP: {_li}".rstrip()
                     _lead_ok = False
+                if self._form_dif_menor:
+                    result_text = (result_text or "") + (
+                        f" | Aviso: la URL del form difiere de la esperada en "
+                        f"{', '.join(self._form_dif_menor)} (es el mismo form) — "
+                        f"esperada: {expected_form_url} | encontrada: {_encontrada}"
+                    )
                 sheet.cell(row=i, column=result_col).value = result_text
                 # OJO: NO se tocan las columnas de entrada (Modelo/Nombre/etc. las setea el
                 # usuario). El modelo realmente elegido queda en las columnas de tracking
@@ -4898,12 +4978,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 _form_coincide_val = ""
                 _form_coincide_ok = None
                 if expected_form_url:
-                    def _norm(u):
-                        if not u: return ""
-                        u = u.strip().split("?")[0].split("#")[0]
-                        if u.endswith("/"): u = u[:-1]
-                        return u.lower()
-                    _form_coincide_ok = (_norm(_found_url) == _norm(expected_form_url))
+                    _form_coincide_ok = self._mismas_urls_de_form(_found_url, expected_form_url)
                     _mismatch_enviado = getattr(self, "_form_mismatch_enviado", False)
                     # Si la landing nunca cargó (404 / sin respuesta / redirect), el form
                     # jamás se buscó: decir "no coincide" sería engañoso.
@@ -4912,7 +4987,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         _lt not in ("-", "") and
                         (not _lt.startswith("200") or "REDIRIGE" in _lt)
                     )
-                    if _form_coincide_ok:
+                    if _form_coincide_ok and self._form_dif_menor:
+                        _form_coincide_val = f"PASS con diferencias: {', '.join(self._form_dif_menor)}"
+                    elif _form_coincide_ok:
                         _form_coincide_val = "PASS"
                     elif _landing_falla:
                         _form_coincide_val = (
@@ -4937,6 +5014,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     if _url_prob:
                         # Una landing 404 explica cualquier "form no encontrado": va primero
                         _motivo = f"{_url_prob} | {_motivo}"
+                elif self._form_dif_menor:
+                    _motivo = f"URL del form difiere en {', '.join(self._form_dif_menor)} (lead OK)"
                 if motivo_col:
                     sheet.cell(row=i, column=motivo_col).value = _motivo
                 if estado_url_landing_col:
@@ -4957,7 +5036,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
                 # Form distinto al esperado PERO el lead viajó: ámbar, no rojo — hay dato en
                 # la base, sólo que entró por otro formulario.
-                if getattr(self, "_form_mismatch_enviado", False):
+                # Mismo form con la URL escrita distinta (y lead OK): ámbar con el aviso.
+                if getattr(self, "_form_mismatch_enviado", False) or (_lead_ok and self._form_dif_menor):
                     for _c in (result_col, form_coincide_col, motivo_col):
                         if not _c:
                             continue

@@ -430,3 +430,31 @@ def test_comparador_avisa_espacios_de_mas_sin_tratarlos_como_otra_url():
     avisos = []
     _avisar_espacios_en_iframe(_Iframe(), lambda msg, nivel="info": avisos.append((nivel, msg)))
     assert len(avisos) == 1 and avisos[0][0] == "warn" and "espacio de más" in avisos[0][1]
+
+
+def test_form_encontrado_igual_al_esperado_no_es_no_coincide():
+    """Android: filas ámbar 'no coincide' con URL esperada == URL encontrada."""
+    from osocio.core.base_form_filler import BaseFormFiller as B
+    esperada = "https://secure-developments.com/commonwealth/peru/gm_front/form/raq"
+    assert B._mismas_urls_de_form(esperada, esperada)
+    assert B._mismas_urls_de_form(esperada + "/?model=onix", esperada.upper())
+    assert not B._mismas_urls_de_form("", esperada)
+    assert not B._mismas_urls_de_form(esperada.replace("raq", "colision"), esperada)
+
+
+@pytest.mark.parametrize("encontrada, esperada, mismo, difs", [
+    ("https://x.com/form/raq", "https://x.com/form/raq", True, []),
+    ("https://x.com/form/RAQ", "https://x.com/form/raq", True, ["mayúsculas"]),
+    ("https://x.com/form/promoción", "https://x.com/form/promocion", True, ["tildes"]),
+    ("https://x.com/form/raq/", "https://x.com/form/raq", True, ["barra final"]),
+    ("https://x.com/form/raq?model=onix%20plus", "https://x.com/form/raq?model=onix plus", True,
+     ["codificación (%20…)"]),
+    ("https://x.com/form/raq?model=Onix", "https://x.com/form/raq?model=onix", True,
+     ["mayúsculas en los parámetros"]),
+    ("https://x.com/form/raq?model=onix&utm_source=a", "https://x.com/form/raq?model=onix", True, []),
+    ("https://x.com/form/colision", "https://x.com/form/raq", False, []),
+])
+def test_url_del_form_misma_o_con_diferencias_menores(encontrada, esperada, mismo, difs):
+    """Idéntica: verde. Mismo form escrito distinto: OK pero ámbar con aviso. Otro form: FAIL."""
+    from osocio.core.base_form_filler import BaseFormFiller as B
+    assert B._diferencia_url_form(encontrada, esperada) == (mismo, difs)
