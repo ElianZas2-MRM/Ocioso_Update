@@ -3077,11 +3077,17 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         return "".join(random.choice(chars) for _ in range(target))
 
     def _is_field_required(self, element):
-        """True si el campo es requerido (attr required/aria-required o su label trae '*')."""
+        """True si el campo es requerido: attr required/aria-required, su label trae '*', o
+        lo exige el validador del form (jQuery Validate: clase "required", data-rule-required,
+        data-msg-required o sus reglas). Ej.: Chile embajadores pide edad, año, versión,
+        color e Instagram sólo por el validador."""
         try:
             return bool(self.driver.execute_script(
                 "var el=arguments[0];"
                 "if(el.required || el.getAttribute('aria-required')==='true') return true;"
+                "if((el.className||'').toString().split(/\\s+/).indexOf('required')>=0) return true;"
+                "if(el.hasAttribute('data-rule-required') || el.hasAttribute('data-msg-required')) return true;"
+                "try{ if(window.jQuery && jQuery(el).rules){ var r=jQuery(el).rules(); if(r && r.required) return true; } }catch(e){}"
                 "var id=el.id;"
                 "if(id){var l=document.querySelector('label[for=\"'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'\"]');"
                 "  if(l && (l.textContent||'').indexOf('*')>=0) return true;}"
@@ -3119,7 +3125,16 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     continue  # ya tiene dato (mapeado, autocompletado por CEP, etc.)
                 if not self._is_field_required(el):
                     continue
-                value = self._generate_synthetic_value(el)
+                # Primero un valor con sentido por el nombre del campo (edad, año, color,
+                # versión, Instagram...); si no hay, el sintético genérico.
+                try:
+                    from osocio.utils.data_generator import valor_plausible_por_nombre
+                    value = valor_plausible_por_nombre(
+                        el.get_attribute("id") or el.get_attribute("name") or "",
+                        el.get_attribute("aria-label") or el.get_attribute("placeholder") or "")
+                except Exception:
+                    value = ""
+                value = value or self._generate_synthetic_value(el)
                 if not value:
                     continue
                 self._scroll_element_into_view(el)

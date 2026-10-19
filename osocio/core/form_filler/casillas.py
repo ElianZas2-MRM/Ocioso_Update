@@ -556,10 +556,17 @@ class CasillasYRadiosMixin:
         try:
             # Los atributos de todos los checkboxes en un solo viaje (antes eran 6 por
             # checkbox: lento en un device de la nube).
+            # grupoReq: el checkbox es una opción de un grupo cuyo título lleva "*" (ej.
+            # "Preferência de contato *" en Brasil gm-envolve): ninguna opción tiene
+            # `required`, pero el form exige al menos una.
             raw_checkboxes = self.driver.execute_script(
                 "return Array.prototype.map.call(document.querySelectorAll(\"input[type='checkbox']\"),"
-                "  function (c) { return {el: c, name: c.getAttribute('name') || '',"
-                "    id: c.id || '', required: !!c.required,"
+                "  function (c) {"
+                "    var g = c.closest('.form-group, fieldset, [role=group]'), req = false;"
+                "    if (g) { var t = g.querySelector('legend, label:not(.form-check-label)');"
+                "      req = !!(t && !t.contains(c) && (t.textContent || '').indexOf('*') >= 0); }"
+                "    return {el: c, name: c.getAttribute('name') || '',"
+                "    id: c.id || '', required: !!c.required, grupoReq: req,"
                 "    aria: c.getAttribute('aria-required') || '',"
                 "    dtm: c.getAttribute('data-dtm') || '', value: c.getAttribute('value') || ''}; });"
             ) or []
@@ -572,7 +579,7 @@ class CasillasYRadiosMixin:
                 name_attr = (info.get("name") or "").strip()
                 lower_name = name_attr.lower()
                 checkbox_id = (info.get("id") or "").strip()
-                is_html_required = bool(info.get("required"))
+                is_html_required = bool(info.get("required")) or bool(info.get("grupoReq"))
                 is_aria_required = (info.get("aria") or "").strip().lower() == "true"
                 data_dtm = (info.get("dtm") or "").strip()
                 value_attr = (info.get("value") or "").strip()
