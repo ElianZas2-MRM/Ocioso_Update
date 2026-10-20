@@ -112,6 +112,8 @@ ETIQUETA_A_IDS = (
     (("codigo asesor", "codigo de asesor", "asesor", "adviser"), ("adviser",)),
     (("vines", "chasis", "chassis", "vin"), ("vin", "chasis", "chassis", "vin-code")),
     (("cep", "codigo postal", "zip"), ("cep", "zip_code")),
+    # Comentarios / mensaje: el valor sale de IDs Dinámicos (comment), como en Chrome.
+    (("comentario", "comentarios", "mensaje", "mensagem", "comment"), ("comment", "comments", "message")),
     (("cedula", "documento", "cpf", "dni", "rut", "carnet", "pasaporte", "ruc", "ci"),
      ("document", "ci", "cpf", "rut", "dni")),
     (("departamento", "estado", "provincia", "region"), ("region", "state")),

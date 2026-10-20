@@ -548,3 +548,37 @@ def test_iphone_grupo_de_checkboxes_con_titulo_afuera_marca_una_sola_opcion():
 def test_valor_plausible_para_orden_del_plan():
     from osocio.utils.data_generator import valor_plausible_por_nombre
     assert valor_plausible_por_nombre("Orden", "Orden").isdigit()
+
+
+def test_iphone_segunda_pasada_marca_todos_los_checkboxes_y_comentarios_va_a_comment():
+    """acdelco Chile: `terms` está disabled hasta marcar `product_info` ("Me gustaría recibir
+    información..."). Si términos no se deja marcar, la segunda pasada marca los demás."""
+    from osocio.core.campos_inferencia import ids_para_etiqueta
+    assert ids_para_etiqueta("Comentarios")[0] == "comment"
+    f = _form_nativo_de_prueba([
+        ("Switch", _caja(47, 425, 336, 43, value="0")),
+        ("StaticText", _caja(82, 425, 236, 42, label="Me gustaría recibir información de los productos.")),
+        ("Switch", _caja(98, 511, 285, 26, value="0")),
+        ("StaticText", _caja(133, 514, 250, 22, label="Acepto la Política de Privacidad Integral.")),
+    ])
+    f.marcar_todos = False
+    cbs = {c["etiqueta"][:10]: c for c in f.escanear()["controles"] if c["tipo"] == "checkbox"}
+    assert not f._pendiente(cbs["Me gustarí"]) and f._pendiente(cbs["Acepto la "])
+    f.marcar_todos = True
+    assert f._pendiente(cbs["Me gustarí"]) and f._pendiente(cbs["Acepto la "])
+
+
+def test_iphone_radio_sin_estado_si_no():
+    """Chile retail-colorado "¿ERES EMPRENDEDOR?": Sí / No son Other angostos sin value,
+    con el label igual a su texto. Cuentan como una pregunta de radio."""
+    f = _form_nativo_de_prueba([
+        ("StaticText", _caja(52, 358, 144, 20, label="¿ERES EMPRENDEDOR?")),
+        ("Other", _caja(52, 389, 24, 53, label="Sí")),
+        ("StaticText", _caja(58, 422, 12, 20, label="Sí")),
+        ("Other", _caja(137, 389, 24, 53, label="No")),
+        ("StaticText", _caja(140, 422, 18, 20, label="No")),
+    ])
+    radios = [c for c in f.escanear()["controles"] if c["tipo"] == "radio"]
+    assert len(radios) == 1 and radios[0]["etiqueta"] == "¿ERES EMPRENDEDOR?"
+    assert [o["texto"] for o in radios[0]["opciones"]] == ["Sí", "No"] and radios[0]["sin_estado"]
+    assert f._pendiente(radios[0])

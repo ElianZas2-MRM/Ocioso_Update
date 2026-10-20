@@ -3488,9 +3488,20 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     # Chile). Suelen venir envueltos en Bootstrap Select, que oculta el select
                     # real y pinta su propio widget: por eso además del change hay que pedirle
                     # al plugin que se refresque, o el usuario ve el campo vacío.
+                    # Una cantidad al azar (1..todas) de opciones reales al azar, nunca el
+                    # placeholder ("Seleccione", "Elige al menos una opción").
                     try:
+                        reales = [i for i, t in self.driver.execute_script(
+                            "return Array.from(arguments[0].options).map(function (o, i) {"
+                            "  return [i, (o.disabled || !(o.value || '').trim()) ? '' : (o.text || '').trim()]; });",
+                            select_element) or [] if t and not self._is_placeholder_text(t)]
+                        elegir = random.sample(reales, random.randint(1, len(reales))) if reales else []
                         elegidas = self.driver.execute_script(
-                            "var s = arguments[0], tope = arguments[1], out = [];for (var i = 0; i < s.options.length && out.length < tope; i++) {  var o = s.options[i];  if (o.disabled || !(o.value || '').trim()) continue;  o.selected = true; out.push((o.text || '').trim());}s.dispatchEvent(new Event('change', { bubbles: true }));try { if (window.jQuery && window.jQuery(s).selectpicker) {  window.jQuery(s).selectpicker('refresh'); } } catch (e) {}return out;", select_element, 2) or []
+                            "var s = arguments[0], idx = arguments[1], out = [];"
+                            "idx.forEach(function (i) { var o = s.options[i]; o.selected = true; out.push((o.text || '').trim()); });"
+                            "s.dispatchEvent(new Event('change', { bubbles: true }));"
+                            "try { if (window.jQuery && window.jQuery(s).selectpicker) { window.jQuery(s).selectpicker('refresh'); } } catch (e) {}"
+                            "return out;", select_element, elegir) or []
                     except Exception as e:
                         print(f" {select_id}: no se pudo elegir en el select múltiple — {e}")
                         elegidas = []

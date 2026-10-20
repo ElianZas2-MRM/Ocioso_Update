@@ -118,6 +118,9 @@ class FormNativoIOS:
         # Grupos de checkboxes de elección ("Preferencia de contacto") con una opción ya
         # marcada: con una alcanza.
         self._grupos_hechos = set()
+        # Segunda pasada cuando "términos" no se dejó marcar: se marcan todos los
+        # checkboxes del form (uno puede habilitar a otro, ej. product_info -> terms).
+        self.marcar_todos = False
 
     # ── contextos y scroll ───────────────────────────────────────────────────
     def _nativo(self):
@@ -289,10 +292,17 @@ class FormNativoIOS:
         En la capa nativa una opción de radio es un Other con value '0'/'1' (marcada) y
         sin label, con el texto de la opción ("Si", "Renovar") abajo de todo, adentro.
         """
-        if (e.get("value") or "").strip() not in ("0", "1") or (e.get("label") or "").strip() \
-                not in ("", "0", "1"):
-            return None
         abajo = _num(e, "y") + _num(e, "height")
+        valor, label = (e.get("value") or "").strip(), (e.get("label") or "").strip()
+        if valor not in ("0", "1"):
+            # Radio sin estado en la capa nativa (Chile retail-colorado, "¿Eres
+            # emprendedor?" Sí / No): un Other angosto, sin value, cuyo label es su texto.
+            if valor or not label or len(label) > 20 or _num(e, "width") > 60:
+                return None
+            return next((s for s in estaticos if _adentro(s, e) and _texto(s) == label
+                         and abs(_num(s, "y") + _num(s, "height") - abajo) <= 12), None)
+        if label not in ("", "0", "1"):
+            return None
         return next((s for s in estaticos if _adentro(s, e) and _texto(s) not in ("0", "1")
                      and abs(_num(s, "y") + _num(s, "height") - abajo) <= 12), None)
 
@@ -312,7 +322,8 @@ class FormNativoIOS:
             titulo = _texto(max(arriba, key=lambda t: _num(t, "y"))) if arriba else f"radio@{y // 40}"
             fila = _num(s, "y") + _num(s, "height") // 2
             g = grupos.setdefault(titulo, {"tipo": "radio", "e": e, "etiqueta": titulo, "valor": "",
-                                           "opciones": [], "fila": fila})
+                                           "opciones": [], "fila": fila, "sin_estado": True})
+            g["sin_estado"] = g["sin_estado"] and e.get("value") is None
             g["opciones"].append({"texto": _texto(s), "marcada": e.get("value") == "1",
                                   "tap": (_num(s, "x") + _num(s, "width") // 2, fila)})
             if e.get("value") == "1":
@@ -510,6 +521,11 @@ class FormNativoIOS:
         elegida = elegida or next((o for o in opciones
                                    if any(k in _norm(o["texto"]) for k in self._RADIO_SEGURA)), None)
         elegida = elegida or random.choice(opciones)
+        if c.get("sin_estado"):
+            # La capa nativa no dice cuál está marcada: se toca una vez y listo.
+            self.d.execute_script("mobile: tap", {"x": elegida["tap"][0], "y": elegida["tap"][1]})
+            time.sleep(0.6)
+            return elegida["texto"]
         for _intento in range(2):
             self.d.execute_script("mobile: tap", {"x": elegida["tap"][0], "y": elegida["tap"][1]})
             time.sleep(0.6)
@@ -599,6 +615,8 @@ class FormNativoIOS:
         if self._es_eleccion_de_grupo(c) and c["grupo"] in self._grupos_hechos:
             return False
         texto = f"{c['etiqueta']} {c.get('grupo', '')}"
+        if getattr(self, "marcar_todos", False) and texto.strip():
+            return c["valor"] != "1"
         return c["valor"] != "1" and ("*" in texto
                                       or any(k in _norm(texto) for k in _CHECKBOX_A_MARCAR))
 

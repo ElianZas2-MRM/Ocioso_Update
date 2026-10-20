@@ -91,19 +91,30 @@ class FormFillerIphone(GenericCountryBase):
         self._snapshot_ios: Dict[str, Dict] = {}
         self._tipo_doc_ios = ""
         def valor_para(tipo, etiqueta):
-            return self._valor_para_etiqueta(form_data, tipo, etiqueta)
+            valor = self._valor_para_etiqueta(form_data, tipo, etiqueta)
+            # Nunca "test" en un campo de texto (IDs Dinámicos trae "Este texto es un
+            # test"): lo mismo que _fill_and_dispatch en los navegadores.
+            if tipo == "texto" and isinstance(valor, str):
+                valor = self._sanitize_field_value(valor)
+            return valor
 
         registro = self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
         # "Términos" deshabilitado hasta que todo es válido: si no se dejó marcar, algún
         # opcional que quedó vacío por el 50% en realidad es obligatorio por JS (en la capa
-        # nativa no se ve). Se completan esos y se vuelve a recorrer el form.
-        if any(r["tipo"] == "checkbox" and r["quedo"] == "sigue en 0" for r in registro) \
-                and any(k.startswith("ios::") and not v for k, v in self._decision_opcionales.items()):
-            print("  'Términos' no se dejó marcar: se completan también los opcionales vacíos")
+        # nativa no se ve), o un checkbox lo habilita (acdelco Chile: `terms` está disabled
+        # hasta marcar `product_info`, igual que la segunda pasada de checkboxes en Chrome).
+        # Se completan los opcionales, se marcan los demás checkboxes y se vuelve a recorrer.
+        if any(r["tipo"] == "checkbox" and r["quedo"] == "sigue en 0" for r in registro):
+            print("  'Términos' no se dejó marcar: se completan también los opcionales vacíos "
+                  "y los demás checkboxes")
             for clave in self._decision_opcionales:
                 if clave.startswith("ios::"):
                     self._decision_opcionales[clave] = True
-            self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
+            self._nativo.marcar_todos = True
+            try:
+                self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
+            finally:
+                self._nativo.marcar_todos = False
         return self.screenshot_manager.fname("form", "completado", 1)
 
     def _config_para_ids(self, ids):
