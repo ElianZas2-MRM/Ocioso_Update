@@ -531,6 +531,8 @@ def test_iphone_grupo_de_checkboxes_con_titulo_afuera_marca_una_sola_opcion():
         ("StaticText", _caja(89, 170, 69, 22, label="WhatsApp")),
         ("Switch", _caja(27, 234, 123, 62, value="0")),
         ("StaticText", _caja(27, 273, 124, 22, label="Correo electrónico")),
+        ("Switch", _caja(183, 234, 127, 62, value="0")),
+        ("StaticText", _caja(183, 273, 127, 22, label="Llamada telefónica")),
         ("Switch", _caja(13, 319, 391, 81, value="0")),
         ("StaticText", _caja(64, 333, 321, 66, label="Acepto que he leído la política de privacidad")),
         ("Switch", _caja(13, 424, 391, 81, value="0")),
@@ -582,3 +584,57 @@ def test_iphone_radio_sin_estado_si_no():
     assert len(radios) == 1 and radios[0]["etiqueta"] == "¿ERES EMPRENDEDOR?"
     assert [o["texto"] for o in radios[0]["opciones"]] == ["Sí", "No"] and radios[0]["sin_estado"]
     assert f._pendiente(radios[0])
+
+
+def test_cta_de_landing_solo_en_la_landing_de_la_matriz():
+    """AR kits-mantenimiento: se entra por un CTA "Solicitá" al azar. Cualquier otra
+    landing (incluida la de /formulario) no toca nada."""
+    from osocio.core.base_form_filler import BaseFormFiller
+
+    class _SinDriver:
+        def __getattr__(self, nombre):
+            raise AssertionError(f"no debería usar el driver ({nombre})")
+
+    f = object.__new__(BaseFormFiller)
+    f.driver = _SinDriver()
+    for url in ("https://www.chevrolet.com.ar/kits-mantenimiento/formulario",
+                "https://www.chevrolet.com.ar/mantenimiento",
+                "https://www.chevrolet.cl/kits-mantenimiento"):
+        assert f._entrar_por_cta_de_landing(url) is None
+    regla = BaseFormFiller._LANDINGS_CON_CTA[0]
+    assert regla["landing"] == "chevrolet.com.ar/kits-mantenimiento"
+
+
+def test_iphone_consentimiento_suelto_no_toma_el_label_del_campo_de_arriba():
+    """Brasil tenho-interesse: el "Autorizo..." está debajo de "DATA ESTIMADA DE COMPRA *".
+    Ese label no es un título de grupo (el * lo hacía marcar/desmarcar el consentimiento)."""
+    f = _form_nativo_de_prueba([
+        ("StaticText", _caja(42, 110, 183, 20, label="DATA ESTIMADA DE COMPRA *")),
+        ("Other", _caja(42, 143, 346, 56, value="1 mês")),
+        ("Switch", _caja(42, 225, 346, 231, value="0")),
+        ("StaticText", _caja(77, 372, 304, 83, label="Autorizo a General Motors a tratar meus dados")),
+    ])
+    cb = next(c for c in f.escanear()["controles"] if c["tipo"] == "checkbox")
+    assert not cb.get("grupo")
+
+
+def test_iphone_label_flotante_no_es_radio():
+    """gm_front/form/kits (Argentina): el label flotante "Nombre" es un Other angosto con su
+    texto adentro, como un Sí/No, pero está solo en su fila: no es una opción de radio."""
+    f = _form_nativo_de_prueba([
+        ("Other", _caja(48, 100, 55, 30, label="Nombre")),
+        ("StaticText", _caja(52, 110, 43, 18, label="Nombre")),
+        ("TextField", _caja(47, 100, 336, 59)),
+    ])
+    assert not [c for c in f.escanear()["controles"] if c["tipo"] == "radio"]
+
+
+def test_landing_con_nota_de_popup_en_la_matriz():
+    """BR 62: "https://…/novo-trailblazer (dentro de un pop-up)" abre la URL limpia y entra
+    por el modal de "Tenho interesse". La misma landing sin nota (BR 60) no toca nada."""
+    from osocio.core.base_form_filler import BaseFormFiller as B
+    url = "https://www.chevrolet.com.br/suvs/novo-trailblazer"
+    assert B._separar_nota_de_landing(url + " (dentro de un pop-up)") == (url, "dentro de un pop-up")
+    assert B._separar_nota_de_landing(url) == (url, "")
+    assert B._regla_cta_de_landing(url + " (dentro de un pop-up)")["popup"] is True
+    assert B._regla_cta_de_landing(url) is None

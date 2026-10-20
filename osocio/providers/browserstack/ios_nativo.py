@@ -248,6 +248,12 @@ class FormNativoIOS:
                 enviar = e
             elif tag == "Button" and visible and _norm(_texto(e)).startswith(kw_siguiente):
                 siguiente = e
+        # Radios sin estado (Sí | No): sólo si hay otra opción igual en la misma fila. Un
+        # label flotante ("Nombre", "Modelos" en gm_front/form/kits) también es un Other
+        # angosto con su texto adentro, pero está solo en su fila.
+        sin_estado = [(e, s) for e, s in radios if e.get("value") is None]
+        radios = [(e, s) for e, s in radios if e.get("value") is not None or any(
+            o is not e and abs(_num(o, "y") - _num(e, "y")) <= 5 for o, _ in sin_estado)]
         controles += self._grupos_de_radios(radios, estaticos)
         # Campo partido en dos cajas en la misma fila (ej. Celular: "+56" | número): la caja
         # sin label toma el de la caja de su izquierda.
@@ -262,9 +268,14 @@ class FormNativoIOS:
         # Grupo con el título AFUERA de los Switch (Colombia preferencia-de-canales:
         # "PREFERENCIA DE CONTACTO" arriba y las opciones en dos filas abajo): el título es
         # el texto más cercano por encima del Switch que no sea la opción de otro checkbox.
-        opciones_cb = {c["etiqueta"] for c in controles if c["tipo"] == "checkbox"}
-        for c in controles:
-            if c["tipo"] == "checkbox" and not c.get("grupo"):
+        # Sólo opciones de un grupo: comparten fila con otro checkbox. Un checkbox suelto
+        # (un consentimiento) no toma como título el label del campo de arriba (Brasil
+        # tenho-interesse: "DATA ESTIMADA DE COMPRA *" arriba del "Autorizo...").
+        cbs = [c for c in controles if c["tipo"] == "checkbox"]
+        opciones_cb = {c["etiqueta"] for c in cbs}
+        for c in cbs:
+            en_fila = any(o is not c and abs(_num(o["e"], "y") - _num(c["e"], "y")) <= 10 for o in cbs)
+            if en_fila and not c.get("grupo"):
                 tope = _num(c["e"], "y")
                 arriba = [s for s in estaticos_form
                           if _texto(s) not in opciones_cb and len(_texto(s)) > 2 and not _texto(s).isdigit()

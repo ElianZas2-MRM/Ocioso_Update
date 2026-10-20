@@ -2549,13 +2549,125 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 return f"Landing 404 / no encontrada (encabezado contiene '{p}')"
         return ""
 
+    # Landings sin form propio: el form está detrás de uno o más CTAs. En cada paso se elige
+    # al azar un tab (si hay) y un CTA visible, y se verifica que lleve a una página cuyo path
+    # cumpla `destino` (regex). Al final el flujo normal compara el form de esa página con el
+    # del Excel. `landing`: la URL de la matriz, sin protocolo ni www.
+    _MONTANA_ACC = "/picapes/chevrolet-montana/acessorios"
+    _SONIC_ACC = "/suvs/sonic/acessorios"
+    _LANDINGS_CON_CTA = (
+        # Argentina, Kits de mantenimiento: tab (Todos / Autos / SUVs / Pick Ups) + "Solicitá".
+        {"landing": "chevrolet.com.ar/kits-mantenimiento", "pasos": (
+            {"tabs": "li.gb-tab-button[data-dtm='intro']",
+             "cta": "a[href*='/kits-mantenimiento/formulario']",
+             "destino": r"/kits-mantenimiento/formulario$"},)},
+        # Brasil, accesorios: "Saber mais" (una categoría) y "Tenho interesse" -> /formulario.
+        {"landing": "chevrolet.com.br" + _MONTANA_ACC, "pasos": (
+            {"cta": f"a[title='Saber mais'][href^='{_MONTANA_ACC}/']",
+             "destino": _MONTANA_ACC + r"/(?!formulario$)[^/]+$"},
+            {"cta": f"a[title='Tenho interesse'][href*='{_MONTANA_ACC}/formulario']",
+             "destino": _MONTANA_ACC + r"/formulario$"})},
+        {"landing": "chevrolet.com.br" + _MONTANA_ACC + "/aparencia", "pasos": (
+            {"cta": f"a[title='Tenho interesse'][href*='{_MONTANA_ACC}/formulario']",
+             "destino": _MONTANA_ACC + r"/formulario$"},)},
+        {"landing": "chevrolet.com.br" + _SONIC_ACC, "pasos": (
+            {"cta": f"a[title='Saber mais'][href^='{_SONIC_ACC}/']",
+             "destino": _SONIC_ACC + r"/(?!formulario$)[^/]+$"},
+            {"cta": f"a[title='Tenho interesse'][href*='{_SONIC_ACC}/formulario']",
+             "destino": _SONIC_ACC + r"/formulario$"})},
+        # Ecuador, exonerados / proceso: el CTA lleva al form de la landing principal.
+        {"landing": "chevrolet.com.ec/programas-nuevos-caminos-exonerados/proceso", "pasos": (
+            {"cta": "a[href*='/programas-nuevos-caminos-exonerados#form']",
+             "destino": r"/programas-nuevos-caminos-exonerados$"},)},
+        # Brasil, Trailblazer: la matriz anota "(dentro de un pop-up)". Ese form (Midnight)
+        # está en el modal que abre "Tenho interesse"; sin la nota, es el form de la página.
+        {"landing": "chevrolet.com.br/suvs/novo-trailblazer", "popup": True, "pasos": (
+            {"cta": "a[title='Tenho interesse'][data-gb-modal-id]", "modal": True},)},
+    )
+
+    @staticmethod
+    def _separar_nota_de_landing(landing_url):
+        """La matriz a veces anota algo después de la URL: "https://… (dentro de un pop-up)".
+        Devuelve (url, nota)."""
+        m = re.match(r"\s*(\S+)\s+\(?(.*?)\)?\s*$", landing_url or "")
+        return (m.group(1), m.group(2)) if m else ((landing_url or "").strip(), "")
+
+    @classmethod
+    def _regla_cta_de_landing(cls, landing_url):
+        limpia, nota = cls._separar_nota_de_landing(landing_url)
+        popup = bool(re.search(r"pop.?up", nota, re.I))
+        url = re.sub(r"^https?://(www\.)?", "", limpia.split("?")[0].split("#")[0].lower()).rstrip("/")
+        return next((r for r in cls._LANDINGS_CON_CTA
+                     if url == r["landing"] and r.get("popup", False) == popup), None)
+
+    def _entrar_por_cta_de_landing(self, landing_url):
+        regla = self._regla_cta_de_landing(landing_url)
+        if regla is None:
+            return
+        from urllib.parse import urlparse
+        try:
+            for paso in regla["pasos"]:
+                if paso.get("tabs"):
+                    tabs = [t for t in self.driver.find_elements(By.CSS_SELECTOR, paso["tabs"]) if t.is_displayed()]
+                    if tabs:
+                        tab = random.choice(tabs)
+                        nombre_tab = (tab.text or "").strip()
+                        self.driver.execute_script(
+                            "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", tab)
+                        time.sleep(0.8)
+                        print(f"CTA de landing: tab '{nombre_tab}'")
+                ctas = self.driver.find_elements(By.CSS_SELECTOR, paso["cta"])
+                visibles = [c for c in ctas if c.is_displayed()] or ctas
+                if not visibles:
+                    self._landing_issue = (f"No se encontró ningún CTA ({paso['cta']}) en "
+                                           f"{self.driver.current_url}")
+                    print(f"⚠ {self._landing_issue}")
+                    return
+                cta = random.choice(visibles)
+                detalle = (cta.get_attribute("data-dtm") or cta.get_attribute("title") or cta.text or "").strip()
+                self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+                if paso.get("modal"):
+                    # Abre un modal en la misma página: esperar a que aparezca un iframe nuevo.
+                    antes = len(self.driver.find_elements(By.TAG_NAME, "iframe"))
+                    try:
+                        WebDriverWait(self.driver, 10).until(
+                            lambda d: len(d.find_elements(By.TAG_NAME, "iframe")) > antes)
+                    except Exception:
+                        pass
+                    time.sleep(1.5)
+                    print(f"CTA de landing '{detalle}' → modal abierto")
+                    continue
+
+                def llego(d):
+                    return re.search(paso["destino"], urlparse(d.current_url or "").path.lower().rstrip("/"))
+                try:
+                    WebDriverWait(self.driver, 15).until(llego)
+                except Exception:
+                    self._landing_issue = (f"El CTA '{detalle}' no llevó a {paso['destino']} "
+                                           f"(quedó en {self.driver.current_url})")
+                    print(f"⚠ {self._landing_issue}")
+                    return
+                print(f"CTA de landing '{detalle}' → {self.driver.current_url}")
+                try:
+                    WebDriverWait(self.driver, 10).until(
+                        lambda d: d.execute_script("return document.readyState") in ("interactive", "complete"))
+                except Exception:
+                    pass
+                time.sleep(0.5)
+                self.handle_cookie_popups()
+            self.pre_scroll_for_dynamic_content()
+        except Exception as e:
+            self._landing_issue = f"No se pudo entrar por el CTA de la landing: {e}"
+            print(f"⚠ {self._landing_issue}")
+
     def process_landing_page(self, landing_url, ss_counter, take_screenshot=True):
         """Procesa la página de destino inicial"""
         try:
             self.driver.switch_to.default_content()
         except Exception:
             pass
-        landing_url = self._sanitize_url(landing_url)
+        landing_con_nota = landing_url
+        landing_url, _nota = self._separar_nota_de_landing(self._sanitize_url(landing_url))
         self.driver.get(landing_url)
 
         # Detección de landing rota (404 / página no encontrada): se marca para el Excel.
@@ -2618,7 +2730,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             except Exception as e:
                 print(f"Chevrolet BR: no se encontró #contact-by-form — {e}")
 
-        form_inserto_name = self.screenshot_manager.fname("landing", "inicial", ss_counter) if self.screenshot_manager else f"landing_inicial_{ss_counter}.png"
+        self._entrar_por_cta_de_landing(landing_con_nota)
+
+        form_inserto_name =self.screenshot_manager.fname("landing", "inicial", ss_counter) if self.screenshot_manager else f"landing_inicial_{ss_counter}.png"
         if take_screenshot:
             self.screenshot_manager.url_landing = landing_url
             self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
