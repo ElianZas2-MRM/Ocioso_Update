@@ -106,6 +106,11 @@ ETIQUETA_A_IDS = (
     # Patente del auto: cada mercado la llama distinto (PLACA en Colombia, MATRÍCULA en
     # Uruguay). Va antes que "documento" para que "matrícula" no se lea como otra cosa.
     (("patente", "placa", "matricula", "plate", "dominio"), ("patent",)),
+    # Número de contrato (Argentina, arrepentimiento / baja de contrato) y VIN / chasis:
+    # el valor sale de IDs Dinámicos, como en Chrome. Van antes que "documento".
+    (("numero de contrato", "contrato", "contract"), ("contract",)),
+    (("codigo asesor", "codigo de asesor", "asesor", "adviser"), ("adviser",)),
+    (("vines", "chasis", "chassis", "vin"), ("vin", "chasis", "chassis", "vin-code")),
     (("cep", "codigo postal", "zip"), ("cep", "zip_code")),
     (("cedula", "documento", "cpf", "dni", "rut", "carnet", "pasaporte", "ruc", "ci"),
      ("document", "ci", "cpf", "rut", "dni")),
@@ -114,6 +119,8 @@ ETIQUETA_A_IDS = (
     (("concesionario", "concessionaria", "distribuidor", "dealer", "agencia"), ("dealer",)),
     (("fecha estimada", "data estimada", "fecha de compra", "data de compra", "plazo"),
      ("estimated-day", "estimated-date-purchase", "estimated-date")),
+    # "AÑO MODELO DE SU VEHÍCULO" (Chile, embajadores) es el año, no el select de modelos.
+    (("ano modelo", "ano del modelo", "ano de modelo", "model year"), ("model_year", "year")),
     (("modelo", "model", "vehiculo", "veiculo"), ("models", "model")),
 )
 

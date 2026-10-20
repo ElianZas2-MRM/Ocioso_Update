@@ -51,7 +51,11 @@ def _kw_botones():
 # Checkbox que se marcan: términos, privacidad, autorizaciones (mismo criterio que
 # _handle_terms_checkboxes de la app, por texto en vez de por name).
 _CHECKBOX_A_MARCAR = ("acepto", "termin", "autoriz", "privacidad", "politica", "consent",
-                      "concordo", "aceito", "declaro", "li e")
+                      "concordo", "aceito", "declaro", "li e",
+                      # Grupo "Preferencia de contacto" / "Preferência de contato" (Chile
+                      # gm_forms, Colombia preferencia-de-canales): obligatorio por JS, sin "*";
+                      # mientras no se marca, el form deja "términos" deshabilitado.
+                      "preferencia")
 # Respaldo de la detección de TY (la principal es estructural, ver esperar_ty).
 _TEXTOS_TY = ("gracias por", "solicitud enviada", "se pondra en contacto", "hemos recibido",
               "nos pondremos en contacto", "obrigado", "recebemos sua", "enviado com sucesso",
@@ -111,6 +115,9 @@ class FormNativoIOS:
         # Preguntas de radio ya decididas en este form (aunque el form traiga una marcada
         # de entrada, se sortea igual, como en los navegadores).
         self._radios_hechos = set()
+        # Grupos de checkboxes de elección ("Preferencia de contacto") con una opción ya
+        # marcada: con una alcanza.
+        self._grupos_hechos = set()
 
     # ── contextos y scroll ───────────────────────────────────────────────────
     def _nativo(self):
@@ -171,7 +178,10 @@ class FormNativoIOS:
         raiz = self._fuente()
         web = raiz.find(f".//{_T}WebView")
         todos = list(web.iter()) if web is not None else []
-        estaticos = [e for e in todos if e.tag == f"{_T}StaticText" and _texto(e)]
+        # Sólo textos legibles: los íconos (ej. la flechita de un select, "") y los
+        # separadores ("-") no son label de nada.
+        estaticos = [e for e in todos if e.tag == f"{_T}StaticText"
+                     and any(ch.isalnum() for ch in _texto(e))]
         # Los checkboxes que cuentan son los del form (la landing puede tener otros).
         contenedor = self._contenedor_del_form(raiz)
 
@@ -198,7 +208,8 @@ class FormNativoIOS:
             (hasta 30 px) y alineado con su borde izquierdo. Sólo textos del form."""
             y, x = _num(ctrl, "y"), _num(ctrl, "x")
             cerca = [s for s in estaticos_form
-                     if 0 <= y - (_num(s, "y") + _num(s, "height")) <= 30 and abs(_num(s, "x") - x) <= 20]
+                     # hasta 30 px de corrimiento: la caja de "TU INSTAGRAM" arranca después del "@"
+                     if 0 <= y - (_num(s, "y") + _num(s, "height")) <= 30 and abs(_num(s, "x") - x) <= 30]
             return _texto(max(cerca, key=lambda s: _num(s, "y"))) if cerca else ""
 
         kw_siguiente, kw_enviar = _kw_botones()
@@ -210,9 +221,17 @@ class FormNativoIOS:
             if opcion_radio is not None:
                 radios.append((e, opcion_radio))
             elif tag in ("TextField", "TextView", "SecureTextField") and visible:
-                controles.append({"tipo": "texto", "e": e, "valor": (e.get("value") or "").strip(),
-                                  "etiqueta": etiqueta_de(e) or (e.get("placeholderValue") or "").strip()
-                                  or etiqueta_arriba(e)})
+                # iOS informa el texto de ejemplo (placeholder, ej. "12345678-9" en el RUT)
+                # como valor de un campo vacío: eso no cuenta como dato.
+                valor = (e.get("value") or "").strip()
+                if valor and valor == (e.get("placeholderValue") or "").strip():
+                    valor = ""
+                # Un ejemplo sin letras ("12345678-9", "00123456789") no nombra al campo: antes
+                # que eso, el label de arriba ("RUT", "Nº DE DOCUMENTO").
+                ejemplo = (e.get("placeholderValue") or "").strip()
+                con_letras = ejemplo if any(ch.isalpha() for ch in ejemplo) else ""
+                controles.append({"tipo": "texto", "e": e, "valor": valor,
+                                  "etiqueta": etiqueta_de(e) or con_letras or etiqueta_arriba(e) or ejemplo})
             elif tag == "Other" and visible and (e.get("value") or "").strip() \
                     and not (e.get("label") or "").strip() and 30 <= _num(e, "height") <= 100:
                 valor = e.get("value").strip()
@@ -227,12 +246,35 @@ class FormNativoIOS:
             elif tag == "Button" and visible and _norm(_texto(e)).startswith(kw_siguiente):
                 siguiente = e
         controles += self._grupos_de_radios(radios, estaticos)
+        # Campo partido en dos cajas en la misma fila (ej. Celular: "+56" | número): la caja
+        # sin label toma el de la caja de su izquierda.
+        for c in controles:
+            if c["tipo"] == "texto" and not c["etiqueta"]:
+                y, x = _num(c["e"], "y"), _num(c["e"], "x")
+                vecina = max((o for o in controles if o is not c and o["tipo"] == "texto" and o["etiqueta"]
+                              and abs(_num(o["e"], "y") - y) <= 6 and _num(o["e"], "x") < x),
+                             key=lambda o: _num(o["e"], "x"), default=None)
+                if vecina is not None:
+                    c["etiqueta"] = vecina["etiqueta"]
+        # Grupo con el título AFUERA de los Switch (Colombia preferencia-de-canales:
+        # "PREFERENCIA DE CONTACTO" arriba y las opciones en dos filas abajo): el título es
+        # el texto más cercano por encima del Switch que no sea la opción de otro checkbox.
+        opciones_cb = {c["etiqueta"] for c in controles if c["tipo"] == "checkbox"}
+        for c in controles:
+            if c["tipo"] == "checkbox" and not c.get("grupo"):
+                tope = _num(c["e"], "y")
+                arriba = [s for s in estaticos_form
+                          if _texto(s) not in opciones_cb and len(_texto(s)) > 2 and not _texto(s).isdigit()
+                          and 0 <= tope - (_num(s, "y") + _num(s, "height")) <= 130]
+                if arriba:
+                    c["grupo"] = _texto(max(arriba, key=lambda s: _num(s, "y")))
         # Duplicados (el mismo control anidado dos veces). Un checkbox se ubica por SU fila:
-        # los de un grupo empiezan todos en la misma línea (el título del grupo).
+        # los de un grupo empiezan todos en la misma línea (el título del grupo). La x cuenta:
+        # dos cajas en la misma fila (Celular "+56" | número) son dos controles.
         vistos, out = set(), []
         for c in sorted(controles, key=lambda c: c.get("fila", _num(c["e"], "y"))):
             c["y"] = c.get("fila", _num(c["e"], "y"))
-            clave = (c["tipo"], c["y"] // 8)
+            clave = (c["tipo"], c["y"] // 8, _num(c["e"], "x") // 8)
             if clave in vistos:
                 continue
             vistos.add(clave)
@@ -342,6 +384,24 @@ class FormNativoIOS:
         return quedo
 
     def _elegir(self, c, opcion: Optional[str]) -> str:
+        r = self._abrir_y_elegir(c, opcion)
+        if r != "no abrió ni ruedita ni menú":
+            return r
+        # El toque no abrió nada: suele ser que el select quedó debajo del menú fijo de la
+        # landing (arriba) o de la barra de Safari (abajo), que se comen el toque. Se lo
+        # lleva al medio de la pantalla y se vuelve a tocar.
+        y = _num(c["e"], "y")
+        self.log(f"      ⚠ '{c['etiqueta']}' no abrió (y={y}): se centra y se reintenta")
+        self._webview()
+        try:
+            self._scroll_por(int(y - 380))
+        finally:
+            self._nativo()
+        nuevo = next((n for n in self.escanear()["controles"]
+                      if n["tipo"] == "select" and n["etiqueta"] == c["etiqueta"]), None)
+        return self._abrir_y_elegir(nuevo, opcion) if nuevo is not None else r
+
+    def _abrir_y_elegir(self, c, opcion: Optional[str]) -> str:
         el = self._elemento(c["e"])
         if el is None:
             return "no encontrado"
@@ -418,6 +478,19 @@ class FormNativoIOS:
                 return "tocado"
             if nuevo["valor"] == "1":
                 return "marcado"
+        # Último intento: activarlo por accesibilidad (el click de XCUITest sobre el Switch
+        # lo activa como un toque de VoiceOver: va al input, no al link del texto). En
+        # acdelco.cl el cuadradito no está donde la capa nativa dice.
+        el = self._elemento(nuevo["e"])
+        if el is not None:
+            try:
+                el.click()
+                time.sleep(0.6)
+                nuevo = self._mismo_checkbox(c) or nuevo
+                if nuevo["valor"] == "1":
+                    return "marcado"
+            except Exception:
+                pass
         return f"sigue en {nuevo['valor']}"
 
     # Opciones que nunca se eligen al azar: abren un bloque obligatorio que el lead no
@@ -523,9 +596,19 @@ class FormNativoIOS:
             return c["etiqueta"] not in self._radios_hechos
         # Checkbox: se marca si es de términos/privacidad o si es obligatorio (* en el label),
         # igual que la app ("se marca si es obligatorio o de términos").
+        if self._es_eleccion_de_grupo(c) and c["grupo"] in self._grupos_hechos:
+            return False
         texto = f"{c['etiqueta']} {c.get('grupo', '')}"
         return c["valor"] != "1" and ("*" in texto
                                       or any(k in _norm(texto) for k in _CHECKBOX_A_MARCAR))
+
+    @staticmethod
+    def _es_eleccion_de_grupo(c) -> bool:
+        """Opción de un grupo de elección ("SMS" en "Preferencia de contacto"): se marca por
+        el título del grupo, no por su texto. De esos alcanza con marcar una; un
+        consentimiento ("Acepto...") cuenta por sí solo aunque tenga un título arriba."""
+        return bool(c.get("grupo")) and not ("*" in c["etiqueta"]
+                                             or any(k in _norm(c["etiqueta"]) for k in _CHECKBOX_A_MARCAR))
 
     def llenar(self, valor_para: Callable[[str, str], Optional[str]],
                limite_seg: int = 360,
@@ -539,6 +622,7 @@ class FormNativoIOS:
         """
         self.ir_al_form()
         intentos: Dict[tuple, int] = {}
+        esperando_padre = set()   # selects que no se habilitaron (les falta el padre)
         registro = []
         pasos = 0
         fin = time.time() + limite_seg
@@ -561,6 +645,14 @@ class FormNativoIOS:
                     r = registro[-1]
                     if r["quedo"] in ("(sin dato)", "(omitido)"):
                         intentos[clave] = 99   # omitido a propósito: no volver a intentarlo
+                    if r["quedo"].startswith("no se habilitó"):
+                        esperando_padre.add(clave)
+                    elif c["tipo"] == "select" and not r["quedo"].startswith(("no ", "sin ", "ERROR")):
+                        # Se eligió un select: los que esperaban a su padre (Ciudad y
+                        # Concesionario antes que Provincia, en Argentina) se vuelven a probar.
+                        for k in esperando_padre - {clave}:
+                            intentos.pop(k, None)
+                        esperando_padre.clear()
                     if al_llenar is not None:
                         try:
                             al_llenar(r)
@@ -648,6 +740,8 @@ class FormNativoIOS:
             elif c["tipo"] == "checkbox":
                 reg["pedido"] = "marcar"
                 reg["quedo"] = self._marcar_checkbox(c)
+                if reg["quedo"] == "marcado" and self._es_eleccion_de_grupo(c):
+                    self._grupos_hechos.add(c["grupo"])
         except Exception as e:
             reg["quedo"] = f"ERROR {str(e).splitlines()[0][:120]}"
         return reg
@@ -779,13 +873,43 @@ class FormNativoIOS:
             self._webview()
 
     def _contenedor_del_form(self, raiz):
-        """El nodo nativo que corresponde al iframe: un Other con el title del iframe."""
-        if not self.titulo_iframe:
+        """El nodo nativo que corresponde al iframe: un Other con el title del iframe. Si no
+        hay (el iframe no tiene title, o no coincide, ej. los camiones de Ecuador), el nodo
+        más chico que contiene todos los campos del form."""
+        if self.titulo_iframe:
+            for e in raiz.iter(f"{_T}Other"):
+                if (e.get("label") or "").strip() == self.titulo_iframe:
+                    return e
+        return self._ancestro_comun_de_campos(raiz)
+
+    @staticmethod
+    def _ancestro_comun_de_campos(raiz):
+        """El ancestro común más profundo de los campos (texto, switches) del WebView. None si
+        no hay campos o si el único común es el WebView entero (no ayuda a separar la landing)."""
+        web = raiz.find(f".//{_T}WebView")
+        if web is None:
             return None
-        for e in raiz.iter(f"{_T}Other"):
-            if (e.get("label") or "").strip() == self.titulo_iframe:
-                return e
-        return None
+        padre = {hijo: p for p in web.iter() for hijo in p}
+        campos = [e for e in web.iter()
+                  if e.tag.replace(_T, "") in ("TextField", "SecureTextField", "TextView", "Switch")]
+        if not campos:
+            return None
+
+        def cadena(e):
+            out = []
+            while e is not None:
+                out.append(e)
+                e = padre.get(e)
+            return out[::-1]   # desde el WebView hasta el campo
+
+        comun = cadena(campos[0])
+        for c in campos[1:]:
+            otra = cadena(c)
+            n = 0
+            while n < min(len(comun), len(otra)) and comun[n] is otra[n]:
+                n += 1
+            comun = comun[:n]
+        return comun[-1] if len(comun) > 1 else None
 
     def mostrar_ty(self):
         """Deja la TY a la vista unos segundos para que quede en el video (igual que la app)."""

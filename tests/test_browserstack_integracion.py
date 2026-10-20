@@ -458,3 +458,93 @@ def test_url_del_form_misma_o_con_diferencias_menores(encontrada, esperada, mism
     """Idéntica: verde. Mismo form escrito distinto: OK pero ámbar con aviso. Otro form: FAIL."""
     from osocio.core.base_form_filler import BaseFormFiller as B
     assert B._diferencia_url_form(encontrada, esperada) == (mismo, difs)
+
+
+def test_iphone_contenedor_del_form_por_ancestro_comun_de_los_campos():
+    """Sin title de iframe que coincida: el nodo más chico que tiene todos los campos, no el
+    menú de la landing que está al lado."""
+    import xml.etree.ElementTree as ET
+    from osocio.providers.browserstack.ios_nativo import FormNativoIOS
+    T = "XCUIElementType"
+    raiz = ET.Element(T + "Application")
+    web = ET.SubElement(raiz, T + "WebView")
+    menu = ET.SubElement(web, T + "Other")
+    ET.SubElement(menu, T + "StaticText", label="Cotiza ya")
+    form = ET.SubElement(web, T + "Other", label="")
+    paso = ET.SubElement(form, T + "Other")
+    ET.SubElement(paso, T + "TextField")
+    ET.SubElement(paso, T + "TextField")
+    ET.SubElement(form, T + "Switch")
+    assert FormNativoIOS._ancestro_comun_de_campos(raiz) is form
+    # Sin campos: no hay contenedor.
+    vacio = ET.Element(T + "Application")
+    ET.SubElement(vacio, T + "WebView")
+    assert FormNativoIOS._ancestro_comun_de_campos(vacio) is None
+
+
+def _form_nativo_de_prueba(hijos):
+    """FormNativoIOS sobre un árbol armado a mano: [(tag, atributos), ...] dentro del form."""
+    import xml.etree.ElementTree as ET
+    from osocio.providers.browserstack.ios_nativo import FormNativoIOS
+    T = "XCUIElementType"
+    raiz = ET.Element(T + "Application")
+    form = ET.SubElement(ET.SubElement(raiz, T + "WebView"), T + "Other", x="0", y="0", width="430", height="900")
+    for tag, attrs in hijos:
+        ET.SubElement(form, T + tag, {k: str(v) for k, v in attrs.items()})
+    f = object.__new__(FormNativoIOS)
+    f._radios_hechos, f._grupos_hechos = set(), set()
+    f._fuente = lambda: raiz
+    f._contenedor_del_form = lambda r: form
+    f._visible = lambda e: True
+    return f
+
+
+def _caja(x, y, w, h, **extra):
+    return dict(x=x, y=y, width=w, height=h, **extra)
+
+
+def test_iphone_rut_con_ejemplo_toma_el_label_de_arriba_y_celular_partido_son_dos_cajas():
+    """Chile gm_forms: el RUT trae el ejemplo '12345678-9' (no es su nombre) y el celular es
+    '+56' | número en la misma fila: las dos cajas cuentan."""
+    f = _form_nativo_de_prueba([
+        ("StaticText", _caja(54, 100, 26, 20, label="RUT")),
+        ("TextField", _caja(54, 133, 322, 56, value="12345678-9", placeholderValue="12345678-9")),
+        ("StaticText", _caja(54, 230, 58, 20, label="CELULAR")),
+        ("TextField", _caja(54, 263, 70, 56, value="+56")),
+        ("StaticText", _caja(139, 280, 8, 22, label="-")),
+        ("TextField", _caja(161, 263, 216, 56)),
+    ])
+    textos = [c for c in f.escanear()["controles"] if c["tipo"] == "texto"]
+    assert [(c["etiqueta"], c["valor"]) for c in textos] == [("RUT", ""), ("CELULAR", "+56"), ("CELULAR", "")]
+    assert [f._pendiente(c) for c in textos] == [True, False, True]
+
+
+def test_iphone_grupo_de_checkboxes_con_titulo_afuera_marca_una_sola_opcion():
+    """Colombia preferencia-de-canales: 'PREFERENCIA DE CONTACTO' arriba de los Switch. Es
+    obligatorio (sin él no se habilita términos); con una opción alcanza. Los
+    consentimientos de abajo cuentan cada uno."""
+    f = _form_nativo_de_prueba([
+        ("StaticText", _caja(27, 100, 198, 22, label="PREFERENCIA DE CONTACTO")),
+        ("Switch", _caja(27, 131, 45, 62, value="0")),
+        ("StaticText", _caja(27, 170, 30, 22, label="SMS")),
+        ("Switch", _caja(89, 131, 69, 62, value="0")),
+        ("StaticText", _caja(89, 170, 69, 22, label="WhatsApp")),
+        ("Switch", _caja(27, 234, 123, 62, value="0")),
+        ("StaticText", _caja(27, 273, 124, 22, label="Correo electrónico")),
+        ("Switch", _caja(13, 319, 391, 81, value="0")),
+        ("StaticText", _caja(64, 333, 321, 66, label="Acepto que he leído la política de privacidad")),
+        ("Switch", _caja(13, 424, 391, 81, value="0")),
+        ("StaticText", _caja(64, 437, 326, 67, label="Acepto que puedo ser contactado")),
+    ])
+    cbs = {c["etiqueta"]: c for c in f.escanear()["controles"] if c["tipo"] == "checkbox"}
+    assert cbs["SMS"]["grupo"] == cbs["Correo electrónico"]["grupo"] == "PREFERENCIA DE CONTACTO"
+    assert not cbs["Acepto que puedo ser contactado"].get("grupo")
+    assert all(f._pendiente(c) for c in cbs.values())
+    f._grupos_hechos.add("PREFERENCIA DE CONTACTO")     # se marcó SMS
+    assert not f._pendiente(cbs["WhatsApp"]) and not f._pendiente(cbs["Correo electrónico"])
+    assert f._pendiente(cbs["Acepto que puedo ser contactado"])
+
+
+def test_valor_plausible_para_orden_del_plan():
+    from osocio.utils.data_generator import valor_plausible_por_nombre
+    assert valor_plausible_por_nombre("Orden", "Orden").isdigit()

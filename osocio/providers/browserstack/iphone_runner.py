@@ -90,8 +90,20 @@ class FormFillerIphone(GenericCountryBase):
         self._current_form_data = form_data
         self._snapshot_ios: Dict[str, Dict] = {}
         self._tipo_doc_ios = ""
-        self._nativo.llenar(lambda tipo, etiqueta: self._valor_para_etiqueta(form_data, tipo, etiqueta),
-                      al_llenar=self._registrar_campo_ios)
+        def valor_para(tipo, etiqueta):
+            return self._valor_para_etiqueta(form_data, tipo, etiqueta)
+
+        registro = self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
+        # "Términos" deshabilitado hasta que todo es válido: si no se dejó marcar, algún
+        # opcional que quedó vacío por el 50% en realidad es obligatorio por JS (en la capa
+        # nativa no se ve). Se completan esos y se vuelve a recorrer el form.
+        if any(r["tipo"] == "checkbox" and r["quedo"] == "sigue en 0" for r in registro) \
+                and any(k.startswith("ios::") and not v for k, v in self._decision_opcionales.items()):
+            print("  'Términos' no se dejó marcar: se completan también los opcionales vacíos")
+            for clave in self._decision_opcionales:
+                if clave.startswith("ios::"):
+                    self._decision_opcionales[clave] = True
+            self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
         return self.screenshot_manager.fname("form", "completado", 1)
 
     def _config_para_ids(self, ids):

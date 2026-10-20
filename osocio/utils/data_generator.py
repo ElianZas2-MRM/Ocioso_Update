@@ -482,6 +482,8 @@ _PLAUSIBLES = (
     (("comment", "comentario", "mensaje", "message", "detalle", "observ", "pedido"),
      lambda: random.choice(_FRASES)),
     (("group", "grupo"), lambda: str(random.randint(1, 5))),
+    # Orden dentro del grupo (Plan Chevrolet, Argentina: "Grupo" / "Orden").
+    (("orden",), lambda: str(random.randint(1, 120))),
 )
 
 
