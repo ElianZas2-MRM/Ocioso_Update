@@ -2585,6 +2585,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             {"cta": "a[title='Tenho interesse'][data-gb-modal-id]", "modal": True},)},
     )
 
+    def _seguir_cta(self, cta):
+        """Entra por el CTA haciéndole click (lo que haría el usuario)."""
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+
     @staticmethod
     def _separar_nota_de_landing(landing_url):
         """La matriz a veces anota algo después de la URL: "https://… (dentro de un pop-up)".
@@ -2625,7 +2629,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     return
                 cta = random.choice(visibles)
                 detalle = (cta.get_attribute("data-dtm") or cta.get_attribute("title") or cta.text or "").strip()
-                self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+                if paso.get("modal"):
+                    self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+                else:
+                    self._seguir_cta(cta)
                 if paso.get("modal"):
                     # Abre un modal en la misma página: esperar a que aparezca un iframe nuevo.
                     antes = len(self.driver.find_elements(By.TAG_NAME, "iframe"))

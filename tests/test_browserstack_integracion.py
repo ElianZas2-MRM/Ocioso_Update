@@ -701,3 +701,11 @@ def test_iphone_lista_web_de_kits_elige_opciones_debajo_del_desplegable():
     elegidas = r.split(" | ")
     assert elegidas and set(elegidas) <= {"Aceite y Filtro", "Bujías", "Escobillas Delanteras"}
     assert tocados[-1] == "Seleccionar"            # al final se cierra la lista
+
+
+def test_iphone_lista_multiple_con_n_seleccionados_ya_esta_completa():
+    """Después de elegir kits, el desplegable muestra "3 seleccionados": no es "Seleccionar"."""
+    f = _form_nativo_de_prueba([])
+    assert not f._pendiente({"tipo": "select", "valor": "3 seleccionados", "etiqueta": "Kits"})
+    assert not f._pendiente({"tipo": "select", "valor": "2 selecionados", "etiqueta": "Kits"})
+    assert f._pendiente({"tipo": "select", "valor": "Seleccionar", "etiqueta": "Kits"})

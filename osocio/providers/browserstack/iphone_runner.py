@@ -55,6 +55,16 @@ class FormFillerIphone(GenericCountryBase):
     def _verificar_cta_eletricos_br(self, landing_url, form_url):
         return None if self._nativo else super()._verificar_cta_eletricos_br(landing_url, form_url)
 
+    def _seguir_cta(self, cta):
+        """iPhone: un CTA que es un link se sigue abriendo su href. Con el click, en landings
+        pesadas (BR sonic/acessorios, después del pre-scroll) Safari se quedaba sin memoria
+        al navegar y se caía la sesión. El href es el mismo destino: igual se verifica que
+        el CTA lleve a la página correcta."""
+        href = cta.get_attribute("href") or ""
+        if not href:
+            return super()._seguir_cta(cta)
+        self.driver.get(href)
+
     def _maybe_click_raq_cta(self, *urls):
         """RAQ de Brasil: antes del form hay una pantalla con cards y el CTA "Solicitar
         Contato" (#contact-by-form) que hay que tocar. En los navegadores se clickea por DOM

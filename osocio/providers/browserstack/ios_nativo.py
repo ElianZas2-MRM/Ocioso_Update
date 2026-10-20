@@ -31,6 +31,7 @@ Detalles de la capa nativa:
 """
 
 import random
+import re
 import time
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -710,6 +711,9 @@ class FormNativoIOS:
         if c["tipo"] == "texto":
             return not c["valor"].strip()
         if c["tipo"] == "select":
+            # "3 seleccionados" (lista múltiple con opciones elegidas) no es un placeholder.
+            if re.match(r"^\d+\s+sele", _norm(c["valor"])):
+                return False
             return _is_placeholder(c["valor"])
         if c["tipo"] == "radio":
             return c["etiqueta"] not in self._radios_hechos
