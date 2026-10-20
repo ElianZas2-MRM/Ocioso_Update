@@ -543,7 +543,52 @@ class CasillasYRadiosMixin:
         # así que si se marcó algo se hace una segunda para los que recién se habilitaron.
         if marked:
             marked += self._mark_required_checkboxes_pasada()
+        # Términos sigue deshabilitado: falta algo que el form exige por JS sin marcarlo con
+        # error. Si es un grupo de checkboxes de elección sin ninguna opción marcada
+        # (Colombia preferencia-de-canales: contact-channels), se marca una opción al azar
+        # de cada grupo y se vuelve a intentar.
+        if self._hay_terminos_deshabilitado() and self._marcar_una_opcion_por_grupo():
+            marked += self._mark_required_checkboxes_pasada()
         return marked
+
+    _JS_TERMINOS_DESHABILITADO = r"""
+        return Array.from(document.querySelectorAll('input[type=checkbox]')).some(function (cb) {
+            var t = ((cb.id || '') + ' ' + (cb.name || '')).toLowerCase();
+            return cb.disabled && !cb.checked && /term|privac|consent|acept/.test(t);
+        });"""
+
+    def _hay_terminos_deshabilitado(self):
+        try:
+            return bool(self.driver.execute_script(self._JS_TERMINOS_DESHABILITADO))
+        except Exception:
+            return False
+
+    _JS_UNA_OPCION_POR_GRUPO = r"""
+        var grupos = {}, out = [];
+        document.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+            if (!cb.name) return;
+            (grupos[cb.name] = grupos[cb.name] || []).push(cb);
+        });
+        Object.keys(grupos).forEach(function (n) {
+            var g = grupos[n].filter(function (cb) { return !cb.disabled && cb.getClientRects().length; });
+            if (g.length < 2 || g.some(function (cb) { return cb.checked; })) return;
+            var cb = g[Math.floor(Math.random() * g.length)];
+            cb.click();
+            if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); }
+            out.push(n + '=' + (cb.value || cb.id));
+        });
+        return out;"""
+
+    def _marcar_una_opcion_por_grupo(self):
+        try:
+            elegidas = self.driver.execute_script(self._JS_UNA_OPCION_POR_GRUPO) or []
+        except Exception as e:
+            print(f" Grupos de checkboxes: no crítico — {e}")
+            return False
+        if elegidas:
+            print(f" Términos deshabilitado: se marcó una opción de cada grupo vacío: {elegidas}")
+            time.sleep(0.5)
+        return bool(elegidas)
 
     def _mark_required_checkboxes_pasada(self):
         # Los errores del "click enviar vacío" siguen pintados al llegar acá; se vuelven a

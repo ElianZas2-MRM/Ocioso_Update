@@ -510,6 +510,16 @@ class MassiveFormFiller(GenericCountryBase):
         }
 
 
+
+def _url_de_celda(cell):
+    """La URL de una celda de la matriz. Si el texto no es una URL pero la celda tiene un
+    link (ej. Colombia: "N400 Cargo | Chevrolet" con link a /vans/n400-cargo), el link."""
+    texto = str(cell.value or "").strip()
+    if texto.lower().startswith("http"):
+        return texto
+    link = getattr(getattr(cell, "hyperlink", None), "target", None) or ""
+    return link.strip() if link.strip().lower().startswith("http") else texto
+
 def load_passed_results_from_wb(wb, custom_cols):
     """Devuelve {(url_live, url_secure): resultados} de las filas que pasaron LIMPIAS.
 
@@ -559,8 +569,8 @@ def load_passed_results_from_wb(wb, custom_cols):
             continue
             
         for r_idx in range(header_row_idx + 1, sheet.max_row + 1):
-            url_live = str(sheet.cell(row=r_idx, column=col_url_live).value or "").strip()
-            url_secure = str(sheet.cell(row=r_idx, column=col_url_secure).value or "").strip()
+            url_live = _url_de_celda(sheet.cell(row=r_idx, column=col_url_live))
+            url_secure = _url_de_celda(sheet.cell(row=r_idx, column=col_url_secure))
             if not url_live and not url_secure:
                 continue
                 
@@ -827,8 +837,8 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         # el workbook.
         filas = []
         for r_idx in range(header_row_idx + 1, sheet.max_row + 1):
-            url_live = str(sheet.cell(row=r_idx, column=col_indices["url_live"]).value or "").strip()
-            url_secure = str(sheet.cell(row=r_idx, column=col_indices["url_secure"]).value or "").strip()
+            url_live = _url_de_celda(sheet.cell(row=r_idx, column=col_indices["url_live"]))
+            url_secure = _url_de_celda(sheet.cell(row=r_idx, column=col_indices["url_secure"]))
             if not url_live and not url_secure:
                 continue
             filas.append({

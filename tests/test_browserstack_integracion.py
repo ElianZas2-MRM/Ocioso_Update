@@ -709,3 +709,17 @@ def test_iphone_lista_multiple_con_n_seleccionados_ya_esta_completa():
     assert not f._pendiente({"tipo": "select", "valor": "3 seleccionados", "etiqueta": "Kits"})
     assert not f._pendiente({"tipo": "select", "valor": "2 selecionados", "etiqueta": "Kits"})
     assert f._pendiente({"tipo": "select", "valor": "Seleccionar", "etiqueta": "Kits"})
+
+
+def test_revision_masiva_usa_el_link_si_la_celda_no_es_una_url():
+    """Colombia N400: la celda muestra "N400 Cargo | Chevrolet" y la URL está en el link."""
+    import openpyxl
+    from osocio.core.massive_check_runner import _url_de_celda
+    ws = openpyxl.Workbook().active
+    ws["A1"] = "N400 Cargo | Chevrolet"
+    ws["A1"].hyperlink = "https://www.chevrolet.com.co/vans/n400-cargo"
+    ws["A2"] = " https://www.chevrolet.com.co/eleccion-canal-comunicacion "
+    ws["A3"] = "sin link"
+    assert _url_de_celda(ws["A1"]) == "https://www.chevrolet.com.co/vans/n400-cargo"
+    assert _url_de_celda(ws["A2"]) == "https://www.chevrolet.com.co/eleccion-canal-comunicacion"
+    assert _url_de_celda(ws["A3"]) == "sin link"
