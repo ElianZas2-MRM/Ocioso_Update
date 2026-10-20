@@ -638,3 +638,66 @@ def test_landing_con_nota_de_popup_en_la_matriz():
     assert B._separar_nota_de_landing(url) == (url, "")
     assert B._regla_cta_de_landing(url + " (dentro de un pop-up)")["popup"] is True
     assert B._regla_cta_de_landing(url) is None
+
+
+def test_iphone_select_con_placeholder_en_el_label():
+    """AR gm_front/form/kits: "Kits de Mantenimiento" llega como Other sin value y con
+    label "Seleccionar". Es un select pendiente (sin él no se habilita términos)."""
+    f = _form_nativo_de_prueba([
+        ("Other", _caja(26, 207, 378, 64, label="Seleccionar")),
+        ("StaticText", _caja(36, 211, 118, 17, label="Kits de Mantenimiento")),
+    ])
+    sel = [c for c in f.escanear()["controles"] if c["tipo"] == "select"]
+    assert len(sel) == 1 and sel[0]["etiqueta"] == "Kits de Mantenimiento" and f._pendiente(sel[0])
+
+
+def test_iphone_switch_del_menu_de_la_landing_no_es_checkbox_del_form():
+    """BR tenho-interesse: el tab "Universo EV" del menú fijo de la landing es un Switch que
+    queda encima del form. No es un checkbox del form (tocarlo hace saltar la página)."""
+    import xml.etree.ElementTree as ET
+    from osocio.providers.browserstack.ios_nativo import FormNativoIOS
+    T = "XCUIElementType"
+    raiz = ET.Element(T + "Application")
+    web = ET.SubElement(raiz, T + "WebView")
+    ET.SubElement(web, T + "Switch", dict(x="0", y="59", width="430", height="60", value="0", label="Universo EV"))
+    form = ET.SubElement(web, T + "Other", dict(x="0", y="0", width="430", height="900"))
+    ET.SubElement(form, T + "Switch", dict(x="42", y="500", width="346", height="40", value="0"))
+    ET.SubElement(form, T + "StaticText", dict(x="80", y="505", width="290", height="30", label="Autorizo o uso dos dados"))
+    f = object.__new__(FormNativoIOS)
+    f._radios_hechos, f._grupos_hechos = set(), set()
+    f._fuente = lambda: raiz
+    f._contenedor_del_form = lambda r: form
+    f._visible = lambda e: True
+    cbs = [c for c in f.escanear()["controles"] if c["tipo"] == "checkbox"]
+    assert [c["etiqueta"] for c in cbs] == ["Autorizo o uso dos dados"]
+
+
+def test_iphone_lista_web_de_kits_elige_opciones_debajo_del_desplegable():
+    """AR gm_front/form/kits: al tocar "Kits de Mantenimiento" aparecen las opciones como
+    Other del ancho del desplegable, justo debajo. Se eligen entre esas, nunca el label de
+    otro campo ni el checkbox de términos."""
+    import xml.etree.ElementTree as ET
+    from osocio.providers.browserstack.ios_nativo import FormNativoIOS
+    T = "XCUIElementType"
+    raiz = ET.Element(T + "Application")
+    form = ET.SubElement(ET.SubElement(raiz, T + "WebView"), T + "Other", dict(x="0", y="0", width="430", height="900"))
+    trig = ET.SubElement(form, T + "Other", dict(x="36", y="487", width="358", height="60", label="Seleccionar"))
+    for i, t in enumerate(("Aceite y Filtro", "Bujías", "Escobillas Delanteras")):
+        ET.SubElement(form, T + "Other", dict(x="37", y=str(556 + 40 * i), width="356", height="40", label=t))
+    ET.SubElement(form, T + "Other", dict(x="46", y="491", width="111", height="15", label="Kits de Mantenimiento"))
+    ET.SubElement(form, T + "Switch", dict(x="70", y="578", width="325", height="37", value="0"))
+    f = object.__new__(FormNativoIOS)
+    f._fuente = lambda: raiz
+    f._contenedor_del_form = lambda r: form
+    f.log = lambda *a: None
+    tocados = []
+    f._tocar_centro = lambda e: tocados.append(e.get("label"))
+    import osocio.providers.browserstack.ios_nativo as m
+    dormir, m.time.sleep = m.time.sleep, (lambda s: None)
+    try:
+        r = f._elegir_en_lista_web({"e": trig}, None)
+    finally:
+        m.time.sleep = dormir
+    elegidas = r.split(" | ")
+    assert elegidas and set(elegidas) <= {"Aceite y Filtro", "Bujías", "Escobillas Delanteras"}
+    assert tocados[-1] == "Seleccionar"            # al final se cierra la lista

@@ -3556,9 +3556,58 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             print(f" Campos de texto no mapeados completados: {llenados}")
         return llenados > 0
 
+    def _llenar_listboxes_custom(self):
+        """Desplegables que no son <select>: un botón con aria-haspopup="listbox" que abre una
+        lista de [role=option] (AR gm_front/form/kits: "Kits de Mantenimiento", de selección
+        múltiple). Sin elegir, "términos" queda deshabilitado. Se eligen al azar: una
+        cantidad al azar si es múltiple, una si no; nunca un placeholder."""
+        try:
+            triggers = [b for b in self.driver.find_elements(By.CSS_SELECTOR, "button[aria-haspopup='listbox']")
+                        if b.is_displayed() and b.is_enabled()]
+        except Exception:
+            return 0
+        llenados = 0
+        for trig in triggers:
+            try:
+                resumen = (trig.text or "").strip()
+                if resumen and not self._is_placeholder_text(resumen):
+                    continue   # ya tiene algo elegido
+                nombre = trig.get_attribute("id") or trig.get_attribute("title") or "listbox"
+                if trig.get_attribute("aria-expanded") != "true":
+                    self.driver.execute_script("arguments[0].click();", trig)
+                    time.sleep(0.6)
+                lista = self.driver.execute_script(
+                    "var t = arguments[0], c = t.parentElement;"
+                    "for (var i = 0; i < 3 && c && !c.querySelector('[role=listbox]'); i++) c = c.parentElement;"
+                    "return c ? c.querySelector('[role=listbox]') : null;", trig)
+                if lista is None:
+                    continue
+                opciones = [o for o in lista.find_elements(By.CSS_SELECTOR, "[role=option]")
+                            if (o.text or "").strip() and not self._is_placeholder_text(o.text)
+                            and o.get_attribute("aria-disabled") != "true"]
+                if not opciones:
+                    continue
+                multiple = (lista.get_attribute("aria-multiselectable") or "").lower() == "true"
+                elegir = random.sample(opciones, random.randint(1, len(opciones))) if multiple else [random.choice(opciones)]
+                textos = []
+                for o in elegir:
+                    self.driver.execute_script("arguments[0].click();", o)
+                    textos.append((o.text or "").strip())
+                    time.sleep(0.3)
+                if trig.get_attribute("aria-expanded") == "true":
+                    self.driver.execute_script("arguments[0].click();", trig)   # cerrar la lista
+                    time.sleep(0.3)
+                self._record_field_value(nombre, " | ".join(textos))
+                print(f"🎲 {nombre} ({'múltiple' if multiple else 'lista'}) - elegidas: {', '.join(textos)}")
+                llenados += 1
+            except Exception as e:
+                print(f" Listbox no crítico — {e}")
+        return llenados
+
     def _auto_fill_unmapped_dropdowns(self, field_mapping=None):
         """Completa campos no mapeados: respeta lo pedido en el Excel, después IDs
         dinámicos, y sólo sortea cuando no hay ningún valor pedido."""
+        self._llenar_listboxes_custom()
         mapped_ids = self._get_mapped_select_ids(field_mapping)
         # Ids ya llenados/registrados por el mapping en ESTA fila. Cubre el caso en que el
         # id real del form difiere del de la config (ej. 'estimated-day' vs

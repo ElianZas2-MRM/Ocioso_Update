@@ -85,6 +85,12 @@ def _norm(s: str) -> str:
     return " ".join("".join(c for c in s if not unicodedata.combining(c)).split())
 
 
+def _es_placeholder(texto: str) -> bool:
+    """"Seleccionar", "Seleccione", "Escolha"… (no vacío): el texto de un select sin elegir."""
+    from osocio.core.campos_inferencia import _is_placeholder
+    return bool(texto) and len(texto) <= 40 and _is_placeholder(texto)
+
+
 def _num(e, k) -> int:
     try:
         return int(float(e.get(k) or 0))
@@ -137,7 +143,43 @@ class FormNativoIOS:
         antes = self._offset()
         self.d.execute_script("window.scrollBy(0, arguments[0]);", dy)
         time.sleep(0.7)
-        return self._offset() != antes
+        if self._offset() != antes:
+            return True
+        # La página no se mueve: el form puede estar en un modal con scroll propio (BR
+        # novo-trailblazer, "Tenho interesse"). Se scrollea el primer ancestro del iframe que
+        # tenga scroll vertical (es la landing, así que acá sí hay DOM).
+        try:
+            movio = self.d.execute_script(
+                "var e = arguments[0].parentElement, dy = arguments[1];"
+                "while (e && e !== document.body) {"
+                "  var s = getComputedStyle(e).overflowY;"
+                "  if ((s === 'auto' || s === 'scroll') && e.scrollHeight > e.clientHeight + 2) {"
+                "    var a = e.scrollTop; e.scrollTop = a + dy; return e.scrollTop !== a; }"
+                "  e = e.parentElement; }"
+                "return false;", self.iframe, dy)
+            if movio:
+                time.sleep(0.7)
+            return bool(movio)
+        except Exception:
+            return False
+
+    def _arrastrar_form(self) -> bool:
+        """La página ya no baja pero el form sigue (está en un modal que scrollea por su
+        cuenta, ej. BR novo-trailblazer "Tenho interesse"): arrastrar con el dedo sobre el
+        form. True si los controles se movieron."""
+        self._nativo()
+        try:
+            antes = [c["y"] for c in self.escanear()["controles"]]
+            alto = self._alto_pantalla()
+            self.d.execute_script("mobile: dragFromToForDuration", {
+                "fromX": 215, "fromY": int(alto * 0.62), "toX": 215, "toY": int(alto * 0.32), "duration": 0.6})
+            time.sleep(0.8)
+            despues = [c["y"] for c in self.escanear()["controles"]]
+            return bool(antes) and antes != despues
+        except Exception:
+            return False
+        finally:
+            self._webview()
 
     def ir_al_form(self):
         self._webview()
@@ -235,14 +277,20 @@ class FormNativoIOS:
                 con_letras = ejemplo if any(ch.isalpha() for ch in ejemplo) else ""
                 controles.append({"tipo": "texto", "e": e, "valor": valor,
                                   "etiqueta": etiqueta_de(e) or con_letras or etiqueta_arriba(e) or ejemplo})
-            elif tag == "Other" and visible and (e.get("value") or "").strip() \
-                    and not (e.get("label") or "").strip() and 30 <= _num(e, "height") <= 100:
-                valor = e.get("value").strip()
+            elif tag == "Other" and visible and 30 <= _num(e, "height") <= 100 and (
+                    ((e.get("value") or "").strip() and not (e.get("label") or "").strip())
+                    # Select sin opción elegida que trae el placeholder en el label y no en el
+                    # value (AR gm_front/form/kits: "Kits de Mantenimiento" → "Seleccionar").
+                    or (e.get("value") is None and _es_placeholder((e.get("label") or "").strip()))):
+                valor = (e.get("value") or e.get("label") or "").strip()
                 etiqueta = etiqueta_de(e, excluir=valor) or etiqueta_arriba(e)
                 if etiqueta:   # sin label (adentro o justo arriba) no es un select del form
                     controles.append({"tipo": "select", "e": e, "valor": valor, "etiqueta": etiqueta,
                                       "habilitado": e.get("enabled") == "true"})
-            elif tag == "Switch" and (contenedor is None or _adentro(e, contenedor)):
+            # Por pertenencia al árbol del form, no por posición: un tab del menú fijo de la
+            # landing ("Universo EV" en BR tenho-interesse) también es un Switch y queda
+            # ENCIMA del form; tocarlo hace saltar la página.
+            elif tag == "Switch" and (contenedor is None or id(e) in del_form):
                 controles.append(self._checkbox(e, estaticos))
             elif tag == "Button" and visible and _norm(_texto(e)).startswith(kw_enviar):
                 enviar = e
@@ -432,7 +480,51 @@ class FormNativoIOS:
         ruedas = self.d.find_elements(By.XPATH, f"//{_T}PickerWheel")
         if ruedas:
             return self._elegir_en_ruedita(ruedas[0], opcion)
-        return self._elegir_en_menu(opcion)
+        r = self._elegir_en_menu(opcion)
+        if r == "no abrió ni ruedita ni menú":
+            r = self._elegir_en_lista_web(c, opcion) or r
+        return r
+
+    def _elegir_en_lista_web(self, c, opcion: Optional[str]) -> str:
+        """Desplegable hecho con botones (role=listbox / role=option, AR gm_front/form/kits:
+        "Kits de Mantenimiento"): al tocarlo aparecen las opciones como Button debajo, dentro
+        del form. Se eligen al azar (una cantidad al azar: puede ser de selección múltiple)
+        y se vuelve a tocar el desplegable para cerrarlo. "" si no apareció ninguna lista."""
+        from osocio.core.campos_inferencia import _is_placeholder
+        y0 = _num(c["e"], "y") + _num(c["e"], "height")
+        x0, ancho = _num(c["e"], "x"), _num(c["e"], "width")
+        kw_siguiente, kw_enviar = _kw_botones()
+        raiz = self._fuente()
+        caja = self._contenedor_del_form(raiz)
+        # Cada opción es una fila (Other o Button, sin value) del ancho del desplegable,
+        # justo debajo de él: "Aceite y Filtro", "Bujías"... Los labels de los campos son
+        # más bajos (~15 px) y los selects tienen value.
+        opciones = [b for b in (caja.iter() if caja is not None else [])
+                    if b.tag in (f"{_T}Button", f"{_T}Other", f"{_T}Cell") and b.get("value") is None
+                    and _texto(b) and not _is_placeholder(_texto(b))
+                    and 28 <= _num(b, "height") <= 70 and abs(_num(b, "x") - x0) <= 15
+                    and _num(b, "width") >= ancho * 0.8
+                    and 0 <= _num(b, "y") - y0 <= 400
+                    and not _norm(_texto(b)).startswith(kw_enviar + kw_siguiente)]
+        # Un mismo texto puede venir dos veces (contenedor y botón): una opción por texto.
+        unicas = {}
+        for b in opciones:
+            unicas.setdefault(_texto(b), b)
+        opciones = list(unicas.values())
+        if not opciones:
+            return ""
+        if opcion:
+            elegir = [b for b in opciones if _norm(_texto(b)) == _norm(opcion)] or [random.choice(opciones)]
+        else:
+            elegir = random.sample(opciones, random.randint(1, len(opciones)))
+        textos = [_texto(b) for b in elegir]
+        self.log(f"      lista: {len(opciones)} opciones {[_texto(b) for b in opciones][:6]}")
+        for b in sorted(elegir, key=lambda b: -_num(b, "y")):   # de abajo hacia arriba
+            self._tocar_centro(b)
+            time.sleep(0.4)
+        self._tocar_centro(c["e"])   # cerrar la lista
+        time.sleep(0.6)
+        return " | ".join(textos)
 
     def _elegir_en_ruedita(self, rueda, opcion: Optional[str]) -> str:
         try:
@@ -705,7 +797,7 @@ class FormNativoIOS:
             # Nada pendiente a la vista: si ya se ve Enviar, terminó el form; si no, bajar.
             if enviar is not None and _num(enviar, "y") <= _Y_MAX:
                 break
-            if not self._scroll_por(250):
+            if not self._scroll_por(250) and not self._arrastrar_form():
                 break
         else:
             self.log(f"    ⚠ se cortó el recorrido a los {limite_seg}s")
@@ -812,7 +904,7 @@ class FormNativoIOS:
                         return True
             finally:
                 self._webview()
-            if not self._scroll_por(200):
+            if not self._scroll_por(200) and not self._arrastrar_form():
                 break
         return False
 
