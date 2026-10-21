@@ -723,3 +723,19 @@ def test_revision_masiva_usa_el_link_si_la_celda_no_es_una_url():
     assert _url_de_celda(ws["A1"]) == "https://www.chevrolet.com.co/vans/n400-cargo"
     assert _url_de_celda(ws["A2"]) == "https://www.chevrolet.com.co/eleccion-canal-comunicacion"
     assert _url_de_celda(ws["A3"]) == "sin link"
+
+
+def test_iphone_lista_multiple_bootstrap_select():
+    """Chile retail-colorado "¿CUÁLES SON TUS PASATIEMPOS?": el select real es un Other
+    angosto con value "0 Items" y se toca el Button de al lado. Es un control pendiente; con
+    algo elegido ("Campo", "1 Item") ya no."""
+    f = _form_nativo_de_prueba([
+        ("StaticText", _caja(52, 249, 209, 20, label="¿CUÁLES SON TUS PASATIEMPOS?")),
+        ("Other", _caja(215, 284, 2, 56, value="0 Items")),
+        ("Button", _caja(74, 300, 283, 25, label="Elige al menos una opción.")),
+    ])
+    multi = [c for c in f.escanear()["controles"] if c["tipo"] == "multi"]
+    assert len(multi) == 1 and multi[0]["etiqueta"] == "¿CUÁLES SON TUS PASATIEMPOS?"
+    assert multi[0]["cerrar"] is not None and f._pendiente(multi[0])
+    assert not f._pendiente(dict(multi[0], valor="Campo", elegidos="1 Item"))
+    assert not f._pendiente(dict(multi[0], valor="3 seleccionados", elegidos="0 Items"))

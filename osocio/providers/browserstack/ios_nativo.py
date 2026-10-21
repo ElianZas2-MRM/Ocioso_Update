@@ -304,6 +304,7 @@ class FormNativoIOS:
         radios = [(e, s) for e, s in radios if e.get("value") is not None or any(
             o is not e and abs(_num(o, "y") - _num(e, "y")) <= 5 for o, _ in sin_estado)]
         controles += self._grupos_de_radios(radios, estaticos)
+        controles += self._listas_multiples(todos, estaticos_form)
         # Campo partido en dos cajas en la misma fila (ej. Celular: "+56" | número): la caja
         # sin label toma el de la caja de su izquierda.
         for c in controles:
@@ -344,6 +345,56 @@ class FormNativoIOS:
             out.append(c)
         textos = [{"texto": _texto(s), "x": _num(s, "x"), "y": _num(s, "y")} for s in estaticos]
         return {"controles": out, "enviar": enviar, "siguiente": siguiente, "textos": textos}
+
+    @staticmethod
+    def _listas_multiples(todos, estaticos):
+        """<select multiple> con bootstrap-select (Chile retail-colorado, "¿Cuáles son tus
+        pasatiempos?"): el select real es un Other angosto con value "0 Items" y lo que se
+        toca es el Button de al lado ("Elige al menos una opción."). Un control por lista:
+        dónde tocar para abrirla, dónde tocar para cerrarla (su título) y lo que muestra."""
+        out = []
+        botones = [b for b in todos if b.tag == f"{_T}Button" and _texto(b)]
+        for e in todos:
+            if e.tag != f"{_T}Other" or not re.match(r"^\d+\s+items?$", (e.get("value") or "").strip(), re.I):
+                continue
+            y = _num(e, "y") + _num(e, "height") // 2
+            boton = min((b for b in botones if abs(_num(b, "y") + _num(b, "height") // 2 - y) <= 30),
+                        key=lambda b: abs(_num(b, "y") - _num(e, "y")), default=None)
+            if boton is None:
+                continue
+            arriba = [s for s in estaticos if 0 <= _num(boton, "y") - (_num(s, "y") + _num(s, "height")) <= 70
+                      and _num(s, "x") <= _num(boton, "x") + 10 and len(_texto(s)) > 2]
+            titulo = max(arriba, key=lambda s: _num(s, "y"), default=None)
+            out.append({"tipo": "multi", "e": boton, "select": e,
+                        "valor": _texto(boton), "elegidos": (e.get("value") or "").strip(),
+                        "etiqueta": _texto(titulo) if titulo is not None else _texto(boton),
+                        "cerrar": None if titulo is None else
+                        (_num(titulo, "x") + 20, _num(titulo, "y") + _num(titulo, "height") // 2)})
+        return out
+
+    # Filas de la lista de bootstrap-select debajo del botón (en puntos): la primera opción
+    # queda ~71 pt debajo del borde superior del botón y cada fila mide ~32 pt. La lista no se
+    # puede leer mientras está abierta (leer la capa nativa ahí hace caer a Safari), así que
+    # se toca por posición, entre las primeras opciones, que toda lista tiene.
+    _MULTI_PRIMERA, _MULTI_FILA, _MULTI_FILAS = 71, 32.2, 4
+
+    def _elegir_multi(self, c) -> str:
+        """Abre la lista, toca una cantidad al azar de opciones por posición, la cierra tocando
+        el título del campo y devuelve lo que muestra el campo después."""
+        b = c["e"]
+        bx, by = _num(b, "x") + 40, _num(b, "y")
+        self.d.execute_script("mobile: tap", {"x": bx, "y": by + _num(b, "height") // 2})
+        time.sleep(1.5)
+        filas = random.sample(range(self._MULTI_FILAS), random.randint(1, 3))
+        for i in sorted(filas):
+            self.d.execute_script("mobile: tap", {"x": bx, "y": int(by + self._MULTI_PRIMERA + self._MULTI_FILA * i)})
+            time.sleep(0.6)
+        cx, cy = c["cerrar"] or (bx, by - 40)
+        self.d.execute_script("mobile: tap", {"x": cx, "y": cy})
+        time.sleep(1.2)
+        ahora = next((n for n in self.escanear()["controles"]
+                      if n["tipo"] == "multi" and n["etiqueta"] == c["etiqueta"]), None)
+        return ahora["valor"] if ahora is not None else "(sin verificar)"
 
     @staticmethod
     def _opcion_de_radio(e, estaticos):
@@ -717,6 +768,11 @@ class FormNativoIOS:
             return _is_placeholder(c["valor"])
         if c["tipo"] == "radio":
             return c["etiqueta"] not in self._radios_hechos
+        if c["tipo"] == "multi":
+            if re.match(r"^\d+\s+sele", _norm(c["valor"])):   # "3 seleccionados"
+                return False
+            return c.get("elegidos", "").startswith("0") or _is_placeholder(c["valor"]) \
+                or "al menos" in _norm(c["valor"])
         # Checkbox: se marca si es de términos/privacidad o si es obligatorio (* en el label),
         # igual que la app ("se marca si es obligatorio o de términos").
         if self._es_eleccion_de_grupo(c) and c["grupo"] in self._grupos_hechos:
@@ -835,6 +891,10 @@ class FormNativoIOS:
             if c["tipo"] == "radio":
                 reg["pedido"] = pedido or "(al azar)"
                 reg["quedo"] = self._elegir_radio(c, pedido)
+                return reg
+            if c["tipo"] == "multi":
+                reg["pedido"] = "(al azar)"
+                reg["quedo"] = self._elegir_multi(c)
                 return reg
             if c["tipo"] == "texto":
                 reg["pedido"] = pedido or ""
