@@ -5017,7 +5017,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     result_text = result_text_2
                                     ty_page_name = ty_page_name_2
                                 elif isinstance(result_text_2, str) and result_text_2.startswith("ERROR_EVENT_ID:"):
-                                    result_text = "Error event_id: formulario no pudo enviarse por falta de event_id (2 intentos fallidos)"
+                                    result_text = ("Error event_id: lead NO enviado — el sitio mostró el cartel de error "
+                                                   "de event_id al enviar, también en el reintento (2 intentos)")
                                     ty_page_name = None
                                     try:
                                         self.driver.switch_to.default_content()
@@ -5027,11 +5028,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     except Exception as _cap_e:
                                         print(f"Error capturando evidencia event_id: {_cap_e}")
                                 else:
-                                    result_text = (result_text_2 or "Fallo") + " (intento 2 tras error event_id)"
+                                    result_text = ("Error event_id: lead NO enviado — el sitio mostró el cartel de error "
+                                                   f"de event_id al enviar y el reintento falló: {result_text_2 or 'sin detalle'}")
                                     ty_page_name = ty_page_name_2
                             except Exception as _ev_e:
                                 print(f"  Error en retry event_id: {_ev_e}")
-                                result_text = f"Error event_id: fallo en reintento — {_ev_e}"
+                                result_text = ("Error event_id: lead NO enviado — el sitio mostró el cartel de error "
+                                               f"de event_id al enviar y no se pudo reintentar: {_ev_e}")
 
                         # 5c-1. Retry rápido: recargar SOLO el iframe del formulario (no toda la
                         #       landing), rellenar de nuevo y reenviar, quedando posicionado en el form.
