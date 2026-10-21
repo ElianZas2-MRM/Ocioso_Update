@@ -187,10 +187,39 @@ Qué hace con cada cosa, **con la lógica de la app** (no reglas propias):
 - **Error de event_id**: textos de `BaseFormFiller._EVENT_ID_PATTERNS`. **Solo en forms
   `gm_forms`** (en `gm_front`/`gm_frontend` no ocurre) se reintenta una vez como en los
   navegadores locales: esperar que el form se recargue solo, volver a llenar y reenviar.
-  Si falla de nuevo: *"Error event_id: formulario no pudo enviarse por falta de event_id
-  (2 intentos fallidos)"*.
+  Si falla de nuevo, el Excel dice *"Error event_id: lead NO enviado — …"* y por qué falló
+  el reintento.
 - **Sin TY**: deja en el log qué textos, campos y botones quedaron en el form, para poder
   revisar y reintentar la corrida.
+
+Agregado en el chequeo pre-merge (todas las landings de la matriz, sin enviar):
+
+- **Etiquetas**: se ignoran los íconos (la flechita de los selects) y los textos de
+  ejemplo sin letras ("12345678-9", "00123456789"); gana el label de arriba. Un campo
+  partido en dos cajas (Celular "+56" | número) son dos controles y el número toma el
+  label de la de al lado. Los labels flotantes no cuentan como radios.
+- **Contenedor del form**: si el iframe no tiene `title`, es el ancestro común más chico
+  de los campos (antes se tomaban textos del menú de la landing). Los checkboxes cuentan
+  sólo si están en ese árbol (el tab "Universo EV" del menú fijo de la landing es un
+  `Switch` que queda encima del form).
+- **Selects**: si el toque no abre (tapado por el menú fijo), se centra y se reintenta; al
+  elegir un padre se vuelven a probar los hijos que esperaban (Provincia → Ciudad →
+  Concesionario en Argentina). Un select puede traer el placeholder en el `label` en vez
+  del `value`. Las listas hechas con botones (`role=listbox`, AR "Kits de Mantenimiento")
+  aparecen como filas debajo del desplegable. "3 seleccionados" cuenta como completo.
+- **Listas `bootstrap-select`** (CL "Pasatiempos"): leer la capa nativa con la lista
+  abierta hace caer a Safari ("This webpage was reloaded…"). Se abre, se tocan opciones
+  por posición (1 a 4 al azar, entre las primeras) y se cierra tocando el título del campo
+  antes de volver a leer.
+- **Radios sin estado** (Sí / No sin `value`): una opción al azar, se toca una vez.
+- **Grupos de checkboxes con el título afuera** (CO "Preferencia de contacto"): con una
+  opción alcanza. Si términos no se deja marcar, se completan también los opcionales
+  vacíos y se marcan los demás checkboxes (acdelco: `product_info` habilita `terms`).
+- **Modales con scroll propio** (BR `novo-trailblazer`, "Tenho interesse"): si la página no
+  se mueve, se scrollea el contenedor con scroll del iframe y, si tampoco, se arrastra.
+- **CTAs de landing que son links**: se siguen por su `href` (con el click, en landings
+  pesadas como BR `sonic/acessorios`, Safari se quedaba sin memoria y se caía la sesión).
+- **Nunca "test"** en un campo de texto: el valor pasa por `_sanitize_field_value`.
 
 Detalles técnicos que costaron encontrar:
 
@@ -226,7 +255,7 @@ python -m osocio.providers.browserstack.prueba_conexion --url https://... --form
 ```
 
 Tests sin red: `pytest tests/test_estructura_browserstack.py tests/test_browserstack_integracion.py`.
-**En pruebas, máximo 2 sesiones de BrowserStack a la vez.**
+**En pruebas, máximo 3 sesiones de BrowserStack a la vez** (la cuenta se comparte con otros equipos).
 
 ## Resultados hasta ahora
 
@@ -244,6 +273,12 @@ app (`runner.run`): Colombia `raq` en iPhone, Android y Mac.
 | Argentina `verano-testdrive` (layout default) | gm_front | ✅ | — | ✅ |
 | Ecuador `evento-autoshow-onstar` y `raq` ("C.I.") | gm_front | ✅ | — | ✅ |
 | Chile `gm-envolve` | gm_forms | ✅ llena todo y marca contacto + términos (sin envío) | — | ✅ (sin envío) |
+
+**Chequeo pre-merge (21/10/2026), sin enviar:** todas las landings de la matriz
+*GM Forms - 2026* que no están en OFF (373 filas, 9 mercados). Chrome: todas, 337 OK; el
+resto son fallas del sitio o de la matriz (404, redirects, iframes vacíos, forms que no
+coinciden con la matriz) o casos fuera de alcance. iPhone: todas; las que fallaban se
+arreglaron y las 41 re-chequeadas con el código final pasan.
 
 ## Plan de BrowserStack
 
@@ -314,11 +349,22 @@ Lo que se mantiene a propósito: las programaciones y selecciones guardadas con 
 - [x] Código común fuera de `lambdatest_mac/` (`core/campos_inferencia.py`).
 - [x] iPhone con las reglas de datos de la app (`-`, Excel antes que IDs dinámicos,
       documentos de Brasil, no mapeados).
-- [ ] Probar desde la app (UI) los tres dispositivos, un T3/CDC de Brasil y "Reintentar
-      fallidos".
+- [x] Probar desde la app (UI) los tres dispositivos y "Reintentar fallidos".
 - [x] **Optimizar el motor en remoto**: ~850 → ~320 comandos por lead (ver "Velocidad").
-- [ ] Más mercados en iPhone, sobre todo Perú (tipo de documento) y un form en pasos.
-- [ ] iPhone: columnas SI/NO de checkboxes opcionales (la capa nativa no ve el `name` del
-      checkbox) y envío vacío inicial.
-- [ ] Probar el `.exe` en otra PC con las credenciales de otra persona.
+- [x] Todos los mercados en iPhone (chequeo pre-merge, incluido Perú con tipo de documento
+      y forms en pasos).
 - [x] Retirar LambdaTest (ver "Si hace falta algo de LambdaTest").
+
+**Para otros PRs** (cada uno en su rama, después de mergear este):
+
+- iPhone: columnas SI/NO de checkboxes opcionales y `name` de grupos de radios desde el
+  Excel (la capa nativa no ve el `name`).
+- BR `solicitar-proposta`: validar el form AEM (embebido, sin iframe) por su ruta.
+- Rotación de dealers: concesionario / ciudad / región al azar sin repetirse en las
+  corridas del día, salvo que sea la única opción o lo pida el Excel.
+
+**Fuera del código:**
+
+- Pedir acceso a BrowserStack Automate para cada persona del equipo de testing de forms.
+- Android: correr Brasil.
+- Probar el `.exe` en otra PC con las credenciales de otra persona.
