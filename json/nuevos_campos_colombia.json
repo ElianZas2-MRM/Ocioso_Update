@@ -1,6 +1,6 @@
 {
   "pais": "Colombia",
-  "ultima_deteccion": "2026-09-15T09:31:16",
+  "ultima_deteccion": "2026-10-21T07:47:27",
   "campos_nuevos": [
     {
       "id": "NOMBRE",
@@ -406,6 +406,34 @@
       "type": "select",
       "required": false,
       "label": "purchase_requirement",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "type-of-company",
+      "type": "select",
+      "required": true,
+      "label": "type-of-company",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "current-fleet-size",
+      "type": "select",
+      "required": true,
+      "label": "current-fleet-size",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "purchase-date",
+      "type": "select",
+      "required": true,
+      "label": "purchase-date",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "purchase-requirements",
+      "type": "select",
+      "required": true,
+      "label": "purchase-requirements",
       "origen": "runtime_discovery"
     }
   ]

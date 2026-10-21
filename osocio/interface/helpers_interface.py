@@ -1428,12 +1428,16 @@ def _label_navegador(navegador, viewport):
         "chrome": "Chrome",
         "firefox": "Firefox",
         "edge": "Edge",
+        # Resultados viejos que todavía puedan andar dando vueltas en un mail pendiente.
         "lambdatest_mac": "LambdaTest Mac",
         "lambdatest_android": "LambdaTest Android",
     }
+    from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS
+    nav_map.update({d.navegador: f"BrowserStack {d.etiqueta[:-3]}" for d in DISPOSITIVOS_BS})
     vp_map = {
         "desktop": "Desktop",
         "mobile": "Mobile",
+        "iphone": "iPhone 14 Pro Max (Safari)",
         "mac": "Mac (Safari)",
         "android": "Android (Chrome)",
         "fullscreen": "Desktop",

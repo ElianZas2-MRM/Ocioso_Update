@@ -83,8 +83,8 @@ class FormulariosAEMMixin:
         # Modo rellenado parcial
         if bool(self.config.get("solo_verificar_visual", False) or self.config.get("no_enviar_lead", False)):
             fd = {
-                "firstname": fd.get("firstname") or "Test",
-                "lastname": fd.get("lastname") or "User"
+                "firstname": fd.get("firstname") or "Prueba",
+                "lastname": fd.get("lastname") or "Prueba"
             }
         else:
             # Asegurar cpf/cnpj/cep desde __by_id (por si el normalizado no los trae)

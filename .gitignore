@@ -27,6 +27,9 @@ Thumbs.db
 
 # Credenciales sensibles - no versionar
 lambdatest_credentials.txt
+browserstack_credentials.txt
+# Config del SDK de BrowserStack: lleva userName/accessKey en claro
+browserstack.yml
 config_global.json
 
 # Excels reales de clientes (rankings/listados de dealers) - no versionar

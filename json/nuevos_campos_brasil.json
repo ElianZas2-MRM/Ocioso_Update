@@ -1,6 +1,6 @@
 {
   "pais": "Brasil",
-  "ultima_deteccion": "2026-09-15T12:13:28",
+  "ultima_deteccion": "2026-10-19T16:37:15",
   "campos_nuevos": [
     {
       "id": "categories",
@@ -406,6 +406,20 @@
       "type": "text",
       "required": false,
       "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "first_name",
+      "type": "text",
+      "required": true,
+      "label": "first_name",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "last_name",
+      "type": "text",
+      "required": true,
+      "label": "last_name",
       "origen": "runtime_discovery"
     }
   ]

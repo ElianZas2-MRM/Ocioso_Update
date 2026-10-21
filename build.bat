@@ -108,8 +108,8 @@ for %%D in (resultados temporales) do (
 )
 
 REM Copiar json/ sin los archivos de estado del scheduler, la config personal del
-REM Comparador Dealers, ni config_global.json (tiene el email y la access key de
-REM LambdaTest en texto plano) — el portable arranca limpio, sin datos de otra PC
+REM Comparador Dealers, ni config_global.json (tiene el email y datos personales en
+REM texto plano) — el portable arranca limpio, sin datos de otra PC
 if exist ".\json" (
     robocopy ".\json" "%PORTABLE_DIR%\json" /E /NFL /NDL /NJH /NJS /NC /NS /XF programacion_test.json programacion_leads.json programacion_masivo.json scheduler_triggered.json dealer_comparator_settings.json config_global.json ejecutor_autonomo.log >nul
     if errorlevel 8 goto :error
@@ -130,12 +130,14 @@ if exist "%PORTABLE_DIR%\json\scheduler_triggered.json" del /f /q "%PORTABLE_DIR
     echo start "" "%APP_NAME%.exe"
 ) > "%PORTABLE_DIR%\Abrir_Osocio_Form_Automation.bat"
 
-REM Crear plantilla de credenciales si no existe en el portable
-if not exist "%PORTABLE_DIR%\lambdatest_credentials.txt" (
-    echo # LambdaTest credentials - completar con tus datos> "%PORTABLE_DIR%\lambdatest_credentials.txt"
-    echo username=TU_USUARIO>> "%PORTABLE_DIR%\lambdatest_credentials.txt"
-    echo access_key=TU_ACCESS_KEY>> "%PORTABLE_DIR%\lambdatest_credentials.txt"
-    echo Plantilla lambdatest_credentials.txt creada en portable.
+REM Crear plantilla de credenciales de BrowserStack si no existe en el portable. Cada
+REM persona usa SU usuario y access key (tiene que estar invitada a la organizacion de
+REM BrowserStack): se ven en https://www.browserstack.com/accounts/settings
+if not exist "%PORTABLE_DIR%\browserstack_credentials.txt" (
+    echo # BrowserStack - completar con TU usuario y access key ^(Account ^> Settings^)> "%PORTABLE_DIR%\browserstack_credentials.txt"
+    echo username=TU_USUARIO>> "%PORTABLE_DIR%\browserstack_credentials.txt"
+    echo access_key=TU_ACCESS_KEY>> "%PORTABLE_DIR%\browserstack_credentials.txt"
+    echo Plantilla browserstack_credentials.txt creada en portable.
 )
 
 REM Se borra el .exe crudo de PyInstaller (ya fue copiado adentro del portable) y la carpeta

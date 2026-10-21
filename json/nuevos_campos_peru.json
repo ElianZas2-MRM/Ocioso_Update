@@ -1,6 +1,6 @@
 {
   "pais": "Peru",
-  "ultima_deteccion": "2026-09-02T14:21:59",
+  "ultima_deteccion": "2026-10-19T16:27:48",
   "campos_nuevos": [
     {
       "id": "cc_date",
@@ -372,6 +372,13 @@
       "type": "select",
       "required": false,
       "label": "estimated-mileage",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "business-category",
+      "type": "select",
+      "required": true,
+      "label": "business-category",
       "origen": "runtime_discovery"
     }
   ]

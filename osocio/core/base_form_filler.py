@@ -46,7 +46,7 @@ from osocio.core.form_filler.ids_dinamicos import IdsDinamicosMixin
 from osocio.core.form_filler.por_mercado import ReglasPorMercadoMixin
 from osocio.core.form_filler.aem import FormulariosAEMMixin
 from osocio.core.form_filler.navegacion import NavegacionDOMMixin
-from osocio.core.screenshot_manager import ScreenshotManager
+from osocio.core.screenshot_manager import ScreenshotManager, ScreenshotManagerNulo
 from osocio.core.browser.browser_actions import BrowserActions
 
 from osocio.utils.field_id_aliases import VISID_ID_ALIASES
@@ -99,6 +99,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         "ocorreu um problema ao enviar o formulario neste momento",
         "lo sentimos, ocurrió",
         "lo siento, ocurrió",
+        # Cartel nuevo de Brasil (gm_forms): "A bola bateu na trave, mas seguimos na
+        # estrada. Não conseguimos concluir seu envio neste momento..."
+        "não conseguimos concluir seu envio",
+        "nao conseguimos concluir seu envio",
     )
 
     # Marcadores de URL de los formularios GM hechos por DEV (NO los AEM): el iframe del
@@ -117,9 +121,98 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return ""
 
+    @staticmethod
+    def _diferencia_url_form(encontrada, esperada):
+        """(¿es el mismo form?, [diferencias]) entre la URL del iframe y la del Excel.
+
+        Mismo form = misma dirección sin importar mayúsculas, tildes, codificación (%20),
+        la "/" final ni los parámetros (?model=...). Si no son idénticas, las diferencias
+        dicen en qué difieren: el lead cuenta como OK, pero la fila queda ámbar para que
+        se corrija la URL esperada.
+        """
+        import unicodedata
+        from urllib.parse import unquote
+        a, b = (encontrada or "").strip(), (esperada or "").strip()
+        if not a or not b:
+            return False, []
+        if a == b:
+            return True, []
+
+        def partes(u):
+            base, _, query = u.split("#")[0].partition("?")
+            return base, query
+
+        def sin_tildes(u):
+            u = unicodedata.normalize("NFKD", u)
+            return "".join(c for c in u if not unicodedata.combining(c))
+
+        (ba, qa), (bb, qb) = partes(a), partes(b)
+        difs = []
+        if ba.endswith("/") != bb.endswith("/"):
+            difs.append("barra final")
+        ba, bb = ba.rstrip("/"), bb.rstrip("/")
+        if (ba, qa) != (bb, qb) and (unquote(ba), unquote(qa)) == (unquote(bb), unquote(qb)):
+            difs.append("codificación (%20…)")
+        ba, bb, qa, qb = unquote(ba), unquote(bb), unquote(qa), unquote(qb)
+        if ba != bb and ba.lower() == bb.lower():
+            difs.append("mayúsculas")
+        elif ba.lower() != bb.lower() and sin_tildes(ba.lower()) == sin_tildes(bb.lower()):
+            difs.append("tildes")
+        mismo = sin_tildes(ba.lower()) == sin_tildes(bb.lower())
+        # Parámetros: sólo cuentan los que pide el Excel. Los que agrega la landing por su
+        # cuenta (utm_, gclid... que el iframe hereda) no son un error de la URL esperada.
+        from urllib.parse import parse_qsl
+        pedidos = dict(parse_qsl(qb, keep_blank_values=True))
+        tiene = dict(parse_qsl(qa, keep_blank_values=True))
+        if any(tiene.get(k) != v for k, v in pedidos.items()):
+            iguales_sin_mayus = all(
+                any(k2.lower() == k.lower() and v2.lower() == v.lower() for k2, v2 in tiene.items())
+                for k, v in pedidos.items())
+            difs.append("mayúsculas en los parámetros" if iguales_sin_mayus else "parámetros (?…)")
+        return mismo, difs
+
+    @classmethod
+    def _mismas_urls_de_form(cls, encontrada, esperada):
+        """¿Es el mismo form? (criterio de la columna "Form coincide")."""
+        return cls._diferencia_url_form(encontrada, esperada)[0]
+
     def _is_gm_form_src(self, src):
         s = (src or "").lower()
         return any(m in s for m in self.GM_FORM_URL_MARKERS)
+
+    # src y "se ve" de todos los iframes en UN viaje al navegador. Uno por uno eran dos
+    # comandos por iframe, y en BrowserStack is_displayed() (un script pesado) tarda ~4 s
+    # en Safari: con los iframes de una landing (form, ads, trackers) eran ~20 s por lead.
+    _JS_SRC_Y_VISIBILIDAD = """
+        return arguments[0].map(function (f) {
+            try {
+                var r = f.getBoundingClientRect(), s = window.getComputedStyle(f);
+                var ve = r.width > 0 && r.height > 0 && f.getClientRects().length > 0
+                         && s.visibility !== 'hidden' && s.display !== 'none'
+                         && parseFloat(s.opacity || '1') > 0;
+                return [f.src || f.getAttribute('src') || '', ve];
+            } catch (e) { return ['', false]; }
+        });"""
+
+    def _src_y_visibilidad_de_iframes(self, iframes):
+        """[(src, visible)] de cada iframe, en un solo execute_script (con respaldo uno
+        por uno si el script falla)."""
+        if not iframes:
+            return []
+        try:
+            datos = self.driver.execute_script(self._JS_SRC_Y_VISIBILIDAD, iframes)
+            if isinstance(datos, list) and len(datos) == len(iframes):
+                return [(str(d[0] or ""), bool(d[1])) for d in datos]
+        except Exception:
+            pass
+        out = []
+        for f in iframes:
+            try:
+                disp = f.is_displayed()
+            except Exception:
+                disp = False
+            out.append((self._iframe_src_of(f), disp))
+        return out
 
     def _pick_gm_iframe(self, iframes, expected_url=None):
         """
@@ -133,12 +226,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         """
         exp = (expected_url or "").strip().lower()
         gm_visible, gm_any, first_visible = [], [], None
-        for f in (iframes or []):
-            src = self._iframe_src_of(f)
-            try:
-                disp = f.is_displayed()
-            except Exception:
-                disp = False
+        iframes = list(iframes or [])
+        datos = self._src_y_visibilidad_de_iframes(iframes)
+        for f, (src, disp) in zip(iframes, datos):
             if disp and first_visible is None:
                 first_visible = f
             if self._is_gm_form_src(src):
@@ -238,6 +328,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.effective_data_keys = self._build_effective_data_keys()
         # Preferencias SI/NO de checkbox del lead actual (se recarga por fila del Excel)
         self.checkbox_prefs = {}
+        # Opción pedida por el Excel para cada grupo de radios (columna = name del radio)
+        self.radio_prefs = {}
         # Cargar timeouts desde config_global.json (con defaults si no existe)
         _global_timeouts = {}
         try:
@@ -287,6 +379,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         # formulario distinto: sin este reset, omitir el concesionario en una URL lo
         # omitiria en todas las siguientes.
         self._campos_omitidos = []
+        # Diferencias menores entre la URL del form esperada y la encontrada (fila ámbar).
+        self._form_dif_menor = []
         # Qué campos opcionales se completan en esta fila (se sortea uno por campo).
         self._decision_opcionales = {}
         self._campos_sin_mapeo_exitoso = []
@@ -1147,15 +1241,26 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
         return self._normalize_resolved_value(val, field_config)
 
+    # Números de corrida tomados por corridas SIN capturas (BrowserStack) de este proceso.
+    # Las locales reservan su número creando la carpeta screenshots_<...>N; las de la nube
+    # no crean esa carpeta (la evidencia es el video), así que reservan acá. Sin esto, dos
+    # sesiones en paralelo del mismo país y dispositivo (una sesión por URL) tomarían el
+    # mismo resultados_<...>N.xlsx.
+    _NUMEROS_RESERVADOS = set()
+
     def setup_directories_and_files(self):
         """Configura carpetas y archivos con rutas relativas"""
         run_number = self._get_next_available_number()
-        
+
         self.SCREENSHOT_DIR = os.path.join(self.RESULTADOS_DIR, f"{self.SCREENSHOT_BASENAME}{run_number}")
         self.RESULTADOS_PATH = os.path.join(self.RESULTADOS_DIR, f"{self.RESULTADOS_BASENAME}{run_number}.xlsx")
-        
-        os.makedirs(self.SCREENSHOT_DIR, exist_ok=True)
-        
+
+        if self.config.get("capturas", True):
+            os.makedirs(self.SCREENSHOT_DIR, exist_ok=True)
+        else:
+            # BrowserStack: nunca carpeta de capturas (ver _NUMEROS_RESERVADOS).
+            BaseFormFiller._NUMEROS_RESERVADOS.add(os.path.normcase(self.RESULTADOS_PATH))
+
         print(f"Carpeta de screenshots: {self.SCREENSHOT_DIR}")
         print(f"Archivo de resultados: {self.RESULTADOS_PATH}")
         print(f"Archivo Excel de datos: {self.EXCEL_PATH}")
@@ -1183,8 +1288,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         i = 1
         while True:
             folder_exists = os.path.exists(os.path.join(self.RESULTADOS_DIR, f"{self.SCREENSHOT_BASENAME}{i}"))
-            file_exists = os.path.exists(os.path.join(self.RESULTADOS_DIR, f"{self.RESULTADOS_BASENAME}{i}.xlsx"))
-            
+            _archivo = os.path.join(self.RESULTADOS_DIR, f"{self.RESULTADOS_BASENAME}{i}.xlsx")
+            file_exists = os.path.exists(_archivo) or \
+                os.path.normcase(_archivo) in BaseFormFiller._NUMEROS_RESERVADOS
+
             if not folder_exists and not file_exists:
                 return i
             i += 1
@@ -1200,7 +1307,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             headless=self.config.get('headless', False),
             background=self.config.get('background', True),
         )
-        self.screenshot_manager = ScreenshotManager(self.driver, self.SCREENSHOT_DIR)
+        # capturas=False en las corridas en la nube: la evidencia es el video.
+        _gestor = ScreenshotManager if self.config.get("capturas", True) else ScreenshotManagerNulo
+        self.screenshot_manager = _gestor(self.driver, self.SCREENSHOT_DIR)
         self.actions = BrowserActions(self.driver)
 
         # Monkey patch find_element and find_elements to support name & CSS fallback for By.ID
@@ -1336,28 +1445,52 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return False
 
+    # Mismo criterio que _element_exists_by_id (id, name o selector CSS), para una lista
+    # de ids en un solo viaje al navegador.
+    _JS_IDS_EXISTENTES = r"""
+        return arguments[0].filter(function (id) {
+            if (!id) return false;
+            if (document.getElementById(id)) return true;
+            try { if (document.querySelector('[name="' + id + '"]')) return true; } catch (e) {}
+            if (/[\[.#]/.test(id)) {
+                try { if (document.querySelector(id)) return true; } catch (e) {}
+            }
+            return false;
+        });
+    """
+
+    def _ids_existentes(self, ids):
+        """Los ids de la lista que existen en el DOM actual, en el mismo orden."""
+        ids = [i for i in ids if isinstance(i, str) and i]
+        if not ids:
+            return []
+        try:
+            return list(self.driver.execute_script(self._JS_IDS_EXISTENTES, ids) or [])
+        except Exception:
+            return [i for i in ids if self._element_exists_by_id(i)]
+
     def _pick_first_visible_id(self, ids):
-        """Devuelve el primer id existente en DOM y visible (o None)."""
+        """Devuelve el primer id existente en DOM y visible (o None).
+
+        La existencia se resuelve de una vez para toda la lista (el mapping trae varios
+        ids por campo, y antes eran hasta 3 viajes al navegador por cada uno); la
+        visibilidad se sigue chequeando con Selenium, sólo para los que existen.
+        """
         if isinstance(ids, str):
             ids = [ids]
-        for fid in ids or []:
-            if fid and self._element_exists_by_id(fid):
-                try:
-                    el = self.driver.find_element(By.ID, fid)
-                    if el.is_displayed():
-                        return fid
-                except Exception:
-                    continue
-        # Fallback visid: si ningún ID del mapping fue encontrado, probar alias estandarizado
-        for fid in ids or []:
-            alias = self._VISID_ID_ALIASES.get(fid if isinstance(fid, str) else "")
-            if alias and self._element_exists_by_id(alias):
-                try:
-                    el = self.driver.find_element(By.ID, alias)
-                    if el.is_displayed():
-                        return alias
-                except Exception:
-                    continue
+        ids = list(ids or [])
+        aliases = [self._VISID_ID_ALIASES.get(fid if isinstance(fid, str) else "") for fid in ids]
+        existentes = set(self._ids_existentes(ids + [a for a in aliases if a]))
+        # Primero los ids del mapping; si ninguno sirve, el alias estandarizado (visid).
+        for candidatos in (ids, aliases):
+            for fid in candidatos:
+                if fid and fid in existentes:
+                    try:
+                        el = self.driver.find_element(By.ID, fid)
+                        if el.is_displayed():
+                            return fid
+                    except Exception:
+                        continue
         return None
 
     def _is_next_button_element(self, element):
@@ -1404,6 +1537,31 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return False
 
+    # Prefiltro de _find_next_button: en un solo viaje, los elementos de cada selector
+    # (en orden) cuyo texto o atributos contienen una palabra de "avanzar". El chequeo
+    # completo (_is_next_button_element) exige esa misma palabra, así que no se pierde
+    # ninguno; sólo se evita revisar con ~9 viajes cada botón y link del form.
+    _JS_CANDIDATOS_SIGUIENTE = r"""
+        var sels = arguments[0], claves = arguments[1], vistos = [], out = [];
+        function norm(s) {
+            return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
+        sels.forEach(function (sel) {
+            var els;
+            try { els = document.querySelectorAll(sel); } catch (e) { return; }
+            Array.prototype.forEach.call(els, function (el) {
+                if (vistos.indexOf(el) >= 0) return;
+                vistos.push(el);
+                var t = norm([el.innerText || el.textContent, el.getAttribute('data-dtm'),
+                              el.getAttribute('class'), el.getAttribute('aria-label'),
+                              el.getAttribute('title')].join(' '));
+                if (claves.some(function (k) { return t.indexOf(k) >= 0; })) out.push(el);
+            });
+        });
+        return out;
+    """
+    _CLAVES_SIGUIENTE = ("siguiente", "seguinte", "continuar", "continuacao", "proximo", "next")
+
     def _find_next_button(self):
         """Devuelve el primer botón visible que parezca avanzar al siguiente paso."""
         selectors = [
@@ -1413,25 +1571,23 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             "button[data-dtm*='next']",
             "button[type='button']",
             ".next-button",
+            # Barrido genérico final: cualquier button/a/role=button cuyo texto/atributos
+            # indiquen "Siguiente/Seguinte/Continuar/Próximo/Next".
+            "button, a, [role='button']",
         ]
-
-        for selector in selectors:
-            try:
-                btns = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                for btn in btns:
-                    if self._is_next_button_element(btn):
-                        return btn
-            except Exception:
-                continue
-
-        # Barrido genérico final: cualquier button/a/role=button visible cuyo texto/atributos
-        # indiquen "Siguiente/Seguinte/Continuar/Próximo/Next" (cubre markups fuera de la lista).
         try:
-            for btn in self.driver.find_elements(By.CSS_SELECTOR, "button, a, [role='button']"):
-                if self._is_next_button_element(btn):
-                    return btn
+            candidatos = self.driver.execute_script(
+                self._JS_CANDIDATOS_SIGUIENTE, selectors, list(self._CLAVES_SIGUIENTE)) or []
         except Exception:
-            pass
+            candidatos = []
+            for selector in selectors:
+                try:
+                    candidatos.extend(self.driver.find_elements(By.CSS_SELECTOR, selector))
+                except Exception:
+                    continue
+        for btn in candidatos:
+            if self._is_next_button_element(btn):
+                return btn
         return None
 
     def _has_next_button(self):
@@ -1547,6 +1703,32 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             except Exception as e:
                 print(f" Error con kit (intento {intento}): {e}")
         print(" No se pudo seleccionar el kit en paso final")
+
+    # "¿Cómo deseas realizar la compra?" (Plan de ahorro / Contado). No es un campo más: hasta
+    # que se elige, Región, Ciudad y Concesionario vienen deshabilitados, y cambiarlo repuebla
+    # la cascada. Por eso va ANTES que todo (mismo criterio que el Comparador de Dealers).
+    _IDS_FORMA_DE_COMPRA = ("buy_pda", "purchase-type")
+
+    def _elegir_forma_de_compra(self, form_data):
+        """Si el form tiene el selector de forma de compra sin elegir, lo elige primero: lo
+        que diga la columna "¿Cómo desea realizar la compra?" del Excel o, si está vacía, una
+        opción real al azar."""
+        select_id = self._pick_first_visible_id(list(self._IDS_FORMA_DE_COMPRA))
+        if not select_id:
+            return
+        try:
+            actual = self._get_selected_text_for_select(self.driver.find_element(By.ID, select_id)) or ""
+        except Exception:
+            actual = ""
+        if not self._is_placeholder_text(actual):
+            return   # ya viene elegido
+        config = next((fc for fc in self.field_mapping or []
+                       if "realizar la compra" in str(fc.get("name", "")).lower()), None)
+        valor = self._resolve_field_value(form_data, config) if config else ""
+        if self._pide_omitir_campo(select_id, valor):
+            return
+        if self.safe_select_option_if_visible(select_id, valor or "", "Forma de compra"):
+            time.sleep(1)   # la cascada se habilita y se repuebla
 
     def _fill_visible_fields_from_mapping(self, form_data, dependencies):
         """
@@ -1732,6 +1914,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 else:
                     print(f"⚠️ [DEBUG-FILL] Omitiendo '{field_name}' ({field_id}) porque su valor en Excel está vacío o es None.")
             processed_ids.add(field_id)
+
+        if not solo_verificar_visual:
+            self._elegir_forma_de_compra(form_data)
 
         for field_config in resolved_field_configs:
             if solo_verificar_visual and len(processed_ids) >= 2:
@@ -2163,6 +2348,27 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
 
     
+    def _scrollear_a_iframe_sin_cargar(self, expected_form_url):
+        """Lleva a la vista el iframe del form que todavía no cargó (tiene data-src y no src).
+        Algunas landings (ej. chevrolet.com.ar) le ponen el src recién cuando entra en
+        pantalla; si nadie scrollea hasta él, el form nunca aparece."""
+        try:
+            self.driver.switch_to.default_content()
+            self.driver.execute_script("""
+                var esperado = (arguments[0] || '').toLowerCase().split('?')[0];
+                var gm = /gm_forms|gm_formns|gm_front|gm_admin/i;
+                var lista = document.querySelectorAll('iframe[data-src]');
+                for (var i = 0; i < lista.length; i++) {
+                    var f = lista[i], ds = (f.getAttribute('data-src') || '').trim();
+                    if (f.getAttribute('src') || !ds) continue;
+                    if (gm.test(ds) || (esperado && ds.toLowerCase().indexOf(esperado) >= 0)) {
+                        f.scrollIntoView({block: 'center'});
+                        return;
+                    }
+                }""", expected_form_url or "")
+        except Exception:
+            pass
+
     def find_and_position_to_form(self, expected_form_url):
         """Encuentra el iframe del formulario y posiciona el viewport sobre él.
         Usa 2 intentos: el primero espera activamente el iframe específico; el segundo
@@ -2207,6 +2413,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             self.pre_scroll_for_dynamic_content()
                         except Exception:
                             pass
+                        # Iframe que la landing carga recién al verlo (data-src sin src):
+                        # scrollear hasta él, como haría una persona, y esperar que cargue.
+                        self._scrollear_a_iframe_sin_cargar(_url)
                         time.sleep(3)
                     continue
 
@@ -2238,6 +2447,15 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
         return None
     
+    def _entrar_al_iframe(self, iframe):
+        """Pasa el driver al iframe del formulario.
+
+        Es un método aparte para que un motor que no puede entrar al iframe lo reemplace:
+        el iPhone de BrowserStack (Safari bloquea entrar a un iframe de otro dominio) se
+        queda en la landing y llena el form por la capa nativa del dispositivo.
+        """
+        self.driver.switch_to.frame(iframe)
+
     def wait_for_form_ready_in_iframe(self, timeout=3):
         """Espera a que el formulario dentro del iframe esté completamente listo"""
         try:
@@ -2331,13 +2549,132 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 return f"Landing 404 / no encontrada (encabezado contiene '{p}')"
         return ""
 
+    # Landings sin form propio: el form está detrás de uno o más CTAs. En cada paso se elige
+    # al azar un tab (si hay) y un CTA visible, y se verifica que lleve a una página cuyo path
+    # cumpla `destino` (regex). Al final el flujo normal compara el form de esa página con el
+    # del Excel. `landing`: la URL de la matriz, sin protocolo ni www.
+    _MONTANA_ACC = "/picapes/chevrolet-montana/acessorios"
+    _SONIC_ACC = "/suvs/sonic/acessorios"
+    _LANDINGS_CON_CTA = (
+        # Argentina, Kits de mantenimiento: tab (Todos / Autos / SUVs / Pick Ups) + "Solicitá".
+        {"landing": "chevrolet.com.ar/kits-mantenimiento", "pasos": (
+            {"tabs": "li.gb-tab-button[data-dtm='intro']",
+             "cta": "a[href*='/kits-mantenimiento/formulario']",
+             "destino": r"/kits-mantenimiento/formulario$"},)},
+        # Brasil, accesorios: "Saber mais" (una categoría) y "Tenho interesse" -> /formulario.
+        {"landing": "chevrolet.com.br" + _MONTANA_ACC, "pasos": (
+            {"cta": f"a[title='Saber mais'][href^='{_MONTANA_ACC}/']",
+             "destino": _MONTANA_ACC + r"/(?!formulario$)[^/]+$"},
+            {"cta": f"a[title='Tenho interesse'][href*='{_MONTANA_ACC}/formulario']",
+             "destino": _MONTANA_ACC + r"/formulario$"})},
+        {"landing": "chevrolet.com.br" + _MONTANA_ACC + "/aparencia", "pasos": (
+            {"cta": f"a[title='Tenho interesse'][href*='{_MONTANA_ACC}/formulario']",
+             "destino": _MONTANA_ACC + r"/formulario$"},)},
+        {"landing": "chevrolet.com.br" + _SONIC_ACC, "pasos": (
+            {"cta": f"a[title='Saber mais'][href^='{_SONIC_ACC}/']",
+             "destino": _SONIC_ACC + r"/(?!formulario$)[^/]+$"},
+            {"cta": f"a[title='Tenho interesse'][href*='{_SONIC_ACC}/formulario']",
+             "destino": _SONIC_ACC + r"/formulario$"})},
+        # Ecuador, exonerados / proceso: el CTA lleva al form de la landing principal.
+        {"landing": "chevrolet.com.ec/programas-nuevos-caminos-exonerados/proceso", "pasos": (
+            {"cta": "a[href*='/programas-nuevos-caminos-exonerados#form']",
+             "destino": r"/programas-nuevos-caminos-exonerados$"},)},
+        # Brasil, Trailblazer: la matriz anota "(dentro de un pop-up)". Ese form (Midnight)
+        # está en el modal que abre "Tenho interesse"; sin la nota, es el form de la página.
+        {"landing": "chevrolet.com.br/suvs/novo-trailblazer", "popup": True, "pasos": (
+            {"cta": "a[title='Tenho interesse'][data-gb-modal-id]", "modal": True},)},
+    )
+
+    def _seguir_cta(self, cta):
+        """Entra por el CTA haciéndole click (lo que haría el usuario)."""
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+
+    @staticmethod
+    def _separar_nota_de_landing(landing_url):
+        """La matriz a veces anota algo después de la URL: "https://… (dentro de un pop-up)".
+        Devuelve (url, nota)."""
+        m = re.match(r"\s*(\S+)\s+\(?(.*?)\)?\s*$", landing_url or "")
+        return (m.group(1), m.group(2)) if m else ((landing_url or "").strip(), "")
+
+    @classmethod
+    def _regla_cta_de_landing(cls, landing_url):
+        limpia, nota = cls._separar_nota_de_landing(landing_url)
+        popup = bool(re.search(r"pop.?up", nota, re.I))
+        url = re.sub(r"^https?://(www\.)?", "", limpia.split("?")[0].split("#")[0].lower()).rstrip("/")
+        return next((r for r in cls._LANDINGS_CON_CTA
+                     if url == r["landing"] and r.get("popup", False) == popup), None)
+
+    def _entrar_por_cta_de_landing(self, landing_url):
+        regla = self._regla_cta_de_landing(landing_url)
+        if regla is None:
+            return
+        from urllib.parse import urlparse
+        try:
+            for paso in regla["pasos"]:
+                if paso.get("tabs"):
+                    tabs = [t for t in self.driver.find_elements(By.CSS_SELECTOR, paso["tabs"]) if t.is_displayed()]
+                    if tabs:
+                        tab = random.choice(tabs)
+                        nombre_tab = (tab.text or "").strip()
+                        self.driver.execute_script(
+                            "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", tab)
+                        time.sleep(0.8)
+                        print(f"CTA de landing: tab '{nombre_tab}'")
+                ctas = self.driver.find_elements(By.CSS_SELECTOR, paso["cta"])
+                visibles = [c for c in ctas if c.is_displayed()] or ctas
+                if not visibles:
+                    self._landing_issue = (f"No se encontró ningún CTA ({paso['cta']}) en "
+                                           f"{self.driver.current_url}")
+                    print(f"⚠ {self._landing_issue}")
+                    return
+                cta = random.choice(visibles)
+                detalle = (cta.get_attribute("data-dtm") or cta.get_attribute("title") or cta.text or "").strip()
+                if paso.get("modal"):
+                    self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+                else:
+                    self._seguir_cta(cta)
+                if paso.get("modal"):
+                    # Abre un modal en la misma página: esperar a que aparezca un iframe nuevo.
+                    antes = len(self.driver.find_elements(By.TAG_NAME, "iframe"))
+                    try:
+                        WebDriverWait(self.driver, 10).until(
+                            lambda d: len(d.find_elements(By.TAG_NAME, "iframe")) > antes)
+                    except Exception:
+                        pass
+                    time.sleep(1.5)
+                    print(f"CTA de landing '{detalle}' → modal abierto")
+                    continue
+
+                def llego(d):
+                    return re.search(paso["destino"], urlparse(d.current_url or "").path.lower().rstrip("/"))
+                try:
+                    WebDriverWait(self.driver, 15).until(llego)
+                except Exception:
+                    self._landing_issue = (f"El CTA '{detalle}' no llevó a {paso['destino']} "
+                                           f"(quedó en {self.driver.current_url})")
+                    print(f"⚠ {self._landing_issue}")
+                    return
+                print(f"CTA de landing '{detalle}' → {self.driver.current_url}")
+                try:
+                    WebDriverWait(self.driver, 10).until(
+                        lambda d: d.execute_script("return document.readyState") in ("interactive", "complete"))
+                except Exception:
+                    pass
+                time.sleep(0.5)
+                self.handle_cookie_popups()
+            self.pre_scroll_for_dynamic_content()
+        except Exception as e:
+            self._landing_issue = f"No se pudo entrar por el CTA de la landing: {e}"
+            print(f"⚠ {self._landing_issue}")
+
     def process_landing_page(self, landing_url, ss_counter, take_screenshot=True):
         """Procesa la página de destino inicial"""
         try:
             self.driver.switch_to.default_content()
         except Exception:
             pass
-        landing_url = self._sanitize_url(landing_url)
+        landing_con_nota = landing_url
+        landing_url, _nota = self._separar_nota_de_landing(self._sanitize_url(landing_url))
         self.driver.get(landing_url)
 
         # Detección de landing rota (404 / página no encontrada): se marca para el Excel.
@@ -2400,7 +2737,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             except Exception as e:
                 print(f"Chevrolet BR: no se encontró #contact-by-form — {e}")
 
-        form_inserto_name = self.screenshot_manager.fname("landing", "inicial", ss_counter) if self.screenshot_manager else f"landing_inicial_{ss_counter}.png"
+        self._entrar_por_cta_de_landing(landing_con_nota)
+
+        form_inserto_name =self.screenshot_manager.fname("landing", "inicial", ss_counter) if self.screenshot_manager else f"landing_inicial_{ss_counter}.png"
         if take_screenshot:
             self.screenshot_manager.url_landing = landing_url
             self.screenshot_manager.take_landing_screenshot(ss_counter, "inicial")
@@ -2859,11 +3198,17 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         return "".join(random.choice(chars) for _ in range(target))
 
     def _is_field_required(self, element):
-        """True si el campo es requerido (attr required/aria-required o su label trae '*')."""
+        """True si el campo es requerido: attr required/aria-required, su label trae '*', o
+        lo exige el validador del form (jQuery Validate: clase "required", data-rule-required,
+        data-msg-required o sus reglas). Ej.: Chile embajadores pide edad, año, versión,
+        color e Instagram sólo por el validador."""
         try:
             return bool(self.driver.execute_script(
                 "var el=arguments[0];"
                 "if(el.required || el.getAttribute('aria-required')==='true') return true;"
+                "if((el.className||'').toString().split(/\\s+/).indexOf('required')>=0) return true;"
+                "if(el.hasAttribute('data-rule-required') || el.hasAttribute('data-msg-required')) return true;"
+                "try{ if(window.jQuery && jQuery(el).rules){ var r=jQuery(el).rules(); if(r && r.required) return true; } }catch(e){}"
                 "var id=el.id;"
                 "if(id){var l=document.querySelector('label[for=\"'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'\"]');"
                 "  if(l && (l.textContent||'').indexOf('*')>=0) return true;}"
@@ -2879,12 +3224,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         (no mapeados o sin dato en el Excel). Cubre campos extra de ciertos forms
         (ej. Rua, Número, Data de Nascimento) sin tener que mapearlos uno por uno."""
         try:
-            els = self.driver.find_elements(
-                By.XPATH,
-                "//input[not(@type='hidden')][not(@type='submit')][not(@type='button')]"
-                "[not(@type='checkbox')][not(@type='radio')][not(@type='file')][not(@type='reset')]"
-                " | //textarea",
-            )
+            # Sólo los que están vacíos y no deshabilitados, en un solo viaje: lo habitual
+            # es que ya tengan dato, y antes eran 4 viajes por input para saltearlos.
+            els = self.driver.execute_script(
+                "return Array.prototype.filter.call(document.querySelectorAll("
+                "  'input:not([type=hidden]):not([type=submit]):not([type=button])"
+                ":not([type=checkbox]):not([type=radio]):not([type=file]):not([type=reset]), textarea'),"
+                "  function (e) { return !e.disabled && !(e.value || '').trim(); });") or []
         except Exception:
             return 0
         filled = 0
@@ -2900,7 +3246,16 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     continue  # ya tiene dato (mapeado, autocompletado por CEP, etc.)
                 if not self._is_field_required(el):
                     continue
-                value = self._generate_synthetic_value(el)
+                # Primero un valor con sentido por el nombre del campo (edad, año, color,
+                # versión, Instagram...); si no hay, el sintético genérico.
+                try:
+                    from osocio.utils.data_generator import valor_plausible_por_nombre
+                    value = valor_plausible_por_nombre(
+                        el.get_attribute("id") or el.get_attribute("name") or "",
+                        el.get_attribute("aria-label") or el.get_attribute("placeholder") or "")
+                except Exception:
+                    value = ""
+                value = value or self._generate_synthetic_value(el)
                 if not value:
                     continue
                 self._scroll_element_into_view(el)
@@ -3208,9 +3563,58 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             print(f" Campos de texto no mapeados completados: {llenados}")
         return llenados > 0
 
+    def _llenar_listboxes_custom(self):
+        """Desplegables que no son <select>: un botón con aria-haspopup="listbox" que abre una
+        lista de [role=option] (AR gm_front/form/kits: "Kits de Mantenimiento", de selección
+        múltiple). Sin elegir, "términos" queda deshabilitado. Se eligen al azar: una
+        cantidad al azar si es múltiple, una si no; nunca un placeholder."""
+        try:
+            triggers = [b for b in self.driver.find_elements(By.CSS_SELECTOR, "button[aria-haspopup='listbox']")
+                        if b.is_displayed() and b.is_enabled()]
+        except Exception:
+            return 0
+        llenados = 0
+        for trig in triggers:
+            try:
+                resumen = (trig.text or "").strip()
+                if resumen and not self._is_placeholder_text(resumen):
+                    continue   # ya tiene algo elegido
+                nombre = trig.get_attribute("id") or trig.get_attribute("title") or "listbox"
+                if trig.get_attribute("aria-expanded") != "true":
+                    self.driver.execute_script("arguments[0].click();", trig)
+                    time.sleep(0.6)
+                lista = self.driver.execute_script(
+                    "var t = arguments[0], c = t.parentElement;"
+                    "for (var i = 0; i < 3 && c && !c.querySelector('[role=listbox]'); i++) c = c.parentElement;"
+                    "return c ? c.querySelector('[role=listbox]') : null;", trig)
+                if lista is None:
+                    continue
+                opciones = [o for o in lista.find_elements(By.CSS_SELECTOR, "[role=option]")
+                            if (o.text or "").strip() and not self._is_placeholder_text(o.text)
+                            and o.get_attribute("aria-disabled") != "true"]
+                if not opciones:
+                    continue
+                multiple = (lista.get_attribute("aria-multiselectable") or "").lower() == "true"
+                elegir = random.sample(opciones, random.randint(1, len(opciones))) if multiple else [random.choice(opciones)]
+                textos = []
+                for o in elegir:
+                    self.driver.execute_script("arguments[0].click();", o)
+                    textos.append((o.text or "").strip())
+                    time.sleep(0.3)
+                if trig.get_attribute("aria-expanded") == "true":
+                    self.driver.execute_script("arguments[0].click();", trig)   # cerrar la lista
+                    time.sleep(0.3)
+                self._record_field_value(nombre, " | ".join(textos))
+                print(f"🎲 {nombre} ({'múltiple' if multiple else 'lista'}) - elegidas: {', '.join(textos)}")
+                llenados += 1
+            except Exception as e:
+                print(f" Listbox no crítico — {e}")
+        return llenados
+
     def _auto_fill_unmapped_dropdowns(self, field_mapping=None):
         """Completa campos no mapeados: respeta lo pedido en el Excel, después IDs
         dinámicos, y sólo sortea cuando no hay ningún valor pedido."""
+        self._llenar_listboxes_custom()
         mapped_ids = self._get_mapped_select_ids(field_mapping)
         # Ids ya llenados/registrados por el mapping en ESTA fila. Cubre el caso en que el
         # id real del form difiere del de la config (ej. 'estimated-day' vs
@@ -3222,20 +3626,25 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             already_filled_ids.add(raw)
         ids_dinamicos = self._cargar_ids_dinamicos()
         try:
-            select_elements = self.driver.find_elements(By.XPATH, "//select")
+            # id y name de todos los selects en un solo viaje: lo habitual es que estén
+            # todos mapeados, y antes se preguntaba atributo por atributo para saltearlos.
+            selects_info = self.driver.execute_script(
+                "return Array.prototype.map.call(document.querySelectorAll('select'), function (s) {"
+                "  return {el: s, id: s.id || '', name: s.getAttribute('name') || ''}; });") or []
         except Exception as e:
             print(f" Error buscando dropdowns no mapeados: {e}")
             return False
         filled_any = False
 
-        for select_element in select_elements:
+        for info in selects_info:
+            select_element = info.get("el")
             select_id = None
             try:
-                select_id = select_element.get_attribute("id") or select_element.get_attribute("name")
-                if not select_id:
+                select_id = info.get("id") or info.get("name")
+                if not select_id or select_element is None:
                     continue
                 # Solo saltear si tiene id Y ese id ya está en el mapping (campos por name nunca están en mapped_ids)
-                elem_real_id = select_element.get_attribute("id")
+                elem_real_id = info.get("id")
                 if elem_real_id and elem_real_id in mapped_ids:
                     continue
                 # Saltear si el mapping ya llenó este select en esta fila (id real ≠ id de config)
@@ -3249,9 +3658,20 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     # Chile). Suelen venir envueltos en Bootstrap Select, que oculta el select
                     # real y pinta su propio widget: por eso además del change hay que pedirle
                     # al plugin que se refresque, o el usuario ve el campo vacío.
+                    # Una cantidad al azar (1..todas) de opciones reales al azar, nunca el
+                    # placeholder ("Seleccione", "Elige al menos una opción").
                     try:
+                        reales = [i for i, t in self.driver.execute_script(
+                            "return Array.from(arguments[0].options).map(function (o, i) {"
+                            "  return [i, (o.disabled || !(o.value || '').trim()) ? '' : (o.text || '').trim()]; });",
+                            select_element) or [] if t and not self._is_placeholder_text(t)]
+                        elegir = random.sample(reales, random.randint(1, len(reales))) if reales else []
                         elegidas = self.driver.execute_script(
-                            "var s = arguments[0], tope = arguments[1], out = [];for (var i = 0; i < s.options.length && out.length < tope; i++) {  var o = s.options[i];  if (o.disabled || !(o.value || '').trim()) continue;  o.selected = true; out.push((o.text || '').trim());}s.dispatchEvent(new Event('change', { bubbles: true }));try { if (window.jQuery && window.jQuery(s).selectpicker) {  window.jQuery(s).selectpicker('refresh'); } } catch (e) {}return out;", select_element, 2) or []
+                            "var s = arguments[0], idx = arguments[1], out = [];"
+                            "idx.forEach(function (i) { var o = s.options[i]; o.selected = true; out.push((o.text || '').trim()); });"
+                            "s.dispatchEvent(new Event('change', { bubbles: true }));"
+                            "try { if (window.jQuery && window.jQuery(s).selectpicker) { window.jQuery(s).selectpicker('refresh'); } } catch (e) {}"
+                            "return out;", select_element, elegir) or []
                     except Exception as e:
                         print(f" {select_id}: no se pudo elegir en el select múltiple — {e}")
                         elegidas = []
@@ -4174,7 +4594,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 from osocio.utils.ty_cta import investigate_ty_cta, format_ty_cta, format_link_issue
                 _cta_info = investigate_ty_cta(
                     self.driver, log=print,
-                    evidence_dir=self.SCREENSHOT_DIR, take_screenshot=True,
+                    evidence_dir=self.SCREENSHOT_DIR,
+                    take_screenshot=bool(self.config.get("capturas", True)),
                 )
                 self._ty_cta = format_ty_cta(_cta_info)
                 self._link_issue = format_link_issue(_cta_info)
@@ -4276,6 +4697,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 self.checkbox_prefs = self.build_checkbox_prefs(raw_headers, row)
                 if self.checkbox_prefs:
                     print(f"  ☑ Preferencias de checkbox (Excel): {self.checkbox_prefs}")
+                # Columnas con el name de un grupo de radios (ver build_radio_prefs)
+                self.radio_prefs = self.build_radio_prefs(raw_headers, row)
                 if len(row) < 2:
                     print(f"Saltando fila {i}: no tiene suficientes columnas")
                     continue
@@ -4425,7 +4848,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             except Exception:
                                 pass
 
-                            self.driver.switch_to.frame(target_iframe)
+                            self._entrar_al_iframe(target_iframe)
                             if self.screenshot_manager:
                                 self.screenshot_manager.current_frame = target_iframe
 
@@ -4564,10 +4987,20 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 self._esperar_recarga_tras_event_id(use_iframe, expected_form_url)
                                 if use_iframe:
                                     _ev_iframe = self.find_and_position_to_form(expected_form_url)
-                                    if _ev_iframe:
-                                        self.driver.switch_to.frame(_ev_iframe)
-                                    else:
-                                        self.driver.switch_to.default_content()
+                                    if not _ev_iframe:
+                                        # Mismo respaldo que el flujo principal: cualquier iframe GM.
+                                        # Sin esto se llenaba la landing (BR captiva-ev en Mac: tomó la
+                                        # flecha "Next Slide" del carrusel como el "Siguiente" del form).
+                                        try:
+                                            _ev_iframe, _ = self._pick_gm_iframe(
+                                                self.driver.find_elements(By.TAG_NAME, "iframe"),
+                                                expected_url=expected_form_url)
+                                        except Exception:
+                                            _ev_iframe = None
+                                    if not _ev_iframe:
+                                        raise RuntimeError("tras el error de event_id no se encontró el "
+                                                           "iframe del form en la landing")
+                                    self._entrar_al_iframe(_ev_iframe)
                                 self.wait_for_form_ready_in_iframe()
                                 if _is_libro_reclamaciones:
                                     form_completado_name = self._fill_libro_reclamaciones_direct(form_data)
@@ -4584,7 +5017,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     result_text = result_text_2
                                     ty_page_name = ty_page_name_2
                                 elif isinstance(result_text_2, str) and result_text_2.startswith("ERROR_EVENT_ID:"):
-                                    result_text = "Error event_id: formulario no pudo enviarse por falta de event_id (2 intentos fallidos)"
+                                    result_text = ("Error event_id: lead NO enviado — el sitio mostró el cartel de error "
+                                                   "de event_id al enviar, también en el reintento (2 intentos)")
                                     ty_page_name = None
                                     try:
                                         self.driver.switch_to.default_content()
@@ -4594,11 +5028,13 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     except Exception as _cap_e:
                                         print(f"Error capturando evidencia event_id: {_cap_e}")
                                 else:
-                                    result_text = (result_text_2 or "Fallo") + " (intento 2 tras error event_id)"
+                                    result_text = ("Error event_id: lead NO enviado — el sitio mostró el cartel de error "
+                                                   f"de event_id al enviar y el reintento falló: {result_text_2 or 'sin detalle'}")
                                     ty_page_name = ty_page_name_2
                             except Exception as _ev_e:
                                 print(f"  Error en retry event_id: {_ev_e}")
-                                result_text = f"Error event_id: fallo en reintento — {_ev_e}"
+                                result_text = ("Error event_id: lead NO enviado — el sitio mostró el cartel de error "
+                                               f"de event_id al enviar y no se pudo reintentar: {_ev_e}")
 
                         # 5c-1. Retry rápido: recargar SOLO el iframe del formulario (no toda la
                         #       landing), rellenar de nuevo y reenviar, quedando posicionado en el form.
@@ -4632,7 +5068,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                     except Exception:
                                         _retry_iframe = None
                                 if _retry_iframe:
-                                    self.driver.switch_to.frame(_retry_iframe)
+                                    self._entrar_al_iframe(_retry_iframe)
                                 else:
                                     self.driver.switch_to.default_content()
                             self.wait_for_form_ready_in_iframe()
@@ -4711,8 +5147,30 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 # igual pese al form equivocado (eso va en naranja, no en rojo).
                 self._form_inserto_estado = "inserto_ok"
                 self._form_mismatch_enviado = False
+                # El "no coincide" se marca al BUSCAR el form; si después se entró al iframe y
+                # su URL es la esperada, era el form correcto (mismo criterio que la columna
+                # "Form coincide"). Pasaba en BrowserStack Android con el segundo lead de la
+                # sesión: el form tardaba en aparecer, se tomaba por la vía de respaldo y la
+                # fila quedaba ámbar con URL esperada == URL encontrada.
+                # Si es el mismo form pero la URL no es idéntica (mayúsculas, tildes, %20, "/",
+                # parámetros), el lead cuenta como OK y la fila queda ámbar con el aviso: la URL
+                # esperada del Excel hay que corregirla.
+                self._form_dif_menor = []
+                _encontrada = getattr(self, "_url_form_encontrado", "") or ""
+                if expected_form_url and _encontrada:
+                    _mismo_form, _difs = self._diferencia_url_form(_encontrada, expected_form_url)
+                    if _mismo_form:
+                        if form_url_mismatch:
+                            print("ℹ El form encontrado es el esperado (se ubicó por la vía de respaldo)")
+                        form_url_mismatch = False
+                        self._form_dif_menor = _difs
                 if form_url_mismatch:
                     _found_for_msg = getattr(self, "_url_form_encontrado", "") or ""
+                    # Un iframe vacío (about:blank) no es "otro form": es que la landing no
+                    # tiene el form cargado (iframe sin src). Se reporta como FORM NO INSERTO.
+                    if _found_for_msg.strip().lower() in ("about:blank", "about:srcdoc"):
+                        _found_for_msg = ""
+                        self._url_form_encontrado = ""
                     self._form_mismatch_enviado = bool(_lead_ok)
                     self._form_inserto_estado = "inserto_otro" if _found_for_msg else "no_inserto"
                     _lead_str = "se envió lead igualmente" if _lead_ok else "lead no enviado"
@@ -4763,6 +5221,12 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     _li = getattr(self, "_link_issue", "") or ""
                     result_text = (result_text or "") + f" | LINK ISSUE TYP: {_li}".rstrip()
                     _lead_ok = False
+                if self._form_dif_menor:
+                    result_text = (result_text or "") + (
+                        f" | Aviso: la URL del form difiere de la esperada en "
+                        f"{', '.join(self._form_dif_menor)} (es el mismo form) — "
+                        f"esperada: {expected_form_url} | encontrada: {_encontrada}"
+                    )
                 sheet.cell(row=i, column=result_col).value = result_text
                 # OJO: NO se tocan las columnas de entrada (Modelo/Nombre/etc. las setea el
                 # usuario). El modelo realmente elegido queda en las columnas de tracking
@@ -4781,12 +5245,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 _form_coincide_val = ""
                 _form_coincide_ok = None
                 if expected_form_url:
-                    def _norm(u):
-                        if not u: return ""
-                        u = u.strip().split("?")[0].split("#")[0]
-                        if u.endswith("/"): u = u[:-1]
-                        return u.lower()
-                    _form_coincide_ok = (_norm(_found_url) == _norm(expected_form_url))
+                    _form_coincide_ok = self._mismas_urls_de_form(_found_url, expected_form_url)
                     _mismatch_enviado = getattr(self, "_form_mismatch_enviado", False)
                     # Si la landing nunca cargó (404 / sin respuesta / redirect), el form
                     # jamás se buscó: decir "no coincide" sería engañoso.
@@ -4795,7 +5254,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         _lt not in ("-", "") and
                         (not _lt.startswith("200") or "REDIRIGE" in _lt)
                     )
-                    if _form_coincide_ok:
+                    if _form_coincide_ok and self._form_dif_menor:
+                        _form_coincide_val = f"PASS con diferencias: {', '.join(self._form_dif_menor)}"
+                    elif _form_coincide_ok:
                         _form_coincide_val = "PASS"
                     elif _landing_falla:
                         _form_coincide_val = (
@@ -4820,6 +5281,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     if _url_prob:
                         # Una landing 404 explica cualquier "form no encontrado": va primero
                         _motivo = f"{_url_prob} | {_motivo}"
+                elif self._form_dif_menor:
+                    _motivo = f"URL del form difiere en {', '.join(self._form_dif_menor)} (lead OK)"
                 if motivo_col:
                     sheet.cell(row=i, column=motivo_col).value = _motivo
                 if estado_url_landing_col:
@@ -4840,7 +5303,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
                 # Form distinto al esperado PERO el lead viajó: ámbar, no rojo — hay dato en
                 # la base, sólo que entró por otro formulario.
-                if getattr(self, "_form_mismatch_enviado", False):
+                # Mismo form con la URL escrita distinta (y lead OK): ámbar con el aviso.
+                if getattr(self, "_form_mismatch_enviado", False) or (_lead_ok and self._form_dif_menor):
                     for _c in (result_col, form_coincide_col, motivo_col):
                         if not _c:
                             continue
@@ -4919,6 +5383,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             print(f"Se capturaron {ss_counter-1} sets completos de screenshots")
 
             # Limpiar temporales de captura que hayan quedado sueltos (no deben viajar al email).
+            # Sin capturas (BrowserStack) no hay carpeta: nada que limpiar ni recomprimir.
+            if not self.config.get("capturas", True):
+                return
             try:
                 import glob as _g
                 for _t in _g.glob(os.path.join(self.SCREENSHOT_DIR, "temp_*.png")):
