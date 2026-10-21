@@ -4987,10 +4987,20 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 self._esperar_recarga_tras_event_id(use_iframe, expected_form_url)
                                 if use_iframe:
                                     _ev_iframe = self.find_and_position_to_form(expected_form_url)
-                                    if _ev_iframe:
-                                        self._entrar_al_iframe(_ev_iframe)
-                                    else:
-                                        self.driver.switch_to.default_content()
+                                    if not _ev_iframe:
+                                        # Mismo respaldo que el flujo principal: cualquier iframe GM.
+                                        # Sin esto se llenaba la landing (BR captiva-ev en Mac: tomó la
+                                        # flecha "Next Slide" del carrusel como el "Siguiente" del form).
+                                        try:
+                                            _ev_iframe, _ = self._pick_gm_iframe(
+                                                self.driver.find_elements(By.TAG_NAME, "iframe"),
+                                                expected_url=expected_form_url)
+                                        except Exception:
+                                            _ev_iframe = None
+                                    if not _ev_iframe:
+                                        raise RuntimeError("tras el error de event_id no se encontró el "
+                                                           "iframe del form en la landing")
+                                    self._entrar_al_iframe(_ev_iframe)
                                 self.wait_for_form_ready_in_iframe()
                                 if _is_libro_reclamaciones:
                                     form_completado_name = self._fill_libro_reclamaciones_direct(form_data)
