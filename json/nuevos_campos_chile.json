@@ -1,6 +1,6 @@
 {
   "pais": "Chile",
-  "ultima_deteccion": "2026-09-02T14:16:49",
+  "ultima_deteccion": "2026-10-13T15:04:29",
   "campos_nuevos": [
     {
       "id": "comment",
@@ -389,6 +389,34 @@
       "type": "text",
       "required": false,
       "label": "instagram",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "company_type",
+      "type": "select",
+      "required": false,
+      "label": "company_type",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "current_fleet_size",
+      "type": "select",
+      "required": false,
+      "label": "current_fleet_size",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "purchase_date",
+      "type": "select",
+      "required": false,
+      "label": "purchase_date",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "purchase_requirement",
+      "type": "select",
+      "required": false,
+      "label": "purchase_requirement",
       "origen": "runtime_discovery"
     }
   ]

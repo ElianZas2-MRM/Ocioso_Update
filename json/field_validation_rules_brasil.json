@@ -1706,6 +1706,46 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "FIRST_NAME": {
+      "descripcion": "first_name",
+      "campo": "first_name",
+      "element_id": "first_name",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
+    },
+    "LAST_NAME": {
+      "descripcion": "last_name",
+      "campo": "last_name",
+      "element_id": "last_name",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }

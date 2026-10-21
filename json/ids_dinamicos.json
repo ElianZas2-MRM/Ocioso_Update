@@ -96,7 +96,7 @@
     },
     {
       "id": "patent",
-      "valor": "1a2b3c4d5e6f7g8h9i10j",
+      "valor": "1a2b3c4d5e6f7g8",
       "paises": [
         "Peru"
       ],
@@ -1207,6 +1207,114 @@
         "Colombia"
       ],
       "nombre_campo": "purchase_requirement",
+      "origen": "autovalor"
+    },
+    {
+      "id": "company_type",
+      "valor": [
+        "Servicios públicos",
+        "Otros"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "company_type",
+      "origen": "autovalor"
+    },
+    {
+      "id": "current_fleet_size",
+      "valor": [
+        "16 a 25 vehículos",
+        "6 a 15 vehículos"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "current_fleet_size",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase_date",
+      "valor": [
+        "Próximos 60 días",
+        "Próximos 30 días"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "purchase_date",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase_requirement",
+      "valor": [
+        "De 16 a 25 vehículos",
+        "De 6 a 15 vehículos"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "purchase_requirement",
+      "origen": "autovalor"
+    },
+    {
+      "id": "business-category",
+      "valor": [
+        "Servicios Técnicos / Mantenimiento",
+        "Otros"
+      ],
+      "paises": [
+        "Peru"
+      ],
+      "nombre_campo": "business-category",
+      "origen": "autovalor"
+    },
+    {
+      "id": "type-of-company",
+      "valor": [
+        "Manufactura",
+        "Última milla y logística"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "type-of-company",
+      "origen": "autovalor"
+    },
+    {
+      "id": "current-fleet-size",
+      "valor": [
+        "6 a 15 vehículos",
+        "1 a 5 vehículos"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "current-fleet-size",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase-date",
+      "valor": [
+        "Próximos 30 días.",
+        "En 60 días o más."
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "purchase-date",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase-requirements",
+      "valor": [
+        "De 1 a 5 vehículos",
+        "De 16 a 25 vehículos"
+      ],
+      "paises": [
+        "Colombia"
+      ],
+      "nombre_campo": "purchase-requirements",
       "origen": "autovalor"
     }
   ],
