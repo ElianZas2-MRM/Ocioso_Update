@@ -385,7 +385,8 @@ class FormNativoIOS:
         bx, by = _num(b, "x") + 40, _num(b, "y")
         self.d.execute_script("mobile: tap", {"x": bx, "y": by + _num(b, "height") // 2})
         time.sleep(1.5)
-        filas = random.sample(range(self._MULTI_FILAS), random.randint(1, 3))
+        # Cantidad al azar: 1, 2, 3 o 4 (las filas que se pueden tocar sin leer la lista).
+        filas = random.sample(range(self._MULTI_FILAS), random.randint(1, self._MULTI_FILAS))
         for i in sorted(filas):
             self.d.execute_script("mobile: tap", {"x": bx, "y": int(by + self._MULTI_PRIMERA + self._MULTI_FILA * i)})
             time.sleep(0.6)
