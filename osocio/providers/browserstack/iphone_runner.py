@@ -108,7 +108,10 @@ class FormFillerIphone(GenericCountryBase):
                 valor = self._sanitize_field_value(valor)
             return valor
 
+        self._nativo.elegir_opcion = self._elegir_opcion_ios
+        self._rotacion_excluir = {}
         registro = self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
+        self._evitar_concesionario_repetido_ios(valor_para)
         # "Términos" deshabilitado hasta que todo es válido: si no se dejó marcar, algún
         # opcional que quedó vacío por el 50% en realidad es obligatorio por JS (en la capa
         # nativa no se ve), o un checkbox lo habilita (acdelco Chile: `terms` está disabled
@@ -126,6 +129,57 @@ class FormFillerIphone(GenericCountryBase):
             finally:
                 self._nativo.marcar_todos = False
         return self.screenshot_manager.fname("form", "completado", 1)
+
+    # ── rotación del día (región / ciudad / concesionario) ──────────────────────
+    def _elegir_opcion_ios(self, etiqueta, opciones):
+        """La opción al azar de un select del iPhone: región, ciudad y concesionario rotan
+        (las menos usadas hoy); el resto, None (al azar común)."""
+        from osocio.utils.rotacion_dealers import tipo_de_campo
+        tipo = tipo_de_campo(etiqueta)
+        if not tipo or not opciones:
+            return None
+        excluir = (getattr(self, "_rotacion_excluir", None) or {}).get(tipo, ())
+        i = self._rotacion().elegir(self._pais_rotacion(), tipo, opciones, excluir=excluir)
+        self._rotacion_anotar(tipo, etiqueta, opciones[i], al_azar=True)
+        return opciones[i]
+
+    def _evitar_concesionario_repetido_ios(self, valor_para):
+        """Como _evitar_concesionario_repetido de los navegadores: si el concesionario al azar
+        ya se usó hoy, se vuelve a elegir la ciudad (y si hace falta la región) y se completa
+        de nuevo lo que dependa de ella, hasta dar con uno sin usar."""
+        from osocio.utils.rotacion_dealers import CIUDAD, DEALER, REGION
+        fila = getattr(self, "_rotacion_fila", None) or {}
+        rot, pais = self._rotacion(), self._pais_rotacion()
+
+        def repetido():
+            d = fila.get(DEALER)
+            return bool(d and d["al_azar"] and rot.veces(pais, DEALER, d["texto"]) > 0)
+
+        if not repetido():
+            return
+        for tipo_padre in (CIUDAD, REGION):
+            padre = fila.get(tipo_padre)
+            if not padre or not padre["al_azar"]:
+                break
+            probados = {padre["texto"]}
+            for _ in range(5):
+                self._rotacion_excluir = {tipo_padre: set(probados)}
+                try:
+                    nuevo = self._nativo.elegir_de_nuevo(padre["id"])
+                finally:
+                    self._rotacion_excluir = {}
+                if not nuevo or nuevo in probados:
+                    break
+                probados.add(nuevo)
+                # Lo que dependía (ciudad / concesionario) quedó vacío: se completa de nuevo.
+                self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
+                if not repetido():
+                    print(f"🔁 Concesionario sin usar hoy: {fila[DEALER]['texto']}")
+                    return
+        d = fila.get(DEALER) or {}
+        self._aviso_rotacion = (f"concesionario repetido hoy: {d.get('texto', '?')} "
+                                "(ya se usaron hoy todos los que ofrece el form, o es el único)")
+        print(f"⚠️ {self._aviso_rotacion}")
 
     def _config_para_ids(self, ids):
         """El field_config del mapping del país que corresponde a esos ids (con alias)."""
@@ -209,6 +263,14 @@ class FormFillerIphone(GenericCountryBase):
         fc = self._config_para_ids(ids) if ids else None
         fid = self._id_principal(ids, fc) or reg.get("etiqueta", "")
         self._record_field_value(fid, quedo)
+        # Región / ciudad / concesionario que pidió el Excel: manda, pero cuenta como usado
+        # hoy (los al azar ya los anotó _elegir_opcion_ios).
+        pedido = str(reg.get("pedido") or "")
+        if reg.get("tipo") == "select" and pedido and not pedido.startswith("(") and pedido != "-":
+            from osocio.utils.rotacion_dealers import _norm, tipo_de_campo
+            if _norm(pedido) in _norm(quedo) or _norm(quedo) in _norm(pedido):
+                self._rotacion_anotar(tipo_de_campo(reg.get("etiqueta", "")), reg.get("etiqueta", ""),
+                                      quedo, al_azar=False)
         if "document-type" in ids:
             self._tipo_doc_ios = quedo
         entrada = {"id": fid, "realId": fid, "name": fid, "value": quedo, "text": quedo}

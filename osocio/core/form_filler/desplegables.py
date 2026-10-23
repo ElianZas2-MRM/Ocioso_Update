@@ -65,6 +65,132 @@ class DesplegablesMixin:
         else:
             select.select_by_index(indice)
 
+    # ── Rotación del día: región / ciudad / concesionario al azar sin repetirse ──────────
+    # (osocio/utils/rotacion_dealers.py). Lo que pide el Excel manda; lo elegido en la fila
+    # se anota en self._rotacion_fila y se registra como usado al terminar la fila.
+
+    def _rotacion(self):
+        rot = getattr(self, "_rotacion_dia", None)
+        if rot is None:
+            from osocio.utils.rotacion_dealers import RotacionDelDia
+            rot = self._rotacion_dia = RotacionDelDia()
+        return rot
+
+    def _pais_rotacion(self):
+        return str(self.config.get("pais", "") or "")
+
+    def _rotacion_anotar(self, tipo, select_id, texto, al_azar):
+        if not tipo or not texto:
+            return
+        fila = getattr(self, "_rotacion_fila", None)
+        if fila is None:
+            fila = self._rotacion_fila = {}
+        fila[tipo] = {"id": select_id, "texto": str(texto).strip(), "al_azar": al_azar}
+
+    def _elegir_al_azar(self, select_id, field_name, opciones, excluir=()):
+        """La opción al azar de un dropdown. Región, ciudad y concesionario rotan: se elige
+        entre las menos usadas hoy, así no se repiten en las corridas del día."""
+        from osocio.utils.rotacion_dealers import tipo_de_campo
+        tipo = tipo_de_campo(select_id, field_name)
+        if not tipo or not opciones:
+            return random.choice(opciones)
+        i = self._rotacion().elegir(self._pais_rotacion(), tipo, [o.text for o in opciones], excluir=excluir)
+        elegida = opciones[i]
+        self._rotacion_anotar(tipo, select_id, elegida.text, al_azar=True)
+        return elegida
+
+    def _reelegir_al_azar(self, select_id, tipo, excluir):
+        """Vuelve a elegir al azar (con rotación) en un dropdown ya completado, descartando
+        `excluir`. Devuelve el texto elegido, o None si no queda otra opción."""
+        from osocio.utils.rotacion_dealers import _norm
+        el = self.safe_find_element(By.ID, select_id)
+        if el is None:
+            return None
+        opciones = [o for o in self._get_valid_select_options(el) if _norm(o.text) not in {_norm(e) for e in excluir}]
+        if not opciones:
+            return None
+        i = self._rotacion().elegir(self._pais_rotacion(), tipo, [o.text for o in opciones])
+        elegida = opciones[i]
+        _idx = getattr(elegida, "_indice", None)
+        if _idx is None:
+            _idx = Select(el).options.index(elegida)
+        self._elegir_opcion_por_indice(Select(el), el, _idx)
+        self.driver.execute_script(
+            "arguments[0].dispatchEvent(new Event('change', { bubbles: true }));"
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", el)
+        self._rotacion_anotar(tipo, select_id, elegida.text, al_azar=True)
+        self._record_field_value(select_id, elegida.text)
+        return elegida.text
+
+    def _evitar_concesionario_repetido(self):
+        """Si el concesionario elegido al azar ya se usó hoy, busca uno sin usar cambiando de
+        ciudad y, si hace falta, de región (sólo los que se eligieron al azar: lo del Excel
+        no se toca). Si no queda ninguno sin usar, lo deja anotado para el resultado."""
+        from osocio.utils.rotacion_dealers import CIUDAD, DEALER, REGION
+        fila = getattr(self, "_rotacion_fila", None) or {}
+        dealer = fila.get(DEALER)
+        if not dealer or not dealer["al_azar"]:
+            return
+        rot, pais = self._rotacion(), self._pais_rotacion()
+        if rot.veces(pais, DEALER, dealer["texto"]) == 0:
+            return
+
+        def dealer_sin_usar():
+            if not self._wait_for_dependent_dropdown_ready(dealer["id"]):
+                return None
+            texto = self._reelegir_al_azar(dealer["id"], DEALER, excluir=())
+            return texto if texto and rot.veces(pais, DEALER, texto) == 0 else None
+
+        # 1) Otro concesionario de la misma ciudad (por si quedaba uno sin usar).
+        if dealer_sin_usar():
+            return
+        ciudad, region = fila.get(CIUDAD), fila.get(REGION)
+        regiones_probadas = {region["texto"]} if region else set()
+        for _vuelta in range(4):
+            # 2) Otras ciudades de la región actual.
+            if ciudad and ciudad["al_azar"]:
+                ciudades_probadas = {fila[CIUDAD]["texto"]}
+                for _ in range(6):
+                    nueva = self._reelegir_al_azar(ciudad["id"], CIUDAD, excluir=ciudades_probadas)
+                    if not nueva:
+                        break
+                    ciudades_probadas.add(nueva)
+                    if dealer_sin_usar():
+                        print(f"🔁 Concesionario sin usar hoy: {fila[DEALER]['texto']} (ciudad {nueva})")
+                        return
+            # 3) Otra región.
+            if not (region and region["al_azar"] and ciudad and ciudad["al_azar"]):
+                break
+            nueva_r = self._reelegir_al_azar(region["id"], REGION, excluir=regiones_probadas)
+            if not nueva_r:
+                break
+            regiones_probadas.add(nueva_r)
+            if not self._wait_for_dependent_dropdown_ready(ciudad["id"]):
+                continue
+            self._reelegir_al_azar(ciudad["id"], CIUDAD, excluir=())
+            if dealer_sin_usar():
+                print(f"🔁 Concesionario sin usar hoy: {fila[DEALER]['texto']} (región {nueva_r})")
+                return
+        texto = fila[DEALER]["texto"]
+        unico = len(self._get_valid_select_options(self.safe_find_element(By.ID, dealer["id"])) or []) <= 1 \
+            and not (ciudad and ciudad["al_azar"])
+        self._aviso_rotacion = (f"concesionario repetido hoy: {texto} "
+                                f"({'es el único que ofrece el form' if unico else 'ya se usaron hoy todos los que ofrece el form'})")
+        print(f"⚠️ {self._aviso_rotacion}")
+
+    def _registrar_rotacion_fila(self):
+        """Al terminar la fila: anota como usados hoy la región, ciudad y concesionario que
+        quedaron (salvo en corridas de prueba sin envío) y limpia lo de la fila."""
+        fila = getattr(self, "_rotacion_fila", None) or {}
+        sin_envio = bool(self.config.get("chequeo_campos") or self.config.get("no_enviar_lead")
+                         or self.config.get("solo_verificar_visual"))
+        if fila and not sin_envio:
+            try:
+                self._rotacion().registrar(self._pais_rotacion(), {t: v["texto"] for t, v in fila.items()})
+            except Exception as e:
+                print(f" Rotación de concesionarios: no se pudo anotar — {e}")
+        self._rotacion_fila = {}
+
     def _is_option_disabled(self, option_element):
         """Determina si una option está deshabilitada de forma robusta."""
         try:
@@ -364,7 +490,7 @@ class DesplegablesMixin:
                     valid_options = self._get_valid_select_options(select_element)
                 
                 if valid_options:
-                    random_option = random.choice(valid_options)
+                    random_option = self._elegir_al_azar(select_id, field_name, valid_options)
                     _idx = getattr(random_option, "_indice", None)
                     if _idx is None:
                         _idx = select.options.index(random_option)
@@ -418,6 +544,9 @@ class DesplegablesMixin:
                     selected_text = (textos[chosen_idx] or option_text).strip()
                     print(f" {field_name} seleccionado: {selected_text}")
                     self._record_field_value(select_id, selected_text)
+                    # Lo del Excel manda; igual cuenta como usado hoy, así el azar lo evita.
+                    from osocio.utils.rotacion_dealers import tipo_de_campo
+                    self._rotacion_anotar(tipo_de_campo(select_id, field_name), select_id, selected_text, al_azar=False)
                     return True
 
                 print(f"❌ [DEBUG-FILL] No se encontró opción para {field_name}: '{option_text}'.")
@@ -501,7 +630,7 @@ class DesplegablesMixin:
                     valid_options.append(opt)
             
             if valid_options:
-                random_option = random.choice(valid_options)
+                random_option = self._elegir_al_azar(select_id, field_name, valid_options)
                 option_value = random_option.get_attribute("value") or random_option.text
                 option_text = random_option.text.strip()
                 try:

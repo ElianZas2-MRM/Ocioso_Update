@@ -277,6 +277,15 @@ Para los campos `<select>` mapeados (Modelo, Fecha estimada, Región, Ciudad, Co
 
 Esto vale para los **tres motores**: navegadores locales (Chrome/Firefox/Edge), BrowserStack y los formularios **AEM / T3 2.0**. Por defecto los Excels generados dejan **Modelo y Fecha estimada vacíos a propósito** (para que roten al azar); si querés fijar uno, escribilo en su columna.
 
+#### Región, Ciudad y Concesionario no se repiten en el día
+
+Cuando el Excel deja vacíos **Región / Ciudad / Concesionario** (o Provincia, Estado, Cidade, Concessionária…), el azar **rota**: en las corridas del día se elige entre las opciones **menos usadas hoy**, así el mismo concesionario no sale en dos forms distintos ni dos veces en el mismo form.
+
+- Si el concesionario que quedó ya se usó hoy (todos los de esa ciudad están usados), la app **cambia de ciudad y, si hace falta, de región** hasta encontrar uno sin usar.
+- Si no queda ninguno sin usar (es el único que ofrece el form, o ya se usaron todos), deja uno y lo aclara en el resultado: *"Aviso — concesionario repetido hoy: …"*.
+- **El Excel siempre manda**: si la celda tiene valor se usa ese, y cuenta como usado para que el azar lo evite.
+- Vale para todos los dispositivos (Chrome, Firefox, Edge, iPhone, Android y Mac). La cuenta del día es por país y por PC (`temporales/rotacion/<fecha>.json`) y arranca de cero cada día. Las corridas de prueba sin envío no la consumen.
+
 **El modelo elegido queda en el Excel de resultados** (columna Modelo), sea el que pusiste vos o el aleatorio. Y si el formulario **no tiene dropdown de modelo** (el modelo viene fijado en la URL), la app toma el valor de `?model=` de la URL del form y lo escribe igual en esa columna — así siempre sabés con qué modelo se envió el lead.
 
 ### Decirle que **no** complete un campo
