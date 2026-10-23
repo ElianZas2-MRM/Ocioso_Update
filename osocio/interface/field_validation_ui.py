@@ -98,6 +98,21 @@ def _get_validation_urls_excel_path():
     return os.path.join(DATA_DIR, "Field_Validation_URLs.xlsx")
 
 
+def _mismo_contenido_excel(excel_path, df_nuevo):
+    """True si el Excel ya tiene las mismas filas (País, URL, Formulario) que df_nuevo."""
+    try:
+        actual = pd.read_excel(excel_path, dtype=str).fillna("")
+    except Exception:
+        return False
+    if len(actual.columns) < 3:
+        return False
+
+    def filas(df):
+        return [tuple(str(v or "").strip() for v in fila) for fila in df.iloc[:, :3].fillna("").astype(str).values]
+
+    return filas(actual) == filas(df_nuevo)
+
+
 def _get_results_dir():
     return os.path.join(_get_base_dir(), "resultados")
 
@@ -384,6 +399,10 @@ def build_field_validation_tab(parent, palette, shared_config=None):
     def _write_url_pairs_to_excel(url_triples):
         excel_path = _create_validation_urls_excel_if_missing()
         df = pd.DataFrame(url_triples, columns=["Pais", "URL", "Formulario"])
+        # Si el Excel ya tiene exactamente esto, no se reescribe: abrir la pestaña lo
+        # re-guardaba igual y el archivo quedaba "modificado" en git sin cambios reales.
+        if _mismo_contenido_excel(excel_path, df):
+            return
         df.to_excel(excel_path, index=False)
 
     def _read_url_pairs_from_excel(require_form=True):

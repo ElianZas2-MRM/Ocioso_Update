@@ -168,3 +168,17 @@ def test_autovalores_usa_el_json_de_la_raiz_por_defecto():
     from osocio.utils.autovalores_campos_detectados import AutovaloresCamposDetectados
     autov = AutovaloresCamposDetectados("Peru")
     assert os.path.normpath(autov.json_dir) == os.path.normpath(paths.JSON_DIR)
+
+
+def test_field_validation_no_reescribe_el_excel_si_no_cambia(tmp_path):
+    """Abrir la pestaña de Validación de Campos re-guardaba Field_Validation_URLs.xlsx sin
+    cambios y el archivo quedaba modificado en git."""
+    import pandas as pd
+    from osocio.interface.field_validation_ui import _mismo_contenido_excel
+    ruta = tmp_path / "urls.xlsx"
+    df = pd.DataFrame([("ar", "https://a", "https://f")], columns=["Pais", "URL", "Formulario"])
+    df.to_excel(ruta, index=False)
+    assert _mismo_contenido_excel(str(ruta), df)
+    otro = pd.DataFrame([("ar", "https://a", "https://g")], columns=["Pais", "URL", "Formulario"])
+    assert not _mismo_contenido_excel(str(ruta), otro)
+    assert not _mismo_contenido_excel(str(tmp_path / "no_existe.xlsx"), df)
