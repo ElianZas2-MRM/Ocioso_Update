@@ -128,6 +128,9 @@ class FormNativoIOS:
         # Segunda pasada cuando "términos" no se dejó marcar: se marcan todos los
         # checkboxes del form (uno puede habilitar a otro, ej. product_info -> terms).
         self.marcar_todos = False
+        # Quién elige la opción al azar de un select: elegir_opcion(etiqueta, opciones) ->
+        # texto o None. El runner lo usa para rotar región / ciudad / concesionario.
+        self.elegir_opcion = None
 
     # ── contextos y scroll ───────────────────────────────────────────────────
     def _nativo(self):
@@ -533,7 +536,7 @@ class FormNativoIOS:
         ruedas = self.d.find_elements(By.XPATH, f"//{_T}PickerWheel")
         if ruedas:
             return self._elegir_en_ruedita(ruedas[0], opcion)
-        r = self._elegir_en_menu(opcion)
+        r = self._elegir_en_menu(opcion, c.get("etiqueta", ""))
         if r == "no abrió ni ruedita ni menú":
             r = self._elegir_en_lista_web(c, opcion) or r
         return r
@@ -593,7 +596,7 @@ class FormNativoIOS:
         time.sleep(1.0)
         return valor
 
-    def _elegir_en_menu(self, opcion: Optional[str]) -> str:
+    def _elegir_en_menu(self, opcion: Optional[str], etiqueta: str = "") -> str:
         """Elige en el menú de iOS la opción pedida o, si no hay, una real al azar."""
         from osocio.core.campos_inferencia import _is_placeholder
 
@@ -611,6 +614,13 @@ class FormNativoIOS:
             o = _norm(opcion)
             elegida = next((t for t in reales if _norm(t) == o), None) \
                 or next((t for t in reales if o in _norm(t) or _norm(t) in o), None)
+        if elegida is None and self.elegir_opcion is not None:
+            try:
+                elegida = self.elegir_opcion(etiqueta, reales)
+            except Exception:
+                elegida = None
+            if elegida not in reales:
+                elegida = None
         elegida = elegida or random.choice(reales)
         self.log(f"      menú: {len(reales)} opciones reales {reales[:6]}{'...' if len(reales) > 6 else ''}")
         comillas = "'" if '"' in elegida else '"'
@@ -931,6 +941,26 @@ class FormNativoIOS:
         except Exception as e:
             reg["quedo"] = f"ERROR {str(e).splitlines()[0][:120]}"
         return reg
+
+    def elegir_de_nuevo(self, etiqueta: str, intentos: int = 8) -> str:
+        """Vuelve a elegir (al azar, por elegir_opcion) en el select con esa etiqueta, ya
+        completado: lo busca bajando desde el principio del form. Devuelve lo que quedó, o
+        "" si no lo encontró."""
+        self.ir_al_form()
+        for _ in range(intentos):
+            self._nativo()
+            try:
+                c = next((n for n in self.escanear()["controles"] if n["tipo"] == "select"
+                          and n["etiqueta"] == etiqueta and _Y_MIN <= n["y"] <= _Y_MAX), None)
+                if c is not None:
+                    r = self._elegir(c, None)
+                    self.log(f"    · select   {etiqueta[:28]:28} de nuevo → '{r}'")
+                    return "" if r.startswith(("no ", "sin ", "ERROR")) else r
+            finally:
+                self._webview()
+            if not self._scroll_por(250):
+                break
+        return ""
 
     def tocar_texto(self, texto: str, intentos: int = 8) -> bool:
         """Toca, dentro del form, el link/botón con ese texto (ej. el CTA "Solicitar

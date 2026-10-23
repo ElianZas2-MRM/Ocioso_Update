@@ -3773,9 +3773,14 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     else:
                         print(f"⚠️ '{select_id}': ningún valor dinámico coincide, usando aleatorio")
 
-                # Prioridad 3: aleatorio (nadie pidió nada para este campo)
+                # Prioridad 3: aleatorio (nadie pidió nada para este campo). Región, ciudad y
+                # concesionario rotan para no repetirse en las corridas del día.
                 if chosen_option is None:
-                    chosen_option = random.choice(valid_options)
+                    chosen_option = self._elegir_al_azar(select_id, info.get("label") or select_id, valid_options)
+                elif from_excel:
+                    from osocio.utils.rotacion_dealers import tipo_de_campo
+                    self._rotacion_anotar(tipo_de_campo(select_id, info.get("label")), select_id,
+                                          chosen_option.text, al_azar=False)
 
                 option_value = chosen_option.get_attribute("value") or chosen_option.text
                 option_text  = chosen_option.text.strip()
@@ -4051,6 +4056,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
         if not filled_any:
             print(" No se encontraron campos no mapeados para auto-completar")
+        # Con todos los dropdowns ya elegidos: que el concesionario al azar no se repita hoy.
+        try:
+            self._evitar_concesionario_repetido()
+        except Exception as e:
+            print(f" Rotación de concesionarios: no crítico — {e}")
         return filled_any
 
     def _normalize_text(self, value):
@@ -4746,6 +4756,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 self._url_form_encontrado = ""
                 self._errores_ss_taken = False
                 self._landing_issue = ""   # 404 / error de carga de la landing (se llena en process_landing_page)
+                # Región / ciudad / concesionario elegidos en esta fila (rotación del día).
+                self._rotacion_fila = {}
+                self._aviso_rotacion = ""
 
                 # Estado HTTP real de las URLs: Selenium no expone el status code, así que
                 # si la landing da 404 o el form está caído (503), el lead falla sin decir
@@ -5211,6 +5224,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         f" | Aviso — campos opcionales vacíos (sin valor asignado): {', '.join(_sin_valor)}"
                         f" — podés asignarles un valor en ⚙ IDs Dinámicos"
                     )
+                # Rotación del día: se anota lo que usó esta fila y, si el concesionario
+                # quedó repetido (único o ya usados todos), se aclara en el resultado.
+                if getattr(self, "_aviso_rotacion", ""):
+                    result_text = (result_text or "") + f" | Aviso — {self._aviso_rotacion}"
+                self._registrar_rotacion_fila()
                 _no_encontrados = getattr(self, "_campos_dropdown_no_encontrados", [])
                 if _no_encontrados:
                     result_text = (result_text or "") + f" | Dropdown no encontrado: {'; '.join(_no_encontrados)}"
