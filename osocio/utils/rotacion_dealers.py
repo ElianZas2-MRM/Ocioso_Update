@@ -67,6 +67,11 @@ class RotacionDelDia:
         self._lock = self.ruta + ".lock"
 
     # ── archivo con lock ──────────────────────────────────────────────────────────────
+    # En Windows un archivo que otro está borrando, o que tiene abierto el antivirus /
+    # OneDrive / otra corrida leyéndolo, da PermissionError por un instante. Eso es "ocupado,
+    # probá de nuevo", no un error: antes mataba el hilo y la anotación se perdía.
+    _REINTENTOS, _PAUSA = 40, 0.05
+
     def _tomar_lock(self, espera=5.0):
         os.makedirs(self.carpeta, exist_ok=True)
         fin = time.time() + espera
@@ -75,7 +80,7 @@ class RotacionDelDia:
                 fd = os.open(self._lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.close(fd)
                 return True
-            except FileExistsError:
+            except (FileExistsError, PermissionError):
                 # Un lock de más de 30 s es de una corrida que se cortó: se descarta.
                 try:
                     if time.time() - os.path.getmtime(self._lock) > 30:
@@ -87,25 +92,43 @@ class RotacionDelDia:
                     return False
                 time.sleep(0.05)
 
+    def _reintentar(self, accion):
+        """accion() reintentando mientras Windows diga PermissionError (archivo ocupado)."""
+        for _ in range(self._REINTENTOS - 1):
+            try:
+                return accion()
+            except PermissionError:
+                time.sleep(self._PAUSA)
+        return accion()
+
     def _soltar_lock(self):
         try:
-            os.remove(self._lock)
+            self._reintentar(lambda: os.remove(self._lock))
         except OSError:
             pass
 
-    def _leer(self):
-        try:
+    def _leer(self, estricto=False):
+        """Lo anotado hoy. Sin archivo (o roto) = nada anotado. Si el archivo existe pero no
+        se puede abrir, `estricto` lo informa con la excepción en vez de devolver {}: quien
+        va a escribir no puede tomar "no pude leer" por "no hay nada" y pisar lo anotado."""
+        def abrir():
             with open(self.ruta, encoding="utf-8") as f:
-                datos = json.load(f)
+                return json.load(f)
+        try:
+            datos = self._reintentar(abrir)
             return datos if isinstance(datos, dict) else {}
-        except (OSError, ValueError):
+        except (FileNotFoundError, ValueError):
+            return {}
+        except OSError:
+            if estricto:
+                raise
             return {}
 
     def _escribir(self, datos):
         tmp = self.ruta + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(datos, f, ensure_ascii=False, indent=1)
-        os.replace(tmp, self.ruta)
+        self._reintentar(lambda: os.replace(tmp, self.ruta))
 
     # ── consultas y elección ──────────────────────────────────────────────────────────
     def usos(self, pais, tipo):
@@ -133,12 +156,15 @@ class RotacionDelDia:
             return
         tomado = self._tomar_lock()
         try:
-            datos = self._leer()
+            datos = self._leer(estricto=True)
             por_pais = datos.setdefault(_norm(pais), {})
             for tipo, texto in elegidos.items():
                 cuenta = por_pais.setdefault(tipo, {})
                 cuenta[_norm(texto)] = cuenta.get(_norm(texto), 0) + 1
             self._escribir(datos)
+        except OSError as e:
+            # Mejor perder esta anotación que borrar las del día; la corrida sigue.
+            print(f"⚠️ Rotación: no se pudo anotar {elegidos} ({e})")
         finally:
             if tomado:
                 self._soltar_lock()
