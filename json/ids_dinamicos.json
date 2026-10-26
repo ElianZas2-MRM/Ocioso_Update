@@ -1316,6 +1316,18 @@
       ],
       "nombre_campo": "purchase-requirements",
       "origen": "autovalor"
+    },
+    {
+      "id": "dealer-selector-omni-search",
+      "valor": [
+        "822221438",
+        "629447"
+      ],
+      "paises": [
+        "Brasil"
+      ],
+      "nombre_campo": "CEP (digite o CEP completo – apenas números – e localize a Concessionária mais próxima)",
+      "origen": "autovalor"
     }
   ],
   "dependencies": [

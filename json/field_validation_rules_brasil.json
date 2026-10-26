@@ -1746,6 +1746,26 @@
       "error_message_patterns": [],
       "error_config": {},
       "error_priority": []
+    },
+    "DEALER-SELECTOR-OMNI-SEARCH": {
+      "descripcion": "CEP (digite o CEP completo – apenas números – e localize a Concessionária mais próxima)",
+      "campo": "dealer-selector-omni-search",
+      "element_id": "dealer-selector-omni-search",
+      "regex_full": "",
+      "regex_char": "",
+      "test_text": "",
+      "dropdown": false,
+      "dropdown_error_message": "",
+      "dependencies": [],
+      "paises": [
+        "Brasil"
+      ],
+      "teclado_mobile": false,
+      "rules": {},
+      "error_messages": {},
+      "error_message_patterns": [],
+      "error_config": {},
+      "error_priority": []
     }
   }
 }
