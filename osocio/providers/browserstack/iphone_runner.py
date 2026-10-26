@@ -28,6 +28,84 @@ from osocio.core.generic_country_base import GenericCountryBase
 from osocio.providers.browserstack.ios_nativo import OMITIR, FormNativoIOS
 
 
+def _casillas_por_http(url, timeout=15) -> Dict:
+    """Radios, checkboxes y <select multiple> del HTML que devuelve el servidor, con el
+    mismo formato que FormFillerIphone._JS_CASILLAS. {} si no hay (o no se pudo bajar)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        html = urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", "replace")
+    except Exception:
+        return {}
+    return casillas_del_html(html)
+
+
+def casillas_del_html(html) -> Dict:
+    from html.parser import HTMLParser
+
+    class _Lector(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.inputs = []            # [name, tipo, value, id, texto del label que lo envuelve]
+            self.labels = {}            # for -> texto
+            self.multis = {}            # name -> [[value, texto], ...]
+            self._label = None          # [texto, for, índices de inputs adentro]
+            self._multi = None
+            self._opcion = None
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            tipo = (a.get("type") or "").lower()
+            if tag == "input" and tipo in ("radio", "checkbox"):
+                nombre = (a.get("name") or a.get("id") or "").lower()
+                if nombre:
+                    self.inputs.append([nombre, tipo, a.get("value") or "", a.get("id") or "", ""])
+                    if self._label is not None:
+                        self._label[2].append(len(self.inputs) - 1)
+            elif tag == "label":
+                self._label = ["", a.get("for"), []]
+            elif tag == "select" and "multiple" in a:
+                self._multi = (a.get("name") or a.get("id") or "").lower()
+                self.multis[self._multi] = []
+            elif tag == "option" and self._multi and "disabled" not in a and (a.get("value") or "").strip():
+                self._opcion = [a.get("value"), ""]
+
+        def handle_endtag(self, tag):
+            if tag == "label" and self._label is not None:
+                texto = " ".join(self._label[0].split())
+                if self._label[1]:
+                    self.labels[self._label[1]] = texto
+                for i in self._label[2]:
+                    self.inputs[i][4] = texto
+                self._label = None
+            elif tag == "option" and self._opcion is not None:
+                self.multis[self._multi].append([self._opcion[0], " ".join(self._opcion[1].split())])
+                self._opcion = None
+            elif tag == "select":
+                self._multi = None
+
+        def handle_data(self, data):
+            if self._label is not None:
+                self._label[0] += data
+            if self._opcion is not None:
+                self._opcion[1] += data
+
+    lector = _Lector()
+    try:
+        lector.feed(html or "")
+    except Exception:
+        return {}
+    out: Dict[str, Dict] = {}
+    for nombre, tipo, valor, iid, envuelve in lector.inputs:
+        g = out.setdefault(nombre, {"tipo": tipo, "titulo": "", "opciones": []})
+        g["opciones"].append({"valor": valor, "texto": (lector.labels.get(iid) if iid else "") or envuelve})
+    for nombre, opciones in lector.multis.items():
+        if nombre and opciones:
+            out[nombre] = {"tipo": "multi", "titulo": "",
+                           "opciones": [{"valor": v, "texto": t} for v, t in opciones]}
+    return out
+
+
 class FormFillerIphone(GenericCountryBase):
 
     _nativo: Optional[FormNativoIOS] = None
@@ -35,6 +113,189 @@ class FormFillerIphone(GenericCountryBase):
     def begin_row_tracking(self):
         super().begin_row_tracking()
         self._nativo = None  # cada fila es otra landing: el iframe se vuelve a buscar
+        self._casillas_form = {}
+        self._nombres_ios = {}          # (tipo, etiqueta en pantalla) -> name del form
+        self._checkbox_ios_marcadas = {}
+
+    # ── traductor name <-> texto (radios, checkboxes, listas múltiples) ──────────
+    # La capa nativa ve los textos ("WhatsApp", "¿Tenés un Chevrolet?") pero no el name
+    # del campo, que es lo que trae el Excel. Antes de abrir la landing se abre la URL del
+    # form sola (ahí sí hay DOM) y se leen los name con sus opciones, tal como están HOY:
+    # si el form agrega una opción, aparece sola. Después se llena en la landing como siempre.
+    _JS_CASILLAS = r"""
+        function txt(e) { return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
+        function label(c) {
+            return txt((c.id && document.querySelector('label[for="' + c.id + '"]')) || c.closest('label'));
+        }
+        function titulo(c) {
+            var g = c.closest('fieldset, .form-group, [role=group], [role=radiogroup]');
+            var t = g && g.querySelector('legend, label:not(.form-check-label)');
+            return t && !t.contains(c) ? txt(t) : '';
+        }
+        var out = {};
+        document.querySelectorAll('input[type=radio], input[type=checkbox]').forEach(function (c) {
+            var n = (c.getAttribute('name') || c.id || '').toLowerCase();
+            if (!n) return;
+            var g = out[n] = out[n] || {tipo: c.type, titulo: titulo(c), opciones: []};
+            g.opciones.push({valor: c.value || '', texto: label(c)});
+        });
+        document.querySelectorAll('select[multiple]').forEach(function (s) {
+            var n = (s.getAttribute('name') || s.id || '').toLowerCase();
+            if (!n) return;
+            out[n] = {tipo: 'multi', titulo: txt(s.id && document.querySelector('label[for="' + s.id + '"]')) || titulo(s),
+                      opciones: Array.from(s.options).filter(function (o) { return !o.disabled && o.value.trim(); })
+                                     .map(function (o) { return {valor: o.value, texto: txt(o)}; })};
+        });
+        return out;"""
+
+    def _columnas_de_casillas(self):
+        """Columnas del Excel con valor que no son campos del mapping: pueden ser el name de
+        un radio, de un grupo de checkboxes o de una lista múltiple."""
+        from osocio.utils.field_id_aliases import alias_ids_for
+        conocidos = {str(c).lower() for c in (getattr(self, "data_columns", None) or [])}
+        for fc in self.field_mapping or []:
+            fids = fc.get("id")
+            for f in (fids if isinstance(fids, list) else [fids]):
+                conocidos.add(str(f or "").lower())
+                conocidos.update(str(a).lower() for a in alias_ids_for(f))
+        pedidas = {**(self.radio_prefs or {}), **{k: "" for k in (self.checkbox_prefs or {})}}
+        return [k for k, v in pedidas.items()
+                if k not in conocidos and not str(v).lower().startswith(("http", "/content/"))]
+
+    def process_landing_page(self, landing_url, ss_counter, take_screenshot=True):
+        form_url = getattr(self, "expected_form_url", "") or ""
+        # Una vez por fila (process_landing_page se repite en los reintentos).
+        if form_url and not self._casillas_form and self._columnas_de_casillas():
+            self._casillas_form = self._leer_casillas_del_form(form_url)
+        return super().process_landing_page(landing_url, ss_counter, take_screenshot)
+
+    def _leer_casillas_del_form(self, form_url):
+        """{name: {tipo, titulo, opciones: [{valor, texto}]}} del form. Primero por HTTP (los
+        forms gm_forms traen los inputs en el HTML): no se navega en el iPhone, que con
+        landings pesadas (CL embajadores) se queda sin memoria. Si el HTML no los trae (se
+        pintan por JS, ej. gm_front), se abre el form solo en el iPhone y se lee el DOM."""
+        casillas = _casillas_por_http(form_url)
+        if casillas:
+            print(f"🔎 Radios / checkboxes del form (HTML): "
+                  f"{ {n: [o['texto'] or o['valor'] for o in g['opciones']] for n, g in casillas.items()} }")
+            return casillas
+        try:
+            self.driver.get(form_url)
+            fin = time.time() + 10
+            casillas = {}
+            while time.time() < fin:   # forms que se pintan por JS: esperar a que aparezcan
+                casillas = self.driver.execute_script(self._JS_CASILLAS) or {}
+                if casillas:
+                    break
+                time.sleep(1)
+            print(f"🔎 Radios / checkboxes del form: "
+                  f"{ {n: [o['texto'] or o['valor'] for o in g['opciones']] for n, g in casillas.items()} }")
+            return casillas
+        except Exception as e:
+            print(f"  ⚠ No se pudieron leer los radios / checkboxes del form: {e}")
+            return {}
+
+    def _clave_texto(self, texto):
+        return "".join(self._palabras(str(texto or "").replace("*", "")))
+
+    @staticmethod
+    def _textos_visibles(opciones):
+        """Lo que la pantalla muestra de cada opción: el texto del label o, si el label es
+        el mismo para todas (CL envolve: el título del grupo) o no hay, el value."""
+        textos = [o["texto"] for o in opciones]
+        return [o["texto"] if o["texto"] and textos.count(o["texto"]) == 1 else o["valor"] for o in opciones]
+
+    def _titulo_coincide(self, titulo_form, etiqueta):
+        a, b = self._clave_texto(titulo_form), self._clave_texto(etiqueta)
+        return bool(a and b and (a == b or a in b or b in a))
+
+    def _grupo_del_form(self, tipo, opciones_pantalla=None, titulo_pantalla="", opcion=""):
+        """El name del form que corresponde a lo que se ve en pantalla. Radios: por el
+        conjunto de opciones (y el título si hay dos grupos iguales, ej. dos "Sí / No").
+        Checkbox: por el texto de su opción (y el título del grupo si se repite)."""
+        grupos = {n: g for n, g in (self._casillas_form or {}).items() if g.get("tipo") == tipo}
+        if opcion:
+            o = self._clave_texto(opcion)
+            cands = [n for n, g in grupos.items()
+                     if any(self._clave_texto(t) == o for t in self._textos_visibles(g["opciones"]))]
+        elif opciones_pantalla is not None:
+            # Todas las opciones de la pantalla están en el grupo. Una pregunta con opciones
+            # largas, una debajo de otra (PE libro de reclamaciones), llega en pedazos de una
+            # opción: cada pedazo se reconoce igual.
+            pant = {self._clave_texto(t) for t in opciones_pantalla} - {""}
+            cands = [n for n, g in grupos.items()
+                     if pant and pant <= {self._clave_texto(t) for t in self._textos_visibles(g["opciones"])}]
+        else:
+            cands = list(grupos)
+        if len(cands) > 1:
+            cands = [n for n in cands if self._titulo_coincide(grupos[n].get("titulo"), titulo_pantalla)]
+        return cands[0] if len(cands) == 1 else None
+
+    def _radio_pedido_ios(self, etiqueta, opciones_pantalla):
+        """La opción (texto en pantalla) que pide el Excel para esta pregunta de radio, OMITIR,
+        o None (al azar)."""
+        n = self._grupo_del_form("radio", opciones_pantalla, etiqueta)
+        if n is None:
+            return None
+        self._nombres_ios[("radio", etiqueta)] = n
+        pedido = (self.radio_prefs or {}).get(n)
+        if not pedido:
+            return None
+        if self._pide_omitir_campo(n, pedido):
+            return OMITIR
+        opciones = self._casillas_form[n]["opciones"]
+        marcar, _ = self.opciones_a_marcar([pedido], [(o["valor"], o["texto"]) for o in opciones])
+        if not marcar:
+            self._avisar_opciones_no_encontradas(n, [pedido])
+            return None
+        elegida = self._textos_visibles(opciones)[min(marcar)]
+        if self._clave_texto(elegida) not in {self._clave_texto(t) for t in opciones_pantalla}:
+            # Pedazo de la pregunta sin la opción pedida: no se toca (se marca en el suyo).
+            print(f"      radio '{n}': '{elegida}' no está en este pedazo {opciones_pantalla}; no se toca")
+            return OMITIR
+        return elegida
+
+    def _preferencia_checkbox_ios(self, c):
+        """True / False según el Excel (SI/NO, o la lista de opciones de su grupo); None si
+        el Excel no dice nada de este checkbox."""
+        n = self._grupo_del_form("checkbox", titulo_pantalla=c.get("grupo", ""), opcion=c["etiqueta"])
+        if n is None:
+            return None
+        lista = (self.checkbox_opciones or {}).get(n)
+        opciones = self._casillas_form[n]["opciones"]
+        if lista is not None and self._pide_omitir_campo(n, ",".join(lista)):
+            return c["valor"] == "1"      # '-': se deja como está
+        if lista is not None and len(opciones) > 1:
+            marcar, faltan = self.opciones_a_marcar(lista, [(o["valor"], o["texto"]) for o in opciones])
+            self._avisar_opciones_no_encontradas(n, faltan)
+            o = self._clave_texto(c["etiqueta"])
+            visibles = self._textos_visibles(opciones)
+            si = any(self._clave_texto(visibles[i]) == o for i in marcar)
+            elegidas = self._checkbox_ios_marcadas.setdefault(n, [])
+            if si and c["etiqueta"] not in elegidas:
+                elegidas.append(c["etiqueta"])
+            return si
+        return (self.checkbox_prefs or {}).get(n)
+
+    def _opciones_multi_ios(self, c):
+        """Las filas que pide el Excel en una lista múltiple (por su orden en el form) y
+        cuántas opciones tiene hoy; None si el form no tiene una lista que coincida."""
+        n = self._grupo_del_form("multi", titulo_pantalla=c["etiqueta"])
+        if n is None:
+            return None
+        self._nombres_ios[("multi", c["etiqueta"])] = n
+        opciones = self._casillas_form[n]["opciones"]
+        plan = {"total": len(opciones), "indices": None}
+        lista = (self.checkbox_opciones or {}).get(n)
+        if lista:
+            if self._pide_omitir_campo(n, ",".join(lista)):
+                return {"omitir": True}
+            marcar, faltan = self.opciones_a_marcar(lista, [(o["valor"], o["texto"]) for o in opciones])
+            self._avisar_opciones_no_encontradas(n, faltan)
+            if marcar:
+                plan["indices"] = sorted(marcar)
+                plan["pedido"] = " | ".join(self._textos_visibles(opciones)[i] for i in plan["indices"])
+        return plan
 
     # ── entrar al form: quedarse en la landing ───────────────────────────────
     def _entrar_al_iframe(self, iframe):
@@ -100,7 +361,9 @@ class FormFillerIphone(GenericCountryBase):
         self._current_form_data = form_data
         self._snapshot_ios: Dict[str, Dict] = {}
         self._tipo_doc_ios = ""
-        def valor_para(tipo, etiqueta):
+        def valor_para(tipo, etiqueta, opciones=None):
+            if tipo == "radio":
+                return self._radio_pedido_ios(etiqueta, opciones or [])
             valor = self._valor_para_etiqueta(form_data, tipo, etiqueta)
             # Nunca "test" en un campo de texto (IDs Dinámicos trae "Este texto es un
             # test"): lo mismo que _fill_and_dispatch en los navegadores.
@@ -109,6 +372,9 @@ class FormFillerIphone(GenericCountryBase):
             return valor
 
         self._nativo.elegir_opcion = self._elegir_opcion_ios
+        if self._casillas_form:
+            self._nativo.preferencia_checkbox = self._preferencia_checkbox_ios
+            self._nativo.opciones_multi = self._opciones_multi_ios
         self._rotacion_excluir = {}
         registro = self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
         self._evitar_concesionario_repetido_ios(valor_para)
@@ -128,6 +394,8 @@ class FormFillerIphone(GenericCountryBase):
                 self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
             finally:
                 self._nativo.marcar_todos = False
+        for n, marcadas in self._checkbox_ios_marcadas.items():
+            self._record_field_value(n, " | ".join(marcadas))
         return self.screenshot_manager.fname("form", "completado", 1)
 
     # ── rotación del día (región / ciudad / concesionario) ──────────────────────
@@ -204,9 +472,7 @@ class FormFillerIphone(GenericCountryBase):
     def _valor_para_etiqueta(self, form_data, tipo, etiqueta):
         """El mismo camino de decisión que fill_form_fields, partiendo de la etiqueta."""
         if tipo == "radio":
-            # Una opción al azar (la capa nativa no ve el name del grupo, así que la
-            # columna del Excel con el name todavía no aplica en iPhone; ver README).
-            return None
+            return None   # lo resuelve _radio_pedido_ios con las opciones de la pantalla
         ids = ids_para_etiqueta(etiqueta)
         fc = self._config_para_ids(ids) if ids else None
         fid = self._id_principal(ids, fc) or etiqueta
@@ -257,7 +523,14 @@ class FormFillerIphone(GenericCountryBase):
     def _registrar_campo_ios(self, reg):
         """Lo que quedó en cada campo: tracking del Excel y foto para 'Datos vs Excel'."""
         quedo = reg.get("quedo") or ""
-        if quedo.startswith(("(", "no ", "sin ", "ERROR")) or reg.get("tipo") in ("checkbox", "radio"):
+        if quedo.startswith(("(", "no ", "sin ", "ERROR")) or reg.get("tipo") == "checkbox":
+            return
+        # Radio / lista múltiple: con el name del form, si el traductor lo reconoció.
+        nombre = self._nombres_ios.get((reg.get("tipo"), reg.get("etiqueta", "")))
+        if nombre:
+            self._record_field_value(nombre, quedo)
+            return
+        if reg.get("tipo") == "radio":
             return
         ids = ids_para_etiqueta(reg.get("etiqueta", ""))
         fc = self._config_para_ids(ids) if ids else None
@@ -318,8 +591,8 @@ class FormFillerIphone(GenericCountryBase):
         revés, para no arriesgar un envío vacío en un form sin obligatorios: se llena todo,
         se toca Enviar y, si el form frena con un aviso debajo de un checkbox o de su grupo,
         se marcan esos (todas las opciones del grupo, como en Chrome) y se reenvía una vez.
-        Si nada frena el envío, es que no eran obligatorios. Pendiente: las columnas SI/NO
-        del Excel para checkboxes opcionales (la capa nativa no ve el name del checkbox).
+        Si nada frena el envío, es que no eran obligatorios. Lo que pide el Excel para un
+        checkbox (SI/NO o la lista de su grupo) se respeta también acá (FormNativoIOS.marcar).
         """
         time.sleep(2)
         try:

@@ -348,6 +348,9 @@ def _motor_radios(prefs=None):
         def _pide_omitir_campo(self, fid, valor):
             from osocio.utils.omitir_campo import pide_omitir
             return pide_omitir(valor)
+
+        def _record_field_value(self, campo, valor):
+            pass
     m = _M()
     m.radio_prefs = prefs or {}
     m._decision_opcionales = {}

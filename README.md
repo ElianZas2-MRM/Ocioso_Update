@@ -208,7 +208,8 @@ Depende del tipo de campo, y la diferencia importa:
 |---|---|---|
 | **Texto** (Nombre, CPF, CEP…) | queda vacío (o toma el valor de IDs Dinámicos, si hay uno) | queda vacío, y el resultado dice que fue a propósito |
 | **Dropdown** (Modelo, Concesionario…) | **elige una al azar** | no lo toca |
-| **Checkbox** | se marca si es obligatorio o de términos | — (usa `SI`/`NO`, ver abajo) |
+| **Checkbox** | se marca si es obligatorio o de términos | no lo toca (y si no, `SI`/`NO`, ver abajo) |
+| **Radio** | una opción al azar | no lo toca |
 
 Por eso los Excels generados dejan **Modelo y Fecha estimada vacíos a propósito**: para que roten solos entre corridas.
 
@@ -244,12 +245,24 @@ La lista vive en `osocio/utils/field_id_aliases.py` y es la única fuente: si en
 - Lo único que les hace es **sacarles el formato** (puntos y guiones) y **devolverles el cero inicial** que Excel se come cuando la celda es numérica (CPF de 10 dígitos → 11, CNPJ de 13 → 14, CEP de 7 → 8).
 - Si el documento está mal cargado, **llega así al formulario y el formulario lo rechaza**. Eso es a propósito: taparlo con uno generado escondería el problema.
 
-### Columnas especiales del Excel: marcar o no un checkbox
+### Columnas especiales del Excel: radios y checkboxes
 
-Por defecto la app **marca todos los checkboxes** que reconoce (términos, privacidad, y cualquier otro que el formulario declare como obligatorio). Si un formulario tiene un checkbox **opcional** y querés decidir vos si se tilda o no, agregá una columna al Excel:
+Por defecto la app **marca los checkboxes** que reconoce (términos, privacidad, y cualquier otro que el formulario declare como obligatorio) y en cada **radio** elige una opción al azar. Si querés decidir vos, agregá una columna al Excel cuyo **encabezado** es el atributo `name` del campo (o su `id`), tal cual figura en el HTML del formulario. Lo que va en la celda depende del tipo:
 
-- **El encabezado de la columna** = el atributo `name` del checkbox (o su `id`), tal cual figura en el HTML del formulario.
-- **El valor de la celda** = `SI` o `NO`.
+| Campo | Celda | Ejemplo |
+|---|---|---|
+| **Radio** (una sola opción) | la opción | `have-interest` = `Renovar` |
+| **Grupo de checkboxes** (varios con el mismo `name`) | las opciones a marcar, **separadas por coma**. Las demás quedan sin marcar | `contact-channels` = `WhatsApp, Llamada` |
+| **Lista de selección múltiple** (`<select multiple>`, ej. Pasatiempos) | las opciones, separadas por coma | `hobbies[]` = `Viajes, Cine` |
+| **Checkbox suelto** | `SI` o `NO` | `test-drive` = `NO` |
+| Cualquiera de los anteriores | `-`: no lo toca | `have-chevrolet` = `-` |
+
+- **La opción se escribe como se ve en el formulario** (el texto) o con su `value` del HTML. No importan mayúsculas ni acentos. Si no hay una igual, vale una que la contenga como palabra completa: `Correo` encuentra "Correo electrónico".
+- **Las opciones se leen del formulario en cada corrida**: no hay ninguna lista cargada en la app. Si mañana el form agrega una opción (ej. "Telegram"), ya se puede pedir desde el Excel, y el azar también la tiene en cuenta.
+- Si pedís una opción que el formulario no tiene, el resultado lo dice (*"Opción no encontrada"*) y ese campo se completa como si la celda estuviera vacía.
+- Radios con **más de dos opciones** o varias preguntas con el mismo *Sí / No* funcionan igual: cada columna apunta a su grupo por el `name`.
+
+Ejemplo con un checkbox suelto: los formularios RAQ de Brasil tienen `<input type="checkbox" name="test-drive">` ("Tenho interesse em realizar um test-drive"). Para que **no** se tilde:
 
 Ejemplo: los formularios RAQ de Brasil tienen `<input type="checkbox" name="test-drive">` ("Tenho interesse em realizar um test-drive"). Para que **no** se tilde:
 
@@ -261,12 +274,12 @@ Detalles:
 
 - Es **por fila**: podés tener un lead con el test-drive tildado y otro sin él.
 - Valores aceptados: `SI` / `NO`, `YES` / `NO`, `TRUE` / `FALSE`, `1` / `0`, `X`.
-- Si la columna no corresponde a ningún checkbox del formulario, **se ignora sola** (no rompe nada).
+- Si la columna no corresponde a ningún radio ni checkbox del formulario, **se ignora sola** (no rompe nada).
 - Un `SI` tilda el checkbox aunque no sea obligatorio; un `NO` lo destilda y evita que la app lo vuelva a marcar antes de enviar.
 - No hace falta recompilar el portable: los Excels viven en `data/`, afuera del `.exe`.
-- Funciona en Chrome, Firefox, Edge, Android BS y Mac BS. **En iPhone BS todavía no**: ahí el form se toca desde la pantalla y no se ve el `name` del checkbox. El iPhone marca los de términos/privacidad y los que el form exige al tocar Enviar (ej. "Preferencia de contacto" en Chile).
+- Funciona en Chrome, Firefox, Edge, Android BS, Mac BS **y iPhone BS**. En el iPhone el form se toca desde la pantalla, que muestra los textos pero no el `name`: por eso, en las filas que traen columnas de este tipo, la app lee antes el `name` y las opciones de cada radio / checkbox / lista desde la URL del form (del HTML si los trae; si el form se arma por JavaScript, abriéndolo solo en el iPhone) y recién ahí abre la landing y llena como siempre (suma unos segundos sólo en esas filas). Las preguntas *Sí / No* repetidas se distinguen por su título.
 
-> **Solo aplica a checkboxes.** Para campos de texto o selects el Excel funciona distinto: la columna se mapea al campo por el **nombre del campo** o por el **`id` del HTML**, pero el campo tiene que estar declarado en el `field_mapping` del país (`json/fixed_field_mappings.json`). Si querés que un campo se llene siempre con un valor fijo sin tocar el Excel, usá `json/ids_dinamicos.json` (ver la sección *Qué hay adentro de `json/`*).
+> **Solo aplica a radios, checkboxes y listas múltiples.** Para campos de texto o selects el Excel funciona distinto: la columna se mapea al campo por el **nombre del campo** o por el **`id` del HTML**, pero el campo tiene que estar declarado en el `field_mapping` del país (`json/fixed_field_mappings.json`). Si querés que un campo se llene siempre con un valor fijo sin tocar el Excel, usá `json/ids_dinamicos.json` (ver la sección *Qué hay adentro de `json/`*).
 
 ### Dropdowns (Modelo, Fecha estimada, Región…): primero el Excel, si no aleatorio
 

@@ -131,6 +131,12 @@ class FormNativoIOS:
         # Quién elige la opción al azar de un select: elegir_opcion(etiqueta, opciones) ->
         # texto o None. El runner lo usa para rotar región / ciudad / concesionario.
         self.elegir_opcion = None
+        # Lo que pide el Excel para un checkbox: preferencia_checkbox(c) -> True (marcar),
+        # False (desmarcar) o None (la regla de siempre: términos / obligatorios).
+        self.preferencia_checkbox = None
+        # Lista múltiple: opciones_multi(c) -> {"total", "indices" (las pedidas, por orden
+        # en la lista) o None (al azar), "omitir"} o None si no se sabe nada de ella.
+        self.opciones_multi = None
 
     # ── contextos y scroll ───────────────────────────────────────────────────
     def _nativo(self):
@@ -380,18 +386,51 @@ class FormNativoIOS:
     # puede leer mientras está abierta (leer la capa nativa ahí hace caer a Safari), así que
     # se toca por posición, entre las primeras opciones, que toda lista tiene.
     _MULTI_PRIMERA, _MULTI_FILA, _MULTI_FILAS = 71, 32.2, 4
+    # Altura (pt) a la que se sube el botón antes de abrir la lista: debajo del menú fijo
+    # de la landing (el título del campo, que se toca para cerrar, queda arriba del botón),
+    # con lugar para ~18 filas abajo.
+    _MULTI_ARRIBA = 220
 
-    def _elegir_multi(self, c) -> str:
-        """Abre la lista, toca una cantidad al azar de opciones por posición, la cierra tocando
-        el título del campo y devuelve lo que muestra el campo después."""
+    def _elegir_multi(self, c, plan: Optional[Dict] = None) -> str:
+        """Abre la lista, toca las opciones por posición, la cierra tocando el título del
+        campo y devuelve lo que muestra el campo después.
+
+        plan (del runner, leído del form): "indices" = las filas que pide el Excel; sin
+        índices, una cantidad al azar entre las filas que hay (y que entran en pantalla).
+        """
+        plan = plan or {}
+        # Con el botón abajo en la pantalla, bootstrap-select abre la lista hacia ARRIBA y
+        # los toques por posición caen afuera (CL "Pasatiempos" con opciones pedidas más
+        # abajo de la 4ª). Se sube el botón cerca del borde de arriba antes de abrir.
+        if _num(c["e"], "y") > self._MULTI_ARRIBA:
+            self._webview()
+            try:
+                self._scroll_por(int(_num(c["e"], "y") - self._MULTI_ARRIBA))
+            finally:
+                self._nativo()
+            c = next((n for n in self.escanear()["controles"]
+                      if n["tipo"] == "multi" and n["etiqueta"] == c["etiqueta"]), c)
         b = c["e"]
         bx, by = _num(b, "x") + 40, _num(b, "y")
+
+        def y_fila(i):
+            return int(by + self._MULTI_PRIMERA + self._MULTI_FILA * i)
+
         self.d.execute_script("mobile: tap", {"x": bx, "y": by + _num(b, "height") // 2})
         time.sleep(1.5)
-        # Cantidad al azar: 1, 2, 3 o 4 (las filas que se pueden tocar sin leer la lista).
-        filas = random.sample(range(self._MULTI_FILAS), random.randint(1, self._MULTI_FILAS))
+        if plan.get("indices"):
+            filas = [i for i in plan["indices"] if y_fila(i) < self._alto_pantalla() - 60]
+            afuera = [i for i in plan["indices"] if i not in filas]
+            if afuera:
+                self.log(f"      ⚠ opciones {afuera} de '{c['etiqueta']}' quedan fuera de la pantalla")
+        else:
+            # Cantidad al azar entre las filas que hay: sin saber el total, las primeras 4
+            # (las que toda lista tiene).
+            hay = plan.get("total") or self._MULTI_FILAS
+            entran = [i for i in range(hay) if y_fila(i) < self._alto_pantalla() - 60] or [0]
+            filas = random.sample(entran, random.randint(1, len(entran)))
         for i in sorted(filas):
-            self.d.execute_script("mobile: tap", {"x": bx, "y": int(by + self._MULTI_PRIMERA + self._MULTI_FILA * i)})
+            self.d.execute_script("mobile: tap", {"x": bx, "y": y_fila(i)})
             time.sleep(0.6)
         cx, cy = c["cerrar"] or (bx, by - 40)
         self.d.execute_script("mobile: tap", {"x": cx, "y": cy})
@@ -470,7 +509,12 @@ class FormNativoIOS:
                        and len(_texto(s)) > 2 and not _texto(s).isdigit()), "")
         if opcion is not None:
             fila = _num(opcion, "y") + _num(opcion, "height") // 2
-            tap_x = (x + _num(opcion, "x")) // 2 if _num(opcion, "x") > x + 8 else x + 12
+            ox = _num(opcion, "x")
+            # El texto empieza lejos del borde (consentimientos): el cuadradito está entre
+            # los dos. Si empieza casi en el borde, el cuadradito está en el texto: después
+            # de un toque, iOS agranda el recuadro del vecino de fila (CO preferencia-de-
+            # canales: SMS pasa de x=26 a x=15) y tocar desde el borde cae afuera.
+            tap_x = (x + ox) // 2 if ox > x + 16 else max(x, ox) + 12
         else:
             fila, tap_x = y + _num(e, "height") // 2, x + 12
         return {"tipo": "checkbox", "e": e, "valor": (e.get("value") or "0"), "etiqueta": etiqueta,
@@ -641,10 +685,12 @@ class FormNativoIOS:
         except Exception:
             pass
 
-    def _marcar_checkbox(self, c) -> str:
-        """Hay que estar en NATIVE_APP y con el checkbox a la vista."""
-        if c["valor"] == "1":
-            return "ya estaba marcado"
+    def _marcar_checkbox(self, c, objetivo: str = "1") -> str:
+        """Hay que estar en NATIVE_APP y con el checkbox a la vista. objetivo "0" desmarca
+        (el Excel pidió NO, o es una opción de un grupo que el Excel no pidió)."""
+        hecho = "marcado" if objetivo == "1" else "desmarcado"
+        if c["valor"] == objetivo:
+            return f"ya estaba {hecho}"
         nuevo = c
         for _intento in range(2):   # a veces el primer toque después de scrollear no entra
             tap_x, tap_y = nuevo.get("tap") or (_num(nuevo["e"], "x") + 12, nuevo["y"])
@@ -653,8 +699,8 @@ class FormNativoIOS:
             nuevo = self._mismo_checkbox(c)
             if nuevo is None:
                 return "tocado"
-            if nuevo["valor"] == "1":
-                return "marcado"
+            if nuevo["valor"] == objetivo:
+                return hecho
         # Último intento: activarlo por accesibilidad (el click de XCUITest sobre el Switch
         # lo activa como un toque de VoiceOver: va al input, no al link del texto). En
         # acdelco.cl el cuadradito no está donde la capa nativa dice.
@@ -664,8 +710,8 @@ class FormNativoIOS:
                 el.click()
                 time.sleep(0.6)
                 nuevo = self._mismo_checkbox(c) or nuevo
-                if nuevo["valor"] == "1":
-                    return "marcado"
+                if nuevo["valor"] == objetivo:
+                    return hecho
             except Exception:
                 pass
         return f"sigue en {nuevo['valor']}"
@@ -673,11 +719,20 @@ class FormNativoIOS:
     # Opciones que nunca se eligen al azar: abren un bloque obligatorio que el lead no
     # tiene cómo completar (Libro de Reclamaciones: "menor de edad" pide responsable legal).
     _RADIO_SEGURA = ("mayor de edad",)
+    _RADIO_EVITAR = ("menor de edad",)
+
+    @staticmethod
+    def _clave_radio(c):
+        """Una pregunta de radio ya hecha se recuerda por título Y opciones: las que no
+        tienen título se llaman por su altura ("radio@13") y, con el scroll, otra pregunta
+        puede caer con el mismo nombre (PE libro de reclamaciones: RECLAMO y QUEJA llegan
+        como preguntas de una opción)."""
+        return (c["etiqueta"], tuple(o["texto"] for o in c.get("opciones", [])))
 
     def _elegir_radio(self, c, pedido: Optional[str]) -> str:
         """Toca una opción de la pregunta: la del Excel, o una al azar. Hay que estar en
         NATIVE_APP. Devuelve la opción que quedó marcada en pantalla."""
-        self._radios_hechos.add(c["etiqueta"])
+        self._radios_hechos.add(self._clave_radio(c))
         opciones = c["opciones"]
         elegida = None
         if pedido:
@@ -686,7 +741,12 @@ class FormNativoIOS:
                 or next((o for o in opciones if p in _norm(o["texto"]) or _norm(o["texto"]) in p), None)
         elegida = elegida or next((o for o in opciones
                                    if any(k in _norm(o["texto"]) for k in self._RADIO_SEGURA)), None)
-        elegida = elegida or random.choice(opciones)
+        if elegida is None:
+            # Al azar, nunca una opción que rompe el lead. Si el pedazo sólo trae esa, no se toca.
+            posibles = [o for o in opciones if not any(k in _norm(o["texto"]) for k in self._RADIO_EVITAR)]
+            if not posibles:
+                return "(no se toca)"
+            elegida = random.choice(posibles)
         if c.get("sin_estado"):
             # La capa nativa no dice cuál está marcada: se toca una vez y listo.
             self.d.execute_script("mobile: tap", {"x": elegida["tap"][0], "y": elegida["tap"][1]})
@@ -761,7 +821,7 @@ class FormNativoIOS:
                 self._scroll_por(int(c["y"] - 300))
             self._nativo()
             actual = self._mismo_checkbox(c) or c
-            return self._marcar_checkbox(actual)
+            return self._marcar_checkbox(actual, objetivo="0" if self._pref_checkbox(c) is False else "1")
         finally:
             self._webview()
 
@@ -778,14 +838,17 @@ class FormNativoIOS:
                 return False
             return _is_placeholder(c["valor"])
         if c["tipo"] == "radio":
-            return c["etiqueta"] not in self._radios_hechos
+            return self._clave_radio(c) not in self._radios_hechos
         if c["tipo"] == "multi":
             if re.match(r"^\d+\s+sele", _norm(c["valor"])):   # "3 seleccionados"
                 return False
             return c.get("elegidos", "").startswith("0") or _is_placeholder(c["valor"]) \
                 or "al menos" in _norm(c["valor"])
-        # Checkbox: se marca si es de términos/privacidad o si es obligatorio (* en el label),
-        # igual que la app ("se marca si es obligatorio o de términos").
+        # Checkbox: lo que pide el Excel manda (marcar o desmarcar). Si no pide nada, se marca
+        # si es de términos/privacidad o si es obligatorio (* en el label), igual que la app.
+        pref = self._pref_checkbox(c)
+        if pref is not None:
+            return c["valor"] != ("1" if pref else "0")
         if self._es_eleccion_de_grupo(c) and c["grupo"] in self._grupos_hechos:
             return False
         texto = f"{c['etiqueta']} {c.get('grupo', '')}"
@@ -793,6 +856,24 @@ class FormNativoIOS:
             return c["valor"] != "1"
         return c["valor"] != "1" and ("*" in texto
                                       or any(k in _norm(texto) for k in _CHECKBOX_A_MARCAR))
+
+    def _pref_checkbox(self, c) -> Optional[bool]:
+        hook = getattr(self, "preferencia_checkbox", None)
+        if hook is None:
+            return None
+        try:
+            return hook(c)
+        except Exception:
+            return None
+
+    def _plan_multi(self, c) -> Optional[Dict]:
+        hook = getattr(self, "opciones_multi", None)
+        if hook is None:
+            return None
+        try:
+            return hook(c)
+        except Exception:
+            return None
 
     @staticmethod
     def _es_eleccion_de_grupo(c) -> bool:
@@ -827,6 +908,8 @@ class FormNativoIOS:
                     if not (_Y_MIN <= c["y"] <= _Y_MAX) or not self._pendiente(c):
                         continue
                     clave = (c["tipo"], _norm(c["etiqueta"]))
+                    if c["tipo"] == "radio":
+                        clave = ("radio",) + self._clave_radio(c)
                     if intentos.get(clave, 0) >= 2:   # ya se intentó dos veces: no insistir
                         continue
                     pendientes.append((clave, c))
@@ -892,11 +975,16 @@ class FormNativoIOS:
     def _accion(self, c, valor_para) -> Dict:
         reg = {"tipo": c["tipo"], "etiqueta": c["etiqueta"], "pedido": "", "quedo": ""}
         try:
-            if c["tipo"] in ("texto", "select", "radio"):
+            if c["tipo"] == "radio":
+                # Con las opciones que muestra la pantalla: así el runner reconoce el grupo
+                # aunque haya dos preguntas "Sí / No".
+                pedido = valor_para(c["tipo"], c["etiqueta"], [o["texto"] for o in c["opciones"]])
+            elif c["tipo"] in ("texto", "select"):
                 pedido = valor_para(c["tipo"], c["etiqueta"])
+            if c["tipo"] in ("texto", "select", "radio"):
                 if pedido is OMITIR:
                     if c["tipo"] == "radio":
-                        self._radios_hechos.add(c["etiqueta"])
+                        self._radios_hechos.add(self._clave_radio(c))
                     reg["pedido"], reg["quedo"] = "-", "(omitido)"
                     return reg
             if c["tipo"] == "radio":
@@ -904,8 +992,12 @@ class FormNativoIOS:
                 reg["quedo"] = self._elegir_radio(c, pedido)
                 return reg
             if c["tipo"] == "multi":
-                reg["pedido"] = "(al azar)"
-                reg["quedo"] = self._elegir_multi(c)
+                plan = self._plan_multi(c) or {}
+                if plan.get("omitir"):
+                    reg["pedido"], reg["quedo"] = "-", "(omitido)"
+                    return reg
+                reg["pedido"] = plan.get("pedido") or "(al azar)"
+                reg["quedo"] = self._elegir_multi(c, plan)
                 return reg
             if c["tipo"] == "texto":
                 reg["pedido"] = pedido or ""
@@ -934,7 +1026,12 @@ class FormNativoIOS:
                     if ahora is not None and _norm(ahora["valor"]) != _norm(elegida):
                         self.log(f"      ⚠ se tocó '{elegida}' pero el select muestra '{ahora['valor']}'")
             elif c["tipo"] == "checkbox":
-                reg["pedido"] = "marcar"
+                pref = self._pref_checkbox(c)
+                if pref is False:
+                    reg["pedido"] = "desmarcar (Excel)"
+                    reg["quedo"] = self._marcar_checkbox(c, objetivo="0")
+                    return reg
+                reg["pedido"] = "marcar (Excel)" if pref else "marcar"
                 reg["quedo"] = self._marcar_checkbox(c)
                 if reg["quedo"] == "marcado" and self._es_eleccion_de_grupo(c):
                     self._grupos_hechos.add(c["grupo"])
