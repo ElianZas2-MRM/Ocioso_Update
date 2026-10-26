@@ -212,6 +212,28 @@ Agregado en el chequeo pre-merge (todas las landings de la matriz, sin enviar):
   por posición (1 a 4 al azar, entre las primeras) y se cierra tocando el título del campo
   antes de volver a leer.
 - **Radios sin estado** (Sí / No sin `value`): una opción al azar, se toca una vez.
+- **Radios, checkboxes y listas múltiples desde el Excel** (columna = `name` del campo; ver
+  README, "Columnas especiales del Excel: radios y checkboxes"): la capa nativa ve textos y
+  no el `name`. En las filas que traen columnas que no son campos del mapping, antes de la
+  landing se leen los radios / checkboxes / `select[multiple]` del form: `name`, `value`,
+  texto del label y título del grupo (`FormFillerIphone._leer_casillas_del_form`).
+  Primero del HTML por HTTP (los `gm_forms` los traen; no se navega en el iPhone, que con
+  landings pesadas como CL embajadores se quedaba sin memoria); si no están (`gm_front`
+  los arma por JS), se abre la URL del form sola en el iPhone y se lee el DOM. Después se
+  llena en la landing como siempre.
+  - Radios: el grupo se reconoce porque todas las opciones de la pantalla están en él y,
+    si hay dos iguales (dos *Sí / No*), por el título. Una pregunta con opciones largas
+    una debajo de otra (PE libro de reclamaciones) llega en pedazos de una opción sin
+    título ("radio@13"): se marca en el pedazo que tiene la opción pedida y los demás no
+    se tocan. Las preguntas hechas se recuerdan por título **y** opciones (con el scroll,
+    dos pedazos pueden caer con el mismo "radio@N"). Al azar nunca "menor de edad".
+  - Checkboxes: por el texto de la opción (o el `value`, si el label es el título del
+    grupo, como en CL envolve); el gancho `preferencia_checkbox` marca las pedidas y
+    desmarca las demás. En CO preferencia-de-canales, marcar una opción hace que iOS
+    informe marcada y agrande el recuadro de su vecina de fila: el toque se calcula desde
+    el texto de la opción cuando el texto empieza en el borde del recuadro.
+  - Listas: se sube el botón cerca del borde de arriba (si no, bootstrap-select abre la
+    lista hacia arriba) y se tocan por posición las filas pedidas, según el orden del form.
 - **Grupos de checkboxes con el título afuera** (CO "Preferencia de contacto"): con una
   opción alcanza. Si términos no se deja marcar, se completan también los opcionales
   vacíos y se marcan los demás checkboxes (acdelco: `product_info` habilita `terms`).
@@ -357,11 +379,11 @@ Lo que se mantiene a propósito: las programaciones y selecciones guardadas con 
 
 **Para otros PRs** (cada uno en su rama, después de mergear este):
 
-- iPhone: columnas SI/NO de checkboxes opcionales y `name` de grupos de radios desde el
-  Excel (la capa nativa no ve el `name`).
+- [x] Rotación de dealers: concesionario / ciudad / región al azar sin repetirse en las
+      corridas del día, salvo que sea la única opción o lo pida el Excel (#29).
+- [x] iPhone: radios, grupos de checkboxes, checkboxes SI/NO y listas múltiples desde el
+      Excel por `name` (traductor leído del form).
 - BR `solicitar-proposta`: validar el form AEM (embebido, sin iframe) por su ruta.
-- Rotación de dealers: concesionario / ciudad / región al azar sin repetirse en las
-  corridas del día, salvo que sea la única opción o lo pida el Excel.
 
 **Fuera del código:**
 

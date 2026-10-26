@@ -328,6 +328,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.effective_data_keys = self._build_effective_data_keys()
         # Preferencias SI/NO de checkbox del lead actual (se recarga por fila del Excel)
         self.checkbox_prefs = {}
+        # Opciones pedidas para grupos de checkboxes / selects múltiples ("WhatsApp, Llamada")
+        self.checkbox_opciones = {}
         # Opción pedida por el Excel para cada grupo de radios (columna = name del radio)
         self.radio_prefs = {}
         # Cargar timeouts desde config_global.json (con defaults si no existe)
@@ -385,6 +387,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self._decision_opcionales = {}
         self._campos_sin_mapeo_exitoso = []
         self._campos_dropdown_no_encontrados = []
+        # Opciones de radio / checkbox / lista múltiple que pide el Excel y el form no tiene.
+        self._opciones_no_encontradas = []
         self._campos_sin_valor_asignado = []
         self._ids_din_cb_map = None  # re-elige SI/NO random por fila si hay varios valores
         # Checkboxes que el form marcó con error en el envío vacío (requeridos por JS).
@@ -3658,16 +3662,28 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     # Chile). Suelen venir envueltos en Bootstrap Select, que oculta el select
                     # real y pinta su propio widget: por eso además del change hay que pedirle
                     # al plugin que se refresque, o el usuario ve el campo vacío.
-                    # Una cantidad al azar (1..todas) de opciones reales al azar, nunca el
-                    # placeholder ("Seleccione", "Elige al menos una opción").
+                    # Lo que pide el Excel (columna = name, opciones separadas por coma) y, si
+                    # no pide nada, una cantidad al azar (1..todas) de opciones reales al azar,
+                    # nunca el placeholder ("Seleccione", "Elige al menos una opción").
+                    pedidas = self._opciones_pedidas_checkbox(
+                        (info.get("name") or "").lower(), elem_real_id)
+                    if pedidas is not None and self._pide_omitir_campo(select_id, ",".join(pedidas)):
+                        continue
                     try:
-                        reales = [i for i, t in self.driver.execute_script(
+                        reales = [(i, v, t) for i, v, t in self.driver.execute_script(
                             "return Array.from(arguments[0].options).map(function (o, i) {"
-                            "  return [i, (o.disabled || !(o.value || '').trim()) ? '' : (o.text || '').trim()]; });",
+                            "  return [i, o.value || '', (o.disabled || !(o.value || '').trim()) ? '' : (o.text || '').trim()]; });",
                             select_element) or [] if t and not self._is_placeholder_text(t)]
-                        elegir = random.sample(reales, random.randint(1, len(reales))) if reales else []
+                        elegir = []
+                        if pedidas:
+                            marcar, faltan = self.opciones_a_marcar(pedidas, [(v, t) for _, v, t in reales])
+                            elegir = [reales[k][0] for k in sorted(marcar)]
+                            self._avisar_opciones_no_encontradas(select_id, faltan)
+                        if not elegir and reales:
+                            elegir = [i for i, _, _ in random.sample(reales, random.randint(1, len(reales)))]
                         elegidas = self.driver.execute_script(
                             "var s = arguments[0], idx = arguments[1], out = [];"
+                            "Array.from(s.options).forEach(function (o) { o.selected = false; });"
                             "idx.forEach(function (i) { var o = s.options[i]; o.selected = true; out.push((o.text || '').trim()); });"
                             "s.dispatchEvent(new Event('change', { bubbles: true }));"
                             "try { if (window.jQuery && window.jQuery(s).selectpicker) { window.jQuery(s).selectpicker('refresh'); } } catch (e) {}"
@@ -3677,7 +3693,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         elegidas = []
                     if elegidas:
                         self._record_field_value(select_id, " | ".join(elegidas))
-                        print(f"🎲 {select_id} (múltiple) - elegidas: {', '.join(elegidas)}")
+                        print(f"{'☑' if pedidas else '🎲'} {select_id} (múltiple) - elegidas: {', '.join(elegidas)}")
                         filled_any = True
                     continue
 
@@ -4707,6 +4723,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 self.checkbox_prefs = self.build_checkbox_prefs(raw_headers, row)
                 if self.checkbox_prefs:
                     print(f"  ☑ Preferencias de checkbox (Excel): {self.checkbox_prefs}")
+                # Columnas con el name de un grupo de checkboxes y las opciones separadas por coma
+                self.checkbox_opciones = self.build_checkbox_opciones(raw_headers, row)
                 # Columnas con el name de un grupo de radios (ver build_radio_prefs)
                 self.radio_prefs = self.build_radio_prefs(raw_headers, row)
                 if len(row) < 2:
@@ -5233,6 +5251,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 if _no_encontrados:
                     result_text = (result_text or "") + f" | Dropdown no encontrado: {'; '.join(_no_encontrados)}"
                     # Un dropdown que no se pudo completar es un fallo de campo → NO es PASS.
+                    _lead_ok = False
+                # Lo mismo con una opción de radio / checkbox / lista que pidió el Excel.
+                if getattr(self, "_opciones_no_encontradas", []):
+                    result_text = (result_text or "") + \
+                        f" | Opción no encontrada: {'; '.join(self._opciones_no_encontradas)}"
                     _lead_ok = False
                 # Issue en el CTA/link de la TY page → columna LINK ISSUE en rojo y el lead falla.
                 if getattr(self, "_link_issue_present", False):

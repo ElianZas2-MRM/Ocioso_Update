@@ -6,6 +6,7 @@ la misma clase via herencia, asi que pueden llamar a sus hermanos y usar el mism
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
 import random
+import re
 import time
 
 
@@ -34,6 +35,74 @@ class CasillasYRadiosMixin:
                 prefs[key] = False
         return prefs
 
+    # Separadores de una lista de opciones en una celda: "WhatsApp, Llamada".
+    _SEPARADORES_OPCIONES = (",", ";", "|")
+
+    @classmethod
+    def lista_de_opciones(cls, valor):
+        """'WhatsApp, Llamada' -> ['WhatsApp', 'Llamada'] (sin vacíos)."""
+        texto = str(valor or "")
+        for sep in cls._SEPARADORES_OPCIONES[1:]:
+            texto = texto.replace(sep, cls._SEPARADORES_OPCIONES[0])
+        return [p.strip() for p in texto.split(cls._SEPARADORES_OPCIONES[0]) if p.strip()]
+
+    def build_checkbox_opciones(self, raw_headers, row):
+        """
+        Opciones pedidas para un GRUPO de checkboxes (varios con el mismo `name`): una
+        columna cuyo encabezado es el `name` del grupo y las opciones separadas por coma.
+        Ej: columna "contact-channels" = "WhatsApp, Llamada" marca esas dos y deja las demás
+        sin marcar. Las opciones se buscan en el form en cada corrida (por `value` o por el
+        texto del label), así que si el form agrega opciones se pueden pedir sin tocar nada.
+        SI/NO no entra acá (eso es build_checkbox_prefs). Un '-' deja el grupo sin tocar.
+        """
+        opciones = {}
+        for idx, header in enumerate(raw_headers or []):
+            key = str(header or "").strip().lower()
+            if not key or idx >= len(row):
+                continue
+            valor = str(row[idx] or "").strip()
+            if not valor or valor.lower() in self.CHECKBOX_SI or valor.lower() in self.CHECKBOX_NO:
+                continue
+            opciones[key] = self.lista_de_opciones(valor)
+        return opciones
+
+    @staticmethod
+    def _palabras(texto):
+        import unicodedata
+        s = unicodedata.normalize("NFKD", str(texto or "").lower())
+        s = "".join(c for c in s if not unicodedata.combining(c))
+        return re.findall(r"[a-z0-9]+", s)
+
+    @classmethod
+    def opciones_a_marcar(cls, pedidas, opciones):
+        """
+        Qué opciones de un grupo pide el Excel. `opciones` = [(value, texto del label), ...]
+        tal como están en el form HOY. Devuelve (índices a marcar, pedidas no encontradas).
+
+        Cada pedida busca primero coincidencia exacta con el value o el texto (sin acentos,
+        mayúsculas ni espacios). Si ninguna opción coincide exacto, vale que el value o el
+        texto contenga la pedida como palabras completas ("Correo" → "Correo electrónico").
+        Hay forms (CL envolve) donde el label de cada opción es el título del grupo y la
+        opción sólo está en el value.
+        """
+        palabras = [(cls._palabras(valor), cls._palabras(texto)) for valor, texto in opciones]
+        marcar, faltan = set(), []
+        for pedida in pedidas:
+            p = cls._palabras(pedida)
+            if not p:
+                continue
+            junta = "".join(p)
+            elegidas = {i for i, (v, t) in enumerate(palabras) if junta in ("".join(v), "".join(t))}
+            if not elegidas:
+                n = len(p)
+                elegidas = {i for i, (v, t) in enumerate(palabras)
+                            if any(w[k:k + n] == p for w in (v, t) for k in range(len(w) - n + 1))}
+            if elegidas:
+                marcar |= elegidas
+            else:
+                faltan.append(pedida)
+        return marcar, faltan
+
     def build_radio_prefs(self, raw_headers, row):
         """
         Opción de radio pedida por el Excel: una columna cuyo encabezado es el `name` del
@@ -58,6 +127,63 @@ class CasillasYRadiosMixin:
         if pref is None:
             pref = self._checkbox_pref_dinamica(lower_name, checkbox_id)
         return pref
+
+    def _opciones_pedidas_checkbox(self, lower_name, checkbox_id):
+        """Lista de opciones que el Excel pide para el grupo de este checkbox, o None."""
+        opciones = getattr(self, "checkbox_opciones", None) or {}
+        for clave in (lower_name, (checkbox_id or "").strip().lower()):
+            if clave and clave in opciones:
+                return opciones[clave]
+        return None
+
+    def _grupos_pedidos_checkbox(self, raw_checkboxes):
+        """
+        Para los grupos de checkboxes que el Excel pide por lista: {índice del checkbox en
+        raw_checkboxes: marcar sí/no}. Las opciones se leen del form en esta pasada, así que
+        una opción nueva se puede pedir sin tocar el código. Registra lo elegido y avisa en
+        el resultado las opciones pedidas que el form no tiene.
+        """
+        grupos = {}
+        for i, info in enumerate(raw_checkboxes):
+            name = (info.get("name") or "").strip()
+            cid = (info.get("id") or "").strip()
+            pedidas = self._opciones_pedidas_checkbox(name.lower(), cid)
+            if pedidas is None:
+                continue
+            g = grupos.setdefault(name or cid, {"pedidas": pedidas, "indices": [], "opciones": []})
+            g["indices"].append(i)
+            g["opciones"].append(((info.get("value") or "").strip(), (info.get("texto") or "").strip()))
+
+        decision = {}
+        for grupo, g in grupos.items():
+            if self._pide_omitir_campo(grupo, ",".join(g["pedidas"])):
+                decision.update({i: None for i in g["indices"]})
+                continue
+            if len(g["indices"]) < 2:
+                continue        # checkbox suelto: SI/NO como siempre (build_checkbox_prefs)
+            marcar, faltan = self.opciones_a_marcar(g["pedidas"], g["opciones"])
+            for pos, i in enumerate(g["indices"]):
+                decision[i] = pos in marcar
+            textos = [t for _, t in g["opciones"]]
+            elegidas = [t if t and textos.count(t) == 1 else v      # label = título del grupo: el value
+                        for v, t in (g["opciones"][pos] for pos in sorted(marcar))]
+            if elegidas:
+                self._record_field_value(grupo, " | ".join(elegidas))
+            self._avisar_opciones_no_encontradas(grupo, faltan)
+        return decision
+
+    def _avisar_opciones_no_encontradas(self, campo, faltan):
+        """Opciones que el Excel pide y el form no tiene: van al resultado ("Opción no
+        encontrada") una vez por campo y por fila, aunque el marcado pase dos veces."""
+        if not faltan:
+            return
+        avisos = getattr(self, "_opciones_no_encontradas", None)
+        if avisos is None:
+            avisos = self._opciones_no_encontradas = []
+        aviso = f"{campo}: '{', '.join(faltan)}'"
+        if aviso not in avisos:
+            print(f" '{campo}': el form no tiene {faltan}")
+            avisos.append(aviso)
 
     def _checkbox_pref_dinamica(self, lower_name, checkbox_id):
         """SI/NO desde ids_dinamicos.json para checkboxes sin columna en el Excel.
@@ -142,6 +268,7 @@ class CasillasYRadiosMixin:
             radios = self.driver.find_elements(By.CSS_SELECTOR, "input[type='radio']")
         except Exception:
             return []
+        textos = self._textos_de_labels("radio", len(radios))
 
         groups = {}
         for idx, radio in enumerate(radios):
@@ -167,6 +294,7 @@ class CasillasYRadiosMixin:
                     {
                         "value": (radio.get_attribute("value") or "").strip(),
                         "label": (radio.get_attribute("title") or radio.get_attribute("data-dtm") or radio.get_attribute("data-label") or radio.get_attribute("id") or radio.get_attribute("value") or f"opcion_{idx}"),
+                        "texto": textos[idx],
                         "index": idx,
                         "element": radio,
                     }
@@ -176,6 +304,23 @@ class CasillasYRadiosMixin:
 
         ordered_groups = sorted(groups.values(), key=lambda g: g["first_index"])
         return ordered_groups
+
+    # Texto visible de cada opción: <label for=id> o el <label> que la envuelve.
+    _JS_TEXTO_OPCIONES = (
+        "return Array.prototype.map.call(document.querySelectorAll(\"input[type='\" + arguments[0] + \"']\"),"
+        "  function (c) { var l = (c.id && document.querySelector('label[for=\"' + c.id + '\"]'))"
+        "    || c.closest('label'); return l ? l.textContent.replace(/\\s+/g, ' ').trim() : ''; });"
+    )
+
+    def _textos_de_labels(self, tipo, cantidad):
+        """Textos de los labels de todos los inputs `tipo` (en orden de documento), en un
+        solo viaje al driver. Si falla, textos vacíos (se sigue por `value`)."""
+        try:
+            textos = list(self.driver.execute_script(self._JS_TEXTO_OPCIONES, tipo) or [])
+        except Exception:
+            textos = []
+        # Si la cantidad no coincide (el DOM cambió entre lecturas) no se puede alinear.
+        return textos if len(textos) == cantidad else [""] * cantidad
 
     def _ensure_radio_selected(self, group):
         target_option = self._choose_radio_option(group)
@@ -238,7 +383,7 @@ class CasillasYRadiosMixin:
         if not options:
             return None
 
-        from osocio.core.campos_inferencia import _is_placeholder, _normalize_for_infer
+        from osocio.core.campos_inferencia import _is_placeholder
         name_key = group.get("name", "")
 
         # 1) Lo que pide el Excel (columna = name del grupo): la opción por valor o texto.
@@ -246,14 +391,17 @@ class CasillasYRadiosMixin:
         if pedido:
             if self._pide_omitir_campo(group.get("original_name") or name_key, pedido):
                 return None
-            buscado = _normalize_for_infer(pedido)
-            textos = [(o, _normalize_for_infer(f"{o.get('value', '')}")) for o in options]
-            elegida = next((o for o, t in textos if t == buscado), None) \
-                or next((o for o, t in textos if buscado and (buscado in t or t in buscado)), None)
-            if elegida:
+            # Por value o por el texto del label, entre las opciones que el form tiene hoy.
+            marcar, _ = self.opciones_a_marcar(
+                [pedido], [(o.get("value") or "", o.get("texto") or "") for o in options])
+            if marcar:
+                elegida = options[min(marcar)]
+                self._record_field_value(group.get("original_name") or name_key,
+                                         elegida.get("texto") or elegida.get("value"))
                 return elegida
             print(f" Radio '{name_key}': el Excel pide '{pedido}' y no está entre "
-                  f"{[o.get('value') for o in options]}; se elige al azar")
+                  f"{[o.get('texto') or o.get('value') for o in options]}; se elige al azar")
+            self._avisar_opciones_no_encontradas(group.get("original_name") or name_key, [pedido])
 
         # 2) Grupos donde una opción rompe el lead: siempre la segura.
         forzadas = {
@@ -613,10 +761,13 @@ class CasillasYRadiosMixin:
                 "    return {el: c, name: c.getAttribute('name') || '',"
                 "    id: c.id || '', required: !!c.required, grupoReq: req,"
                 "    aria: c.getAttribute('aria-required') || '',"
-                "    dtm: c.getAttribute('data-dtm') || '', value: c.getAttribute('value') || ''}; });"
+                "    dtm: c.getAttribute('data-dtm') || '', value: c.getAttribute('value') || '',"
+                "    texto: ((c.id && document.querySelector('label[for=\"' + c.id + '\"]')) || c.closest('label')"
+                "            || {textContent: ''}).textContent.replace(/\\s+/g, ' ').trim()}; });"
             ) or []
         except Exception:
             raw_checkboxes = []
+        por_lista = self._grupos_pedidos_checkbox(raw_checkboxes)
 
         for index, info in enumerate(raw_checkboxes):
             checkbox = info.get("el")
@@ -634,8 +785,13 @@ class CasillasYRadiosMixin:
                 is_js_required = any(v in con_error
                                      for v in self._identificadores_checkbox(name_attr, checkbox_id))
 
-                # El Excel manda: una columna con el name/id del checkbox y valor SI/NO
+                # El Excel manda: una columna con el name/id del checkbox y valor SI/NO, o
+                # (grupo de checkboxes) la lista de opciones a marcar: "WhatsApp, Llamada".
                 pref = self._checkbox_pref_for(lower_name, checkbox_id)
+                if index in por_lista:
+                    if por_lista[index] is None:    # '-': el grupo queda como está
+                        continue
+                    pref = por_lista[index]
                 accion = self._decidir_marca_checkbox(
                     is_known=is_known,
                     is_required=is_html_required or is_aria_required or is_js_required,
@@ -644,7 +800,8 @@ class CasillasYRadiosMixin:
                 )
                 if accion == "uncheck":
                     self._uncheck_checkbox(checkbox_id, name_attr)
-                    print(f"  ⊘ {name_attr or checkbox_id} desmarcado (Excel = NO)")
+                    print(f"  ⊘ {name_attr or checkbox_id}{'=' + value_attr if index in por_lista else ''}"
+                          f" desmarcado (Excel)")
                     continue
                 if accion == "skip":
                     continue
