@@ -137,6 +137,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             return False, []
         if a == b:
             return True, []
+        # Form AEM embebido: se encontró la ruta interna del componente, no una URL.
+        from osocio.core.form_filler.aem import rutas_aem_coinciden
+        if rutas_aem_coinciden(a, b):
+            return True, []
 
         def partes(u):
             base, _, query = u.split("#")[0].partition("?")
@@ -4851,7 +4855,14 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     # 2. Buscar iframe (solo si hay URL esperada en columna B); si no, formulario embebido en la página
                     if use_iframe:
                         target_iframe = self.find_and_position_to_form(expected_form_url)
+                        # Form AEM que el Excel pide por su URL de iframe (…/formcontainer
+                        # .iframe.br) pero la landing muestra embebido: se valida por la ruta,
+                        # antes de caer a cualquier otro iframe de la página.
+                        _ruta_aem = ""
                         if not target_iframe:
+                            self.driver.switch_to.default_content()
+                            _ruta_aem = self._aem_form_embebido(expected_form_url)
+                        if not target_iframe and not _ruta_aem:
                             print("Formulario esperado no encontrado, buscando iframe GM disponible...")
                             try:
                                 _cand, _es_gm = self._pick_gm_iframe(
@@ -4909,6 +4920,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             # Antes del click: la pantalla de cards todavía está visible.
                             self._verificar_cta_eletricos_br(landing_url, _iframe_src)
                             self._maybe_click_raq_cta(landing_url, _iframe_src)
+                        elif _ruta_aem:
+                            self._url_form_encontrado = _ruta_aem
+                            if self.screenshot_manager:
+                                self.screenshot_manager.url_form_encontrado = _ruta_aem
+                            print(f"Formulario AEM embebido (sin iframe) correcto: {_ruta_aem}")
                         else:
                             form_url_mismatch = True
                             self.driver.switch_to.default_content()

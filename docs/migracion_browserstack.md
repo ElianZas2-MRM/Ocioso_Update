@@ -383,7 +383,9 @@ Lo que se mantiene a propósito: las programaciones y selecciones guardadas con 
       corridas del día, salvo que sea la única opción o lo pida el Excel (#29).
 - [x] iPhone: radios, grupos de checkboxes, checkboxes SI/NO y listas múltiples desde el
       Excel por `name` (traductor leído del form).
-- BR `solicitar-proposta`: validar el form AEM (embebido, sin iframe) por su ruta.
+- [x] BR `solicitar-proposta`: el form AEM que el Excel pide por su URL de iframe
+      (`…/formcontainer.iframe.br`) pero la landing muestra embebido se valida por el final
+      de su ruta (`aemFormComponentPath` de la página).
 
 **Fuera del código:**
 
