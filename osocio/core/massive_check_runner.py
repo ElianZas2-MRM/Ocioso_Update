@@ -392,10 +392,18 @@ class MassiveFormFiller(GenericCountryBase):
         # En un form standalone la página ES el formulario: cuenta como 1, no como 0.
         forms_count = 1 if standalone else len(gm_iframes)
 
+        aem_embebido = ""
         if use_iframe:
             try:
                 target_iframe = self.find_and_position_to_form(expected_form_url)
                 if not target_iframe:
+                    # Form AEM pedido por su URL de iframe pero embebido en la landing:
+                    # se valida por la ruta (mismo criterio que Envío de Leads).
+                    self.driver.switch_to.default_content()
+                    aem_embebido = self._aem_form_embebido(expected_form_url)
+                    if aem_embebido:
+                        iframe_src = aem_embebido
+                if not target_iframe and not aem_embebido:
                     # Intento de fallback
                     try:
                         _cand, _es_gm = self._pick_gm_iframe(iframes_found, expected_url=expected_form_url)
@@ -432,15 +440,16 @@ class MassiveFormFiller(GenericCountryBase):
         else:
             iframe_src = self.driver.current_url
 
-        iframe_correct_str = "SÍ" if (target_iframe and not form_url_mismatch) else ("NO" if use_iframe else "N/A (Standalone)")
-        
+        form_ok = bool(target_iframe or aem_embebido)
+        iframe_correct_str = "SÍ" if (form_ok and not form_url_mismatch) else ("NO" if use_iframe else "N/A (Standalone)")
+
         # Validar coincidencia estricta de URL (Excel == Inserted)
         form_coincide_str = "✅ PASS"
         if use_iframe:
-            if not target_iframe or form_url_mismatch:
+            if not form_ok or form_url_mismatch:
                 form_coincide_str = f"❌ FAIL Mismatch: expected {expected_form_url} but found {iframe_src}"
-        
-        if use_iframe and not target_iframe:
+
+        if use_iframe and not form_ok:
             return {
                 "ok": False,
                 "error": "Iframe del formulario no encontrado en la landing.",

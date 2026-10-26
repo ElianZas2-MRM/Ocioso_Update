@@ -4,9 +4,64 @@ Metodos extraidos de BaseFormFiller sin tocarles una linea. Siguen siendo parte 
 la misma clase via herencia, asi que pueden llamar a sus hermanos y usar el mismo self.
 """
 
+from urllib.parse import unquote, urlsplit
+
+
+def ruta_aem_de_url(url):
+    """Ruta del componente AEM de una URL de form (la parte desde el path, sin dominio,
+    parámetros ni selectores), o "" si la URL no es de un componente AEM.
+
+    https://www.chevrolet.com.br/request-proposal/jcr:content/root/.../formcontainer.iframe.br?dataRef=
+    → /request-proposal/jcr:content/root/.../formcontainer
+    """
+    path = unquote(urlsplit(str(url or "").strip()).path).rstrip("/")
+    if "/jcr:content/" not in path:
+        return ""
+    carpeta, _, ultimo = path.rpartition("/")
+    return f"{carpeta}/{ultimo.split('.')[0]}"
+
+
+def rutas_aem_coinciden(encontrada, esperada):
+    """¿Es el mismo componente AEM? Se compara por el FINAL de la ruta: en la página el
+    componente figura con la ruta interna completa (/content/chevrolet/sa/br/pt/index/
+    request-proposal/jcr:content/...) y en el Excel con la pública (/request-proposal/
+    jcr:content/...). Como la ruta del Excel incluye la página, no matchea el mismo
+    componente de otra página."""
+    a, b = ruta_aem_de_url(encontrada).lower(), ruta_aem_de_url(esperada).lower()
+    return bool(a and b) and a.endswith(b)
+
 
 class FormulariosAEMMixin:
     """Se usa solo como mixin de BaseFormFiller."""
+
+    def _aem_componentes_en_pagina(self):
+        """Rutas de los formcontainer AEM embebidos en la página actual (sin iframe). AEM
+        las deja en el JSON de un script inline: "aemFormComponentPath": "\\/content\\/…"."""
+        try:
+            return self.driver.execute_script("""
+                var out = [], re = /"aemFormComponentPath"\\s*:\\s*"([^"]+)"/g, m;
+                var scripts = document.getElementsByTagName('script');
+                for (var i = 0; i < scripts.length; i++) {
+                    var t = scripts[i].text || '';
+                    while ((m = re.exec(t)) !== null) {
+                        try { out.push(JSON.parse('"' + m[1] + '"')); } catch (e) { out.push(m[1]); }
+                    }
+                }
+                return out;
+            """) or []
+        except Exception:
+            return []
+
+    def _aem_form_embebido(self, expected_form_url):
+        """Ruta del formcontainer de la página que es el form del Excel, o "". Para los
+        forms AEM cuya URL del Excel es la versión iframe del componente (…/formcontainer
+        .iframe.br) pero que la landing muestra embebidos, sin iframe."""
+        if not ruta_aem_de_url(expected_form_url):
+            return ""
+        for ruta in self._aem_componentes_en_pagina():
+            if rutas_aem_coinciden(ruta, expected_form_url):
+                return ruta
+        return ""
 
     def _is_aem_adaptive_form(self):
         """Detecta si la página actual es un Adobe AEM Adaptive Form (Guide)."""
