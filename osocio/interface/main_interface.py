@@ -4065,8 +4065,8 @@ def iniciar_interfaz(autostart_leads=False):
                 paralelo = (scheduler_cfg_masivo.get("modo_excel") == "paralelo")
                 if paralelo:
                     log_message(f"[INFO] Revisión Masiva en paralelo: hasta {_MASIVO_MAX_WORKERS} "
-                                "mercados a la vez, cada uno con su propio navegador. El Excel se "
-                                "escribe al final, de a uno.")
+                                "mercados a la vez, cada uno con su propio navegador. Cada mercado "
+                                "guarda su Excel apenas termina (carpeta por_mercado).")
 
                 success, info = run_massive_check(
                     excel_path, custom_cols,
@@ -4074,7 +4074,7 @@ def iniciar_interfaz(autostart_leads=False):
                     borrar_comentarios=var_borrar_comentarios.get(),
                     tomar_capturas=var_tomar_capturas.get(),
                     solo_fails=var_solo_fails.get(),
-                    browser="chrome", headless=True,
+                    browser="chrome", headless=False,
                     progress_callback=pcb, stop_event=stop_event,
                     paralelo=paralelo, max_workers=_MASIVO_MAX_WORKERS,
                 )

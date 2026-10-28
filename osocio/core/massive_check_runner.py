@@ -1,3 +1,4 @@
+import io
 import os
 import time
 import requests
@@ -25,7 +26,7 @@ class MassiveFormFiller(GenericCountryBase):
     Configura de forma dura el modo rellenado parcial / no enviar lead,
     y escribe las capturas en la ruta específica solicitada.
     """
-    def __init__(self, country_name, browser="chrome", headless=True, background=True):
+    def __init__(self, country_name, browser="chrome", headless=False, background=True):
         super().__init__(country_name, browser=browser, headless=headless, background=background)
         self.config["solo_verificar_visual"] = True
         self.config["no_enviar_lead"] = True
@@ -236,6 +237,31 @@ class MassiveFormFiller(GenericCountryBase):
         # PASS si se detectó al menos un campo visible del formulario
         return found_any_visible_field
 
+    # Los forms nuevos (gm_front) son una app React: el iframe termina de cargar
+    # (readyState complete) y los campos aparecen recién después, cuando corre el JS.
+    # Mirar una sola vez daba "Displayed? FAIL" en forms que sí se ven.
+    CAMPOS_WAIT_SECONDS = 10
+
+    def _esperar_campo_visible(self, timeout=None):
+        """Espera hasta `timeout` s a que el form muestre algún campo. True si apareció."""
+        deadline = time.time() + (self.CAMPOS_WAIT_SECONDS if timeout is None else timeout)
+        while True:
+            try:
+                if self.driver.execute_script("""
+                    var els = document.querySelectorAll('input,select,textarea');
+                    for (var i = 0; i < els.length; i++) {
+                        var t = (els[i].type || '').toLowerCase();
+                        if (t === 'hidden' || t === 'submit' || t === 'button') continue;
+                        if (els[i].offsetParent !== null) return true;
+                    }
+                    return false;"""):
+                    return True
+            except Exception:
+                pass
+            if time.time() >= deadline or (getattr(self, "stop_event", None) and self.stop_event.is_set()):
+                return False
+            time.sleep(0.5)
+
     _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
@@ -330,7 +356,7 @@ class MassiveFormFiller(GenericCountryBase):
                 "landing_status": landing_status_str,
                 "iframe_correct": "NO",
                 "form_url_found": "",
-                "form_coincide": "❌ FAIL",
+                "form_coincide": "❌ FAIL No se pudo revisar el form: la landing no cargó en el navegador",
                 "displayed": "❌ FAIL",
                 "secure_status": secure_status_str,
                 "forms_count": 0,
@@ -338,16 +364,18 @@ class MassiveFormFiller(GenericCountryBase):
                 "ss_completado": ""
             }
 
-        # Validar si base_form_filler detectó 404 en el título/encabezados
+        # Landing rota (404 por título/encabezados) o un CTA de la landing que no lleva al
+        # form. Lo del CTA no es un 404: la landing respondió bien y falló el camino al form.
         if self._landing_issue:
+            codigo = "404" if self._landing_issue.startswith("Landing 404") else "CTA"
             return {
                 "ok": False,
                 "error": self._landing_issue,
                 "current_url": self.driver.current_url,
-                "landing_status": f"404 - ❌ FAIL {self._landing_issue}",
+                "landing_status": f"{codigo} - ❌ FAIL {self._landing_issue}",
                 "iframe_correct": "NO",
                 "form_url_found": "",
-                "form_coincide": "❌ FAIL",
+                "form_coincide": "❌ FAIL No se pudo revisar el form: falló la landing",
                 "displayed": "❌ FAIL",
                 "secure_status": secure_status_str,
                 "forms_count": 0,
@@ -391,6 +419,15 @@ class MassiveFormFiller(GenericCountryBase):
 
         # En un form standalone la página ES el formulario: cuenta como 1, no como 0.
         forms_count = 1 if standalone else len(gm_iframes)
+        # Forms que la landing tiene insertados, para decir cuál hay cuando no es el esperado.
+        forms_en_landing = []
+        for fr in gm_iframes:
+            try:
+                src = self._iframe_src_of(fr)
+            except Exception:
+                src = ""
+            if src and src not in forms_en_landing:
+                forms_en_landing.append(src)
 
         aem_embebido = ""
         if use_iframe:
@@ -429,8 +466,8 @@ class MassiveFormFiller(GenericCountryBase):
                     "current_url": self.driver.current_url,
                     "landing_status": landing_status_str,
                     "iframe_correct": "NO",
-                    "form_url_found": "",
-                    "form_coincide": "❌ FAIL",
+                    "form_url_found": " | ".join(forms_en_landing),
+                    "form_coincide": f"❌ FAIL No se pudo leer el iframe del form: {str(e)[:120]}",
                     "displayed": "❌ FAIL",
                     "secure_status": secure_status_str,
                     "forms_count": forms_count,
@@ -447,7 +484,8 @@ class MassiveFormFiller(GenericCountryBase):
         form_coincide_str = "✅ PASS"
         if use_iframe:
             if not form_ok or form_url_mismatch:
-                form_coincide_str = f"❌ FAIL Mismatch: expected {expected_form_url} but found {iframe_src}"
+                encontrado = iframe_src or " | ".join(forms_en_landing) or "ningún form insertado"
+                form_coincide_str = f"❌ FAIL Mismatch: expected {expected_form_url} but found {encontrado}"
 
         if use_iframe and not form_ok:
             return {
@@ -456,7 +494,7 @@ class MassiveFormFiller(GenericCountryBase):
                 "current_url": self.driver.current_url,
                 "landing_status": landing_status_str,
                 "iframe_correct": "NO",
-                "form_url_found": "",
+                "form_url_found": " | ".join(forms_en_landing),
                 "form_coincide": form_coincide_str,
                 "displayed": "❌ FAIL",
                 "secure_status": secure_status_str,
@@ -473,6 +511,7 @@ class MassiveFormFiller(GenericCountryBase):
         fill_success = False
         try:
             self.wait_for_form_ready_in_iframe()
+            self._esperar_campo_visible()
             if getattr(self, "stop_event", None) and self.stop_event.is_set():
                 raise Exception("Cancelado por el usuario")
             # Detectar si al menos un campo del form es visible
@@ -529,6 +568,67 @@ def _url_de_celda(cell):
     link = getattr(getattr(cell, "hyperlink", None), "target", None) or ""
     return link.strip() if link.strip().lower().startswith("http") else texto
 
+
+def _es_url(valor):
+    return str(valor or "").strip().lower().startswith("http")
+
+
+def _codigo_y_detalle(status):
+    """'404 - ❌ FAIL HTTP Code: 404' → ('404', 'HTTP Code: 404')."""
+    codigo, _, resto = str(status or "").partition(" - ")
+    detalle = resto.split("FAIL", 1)[1] if "FAIL" in resto else resto
+    return codigo.strip(), detalle.strip()
+
+
+def motivo_de_resultado(res):
+    """Motivo corto de una fila revisada, para la columna Motivo: qué falló y por qué
+    (404, 5xx, redirección, timeout, form distinto al esperado, form sin campos...).
+    "OK" si pasó todo."""
+    motivos = []
+    land = str(res.get("landing_status") or "")
+    landing_fallo = "FAIL" in land
+    if landing_fallo:
+        codigo, detalle = _codigo_y_detalle(land)
+        if codigo.isdigit() and codigo.startswith("3"):
+            destino = detalle.rsplit("redirects to:", 1)[-1].strip()
+            motivos.append(f"Landing redirige ({codigo}) a {destino}")
+        elif codigo == "404":
+            motivos.append("Landing 404 (no existe)")
+        elif codigo.isdigit():
+            tipo = " (error del servidor)" if codigo.startswith("5") else ""
+            motivos.append(f"Landing {codigo}{tipo}")
+        elif codigo == "Timeout":
+            motivos.append("Landing no respondió (timeout)")
+        elif codigo == "SSL":
+            motivos.append("Landing con certificado SSL inválido")
+        elif codigo == "CTA":
+            motivos.append(f"CTA de la landing: {detalle}")
+        else:
+            motivos.append(f"Landing inaccesible: {detalle}")
+
+    ins = str(res.get("form_coincide") or "")
+    if "Mismatch" in ins:
+        found = str(res.get("form_url_found") or "")
+        if found:
+            motivos.append(f"Form distinto al esperado: en la landing está {found}")
+        elif not landing_fallo:
+            motivos.append("La landing no tiene el form insertado")
+    elif "No se pudo leer el iframe" in ins:
+        motivos.append(_codigo_y_detalle(" - " + ins)[1])
+    elif "PASS" in ins and "FAIL" in str(res.get("displayed") or ""):
+        motivos.append("Form correcto pero no se ven sus campos")
+
+    sec = str(res.get("secure_status") or "")
+    if "FAIL" in sec:
+        codigo, detalle = _codigo_y_detalle(sec)
+        motivos.append(f"La URL del form del Excel da {codigo}" if codigo.isdigit()
+                       else f"La URL del form del Excel falla: {detalle}")
+
+    err = str(res.get("error") or "")
+    if not motivos and err.startswith(("Error navegación", "Error completando")):
+        motivos.append(err[:160])
+    return " · ".join(motivos) or "OK"
+
 def load_passed_results_from_wb(wb, custom_cols):
     """Devuelve {(url_live, url_secure): resultados} de las filas que pasaron LIMPIAS.
 
@@ -567,7 +667,8 @@ def load_passed_results_from_wb(wb, custom_cols):
             col_disp = header_row.index("DISPLAYED?") + 1
             col_status_ins = header_row.index("STATUSINSERTED") + 1
             col_forms = header_row.index("FORMSCOUNT") + 1
-            
+            col_motivo = header_row.index("MOTIVO") + 1 if "MOTIVO" in header_row else None
+
             col_comments = None
             for col_idx in range(1, len(header_row) + 1):
                 val = header_row[col_idx - 1]
@@ -596,6 +697,7 @@ def load_passed_results_from_wb(wb, custom_cols):
             if is_ok:
                 key = (url_live.lower(), url_secure.lower())
                 passed_results[key] = {
+                    "Motivo": (sheet.cell(row=r_idx, column=col_motivo).value if col_motivo else None) or "OK",
                     "currentUrl": sheet.cell(row=r_idx, column=col_current).value,
                     "LandingStatus": sheet.cell(row=r_idx, column=col_landing).value,
                     "Secure_Inserted": sheet.cell(row=r_idx, column=col_secure_ins).value,
@@ -611,6 +713,7 @@ def load_passed_results_from_wb(wb, custom_cols):
 # Columnas de resultado que se insertan al principio de cada hoja del Excel matriz.
 # El orden importa: se escriben en bloque contiguo arrancando en la columna 1.
 RESULT_HEADERS = [
+    "Motivo",
     "currentUrl",
     "LandingStatus",
     "Secure_Inserted",
@@ -627,10 +730,10 @@ def _sheet_headers(sheet, header_row_idx):
     return [str(c.value).strip().upper() if c.value is not None else "" for c in sheet[header_row_idx]]
 
 
-def _find_result_block(sheet, header_row_idx):
+def _find_result_block(sheet, header_row_idx, columnas=None):
     """Columna (1-indexed) donde arranca el bloque de resultados si ya existe, o None."""
     headers = _sheet_headers(sheet, header_row_idx)
-    wanted = [h.upper() for h in RESULT_HEADERS]
+    wanted = [h.upper() for h in (columnas or RESULT_HEADERS)]
     for start in range(0, max(1, len(headers) - len(wanted) + 1)):
         if headers[start:start + len(wanted)] == wanted:
             return start + 1
@@ -644,22 +747,28 @@ def _find_comments_col(headers):
     return None
 
 
-def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentarios=False, tomar_capturas=True, solo_fails=False, browser="chrome", headless=True, progress_callback=None, stop_event=None, paralelo=False, max_workers=3):
+def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentarios=False, tomar_capturas=True, solo_fails=False, browser="chrome", headless=False, progress_callback=None, stop_event=None, paralelo=False, max_workers=3):
     """
     Función controladora del chequeo masivo.
 
     El Excel matriz que se recibe NO se modifica: se trabaja sobre una copia en memoria y de
-    cada corrida sale un único archivo, en resultados/resultado_urlsinsertas/:
+    cada corrida salen, en resultados/resultado_urlsinsertas/:
 
-        Resultados_Revision_Masiva_<matriz>_<timestamp>.xlsx
+        Resultados_Revision_Masiva_<matriz>_<timestamp>.xlsx            (todos los mercados + resumen)
+        por_mercado/Resultados_Revision_Masiva_<matriz>_<timestamp>_<HOJA>.xlsx
 
-    que es el mismo Excel matriz pero ya editado con los resultados: en cada hoja (una por
-    mercado) las columnas de resultado quedan al principio y a continuación el resto de las
-    columnas originales. No se generan archivos por país: todo queda en ese único Excel.
+    El completo es el mismo Excel matriz pero ya editado con los resultados: en cada hoja
+    (una por mercado) las columnas de resultado quedan al principio y a continuación el
+    resto de las columnas originales. El de cada mercado tiene solo su hoja y se guarda
+    apenas ese mercado termina, para poder revisarlo mientras siguen los demás.
+
+    headless=False: los forms nuevos (gm_front) en headless daban "Displayed? FAIL" aunque
+    se vieran bien. Con background=True el navegador es real pero abre fuera de pantalla,
+    igual que en Envío de Leads.
 
     paralelo=True revisa varios mercados a la vez, cada uno con su propio navegador
-    (hasta max_workers en simultáneo). La escritura del Excel siempre es de a uno al final,
-    así que el paralelo no puede pisar resultados.
+    (hasta max_workers en simultáneo). La escritura del Excel es siempre desde este hilo,
+    de a un mercado, así que el paralelo no puede pisar resultados.
     """
     import time
     start_time = time.time()
@@ -806,11 +915,20 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         # Si ya existe (corrida anterior) se reutiliza y se sobrescribe; si no, se inserta.
         # Así el Excel no se llena de columnas nuevas en cada ejecución.
         if _find_result_block(sheet, header_row_idx) is None:
-            sheet.insert_cols(1, amount=len(RESULT_HEADERS))
-            for off, title in enumerate(RESULT_HEADERS):
-                c = sheet.cell(row=header_row_idx, column=1 + off)
-                c.value = title
+            # Un reporte anterior a la columna Motivo trae el bloque sin ella: se le agrega
+            # adelante en vez de insertar un bloque entero nuevo.
+            viejo = _find_result_block(sheet, header_row_idx, RESULT_HEADERS[1:])
+            if viejo is not None:
+                sheet.insert_cols(viejo, amount=1)
+                c = sheet.cell(row=header_row_idx, column=viejo)
+                c.value = RESULT_HEADERS[0]
                 c.font = font_bold
+            else:
+                sheet.insert_cols(1, amount=len(RESULT_HEADERS))
+                for off, title in enumerate(RESULT_HEADERS):
+                    c = sheet.cell(row=header_row_idx, column=1 + off)
+                    c.value = title
+                    c.font = font_bold
 
         headers = _sheet_headers(sheet, header_row_idx)
         res_start = _find_result_block(sheet, header_row_idx)
@@ -848,6 +966,11 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         for r_idx in range(header_row_idx + 1, sheet.max_row + 1):
             url_live = _url_de_celda(sheet.cell(row=r_idx, column=col_indices["url_live"]))
             url_secure = _url_de_celda(sheet.cell(row=r_idx, column=col_indices["url_secure"]))
+            # Texto que no es URL (otra tabla dentro de la hoja: "LIVE URL", "Lunes - ANDROID",
+            # o notas tipo "Lo usa GM por codigo...") no se revisa. Si solo una de las dos es
+            # URL, se revisa esa sola, como form suelto.
+            url_live = url_live if _es_url(url_live) else ""
+            url_secure = url_secure if _es_url(url_secure) else ""
             if not url_live and not url_secure:
                 continue
             filas.append({
@@ -912,6 +1035,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                     procesadas += 1
                     salida[r_idx] = {
                         "valores": {
+                            "Motivo": "Omitido (OFF)",
                             "currentUrl": "N/A",
                             "LandingStatus": "OFF - Omitido",
                             "Secure_Inserted": "N/A",
@@ -946,6 +1070,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                 res = filler.check_single_url(url_live, url_secure, r_idx, tomar_capturas=tomar_capturas)
                 salida[r_idx] = {
                     "valores": {
+                        "Motivo": motivo_de_resultado(res),
                         "currentUrl": res["current_url"],
                         "LandingStatus": res["landing_status"],
                         "Secure_Inserted": res["form_url_found"],
@@ -966,31 +1091,43 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                     pass
         return plan["s_name"], salida
 
-    resultados_por_hoja = {}
-    if paralelo and len(planes) > 1:
-        # Un navegador por mercado a la vez. Se acota la cantidad: cada worker levanta un
-        # Chrome completo y abrir nueve de golpe deja la maquina inservible.
-        import concurrent.futures
-        n_workers = max(1, min(int(max_workers or 3), len(planes)))
-        print(f"Revisión Masiva en paralelo: {len(planes)} mercado(s), {n_workers} navegador(es) a la vez.")
-        if progress_callback:
-            progress_callback("GENERAL", f"Paralelo: {n_workers} navegadores simultáneos...", 0)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
-            for s_name, salida in pool.map(_revisar_mercado, planes):
-                resultados_por_hoja[s_name] = salida
-    else:
-        for plan in planes:
-            if stop_event and stop_event.is_set():
-                break
-            s_name, salida = _revisar_mercado(plan)
-            resultados_por_hoja[s_name] = salida
-
     # ---------------------------------------------------------------- FASE 3: escribir
-    for plan in planes:
+    # Cada mercado se escribe en el workbook apenas termina (siempre desde este hilo, nunca
+    # desde los workers) y se guarda además en su propio Excel, para poder ir revisándolo
+    # mientras siguen los demás. Al final se guarda el Excel completo con el resumen.
+    nombre_base = os.path.splitext(os.path.basename(excel_path))[0]
+    por_mercado_dir = os.path.join(dest_dir, "por_mercado")
+    reportes_por_mercado = []
+
+    def _guardar_mercado(s_name):
+        """Copia del workbook con solo la hoja de ese mercado, en por_mercado/."""
+        try:
+            os.makedirs(por_mercado_dir, exist_ok=True)
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            wb_m = openpyxl.load_workbook(buf)
+            for _s in list(wb_m.sheetnames):
+                if _s != s_name:
+                    del wb_m[_s]
+            path = os.path.join(por_mercado_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}_{s_name}.xlsx")
+            wb_m.save(path)
+            reportes_por_mercado.append(path)
+            print(f"Excel de {s_name} listo: {path}")
+        except Exception as e:
+            print(f"No se pudo guardar el Excel de {s_name}: {e}")
+
+    def _mercado_terminado(plan, salida):
+        if _escribir_hoja(plan, salida):
+            _guardar_mercado(plan["s_name"])
+            if progress_callback:
+                progress_callback(plan["country_name"], "Listo — Excel del mercado guardado", 100)
+
+    def _escribir_hoja(plan, salida):
+        nonlocal total_processed, total_passed, total_failed, total_skipped
         s_name = plan["s_name"]
-        salida = resultados_por_hoja.get(s_name) or {}
         if not salida:
-            continue
+            return False
         sheet = wb[s_name]
         new_col_indices = plan["new_col_indices"]
         comentarios_col_idx = plan["comentarios_col_idx"]
@@ -1008,6 +1145,8 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                 cell.value = val
                 if r["estado"] == "skip":
                     cell.fill = fill_skip
+                elif col_key == "Motivo":
+                    cell.fill, cell.font = (fill_pass, font_pass) if val == "OK" else (fill_fail, font_fail)
                 else:
                     cell.fill = PatternFill(fill_type=None)
                     cell.font = Font()
@@ -1033,6 +1172,28 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                 m_fail += 1
 
         stats_por_mercado[s_name] = (m_proc, m_pass, m_fail, m_skip)
+        return True
+
+    if paralelo and len(planes) > 1:
+        # Un navegador por mercado a la vez. Se acota la cantidad: cada worker levanta un
+        # Chrome completo y abrir nueve de golpe deja la maquina inservible.
+        import concurrent.futures
+        n_workers = max(1, min(int(max_workers or 3), len(planes)))
+        print(f"Revisión Masiva en paralelo: {len(planes)} mercado(s), {n_workers} navegador(es) a la vez.")
+        if progress_callback:
+            progress_callback("GENERAL", f"Paralelo: {n_workers} navegadores simultáneos...", 0)
+        planes_por_hoja = {p["s_name"]: p for p in planes}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futuros = [pool.submit(_revisar_mercado, p) for p in planes]
+            for fut in concurrent.futures.as_completed(futuros):
+                s_name, salida = fut.result()
+                _mercado_terminado(planes_por_hoja[s_name], salida)
+    else:
+        for plan in planes:
+            if stop_event and stop_event.is_set():
+                break
+            _, salida = _revisar_mercado(plan)
+            _mercado_terminado(plan, salida)
 
     # Calcular tiempo transcurrido antes de guardar para incluirlo en el Excel
     elapsed = time.time() - start_time
@@ -1087,7 +1248,10 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         ws_res.cell(row=5, column=5).value = "Omitidos"
         for c in range(1, 6):
             ws_res.cell(row=5, column=c).font = font_bold
-        for i, (m_name, (m_proc, m_pass, m_fail, m_skip)) in enumerate(stats_por_mercado.items(), start=6):
+        # En el orden de las hojas, no en el que fueron terminando los mercados.
+        orden = [p["s_name"] for p in planes if p["s_name"] in stats_por_mercado]
+        for i, m_name in enumerate(orden, start=6):
+            m_proc, m_pass, m_fail, m_skip = stats_por_mercado[m_name]
             ws_res.cell(row=i, column=1).value = m_name
             ws_res.cell(row=i, column=2).value = m_proc
             ws_res.cell(row=i, column=3).value = m_pass
@@ -1100,7 +1264,6 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
 
     # Único archivo de salida: copia del matriz ya editada con los resultados.
     # El Excel matriz original queda intacto.
-    nombre_base = os.path.splitext(os.path.basename(excel_path))[0]
     reporte_path = os.path.join(dest_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}.xlsx")
     try:
         wb.save(reporte_path)
@@ -1114,6 +1277,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         "msg": msg,
         "excel_path": reporte_path,
         "reporte_path": reporte_path,
+        "reportes_por_mercado": reportes_por_mercado,
         "total_processed": total_processed,
         "total_passed": total_passed,
         "total_failed": total_failed,

@@ -482,7 +482,7 @@ def ejecutar_masivo_autonomo(programacion):
             borrar_comentarios=programacion.get("var_borrar_comentarios", False),
             tomar_capturas=programacion.get("var_tomar_capturas", True),
             solo_fails=programacion.get("var_solo_fails", False),
-            browser="chrome", headless=True
+            browser="chrome", headless=False
         )
         msg = info.get("msg", "") if isinstance(info, dict) else str(info)
         log_mensaje(f" Revisión masiva completada ({'OK' if success else 'FAIL'}): {msg}")
