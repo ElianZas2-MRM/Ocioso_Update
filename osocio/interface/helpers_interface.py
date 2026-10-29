@@ -575,6 +575,42 @@ def limpiar_mensaje_error(mensaje_error):
     
     return mensaje_error
 
+def _leer_excel_resultados(ruta_excel, intentos=10, espera=1.5):
+    """pd.read_excel tolerante a bloqueos momentáneos. Los resultados viven en OneDrive: al
+    terminar una corrida la sincronización (o el Excel abierto por el usuario) deja el archivo
+    bloqueado unos segundos. Si el mail se armaba justo en ese momento, la lectura fallaba,
+    el análisis devolvía "0 errores" y llegaba un PASS sin ninguna URL. Se reintenta, y si el
+    archivo sigue bloqueado se lee una copia temporal."""
+    import shutil
+    import tempfile
+    ultimo = None
+    for intento in range(intentos):
+        try:
+            return pd.read_excel(ruta_excel)
+        except (PermissionError, OSError) as e:
+            ultimo = e
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                copia = os.path.join(tmp, os.path.basename(ruta_excel))
+                shutil.copy2(ruta_excel, copia)
+                return pd.read_excel(copia)
+        except (PermissionError, OSError) as e:
+            ultimo = e
+        if intento < intentos - 1:
+            time.sleep(espera)
+    raise ultimo
+
+
+def problema_de_analisis(errores):
+    """Texto del problema si el análisis de un Excel de resultados no sirve para decir PASS
+    (no se pudo leer, o no tiene ninguna fila procesada); '' si está bien."""
+    if errores.get('error_lectura'):
+        return f"No se pudo leer el Excel de resultados ({errores['error_lectura']})"
+    if not int(errores.get('exitosos', 0)) and not int(errores.get('con_errores', 0)):
+        return "El Excel de resultados no tiene ninguna fila procesada"
+    return ""
+
+
 def analizar_errores_excel(ruta_excel):
     """
     Analiza el Excel y reporta los errores indicando la URL y el mensaje de error.
@@ -596,7 +632,7 @@ def analizar_errores_excel(ruta_excel):
         }
 
     try:
-        df = pd.read_excel(ruta_excel)
+        df = _leer_excel_resultados(ruta_excel)
 
         # Ignorar filas completamente vacías para no inflar el conteo
         def fila_tiene_datos(fila):
@@ -851,12 +887,14 @@ def analizar_errores_excel(ruta_excel):
         }
 
     except Exception as e:
+        print(f"❌ No se pudo analizar {ruta_excel}: {e}")
         return {
             'total': 0,
             'exitosos': 0,
             'con_errores': 0,
             'detalles': [],
             'detalles_ok': [],
+            'error_lectura': f"{type(e).__name__}: {str(e)[:160]}",
             'mensaje': f"❌ No se pudo analizar {ruta_excel}: {e}"
         }
 
@@ -1325,6 +1363,11 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         errores = analizar_errores_excel(excel_path)
         exitosos = int(errores.get('exitosos', 0))
         con_errores = int(errores.get('con_errores', 0))
+        # Un Excel que no se pudo leer (o sin filas) nunca es PASS.
+        _problema = problema_de_analisis(errores)
+        if _problema:
+            print(f"⚠️ {pais}: {_problema} - {excel_path}")
+            con_errores = max(con_errores, 1)
         no_procesados = int(errores.get('no_procesados', 0))
         total_filas = int(errores.get('total', 0))
 
@@ -1341,6 +1384,8 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         icono = "✅" if con_errores == 0 else "❌"
         if con_errores == 0:
             estado_texto = "OK — todos los formularios insertados y leads enviados correctamente"
+        elif _problema:
+            estado_texto = _problema
         else:
             _hay_form_error = bool(errores.get('detalles_form'))
             _hay_envio_error = any(
@@ -1379,6 +1424,9 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         # La firma va DESPUÉS de la tabla de URLs (ver _encolar_email más abajo), no acá.
         _ok_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
         _err_items = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
+        if _problema:
+            _err_items.append({'linea': os.path.basename(excel_path), 'url': '(sin datos del Excel)',
+                               'url_secure': '', 'ok': False, 'error': _problema})
         _url_table_html = _build_url_table_html(_ok_items + _err_items)
 
         config = cargar_config_global()
@@ -1503,12 +1551,21 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             errores = analizar_errores_excel(excel_path)
             exitosos = int(errores.get("exitosos", 0))
             con_errores = int(errores.get("con_errores", 0))
+            # Un Excel que no se pudo leer (o sin filas) nunca es PASS: antes contaba como
+            # "0 errores" y el mail decía PASS sin mostrar ninguna URL.
+            _problema = problema_de_analisis(errores)
+            if _problema:
+                print(f"      ⚠️ {pais}: {_problema} - {excel_path}")
+                con_errores = max(con_errores, 1)
 
             pais_errores[pais] = pais_errores.get(pais, 0) + con_errores
             pais_exitosos[pais] = pais_exitosos.get(pais, 0) + exitosos
 
             _ok_items_c = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
             _err_items_c = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
+            if _problema:
+                _err_items_c.append({'linea': os.path.basename(excel_path), 'url': '(sin datos del Excel)',
+                                     'url_secure': '', 'ok': False, 'error': _problema})
             if _ok_items_c or _err_items_c:
                 detalles_url_pais.append((pais, nav_label, vp_label, _err_items_c + _ok_items_c))
 
