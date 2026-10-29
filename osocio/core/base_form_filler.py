@@ -591,6 +591,19 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     snap[key] = entry
         return snap
 
+    @staticmethod
+    def _con_elementos_reales(crudos, elementos):
+        """Cambia el elemento que vino dentro de un objeto JS ({el: c, ...}) por el mismo
+        elemento pedido con find_elements (mismo orden del documento). En el iPhone de
+        BrowserStack (Safari por Appium) un elemento devuelto adentro de un objeto trae un
+        id ':wdc:...' que después no se puede volver a pasar a un script ("Error converting
+        element ID for using in WD atoms"): el checkbox de términos se daba por no visible
+        y quedaba sin marcar (CL gm_front suscribir-onstar-link)."""
+        if len(elementos) == len(crudos):
+            for info, el in zip(crudos, elementos):
+                info["el"] = el
+        return crudos
+
     def _set_input_value_js(self, el, value):
         """Setea el value con el setter nativo del prototipo (React/Angular no registran
         la asignación directa de el.value)."""
@@ -3639,6 +3652,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             selects_info = self.driver.execute_script(
                 "return Array.prototype.map.call(document.querySelectorAll('select'), function (s) {"
                 "  return {el: s, id: s.id || '', name: s.getAttribute('name') || ''}; });") or []
+            selects_info = self._con_elementos_reales(
+                selects_info, self.driver.find_elements(By.TAG_NAME, "select"))
         except Exception as e:
             print(f" Error buscando dropdowns no mapeados: {e}")
             return False

@@ -223,6 +223,16 @@ class DesplegablesMixin:
                 "return out;", select_element) or []
         except Exception:
             return []
+        # Los <option> que vinieron dentro del objeto JS no sirven en el iPhone de
+        # BrowserStack (ver _con_elementos_reales): se toman los mismos por su índice.
+        try:
+            todas = select_element.find_elements(By.TAG_NAME, "option")
+            for item in crudas:
+                i = item.get("indice")
+                if isinstance(i, int) and 0 <= i < len(todas):
+                    item["el"] = todas[i]
+        except Exception:
+            pass
         valid_options = []
         for item in crudas:
             texto = item.get("texto", "")
