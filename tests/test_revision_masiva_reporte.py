@@ -136,6 +136,14 @@ class _FillerFalso:
                 "secure_status": OK_200, "forms_count": 1, "error": ""}
 
 
+def _tabla(ws):
+    """Tabla de todas las filas de la pestaña del mercado: {fila original: {columna: valor}}."""
+    filas = list(ws.iter_rows(values_only=True))
+    i = next(n for n, f in enumerate(filas) if f[0] == "Fila" and "currentUrl" in f)
+    cab = filas[i]
+    return cab, {f[0]: dict(zip(cab, f)) for f in filas[i + 1:] if f[0] is not None}
+
+
 def test_excel_por_mercado_y_filas_sin_url(tmp_path, monkeypatch):
     import osocio.paths
     monkeypatch.setattr(osocio.paths, "BASE_DIR", str(tmp_path))
@@ -163,23 +171,25 @@ def test_excel_por_mercado_y_filas_sin_url(tmp_path, monkeypatch):
     assert [n.rsplit("_", 1)[-1] for n in por_mercado] == ["CHILE.xlsx", "COLOMBIA.xlsx"]
     for p in info["reportes_por_mercado"]:
         assert os.path.dirname(p).endswith("por_mercado")
-        assert openpyxl.load_workbook(p).sheetnames[0] == mcr.FALLAS_SHEET_NAME
-        assert len(openpyxl.load_workbook(p).sheetnames) == 2
+        assert len(openpyxl.load_workbook(p).sheetnames) == 1
     assert ("Colombia", "Listo — Excel del mercado guardado") in avisos
 
-    # El completo tiene la columna Motivo primero.
-    ws = openpyxl.load_workbook(info["reporte_path"])["COLOMBIA"]
-    assert [c.value for c in ws[1]][:2] == ["Motivo", "currentUrl"]
-    assert ws.cell(row=2, column=1).value == "OK"
-    assert ws.cell(row=5, column=1).value == "Omitido (OFF)"
-    assert ws.cell(row=3, column=1).value is None      # "LIVE URL": no se revisó
+    # El completo: una pestaña por mercado y el resumen. Abajo de las fallas, todas las
+    # filas con su número de fila del Excel original y en qué quedaron.
+    wb_todo = openpyxl.load_workbook(info["reporte_path"])
+    assert wb_todo.sheetnames == ["COLOMBIA", "CHILE", mcr.RESUMEN_SHEET_NAME]
+    ws = wb_todo["COLOMBIA"]
+    cab, tabla = _tabla(ws)
+    assert list(cab[:3]) == ["Fila", "Motivo", "currentUrl"]
+    assert tabla[2]["Motivo"] == "OK"
+    assert tabla[5]["Motivo"] == "Omitido (OFF)"
+    assert tabla[3]["Motivo"] == "No se revisa (sin URL)"     # "LIVE URL": otra tabla
 
     # Sin links clickeables; la URL que solo estaba en el link queda escrita.
     for p in [info["reporte_path"]] + info["reportes_por_mercado"]:
         for hoja in openpyxl.load_workbook(p).worksheets:
             assert not [c.coordinate for fila in hoja.iter_rows() for c in fila if c.hyperlink]
-    cab = [c.value for c in ws[1]]
-    assert ws.cell(row=2, column=cab.index("URL LIVE") + 1).value == "https://www.chevrolet.com.co/vans/n400-cargo"
+    assert tabla[2]["URL LIVE"] == "https://www.chevrolet.com.co/vans/n400-cargo"
 
 
 def test_reporte_viejo_sin_motivo_no_duplica_el_bloque(tmp_path, monkeypatch):
@@ -197,8 +207,8 @@ def test_reporte_viejo_sin_motivo_no_duplica_el_bloque(tmp_path, monkeypatch):
 
     ok, info = mcr.run_massive_check(str(matriz), cols, ["Colombia"], tomar_capturas=False)
     assert ok, info
-    cab = [c.value for c in openpyxl.load_workbook(info["reporte_path"])["COLOMBIA"][1]]
-    assert cab[:8] == mcr.RESULT_HEADERS and cab.count("currentUrl") == 1
+    cab, _ = _tabla(openpyxl.load_workbook(info["reporte_path"])["COLOMBIA"])
+    assert list(cab[1:9]) == mcr.RESULT_HEADERS and cab.count("currentUrl") == 1
 
 
 def test_form_aem_por_ruta_se_revisa(tmp_path, monkeypatch):
@@ -244,13 +254,9 @@ def test_celdas_combinadas_no_tapan_el_motivo(tmp_path, monkeypatch):
 
     ok, info = mcr.run_massive_check(str(matriz), cols, ["Brasil"], tomar_capturas=False)
     assert ok, info
-    ws = openpyxl.load_workbook(info["reporte_path"])["BRASIL"]
-    n = len(mcr.RESULT_HEADERS)
-    assert [ws.cell(row=r, column=1).value for r in (3, 4, 5)] == ["OK"] * 3
-    from openpyxl.utils import get_column_letter as L
-    assert sorted(str(r) for r in ws.merged_cells.ranges) == sorted(
-        [f"{L(1 + n)}2:{L(4 + n)}2", f"{L(1 + n)}3:{L(1 + n)}5"])
-    assert ws.cell(row=2, column=1 + n).value == "REGRESSIONS"
+    _, tabla = _tabla(openpyxl.load_workbook(info["reporte_path"])["BRASIL"])
+    assert [tabla[r]["Motivo"] for r in (3, 4, 5)] == ["OK"] * 3
+    assert tabla[2]["SEGMENTO"] == "REGRESSIONS"
 
 
 def test_iframe_que_no_es_form():
@@ -325,7 +331,7 @@ class _FillerConFallas(_FillerFalso):
         return super().check_single_url(landing, form, row, tomar_capturas)
 
 
-def test_pestana_fallas_por_tipo(tmp_path, monkeypatch):
+def test_pestana_de_mercado_fallas_por_tipo_y_todas_las_filas(tmp_path, monkeypatch):
     import osocio.paths
     monkeypatch.setattr(osocio.paths, "BASE_DIR", str(tmp_path))
     monkeypatch.setattr(mcr, "MassiveFormFiller", _FillerConFallas)
@@ -337,6 +343,7 @@ def test_pestana_fallas_por_tipo(tmp_path, monkeypatch):
     ws.append(["Bien", "ON", "https://www.chevrolet.com.co/bien", FORM, ""])
     ws.append(["Rota", "ON", "https://www.chevrolet.com.co/rota", FORM, ""])
     ws.append(["Otra", "ON", "https://www.chevrolet.com.co/otra", FORM, ""])
+    ws.append(["Vieja", "OFF", "https://www.chevrolet.com.co/vieja", FORM, ""])
     ws2 = wb.create_sheet("CHILE")
     ws2.append(["SEGMENTO", "ESTADO", "URL LIVE", "URL SECURE", "Comentarios"])
     ws2.append(["Bien", "ON", "https://www.chevrolet.cl/bien", FORM, ""])
@@ -348,18 +355,43 @@ def test_pestana_fallas_por_tipo(tmp_path, monkeypatch):
     def textos(ws):
         return [str(c.value) for fila in ws.iter_rows() for c in fila if c.value is not None]
 
-    wb_todo = openpyxl.load_workbook(info["reporte_path"])
-    assert wb_todo.sheetnames[0] == mcr.FALLAS_SHEET_NAME
-    t = textos(wb_todo[mcr.FALLAS_SHEET_NAME])
-    assert "Landing da 404 (1)" in t and "El form de la landing es otro (no coincide con la matriz) (1)" in t
-    assert t.index("Landing da 404 (1)") < t.index("El form de la landing es otro (no coincide con la matriz) (1)")
-    assert "https://www.chevrolet.com.co/rota" in t and "https://www.chevrolet.com.co/bien" not in t
-
     por_mercado = {os.path.basename(p).rsplit("_", 1)[-1]: p for p in info["reportes_por_mercado"]}
-    wb_co = openpyxl.load_workbook(por_mercado["COLOMBIA.xlsx"])
-    assert wb_co.sheetnames == [mcr.FALLAS_SHEET_NAME, "COLOMBIA"]
-    wb_cl = openpyxl.load_workbook(por_mercado["CHILE.xlsx"])
-    assert "Sin fallas ✔" in textos(wb_cl[mcr.FALLAS_SHEET_NAME])
+    for ws in (openpyxl.load_workbook(info["reporte_path"])["COLOMBIA"],
+               openpyxl.load_workbook(por_mercado["COLOMBIA.xlsx"])["COLOMBIA"]):
+        t = textos(ws)
+        assert "Revisadas: 3 · OK: 1 · FAIL: 2 · Omitidas (OFF): 1 · No se revisan (sin URL): 0" in t
+        # Arriba las fallas por tipo: primero lo que hay que reportar, después lo que no coincide.
+        assert t.index("Landing da 404 (1)") < t.index(
+            "El form de la landing es otro (no coincide con la matriz) (1)") < t.index(
+            "Todas las filas (Fila = número de fila en el Excel original)")
+        # Abajo todas las filas, con su fila original.
+        _, tabla = _tabla(ws)
+        assert {f: tabla[f]["Motivo"].split(" ")[0] for f in tabla} == {
+            2: "OK", 3: "Landing", 4: "Form", 5: "Omitido"}
+    assert "Sin fallas ✔" in textos(openpyxl.load_workbook(por_mercado["CHILE.xlsx"])["CHILE"])
+
+
+def test_el_reporte_nuevo_lo_leen_solo_fails_y_el_mail(tmp_path, monkeypatch):
+    import osocio.paths
+    from osocio.interface.helpers_interface import analizar_resultados_masivos
+    monkeypatch.setattr(osocio.paths, "BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(mcr, "MassiveFormFiller", _FillerConFallas)
+    matriz = tmp_path / "Lectores.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "COLOMBIA"
+    ws.append(["SEGMENTO", "ESTADO", "URL LIVE", "URL SECURE", "Comentarios"])
+    ws.append(["Bien", "ON", "https://www.chevrolet.com.co/bien", FORM, ""])
+    ws.append(["Rota", "ON", "https://www.chevrolet.com.co/rota", FORM, ""])
+    wb.save(matriz)
+    cols = {"segmento": "SEGMENTO", "estado": "ESTADO", "url_live": "URL LIVE", "url_secure": "URL SECURE"}
+    ok, info = mcr.run_massive_check(str(matriz), cols, ["Colombia"], tomar_capturas=False)
+    assert ok, info
+    previo = openpyxl.load_workbook(info["reporte_path"], data_only=True)
+    assert set(mcr.load_passed_results_from_wb(previo, cols)) == {
+        ("https://www.chevrolet.com.co/bien", FORM.lower())}
+    assert analizar_resultados_masivos(info["reporte_path"])["market_summaries"]["COLOMBIA"] == {
+        "total": 2, "pass": 1, "fail": 1}
 
 
 class _Resp:

@@ -1754,9 +1754,10 @@ def analizar_resultados_masivos(excel_path):
     for sheet_name in wb.sheetnames:
         sheet = wb[sheet_name]
         
-        # Buscar la cabecera
+        # Buscar la cabecera. En el reporte la tabla de todas las filas va debajo de las
+        # fallas por tipo, así que se busca en toda la hoja y no solo arriba.
         header_row_idx = None
-        for r_idx in range(1, 15):
+        for r_idx in range(1, sheet.max_row + 1):
             row_vals = [str(sheet.cell(row=r_idx, column=c).value or "").strip().upper() for c in range(1, sheet.max_column + 1)]
             if "SEGMENTO" in row_vals and "ESTADO" in row_vals and "URL LIVE" in row_vals:
                 header_row_idx = r_idx

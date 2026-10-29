@@ -1,4 +1,3 @@
-import io
 import os
 import time
 import requests
@@ -1022,7 +1021,6 @@ RESULT_HEADERS = [
 ]
 
 RESUMEN_SHEET_NAME = "RESUMEN REVISIÓN"
-FALLAS_SHEET_NAME = "FALLAS POR TIPO"
 
 # Tipos de falla, en el orden en que se muestran. "reportar": la landing o el form están
 # rotos; "no_coincide": el form de la landing no es el de la matriz. El tipo sale del
@@ -1057,64 +1055,116 @@ def tipo_de_falla(motivo):
     return clave, titulo, grupo
 
 
-def escribir_hoja_fallas(wb, fallas, titulo):
-    """Pestaña con las fallas agrupadas por tipo: un título por tipo (con la cantidad) y
-    debajo sus filas. Primero lo que hay que reportar (rojo), después los forms que no
-    coinciden con la matriz (ámbar). Va primera en el libro."""
+def _escribir_fallas_por_tipo(ws, fila, fallas):
+    """Fallas agrupadas por tipo, desde la fila `fila`: un índice con la cantidad de cada
+    tipo y debajo una sección por tipo (título de color + tabla). Primero lo que hay que
+    reportar (rojo), después los forms que no coinciden con la matriz (ámbar). Devuelve la
+    fila siguiente libre."""
     from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-    if FALLAS_SHEET_NAME in wb.sheetnames:
-        del wb[FALLAS_SHEET_NAME]
-    ws = wb.create_sheet(title=FALLAS_SHEET_NAME, index=0)
     colores = {"reportar": ("FFC7CE", "9C0006"), "no_coincide": ("FFEB9C", "9C5700")}
-    columnas = [("Mercado", 13), ("Fila", 7), ("Segmento", 24), ("Landing", 48),
-                ("Form esperado (matriz)", 52), ("Form en la landing", 52), ("Motivo", 80)]
-    for i, (_, ancho) in enumerate(columnas, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = ancho
+    # Sin "Estado" ni "URL LIVE" en el encabezado: así ningún lector del reporte confunde
+    # estas tablas con la de todas las filas.
+    columnas = ["Fila", "Segmento", "Landing", "Form esperado (matriz)", "Form en la landing", "Motivo"]
     arriba = Alignment(vertical="top", wrap_text=True)
 
-    ws.cell(row=1, column=1, value=titulo).font = Font(bold=True, size=14, color="5D3C7A")
-    ws.cell(row=2, column=1, value=(f"{len(fallas)} falla(s). Arriba lo que hay que reportar (landing o "
-                                    "form rotos); abajo los forms que no coinciden con la matriz.")
-            ).font = Font(italic=True, color="64557A")
+    ws.cell(row=fila, column=1, value="Fallas por tipo de error").font = Font(bold=True, size=12, color="5D3C7A")
+    fila += 1
     if not fallas:
-        ws.cell(row=4, column=1, value="Sin fallas ✔").font = Font(bold=True, color="006100")
-        return ws
+        ws.cell(row=fila, column=1, value="Sin fallas ✔").font = Font(bold=True, color="006100")
+        return fila + 2
 
     por_tipo = {}
     for f in fallas:
         por_tipo.setdefault(tipo_de_falla(f["motivo"])[0], []).append(f)
     tipos = [t for t in TIPOS_DE_FALLA if t[0] in por_tipo]
     tipos.sort(key=lambda t: t[2] != "reportar")      # reportar primero, sin perder el orden
-
-    fila = 4
-    for clave, titulo_tipo, grupo, _ in tipos:          # índice de tipos con su cantidad
-        fondo, letra = colores[grupo]
-        c = ws.cell(row=fila, column=1, value=f"{titulo_tipo}: {len(por_tipo[clave])}")
-        c.font = Font(bold=True, color=letra)
+    for clave, titulo_tipo, grupo, _ in tipos:
+        ws.cell(row=fila, column=1, value=f"{titulo_tipo}: {len(por_tipo[clave])}").font = Font(
+            bold=True, color=colores[grupo][1])
         fila += 1
     fila += 1
 
     for clave, titulo_tipo, grupo, _ in tipos:
         fondo, letra = colores[grupo]
-        relleno = PatternFill(fill_type="solid", fgColor=fondo)
         ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=len(columnas))
         c = ws.cell(row=fila, column=1, value=f"{titulo_tipo} ({len(por_tipo[clave])})")
-        c.font, c.fill = Font(bold=True, size=12, color=letra), relleno
+        c.font, c.fill = Font(bold=True, size=12, color=letra), PatternFill(fill_type="solid", fgColor=fondo)
         fila += 1
-        for i, (nombre, _) in enumerate(columnas, start=1):
+        for i, nombre in enumerate(columnas, start=1):
             c = ws.cell(row=fila, column=i, value=nombre)
-            c.font = Font(bold=True, color="64557A")
-            c.fill = PatternFill(fill_type="solid", fgColor="F2E6FF")
+            c.font, c.fill = Font(bold=True, color="64557A"), PatternFill(fill_type="solid", fgColor="F2E6FF")
         fila += 1
         for f in por_tipo[clave]:
-            valores = [f["mercado"], f["fila"], f["segmento"], f["landing"], f["esperado"],
-                       f["insertado"], f["motivo"]]
-            for i, v in enumerate(valores, start=1):
-                c = ws.cell(row=fila, column=i, value=v)
-                c.alignment = arriba
+            for i, v in enumerate([f["fila"], f["segmento"], f["landing"], f["esperado"], f["insertado"],
+                                   f["motivo"]], start=1):
+                ws.cell(row=fila, column=i, value=v).alignment = arriba
             fila += 1
         fila += 1
+    return fila
+
+
+def armar_hoja_mercado(wb_dest, ws_src, header_row_idx, fallas, fecha):
+    """Pestaña del mercado en el reporte: arriba las fallas por tipo de error y abajo TODAS
+    las filas de la matriz con su número de fila original y en qué quedaron (OK, FAIL con su
+    motivo, Omitida (OFF), No se revisa). La tabla de abajo conserva los encabezados de la
+    matriz y las columnas de resultado: es la que leen "solo fails", el mail y la
+    sincronización con la matriz."""
+    from copy import copy
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    ws = wb_dest.create_sheet(title=ws_src.title)
+    encabezado = [c.value for c in ws_src[header_row_idx]]
+    i_motivo = encabezado.index("Motivo") if "Motivo" in encabezado else None
+    gris = PatternFill(fill_type="solid", fgColor="EAECEE")
+
+    filas = []
+    ok = fail = omitidas = sin_revisar = 0
+    for r in range(header_row_idx + 1, ws_src.max_row + 1):
+        celdas = ws_src[r]
+        if all(c.value in (None, "") for c in celdas):
+            continue
+        motivo = str(celdas[i_motivo].value or "") if i_motivo is not None else ""
+        if motivo == "OK":
+            ok += 1
+        elif motivo.startswith("Omitido"):
+            omitidas += 1
+        elif motivo:
+            fail += 1
+        else:
+            sin_revisar += 1
+        filas.append((r, celdas, motivo))
+
+    ws.cell(row=1, column=1, value=f"{ws_src.title} — Revisión Masiva {fecha}").font = Font(
+        bold=True, size=14, color="5D3C7A")
+    ws.cell(row=2, column=1, value=(f"Revisadas: {ok + fail} · OK: {ok} · FAIL: {fail} · "
+                                    f"Omitidas (OFF): {omitidas} · No se revisan (sin URL): {sin_revisar}")
+            ).font = Font(bold=True, color="64557A")
+    fila = _escribir_fallas_por_tipo(ws, 4, fallas)
+
+    ws.cell(row=fila, column=1, value="Todas las filas (Fila = número de fila en el Excel original)").font = Font(
+        bold=True, size=12, color="5D3C7A")
+    fila += 1
+    for i, v in enumerate(["Fila"] + encabezado, start=1):
+        c = ws.cell(row=fila, column=i, value=v)
+        c.font, c.fill = Font(bold=True, color="64557A"), PatternFill(fill_type="solid", fgColor="F2E6FF")
+    fila += 1
+    arriba = Alignment(vertical="top", wrap_text=True)
+    for r, celdas, motivo in filas:
+        ws.cell(row=fila, column=1, value=r).font = Font(color="64557A")
+        for i, src in enumerate(celdas, start=2):
+            c = ws.cell(row=fila, column=i, value=src.value)
+            if src.has_style:
+                c.font, c.fill = copy(src.font), copy(src.fill)
+        if i_motivo is not None and not motivo:
+            c = ws.cell(row=fila, column=2 + i_motivo, value="No se revisa (sin URL)")
+            c.fill, c.font = gris, Font(color="7A7084")
+        if i_motivo is not None:
+            ws.cell(row=fila, column=2 + i_motivo).alignment = arriba
+        fila += 1
+
+    anchos = {1: 9, 2: 42, 3: 42, 4: 42, 5: 46, 6: 60}
+    for col in range(1, max(len(encabezado) + 2, 7)):
+        ws.column_dimensions[get_column_letter(col)].width = anchos.get(col, 22)
     return ws
 
 
@@ -1384,6 +1434,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
             "new_col_indices": new_col_indices,
             "comentarios_col_idx": comentarios_col_idx,
             "capturas_dir": country_capturas_dir,
+            "header_row_idx": header_row_idx,
             "filas": filas,
         })
 
@@ -1494,21 +1545,26 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     nombre_base = os.path.splitext(os.path.basename(excel_path))[0]
     por_mercado_dir = os.path.join(dest_dir, "por_mercado")
     reportes_por_mercado = []
-    fallas = []   # filas FAIL de todos los mercados, para la pestaña FALLAS POR TIPO
+    fallas = []   # filas FAIL de todos los mercados (arriba de cada pestaña, por tipo)
+    planes_por_nombre = {p["s_name"]: p for p in planes}
+
+    def _hoja_reporte(wb_dest, s_name):
+        """La pestaña del mercado en un Excel de salida: fallas por tipo y todas las filas."""
+        armar_hoja_mercado(wb_dest, wb[s_name], planes_por_nombre[s_name]["header_row_idx"],
+                           [f for f in fallas if f["mercado"] == s_name],
+                           datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+    def _libro_vacio():
+        libro = openpyxl.Workbook()
+        libro.remove(libro.active)
+        return libro
 
     def _guardar_mercado(s_name):
-        """Copia del workbook con solo la hoja de ese mercado, en por_mercado/."""
+        """Excel del mercado en por_mercado/, apenas termina: solo su pestaña."""
         try:
             os.makedirs(por_mercado_dir, exist_ok=True)
-            buf = io.BytesIO()
-            wb.save(buf)
-            buf.seek(0)
-            wb_m = openpyxl.load_workbook(buf)
-            for _s in list(wb_m.sheetnames):
-                if _s != s_name:
-                    del wb_m[_s]
-            escribir_hoja_fallas(wb_m, [f for f in fallas if f["mercado"] == s_name],
-                                 f"Fallas por tipo de error — {s_name}")
+            wb_m = _libro_vacio()
+            _hoja_reporte(wb_m, s_name)
             path = os.path.join(por_mercado_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}_{s_name}.xlsx")
             wb_m.save(path)
             reportes_por_mercado.append(path)
@@ -1614,24 +1670,21 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         return False, ("No se encontró ninguna hoja para los mercados seleccionados "
                        f"({', '.join(selected_markets)}). Hojas del Excel: {', '.join(sheet_names)}.")
 
-    # El reporte es de ESTA corrida: se dejan solo las hojas de los mercados que se
-    # revisaron. Las de los mercados no seleccionados viajaban sin columnas de resultado y
-    # hacian parecer que se habian revisado y no habian dado nada. El Excel matriz original
-    # queda intacto igual, asi que no se pierde nada.
-    for _s in list(wb.sheetnames):
-        if _s not in hojas_procesadas and _s != RESUMEN_SHEET_NAME:
-            try:
-                del wb[_s]
-            except Exception:
-                pass
+    # El reporte es de ESTA corrida: una pestaña por mercado revisado (en el orden de la
+    # matriz) y el resumen. El Excel matriz original queda intacto.
+    orden = [p["s_name"] for p in planes if p["s_name"] in stats_por_mercado]
+    wb_rep = _libro_vacio()
+    for s_name in orden:
+        try:
+            _hoja_reporte(wb_rep, s_name)
+        except Exception as e:
+            print(f"No se pudo armar la pestaña de {s_name}: {e}")
 
-    # Hoja de resumen (se regenera en cada corrida para no acumular filas sueltas)
+    # Hoja de resumen
     summary_font = Font(bold=True, color="7D4E9F")
     summary_fill = PatternFill(start_color="F2E6FF", end_color="F2E6FF", fill_type="solid")
     try:
-        if RESUMEN_SHEET_NAME in wb.sheetnames:
-            del wb[RESUMEN_SHEET_NAME]
-        ws_res = wb.create_sheet(title=RESUMEN_SHEET_NAME)
+        ws_res = wb_rep.create_sheet(title=RESUMEN_SHEET_NAME)
         ws_res.cell(row=1, column=1).value = "Última revisión masiva"
         ws_res.cell(row=1, column=2).value = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         ws_res.cell(row=2, column=1).value = "Duración del test:"
@@ -1652,7 +1705,6 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         for c in range(1, 6):
             ws_res.cell(row=5, column=c).font = font_bold
         # En el orden de las hojas, no en el que fueron terminando los mercados.
-        orden = [p["s_name"] for p in planes if p["s_name"] in stats_por_mercado]
         for i, m_name in enumerate(orden, start=6):
             m_proc, m_pass, m_fail, m_skip = stats_por_mercado[m_name]
             ws_res.cell(row=i, column=1).value = m_name
@@ -1665,18 +1717,9 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     except Exception as e:
         print(f"No se pudo escribir la hoja de resumen: {e}")
 
-    try:
-        orden_hojas = {p["s_name"]: i for i, p in enumerate(planes)}
-        escribir_hoja_fallas(wb, sorted(fallas, key=lambda f: (orden_hojas.get(f["mercado"], 99), f["fila"])),
-                             "Fallas por tipo de error — todos los mercados")
-    except Exception as e:
-        print(f"No se pudo escribir la hoja de fallas por tipo: {e}")
-
-    # Único archivo de salida: copia del matriz ya editada con los resultados.
-    # El Excel matriz original queda intacto.
     reporte_path = os.path.join(dest_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}.xlsx")
     try:
-        wb.save(reporte_path)
+        wb_rep.save(reporte_path)
     except Exception as e:
         print(f"Error guardando el reporte de resultados: {e}")
         return False, f"Error al guardar reporte: {e}"
