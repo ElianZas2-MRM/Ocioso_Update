@@ -1950,9 +1950,6 @@ def iniciar_interfaz(autostart_leads=False):
     SCHED_BG = "#3B1E5E"
     SCHED_BORDER = "#8B5FB5"
     GUIDE_ACCENT = "#FFC845"
-    # Navegadores simultáneos en la Revisión Masiva en paralelo. Cada mercado levanta un
-    # Chrome completo: abrir los nueve de golpe deja la máquina inservible.
-    _MASIVO_MAX_WORKERS = 3
     BADGE_TEAL = "#5DCFCF"
     BADGE_GREEN = "#82E0AA"
     BADGE_AMBER = "#F8C471"
@@ -4064,8 +4061,8 @@ def iniciar_interfaz(autostart_leads=False):
                 # El modo se toma de la columna MERCADOS de la card de configuración.
                 paralelo = (scheduler_cfg_masivo.get("modo_excel") == "paralelo")
                 if paralelo:
-                    log_message(f"[INFO] Revisión Masiva en paralelo: hasta {_MASIVO_MAX_WORKERS} "
-                                "mercados a la vez, cada uno con su propio navegador. Cada mercado "
+                    log_message(f"[INFO] Revisión Masiva en paralelo: {len(active_markets)} "
+                                "mercado(s) a la vez, cada uno con su propio navegador. Cada mercado "
                                 "guarda su Excel apenas termina (carpeta por_mercado).")
 
                 success, info = run_massive_check(
@@ -4076,7 +4073,7 @@ def iniciar_interfaz(autostart_leads=False):
                     solo_fails=var_solo_fails.get(),
                     browser="chrome", headless=False,
                     progress_callback=pcb, stop_event=stop_event,
-                    paralelo=paralelo, max_workers=_MASIVO_MAX_WORKERS,
+                    paralelo=paralelo,
                 )
                 
                 # Enviar correo si corresponde
