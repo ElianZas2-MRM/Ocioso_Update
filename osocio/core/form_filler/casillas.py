@@ -765,6 +765,8 @@ class CasillasYRadiosMixin:
                 "    texto: ((c.id && document.querySelector('label[for=\"' + c.id + '\"]')) || c.closest('label')"
                 "            || {textContent: ''}).textContent.replace(/\\s+/g, ' ').trim()}; });"
             ) or []
+            raw_checkboxes = self._con_elementos_reales(
+                raw_checkboxes, self.driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']"))
         except Exception:
             raw_checkboxes = []
         por_lista = self._grupos_pedidos_checkbox(raw_checkboxes)
