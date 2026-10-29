@@ -1,7 +1,7 @@
-import io
 import os
 import time
 import requests
+from urllib.parse import parse_qsl, urlparse
 import datetime
 import openpyxl
 from openpyxl.styles import PatternFill, Font
@@ -113,6 +113,21 @@ class MassiveFormFiller(GenericCountryBase):
                             break
                     except Exception:
                         pass
+            except Exception:
+                pass
+
+        # Forms cortos (ej. encuesta "¿Por qué no fue útil?"): solo un <textarea> y el
+        # checkbox de términos. También cuentan; el checkbox suele ser un input oculto con
+        # un label dibujado encima, así que se mira el input o su label.
+        if not found_any_visible_field:
+            try:
+                found_any_visible_field = bool(self.driver.execute_script("""
+                    const visible = el => !!el && el.offsetWidth > 0 && el.offsetHeight > 0;
+                    if ([...document.querySelectorAll('textarea')].some(visible)) return true;
+                    return [...document.querySelectorAll('input[type=checkbox], input[type=radio]')].some(i =>
+                        visible(i) || visible(i.closest('label')) ||
+                        (i.id && visible(document.querySelector('label[for="' + CSS.escape(i.id) + '"]'))));
+                """))
             except Exception:
                 pass
 
@@ -265,6 +280,9 @@ class MassiveFormFiller(GenericCountryBase):
     _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
+    # Espera antes de cada reintento por corte de conexión / timeout (2 reintentos).
+    _ESPERAS_REINTENTO_HTTP = (2, 4)
+
     def _http_status_str(self, url, report_redirects=False):
         """Status HTTP de una URL para el reporte. Devuelve (texto, url_final).
 
@@ -278,18 +296,29 @@ class MassiveFormFiller(GenericCountryBase):
         firma el proxy: Windows ya confía en él, y truststore hace que Python use esa misma
         lista, así que no genera falsos FAIL (ver la inyección arriba y en run.py).
         """
-        try:
-            r = requests.get(url, headers={"User-Agent": self._UA},
-                             timeout=8, allow_redirects=True)
-        except requests.exceptions.SSLError as e:
-            # Certificado inválido/vencido/no confiable: es un hallazgo real del chequeo.
-            return f"SSL - ❌ FAIL Certificado TLS inválido o no confiable: {str(e)[:160]}", url
-        except requests.exceptions.Timeout:
-            return "Timeout - ❌ FAIL La URL no respondió en 8s", url
-        except requests.exceptions.RequestException as e:
-            return f"Error - ❌ FAIL {type(e).__name__}: {str(e)[:160]}", url
-        except Exception as e:
-            return f"Error - ❌ FAIL HTTP Code: {type(e).__name__}", url
+        # Un corte de conexión o un timeout suele ser momentáneo (ej. "Connection aborted /
+        # RemoteDisconnected"): se reintenta antes de dar la landing por inaccesible.
+        intentos = 1 + len(self._ESPERAS_REINTENTO_HTTP)
+        for intento in range(intentos):
+            try:
+                r = requests.get(url, headers={"User-Agent": self._UA},
+                                 timeout=8, allow_redirects=True)
+                break
+            except requests.exceptions.SSLError as e:
+                # Certificado inválido/vencido/no confiable: es un hallazgo real del chequeo.
+                return f"SSL - ❌ FAIL Certificado TLS inválido o no confiable: {str(e)[:160]}", url
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                if intento < intentos - 1:
+                    print(f"⟳ {type(e).__name__} en {url}: reintento {intento + 1}")
+                    time.sleep(self._ESPERAS_REINTENTO_HTTP[intento])
+                    continue
+                if isinstance(e, requests.exceptions.Timeout):
+                    return f"Timeout - ❌ FAIL La URL no respondió en 8s (tras {intentos} intentos)", url
+                return f"Error - ❌ FAIL {type(e).__name__} (tras {intentos} intentos): {str(e)[:160]}", url
+            except requests.exceptions.RequestException as e:
+                return f"Error - ❌ FAIL {type(e).__name__}: {str(e)[:160]}", url
+            except Exception as e:
+                return f"Error - ❌ FAIL HTTP Code: {type(e).__name__}", url
 
         if report_redirects and r.history:
             code = r.history[0].status_code
@@ -321,10 +350,18 @@ class MassiveFormFiller(GenericCountryBase):
             landing_url = landing_url or expected_form_url
             expected_form_url = ""
 
+        # Form AEM pedido por la ruta del componente (/content/forms/af/..., ej. Cadillac
+        # Brasil): está embebido en la landing, sin iframe, y se reconoce por el data-path
+        # del guideContainer. Mismo criterio que Envío de Leads.
+        self._aem_content_path = ""
+        if expected_form_url.startswith("/content/"):
+            self._aem_content_path = expected_form_url.rstrip("/")
+
         self.expected_form_url = expected_form_url
         self.ss_counter = row_num
         self._url_form_encontrado = ""
         self._landing_issue = ""
+        self._iframes_vacios = []
         self._errores_ss_taken = False
         
         if self.screenshot_manager:
@@ -334,10 +371,14 @@ class MassiveFormFiller(GenericCountryBase):
             self.screenshot_manager.current_frame = None
 
         # 1. Obtener HTTP Status Code y Redirecciones del landing page
-        landing_status_str, final_url_found = self._http_status_str(landing_url, report_redirects=True)
+        # Sin la nota de la matriz ("… (dentro de un pop-up)"): con ella la URL da 404.
+        landing_status_str, final_url_found = self._http_status_str(
+            self._separar_nota_de_landing(landing_url)[0], report_redirects=True)
 
         # 1b. Obtener HTTP Status del expected secure URL (Secure_Excel)
-        if expected_form_url:
+        if self._aem_content_path:
+            secure_status_str = "N/A (form AEM por ruta)"
+        elif expected_form_url:
             secure_status_str, _ = self._http_status_str(expected_form_url)
         else:
             secure_status_str = "N/A"
@@ -347,7 +388,17 @@ class MassiveFormFiller(GenericCountryBase):
         # 2. Navegar con Selenium
         ss_landing_path = ""
         try:
-            ss_landing_path = self.process_landing_page(landing_url, row_num, take_screenshot=tomar_capturas)
+            try:
+                ss_landing_path = self.process_landing_page(landing_url, row_num, take_screenshot=tomar_capturas)
+            except Exception as e:
+                # Corte de conexión o timeout del navegador (net::ERR_CONNECTION_RESET, ...):
+                # una vez más antes de darla por caída.
+                if getattr(self, "stop_event", None) and self.stop_event.is_set():
+                    raise
+                print(f"⟳ La landing no cargó en el navegador ({str(e)[:80]}): reintento")
+                time.sleep(3)
+                self._landing_issue = ""
+                ss_landing_path = self.process_landing_page(landing_url, row_num, take_screenshot=tomar_capturas)
         except Exception as e:
             return {
                 "ok": False,
@@ -364,10 +415,30 @@ class MassiveFormFiller(GenericCountryBase):
                 "ss_completado": ""
             }
 
+        # Redirección que hace la propia página (JS / meta refresh): el servidor responde 200
+        # pero el navegador termina en otra URL (ej. BR comprar-carro-* → buscador de stock).
+        # No aplica a los forms sueltos ni a las landings que entran al form por un CTA (ahí
+        # cambiar de página es lo esperado).
+        try:
+            url_navegador = self.driver.current_url
+        except Exception:
+            url_navegador = ""
+        landing_limpia = self._separar_nota_de_landing(landing_url)[0]
+        if ("PASS" in landing_status_str and url_navegador and not standalone
+                and self._regla_cta_de_landing(landing_url) is None
+                and not _misma_pagina(landing_limpia, url_navegador)):
+            landing_status_str = f"JS - 🔀 FAIL La landing redirige en el navegador a {url_navegador}"
+
         # Landing rota (404 por título/encabezados) o un CTA de la landing que no lleva al
         # form. Lo del CTA no es un 404: la landing respondió bien y falló el camino al form.
+        # Si falla el CTA de la landing (ej. el botón que abre el pop-up de Trailblazer), el
+        # iframe del form igual puede estar en la página: se busca y se compara su URL con la
+        # esperada. El CTA solo se marca como causa si el form tampoco aparece.
+        cta_issue = ""
+        if self._landing_issue and not self._landing_issue.startswith("Landing 404"):
+            cta_issue, self._landing_issue = self._landing_issue, ""
         if self._landing_issue:
-            codigo = "404" if self._landing_issue.startswith("Landing 404") else "CTA"
+            codigo = "404"
             return {
                 "ok": False,
                 "error": self._landing_issue,
@@ -384,7 +455,7 @@ class MassiveFormFiller(GenericCountryBase):
             }
 
         # 3. Detectar iframe e inyectar URL de form
-        use_iframe = bool(expected_form_url)
+        use_iframe = bool(expected_form_url) and not self._aem_content_path
         form_url_mismatch = False
         target_iframe = None
         iframe_src = ""
@@ -428,6 +499,17 @@ class MassiveFormFiller(GenericCountryBase):
                 src = ""
             if src and src not in forms_en_landing:
                 forms_en_landing.append(src)
+        if use_iframe and not forms_en_landing:
+            # El lugar del form puede estar en la landing pero sin URL cargada (ej. AR rural:
+            # <iframe title="financiamiento rural reemplazo form"> sin src). Se avisa aparte de
+            # "no hay form", porque lo que hay que corregir es la carga del iframe.
+            try:
+                self._iframes_vacios = self.driver.execute_script(
+                    "return [...document.querySelectorAll('iframe')]"
+                    ".filter(i => !i.getAttribute('src') && !i.getAttribute('data-src') && i.offsetWidth > 0)"
+                    ".map(i => (i.getAttribute('title') || '').trim());") or []
+            except Exception:
+                self._iframes_vacios = []
 
         aem_embebido = ""
         if use_iframe:
@@ -449,16 +531,26 @@ class MassiveFormFiller(GenericCountryBase):
                         
                     if _cand is not None:
                         target_iframe = _cand
-                        if not _es_gm:
+                        # Envío de Leads acepta cualquier iframe GM; acá se revisa que el
+                        # insertado sea el esperado, así que otro form GM es un mismatch
+                        # (ej. myr2026 donde se esperaba tenho-interese-trailblazer).
+                        if not _es_gm or not _mismo_form(self._iframe_src_of(_cand), expected_form_url):
                             form_url_mismatch = True
                     else:
                         form_url_mismatch = True
                 
                 if target_iframe:
                     iframe_src = target_iframe.get_attribute("src") or ""
-                    self.driver.switch_to.frame(target_iframe)
+                    # find_and_position_to_form (de Envío de Leads) devuelve cualquier iframe
+                    # GM; acá el insertado tiene que ser el esperado.
+                    if not _mismo_form(iframe_src, expected_form_url):
+                        form_url_mismatch = True
+                    self._entrar_al_iframe(target_iframe)
                     if self.screenshot_manager:
                         self.screenshot_manager.current_frame = target_iframe
+                    # RAQ de Brasil: pantalla previa con el CTA #contact-by-form (igual que
+                    # en Envío de Leads); sin el clic, el form no muestra ningún campo.
+                    self._maybe_click_raq_cta(landing_url, iframe_src)
             except Exception as e:
                 return {
                     "ok": False,
@@ -474,20 +566,33 @@ class MassiveFormFiller(GenericCountryBase):
                     "ss_landing": ss_landing_path,
                     "ss_completado": ""
                 }
+        elif self._aem_content_path:
+            self.driver.switch_to.default_content()
+            if self._aem_form_presente():
+                iframe_src = aem_embebido = self._aem_content_path
+            else:
+                form_url_mismatch = True
+                forms_en_landing = [p for p in (self._aem_guide_data_paths() or []) if p]
         else:
             iframe_src = self.driver.current_url
+            # Form suelto: el RAQ de Brasil igual arranca en la pantalla del CTA.
+            self._maybe_click_raq_cta(landing_url)
 
         form_ok = bool(target_iframe or aem_embebido)
-        iframe_correct_str = "SÍ" if (form_ok and not form_url_mismatch) else ("NO" if use_iframe else "N/A (Standalone)")
+        con_form_esperado = use_iframe or bool(self._aem_content_path)
+        iframe_correct_str = "SÍ" if (form_ok and not form_url_mismatch) else ("NO" if con_form_esperado else "N/A (Standalone)")
 
         # Validar coincidencia estricta de URL (Excel == Inserted)
         form_coincide_str = "✅ PASS"
-        if use_iframe:
+        if con_form_esperado:
             if not form_ok or form_url_mismatch:
-                encontrado = iframe_src or " | ".join(forms_en_landing) or "ningún form insertado"
+                encontrado = (iframe_src or " | ".join(forms_en_landing)
+                              or ("un iframe vacío, sin URL" if self._iframes_vacios else "ningún form insertado"))
                 form_coincide_str = f"❌ FAIL Mismatch: expected {expected_form_url} but found {encontrado}"
 
-        if use_iframe and not form_ok:
+        if con_form_esperado and not form_ok:
+            if cta_issue:
+                landing_status_str = f"CTA - ❌ FAIL {cta_issue}"
             return {
                 "ok": False,
                 "error": "Iframe del formulario no encontrado en la landing.",
@@ -495,8 +600,27 @@ class MassiveFormFiller(GenericCountryBase):
                 "landing_status": landing_status_str,
                 "iframe_correct": "NO",
                 "form_url_found": " | ".join(forms_en_landing),
+                "iframes_vacios": list(self._iframes_vacios),
                 "form_coincide": form_coincide_str,
                 "displayed": "❌ FAIL",
+                "secure_status": secure_status_str,
+                "forms_count": forms_count,
+                "ss_landing": ss_landing_path,
+                "ss_completado": ""
+            }
+
+        # Iframe esperado que no es un form (ej. BR sonic/visualizer-3d → .../visualizer_sonic/):
+        # alcanza con que esté insertado el correcto; no tiene campos que buscar.
+        if use_iframe and not form_url_mismatch and not _es_url_de_form(expected_form_url):
+            return {
+                "ok": True,
+                "error": "",
+                "current_url": self.driver.current_url,
+                "landing_status": landing_status_str,
+                "iframe_correct": iframe_correct_str,
+                "form_url_found": iframe_src,
+                "form_coincide": form_coincide_str,
+                "displayed": "N/A (no es un form)",
                 "secure_status": secure_status_str,
                 "forms_count": forms_count,
                 "ss_landing": ss_landing_path,
@@ -534,6 +658,8 @@ class MassiveFormFiller(GenericCountryBase):
                 "landing_status": landing_status_str,
                 "iframe_correct": iframe_correct_str,
                 "form_url_found": iframe_src,
+            "iframes_vacios": list(self._iframes_vacios),
+                "iframes_vacios": list(self._iframes_vacios),
                 "form_coincide": form_coincide_str,
                 "displayed": displayed_str,
                 "secure_status": secure_status_str,
@@ -549,6 +675,7 @@ class MassiveFormFiller(GenericCountryBase):
             "landing_status": landing_status_str,
             "iframe_correct": iframe_correct_str,
             "form_url_found": iframe_src,
+            "iframes_vacios": list(self._iframes_vacios),
             "form_coincide": form_coincide_str,
             "displayed": displayed_str,
             "secure_status": secure_status_str,
@@ -569,6 +696,136 @@ def _url_de_celda(cell):
     return link.strip() if link.strip().lower().startswith("http") else texto
 
 
+def _misma_pagina(a, b):
+    """True si las dos URLs son la misma página (host y ruta; sin query, # ni barra final)."""
+    def _clave(u):
+        p = urlparse(str(u or "").strip())
+        return p.netloc.lower().removeprefix("www."), p.path.rstrip("/").lower()
+    return _clave(a) == _clave(b)
+
+
+def _insertar_columnas(sheet, idx, cantidad):
+    """insert_cols que también corre las celdas combinadas. openpyxl mueve los valores pero
+    deja las combinaciones donde estaban: en la tabla REGRESSIONS de BRASIL (A156:A180, ...)
+    la columna Motivo quedaba tapada por una combinación y su valor se perdía."""
+    from openpyxl.utils import get_column_letter
+    rangos = [(r.min_row, r.min_col, r.max_row, r.max_col) for r in sheet.merged_cells.ranges]
+    for r in list(sheet.merged_cells.ranges):
+        sheet.unmerge_cells(str(r))
+    sheet.insert_cols(idx, amount=cantidad)
+    for min_row, min_col, max_row, max_col in rangos:
+        if min_col >= idx:
+            min_col += cantidad
+        if max_col >= idx:
+            max_col += cantidad
+        sheet.merge_cells(f"{get_column_letter(min_col)}{min_row}:{get_column_letter(max_col)}{max_row}")
+
+
+def _quitar_links(sheet):
+    """Saca los hipervínculos que vienen de la matriz: en el reporte se hace clic en las
+    filas para revisarlas y cada clic abría la URL. Si la celda mostraba un texto y la URL
+    estaba solo en el link (ej. "N400 Cargo | Chevrolet"), queda la URL escrita."""
+    for fila in sheet.iter_rows():
+        for cell in fila:
+            if not cell.hyperlink:
+                continue
+            destino = (cell.hyperlink.target or "").strip()
+            if destino.lower().startswith("http") and not _es_url(cell.value):
+                cell.value = destino
+            cell.hyperlink = None
+            if cell.font and (cell.font.underline or cell.font.color is not None):
+                f = cell.font
+                cell.font = Font(name=f.name, size=f.size, bold=f.bold, italic=f.italic)
+
+
+def _mismo_form(insertado, esperado):
+    """True solo si la URL insertada es exactamente la del Excel (sin espacios alrededor)."""
+    return str(insertado or "").strip() == str(esperado or "").strip()
+
+
+def diferencias_form(insertado, esperado):
+    """Qué cambia entre la URL insertada y la esperada. Devuelve (otro_form, diferencias):
+    otro_form=True si es otro form (otro dominio u otra ruta); si no, las diferencias son
+    de detalle (www, https, barra final, mayúsculas, parámetros, codificación)."""
+    from urllib.parse import unquote_plus
+    ins, esp = str(insertado or "").strip(), str(esperado or "").strip()
+    if ins == esp:
+        return False, []
+    a, b = urlparse(ins), urlparse(esp)
+    difs, otro_form = [], False
+
+    if a.scheme.lower() != b.scheme.lower():
+        difs.append(f"protocolo: está {a.scheme}:// y se esperaba {b.scheme}://")
+    host_a, host_b = a.netloc.lower(), b.netloc.lower()
+    if host_a.removeprefix("www.") != host_b.removeprefix("www."):
+        otro_form = True
+        difs.append(f"dominio distinto: está {a.netloc} y se esperaba {b.netloc}")
+    elif host_a != host_b:
+        difs.append("el insertado " + ("tiene" if host_a.startswith("www.") else "no tiene") + " 'www.'"
+                    + (" y el esperado no" if host_a.startswith("www.") else " y el esperado sí"))
+    elif a.netloc != b.netloc:
+        difs.append(f"mayúsculas en el dominio: está {a.netloc} y se esperaba {b.netloc}")
+
+    if a.path != b.path:
+        if a.path.rstrip("/") == b.path.rstrip("/"):
+            difs.append("barra final: " + ("el insertado termina en '/' y el esperado no"
+                                           if a.path.endswith("/") else "el esperado termina en '/' y el insertado no"))
+        elif a.path.lower() == b.path.lower():
+            difs.append(f"mayúsculas en la ruta: está {a.path} y se esperaba {b.path}")
+        elif unquote_plus(a.path) == unquote_plus(b.path):
+            difs.append(f"la ruta está escrita distinto (codificación): {a.path} / se esperaba {b.path}")
+        else:
+            otro_form = True
+            seg_a, seg_b = a.path.rstrip("/").split("/"), b.path.rstrip("/").split("/")
+            distintos = [(x, y) for x, y in zip(seg_a, seg_b) if x != y]
+            if len(seg_a) == len(seg_b) and len(distintos) == 1:
+                difs.append(f"ruta distinta: está '{distintos[0][0]}' y se esperaba '{distintos[0][1]}'")
+            else:
+                difs.append(f"ruta distinta: está {a.path} y se esperaba {b.path}")
+
+    if a.query != b.query:
+        qa, qb = parse_qsl(a.query, keep_blank_values=True), parse_qsl(b.query, keep_blank_values=True)
+        da, db = dict(qa), dict(qb)
+        for k, v in qb:
+            if k not in da:
+                difs.append(f"falta el parámetro {k}={v}")
+            elif da[k] != v:
+                if da[k].strip() == v.strip():
+                    invisible = " invisible (espacio no separable)" if " " in da[k] + v else ""
+                    difs.append(f"{k} tiene un espacio{invisible} de más: está '{da[k]}' y se esperaba '{v}'")
+                elif da[k].strip().lower() == v.strip().lower():
+                    difs.append(f"{k} escrito distinto: está '{da[k]}' y se esperaba '{v}'")
+                else:
+                    difs.append(f"{k} distinto: está '{da[k]}' y se esperaba '{v}'")
+        for k, v in qa:
+            if k not in db:
+                difs.append(f"parámetro de más: {k}={v}")
+        if da == db:
+            difs.append("los parámetros son los mismos pero escritos distinto (orden o codificación): "
+                        f"?{a.query} / se esperaba ?{b.query}")
+    if a.fragment != b.fragment:
+        if not b.fragment:
+            difs.append(f"al insertado le sobra '#{a.fragment}'")
+        elif not a.fragment:
+            difs.append(f"al insertado le falta '#{b.fragment}'")
+        elif a.fragment.startswith(b.fragment):
+            difs.append(f"al insertado se le agregó '{a.fragment[len(b.fragment):]}' después del #")
+        else:
+            difs.append(f"#: está '#{a.fragment}' y se esperaba '#{b.fragment}'")
+    if not difs:
+        difs.append("las URLs se escriben distinto")
+    return otro_form, difs
+
+
+def _es_url_de_form(url):
+    """True si la URL esperada es un form: GM (gm_forms / gm_front / gm_frontend / gm_admin)
+    o un form AEM (formcontainer / /content/). Otro iframe (un visualizador 3D, por ejemplo)
+    no tiene campos que revisar."""
+    u = str(url or "").lower()
+    return (any(m in u for m in MassiveFormFiller.GM_FORM_URL_MARKERS)
+            or "formcontainer" in u or u.startswith("/content/"))
+
+
 def _es_url(valor):
     return str(valor or "").strip().lower().startswith("http")
 
@@ -580,9 +837,28 @@ def _codigo_y_detalle(status):
     return codigo.strip(), detalle.strip()
 
 
-def motivo_de_resultado(res):
+def _iframe_vacio_texto(res):
+    titulos = [t for t in (res.get("iframes_vacios") or []) if t]
+    return "un iframe vacío, sin URL" + (f" ('{titulos[0]}')" if titulos else "")
+
+
+def form_insertado_texto(res):
+    """Lo que va en Secure_Inserted: la URL del form que tiene la landing o, si no hay
+    ninguna, por qué (nunca una celda vacía que no dice nada)."""
+    found = str(res.get("form_url_found") or "")
+    if found:
+        return found
+    if "FAIL" in str(res.get("landing_status") or ""):
+        return "— (falló la landing: ver Motivo)"
+    if res.get("iframes_vacios"):
+        return f"— ({_iframe_vacio_texto(res)})"
+    return "— (ningún form insertado)"
+
+
+def motivo_de_resultado(res, esperado=""):
     """Motivo corto de una fila revisada, para la columna Motivo: qué falló y por qué
     (404, 5xx, redirección, timeout, form distinto al esperado, form sin campos...).
+    esperado = URL del form que pide el Excel, para decir cuál debería estar.
     "OK" si pasó todo."""
     motivos = []
     land = str(res.get("landing_status") or "")
@@ -603,23 +879,44 @@ def motivo_de_resultado(res):
             motivos.append("Landing con certificado SSL inválido")
         elif codigo == "CTA":
             motivos.append(f"CTA de la landing: {detalle}")
+        elif codigo == "JS":
+            motivos.append(detalle)
         else:
             motivos.append(f"Landing inaccesible: {detalle}")
 
     ins = str(res.get("form_coincide") or "")
+    se_esperaba = f" (se esperaba {esperado})" if esperado else ""
     if "Mismatch" in ins:
         found = str(res.get("form_url_found") or "")
-        if found:
-            motivos.append(f"Form distinto al esperado: en la landing está {found}")
+        if found and esperado and " | " not in found:
+            otro_form, difs = diferencias_form(found, esperado)
+            if otro_form:
+                motivos.append(f"Form distinto al esperado ({'; '.join(difs)}): en la landing está "
+                               f"{found}{se_esperaba}")
+            else:
+                motivos.append(f"Form casi igual al esperado pero no idéntico ({'; '.join(difs)}): "
+                               f"en la landing está {found}{se_esperaba}")
+        elif found:
+            motivos.append(f"Form distinto al esperado: en la landing está {found}{se_esperaba}")
+        elif res.get("iframes_vacios"):
+            motivos.append(f"La landing tiene {_iframe_vacio_texto(res)}{se_esperaba}")
         elif not landing_fallo:
-            motivos.append("La landing no tiene el form insertado")
+            motivos.append(f"La landing no tiene el form insertado{se_esperaba}")
     elif "No se pudo leer el iframe" in ins:
         motivos.append(_codigo_y_detalle(" - " + ins)[1])
+    sec = str(res.get("secure_status") or "")
+    form_caido = "FAIL" in sec
+    if "PASS" in ins and form_caido and "FAIL" in str(res.get("displayed") or ""):
+        # El form insertado es el correcto pero su URL no carga: eso explica que no se vean
+        # los campos, así que se dice una sola vez y directo.
+        codigo, detalle = _codigo_y_detalle(sec)
+        motivos.append(f"El form insertado es el correcto pero da {codigo} (no carga)" if codigo.isdigit()
+                       else f"El form insertado es el correcto pero no carga: {detalle}")
+        form_caido = False
     elif "PASS" in ins and "FAIL" in str(res.get("displayed") or ""):
         motivos.append("Form correcto pero no se ven sus campos")
 
-    sec = str(res.get("secure_status") or "")
-    if "FAIL" in sec:
+    if form_caido:
         codigo, detalle = _codigo_y_detalle(sec)
         motivos.append(f"La URL del form del Excel da {codigo}" if codigo.isdigit()
                        else f"La URL del form del Excel falla: {detalle}")
@@ -725,6 +1022,151 @@ RESULT_HEADERS = [
 
 RESUMEN_SHEET_NAME = "RESUMEN REVISIÓN"
 
+# Tipos de falla, en el orden en que se muestran. "reportar": la landing o el form están
+# rotos; "no_coincide": el form de la landing no es el de la matriz. El tipo sale del
+# principio del Motivo (motivo_de_resultado).
+TIPOS_DE_FALLA = [
+    ("404", "Landing da 404", "reportar", ("Landing 404",)),
+    ("redirige", "Landing redirige", "reportar", ("Landing redirige", "La landing redirige")),
+    ("no_carga", "Landing no carga (5xx, timeout, SSL)",
+     "reportar", ("Landing 5", "Landing no respondió", "Landing con certificado", "Landing inaccesible")),
+    ("cta", "No se pudo entrar al form por el CTA de la landing", "reportar", ("CTA de la landing",)),
+    ("sin_form", "La landing no tiene el form (o el iframe está vacío)",
+     "reportar", ("La landing no tiene el form", "La landing tiene un iframe vacío")),
+    ("form_caido", "El form insertado no carga", "reportar",
+     ("El form insertado es el correcto pero", "La URL del form del Excel")),
+    ("sin_campos", "Form correcto pero sin campos visibles", "reportar", ("Form correcto pero no se ven",)),
+    ("distinto", "El form de la landing es otro (no coincide con la matriz)", "no_coincide",
+     ("Form distinto al esperado",)),
+    ("casi_igual", "El form de la landing es casi igual pero la URL no es idéntica", "no_coincide",
+     ("Form casi igual",)),
+    ("otros", "Otros errores", "reportar", ()),
+]
+
+
+def tipo_de_falla(motivo):
+    """(clave, título, grupo) del tipo de falla de un Motivo. Si el motivo junta varias
+    causas ("A · B"), manda la primera."""
+    primero = str(motivo or "").split(" · ")[0].strip()
+    for clave, titulo, grupo, prefijos in TIPOS_DE_FALLA:
+        if any(primero.startswith(p) for p in prefijos):
+            return clave, titulo, grupo
+    clave, titulo, grupo, _ = TIPOS_DE_FALLA[-1]
+    return clave, titulo, grupo
+
+
+def _escribir_fallas_por_tipo(ws, fila, fallas):
+    """Fallas agrupadas por tipo, desde la fila `fila`: un índice con la cantidad de cada
+    tipo y debajo una sección por tipo (título de color + tabla). Primero lo que hay que
+    reportar (rojo), después los forms que no coinciden con la matriz (ámbar). Devuelve la
+    fila siguiente libre."""
+    from openpyxl.styles import Alignment
+    colores = {"reportar": ("FFC7CE", "9C0006"), "no_coincide": ("FFEB9C", "9C5700")}
+    # Sin "Estado" ni "URL LIVE" en el encabezado: así ningún lector del reporte confunde
+    # estas tablas con la de todas las filas.
+    columnas = ["Fila", "Segmento", "Landing", "Form esperado (matriz)", "Form en la landing", "Motivo"]
+    arriba = Alignment(vertical="top", wrap_text=True)
+
+    ws.cell(row=fila, column=1, value="Fallas por tipo de error").font = Font(bold=True, size=12, color="5D3C7A")
+    fila += 1
+    if not fallas:
+        ws.cell(row=fila, column=1, value="Sin fallas ✔").font = Font(bold=True, color="006100")
+        return fila + 2
+
+    por_tipo = {}
+    for f in fallas:
+        por_tipo.setdefault(tipo_de_falla(f["motivo"])[0], []).append(f)
+    tipos = [t for t in TIPOS_DE_FALLA if t[0] in por_tipo]
+    tipos.sort(key=lambda t: t[2] != "reportar")      # reportar primero, sin perder el orden
+    for clave, titulo_tipo, grupo, _ in tipos:
+        ws.cell(row=fila, column=1, value=f"{titulo_tipo}: {len(por_tipo[clave])}").font = Font(
+            bold=True, color=colores[grupo][1])
+        fila += 1
+    fila += 1
+
+    for clave, titulo_tipo, grupo, _ in tipos:
+        fondo, letra = colores[grupo]
+        ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=len(columnas))
+        c = ws.cell(row=fila, column=1, value=f"{titulo_tipo} ({len(por_tipo[clave])})")
+        c.font, c.fill = Font(bold=True, size=12, color=letra), PatternFill(fill_type="solid", fgColor=fondo)
+        fila += 1
+        for i, nombre in enumerate(columnas, start=1):
+            c = ws.cell(row=fila, column=i, value=nombre)
+            c.font, c.fill = Font(bold=True, color="64557A"), PatternFill(fill_type="solid", fgColor="F2E6FF")
+        fila += 1
+        for f in por_tipo[clave]:
+            for i, v in enumerate([f["fila"], f["segmento"], f["landing"], f["esperado"], f["insertado"],
+                                   f["motivo"]], start=1):
+                ws.cell(row=fila, column=i, value=v).alignment = arriba
+            fila += 1
+        fila += 1
+    return fila
+
+
+def armar_hoja_mercado(wb_dest, ws_src, header_row_idx, fallas, fecha):
+    """Pestaña del mercado en el reporte: arriba las fallas por tipo de error y abajo TODAS
+    las filas de la matriz con su número de fila original y en qué quedaron (OK, FAIL con su
+    motivo, Omitida (OFF), No se revisa). La tabla de abajo conserva los encabezados de la
+    matriz y las columnas de resultado: es la que leen "solo fails", el mail y la
+    sincronización con la matriz."""
+    from copy import copy
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    ws = wb_dest.create_sheet(title=ws_src.title)
+    encabezado = [c.value for c in ws_src[header_row_idx]]
+    i_motivo = encabezado.index("Motivo") if "Motivo" in encabezado else None
+    gris = PatternFill(fill_type="solid", fgColor="EAECEE")
+
+    filas = []
+    ok = fail = omitidas = sin_revisar = 0
+    for r in range(header_row_idx + 1, ws_src.max_row + 1):
+        celdas = ws_src[r]
+        if all(c.value in (None, "") for c in celdas):
+            continue
+        motivo = str(celdas[i_motivo].value or "") if i_motivo is not None else ""
+        if motivo == "OK":
+            ok += 1
+        elif motivo.startswith("Omitido"):
+            omitidas += 1
+        elif motivo:
+            fail += 1
+        else:
+            sin_revisar += 1
+        filas.append((r, celdas, motivo))
+
+    ws.cell(row=1, column=1, value=f"{ws_src.title} — Revisión Masiva {fecha}").font = Font(
+        bold=True, size=14, color="5D3C7A")
+    ws.cell(row=2, column=1, value=(f"Revisadas: {ok + fail} · OK: {ok} · FAIL: {fail} · "
+                                    f"Omitidas (OFF): {omitidas} · No se revisan (sin URL): {sin_revisar}")
+            ).font = Font(bold=True, color="64557A")
+    fila = _escribir_fallas_por_tipo(ws, 4, fallas)
+
+    ws.cell(row=fila, column=1, value="Todas las filas (Fila = número de fila en el Excel original)").font = Font(
+        bold=True, size=12, color="5D3C7A")
+    fila += 1
+    for i, v in enumerate(["Fila"] + encabezado, start=1):
+        c = ws.cell(row=fila, column=i, value=v)
+        c.font, c.fill = Font(bold=True, color="64557A"), PatternFill(fill_type="solid", fgColor="F2E6FF")
+    fila += 1
+    arriba = Alignment(vertical="top", wrap_text=True)
+    for r, celdas, motivo in filas:
+        ws.cell(row=fila, column=1, value=r).font = Font(color="64557A")
+        for i, src in enumerate(celdas, start=2):
+            c = ws.cell(row=fila, column=i, value=src.value)
+            if src.has_style:
+                c.font, c.fill = copy(src.font), copy(src.fill)
+        if i_motivo is not None and not motivo:
+            c = ws.cell(row=fila, column=2 + i_motivo, value="No se revisa (sin URL)")
+            c.fill, c.font = gris, Font(color="7A7084")
+        if i_motivo is not None:
+            ws.cell(row=fila, column=2 + i_motivo).alignment = arriba
+        fila += 1
+
+    anchos = {1: 9, 2: 42, 3: 42, 4: 42, 5: 46, 6: 60}
+    for col in range(1, max(len(encabezado) + 2, 7)):
+        ws.column_dimensions[get_column_letter(col)].width = anchos.get(col, 22)
+    return ws
+
 
 def _sheet_headers(sheet, header_row_idx):
     return [str(c.value).strip().upper() if c.value is not None else "" for c in sheet[header_row_idx]]
@@ -747,7 +1189,7 @@ def _find_comments_col(headers):
     return None
 
 
-def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentarios=False, tomar_capturas=True, solo_fails=False, browser="chrome", headless=False, progress_callback=None, stop_event=None, paralelo=False, max_workers=3):
+def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentarios=False, tomar_capturas=True, solo_fails=False, browser="chrome", headless=False, progress_callback=None, stop_event=None, paralelo=False, max_workers=None):
     """
     Función controladora del chequeo masivo.
 
@@ -766,8 +1208,8 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     se vieran bien. Con background=True el navegador es real pero abre fuera de pantalla,
     igual que en Envío de Leads.
 
-    paralelo=True revisa varios mercados a la vez, cada uno con su propio navegador
-    (hasta max_workers en simultáneo). La escritura del Excel es siempre desde este hilo,
+    paralelo=True revisa varios mercados a la vez, cada uno con su propio navegador: un
+    navegador por mercado marcado (o hasta max_workers, si se pasa). La escritura del Excel es siempre desde este hilo,
     de a un mercado, así que el paralelo no puede pisar resultados.
     """
     import time
@@ -919,12 +1361,12 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
             # adelante en vez de insertar un bloque entero nuevo.
             viejo = _find_result_block(sheet, header_row_idx, RESULT_HEADERS[1:])
             if viejo is not None:
-                sheet.insert_cols(viejo, amount=1)
+                _insertar_columnas(sheet, viejo, 1)
                 c = sheet.cell(row=header_row_idx, column=viejo)
                 c.value = RESULT_HEADERS[0]
                 c.font = font_bold
             else:
-                sheet.insert_cols(1, amount=len(RESULT_HEADERS))
+                _insertar_columnas(sheet, 1, len(RESULT_HEADERS))
                 for off, title in enumerate(RESULT_HEADERS):
                     c = sheet.cell(row=header_row_idx, column=1 + off)
                     c.value = title
@@ -970,9 +1412,10 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
             # o notas tipo "Lo usa GM por codigo...") no se revisa. Si solo una de las dos es
             # URL, se revisa esa sola, como form suelto.
             url_live = url_live if _es_url(url_live) else ""
-            url_secure = url_secure if _es_url(url_secure) else ""
-            if not url_live and not url_secure:
-                continue
+            # La ruta de un form AEM (/content/forms/af/...) también vale como form esperado.
+            url_secure = url_secure if (_es_url(url_secure) or str(url_secure).strip().startswith("/content/")) else ""
+            if not url_live and not _es_url(url_secure):
+                continue  # nada que abrir (una ruta AEM sola no se puede abrir)
             filas.append({
                 "r_idx": r_idx,
                 "segmento": str(sheet.cell(row=r_idx, column=col_indices["segmento"]).value or "").strip(),
@@ -991,6 +1434,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
             "new_col_indices": new_col_indices,
             "comentarios_col_idx": comentarios_col_idx,
             "capturas_dir": country_capturas_dir,
+            "header_row_idx": header_row_idx,
             "filas": filas,
         })
 
@@ -1068,18 +1512,21 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                     progress_callback(country_name, f"Revisando row {r_idx}: {segmento}", pct)
 
                 res = filler.check_single_url(url_live, url_secure, r_idx, tomar_capturas=tomar_capturas)
+                motivo = motivo_de_resultado(res, url_secure)
                 salida[r_idx] = {
                     "valores": {
-                        "Motivo": motivo_de_resultado(res),
+                        "Motivo": motivo,
                         "currentUrl": res["current_url"],
                         "LandingStatus": res["landing_status"],
-                        "Secure_Inserted": res["form_url_found"],
+                        "Secure_Inserted": form_insertado_texto(res),
                         "Excel==Inserted?": res["form_coincide"],
                         "Displayed?": res["displayed"],
                         "statusInserted": res["secure_status"],
                         "formsCount": res["forms_count"],
                     },
-                    "estado": "pass" if res["ok"] else "fail",
+                    # PASS solo si no hay nada que reportar: una landing que redirige a otra
+                    # página con el form (ej. sin "www") daba ok y se contaba como PASS.
+                    "estado": "pass" if res["ok"] and motivo == "OK" else "fail",
                 }
         except Exception as e:
             print(f"Error procesando la hoja {plan['s_name']}: {e}")
@@ -1098,18 +1545,26 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     nombre_base = os.path.splitext(os.path.basename(excel_path))[0]
     por_mercado_dir = os.path.join(dest_dir, "por_mercado")
     reportes_por_mercado = []
+    fallas = []   # filas FAIL de todos los mercados (arriba de cada pestaña, por tipo)
+    planes_por_nombre = {p["s_name"]: p for p in planes}
+
+    def _hoja_reporte(wb_dest, s_name):
+        """La pestaña del mercado en un Excel de salida: fallas por tipo y todas las filas."""
+        armar_hoja_mercado(wb_dest, wb[s_name], planes_por_nombre[s_name]["header_row_idx"],
+                           [f for f in fallas if f["mercado"] == s_name],
+                           datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+    def _libro_vacio():
+        libro = openpyxl.Workbook()
+        libro.remove(libro.active)
+        return libro
 
     def _guardar_mercado(s_name):
-        """Copia del workbook con solo la hoja de ese mercado, en por_mercado/."""
+        """Excel del mercado en por_mercado/, apenas termina: solo su pestaña."""
         try:
             os.makedirs(por_mercado_dir, exist_ok=True)
-            buf = io.BytesIO()
-            wb.save(buf)
-            buf.seek(0)
-            wb_m = openpyxl.load_workbook(buf)
-            for _s in list(wb_m.sheetnames):
-                if _s != s_name:
-                    del wb_m[_s]
+            wb_m = _libro_vacio()
+            _hoja_reporte(wb_m, s_name)
             path = os.path.join(por_mercado_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}_{s_name}.xlsx")
             wb_m.save(path)
             reportes_por_mercado.append(path)
@@ -1129,6 +1584,7 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         if not salida:
             return False
         sheet = wb[s_name]
+        _quitar_links(sheet)
         new_col_indices = plan["new_col_indices"]
         comentarios_col_idx = plan["comentarios_col_idx"]
         hojas_procesadas.append(s_name)
@@ -1170,15 +1626,18 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
                 total_failed += 1
                 m_proc += 1
                 m_fail += 1
+                fallas.append({"mercado": s_name, "fila": r_idx, "segmento": fila["segmento"],
+                               "landing": fila["url_live"], "esperado": fila["url_secure"],
+                               "insertado": r["valores"].get("Secure_Inserted"),
+                               "motivo": r["valores"].get("Motivo")})
 
         stats_por_mercado[s_name] = (m_proc, m_pass, m_fail, m_skip)
         return True
 
     if paralelo and len(planes) > 1:
-        # Un navegador por mercado a la vez. Se acota la cantidad: cada worker levanta un
-        # Chrome completo y abrir nueve de golpe deja la maquina inservible.
+        # Un navegador por mercado marcado, todos a la vez (max_workers acota si se pasa).
         import concurrent.futures
-        n_workers = max(1, min(int(max_workers or 3), len(planes)))
+        n_workers = max(1, min(int(max_workers or len(planes)), len(planes)))
         print(f"Revisión Masiva en paralelo: {len(planes)} mercado(s), {n_workers} navegador(es) a la vez.")
         if progress_callback:
             progress_callback("GENERAL", f"Paralelo: {n_workers} navegadores simultáneos...", 0)
@@ -1211,24 +1670,21 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         return False, ("No se encontró ninguna hoja para los mercados seleccionados "
                        f"({', '.join(selected_markets)}). Hojas del Excel: {', '.join(sheet_names)}.")
 
-    # El reporte es de ESTA corrida: se dejan solo las hojas de los mercados que se
-    # revisaron. Las de los mercados no seleccionados viajaban sin columnas de resultado y
-    # hacian parecer que se habian revisado y no habian dado nada. El Excel matriz original
-    # queda intacto igual, asi que no se pierde nada.
-    for _s in list(wb.sheetnames):
-        if _s not in hojas_procesadas and _s != RESUMEN_SHEET_NAME:
-            try:
-                del wb[_s]
-            except Exception:
-                pass
+    # El reporte es de ESTA corrida: una pestaña por mercado revisado (en el orden de la
+    # matriz) y el resumen. El Excel matriz original queda intacto.
+    orden = [p["s_name"] for p in planes if p["s_name"] in stats_por_mercado]
+    wb_rep = _libro_vacio()
+    for s_name in orden:
+        try:
+            _hoja_reporte(wb_rep, s_name)
+        except Exception as e:
+            print(f"No se pudo armar la pestaña de {s_name}: {e}")
 
-    # Hoja de resumen (se regenera en cada corrida para no acumular filas sueltas)
+    # Hoja de resumen
     summary_font = Font(bold=True, color="7D4E9F")
     summary_fill = PatternFill(start_color="F2E6FF", end_color="F2E6FF", fill_type="solid")
     try:
-        if RESUMEN_SHEET_NAME in wb.sheetnames:
-            del wb[RESUMEN_SHEET_NAME]
-        ws_res = wb.create_sheet(title=RESUMEN_SHEET_NAME)
+        ws_res = wb_rep.create_sheet(title=RESUMEN_SHEET_NAME)
         ws_res.cell(row=1, column=1).value = "Última revisión masiva"
         ws_res.cell(row=1, column=2).value = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         ws_res.cell(row=2, column=1).value = "Duración del test:"
@@ -1249,7 +1705,6 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
         for c in range(1, 6):
             ws_res.cell(row=5, column=c).font = font_bold
         # En el orden de las hojas, no en el que fueron terminando los mercados.
-        orden = [p["s_name"] for p in planes if p["s_name"] in stats_por_mercado]
         for i, m_name in enumerate(orden, start=6):
             m_proc, m_pass, m_fail, m_skip = stats_por_mercado[m_name]
             ws_res.cell(row=i, column=1).value = m_name
@@ -1262,11 +1717,9 @@ def run_massive_check(excel_path, custom_cols, selected_markets, borrar_comentar
     except Exception as e:
         print(f"No se pudo escribir la hoja de resumen: {e}")
 
-    # Único archivo de salida: copia del matriz ya editada con los resultados.
-    # El Excel matriz original queda intacto.
     reporte_path = os.path.join(dest_dir, f"Resultados_Revision_Masiva_{nombre_base}_{timestamp}.xlsx")
     try:
-        wb.save(reporte_path)
+        wb_rep.save(reporte_path)
     except Exception as e:
         print(f"Error guardando el reporte de resultados: {e}")
         return False, f"Error al guardar reporte: {e}"
