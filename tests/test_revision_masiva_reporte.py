@@ -360,3 +360,36 @@ def test_pestana_fallas_por_tipo(tmp_path, monkeypatch):
     assert wb_co.sheetnames == [mcr.FALLAS_SHEET_NAME, "COLOMBIA"]
     wb_cl = openpyxl.load_workbook(por_mercado["CHILE.xlsx"])
     assert "Sin fallas ✔" in textos(wb_cl[mcr.FALLAS_SHEET_NAME])
+
+
+class _Resp:
+    status_code, history, url = 200, [], "https://www.chevrolet.com.ec/x"
+
+
+def _filler_http(monkeypatch, fallos):
+    """MassiveFormFiller sin navegador: solo para _http_status_str."""
+    import requests
+    llamadas = {"n": 0}
+
+    def get(url, **kw):
+        llamadas["n"] += 1
+        if llamadas["n"] <= fallos:
+            raise requests.exceptions.ConnectionError("('Connection aborted.', RemoteDisconnected('x'))")
+        return _Resp()
+    monkeypatch.setattr(mcr.requests, "get", get)
+    monkeypatch.setattr(mcr.time, "sleep", lambda s: None)
+    return object.__new__(mcr.MassiveFormFiller), llamadas
+
+
+def test_corte_de_conexion_se_reintenta(monkeypatch):
+    f, llamadas = _filler_http(monkeypatch, fallos=2)
+    assert f._http_status_str("https://www.chevrolet.com.ec/x")[0].startswith("200 - ✅ PASS")
+    assert llamadas["n"] == 3
+
+
+def test_corte_de_conexion_que_sigue_es_fail_y_lo_dice(monkeypatch):
+    f, llamadas = _filler_http(monkeypatch, fallos=99)
+    status = f._http_status_str("https://www.chevrolet.com.ec/x")[0]
+    assert llamadas["n"] == 3 and "ConnectionError (tras 3 intentos)" in status
+    assert motivo_de_resultado(_res(landing_status=status)).startswith(
+        "Landing inaccesible: ConnectionError (tras 3 intentos)")

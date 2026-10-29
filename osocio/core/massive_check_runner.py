@@ -281,6 +281,9 @@ class MassiveFormFiller(GenericCountryBase):
     _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
+    # Espera antes de cada reintento por corte de conexión / timeout (2 reintentos).
+    _ESPERAS_REINTENTO_HTTP = (2, 4)
+
     def _http_status_str(self, url, report_redirects=False):
         """Status HTTP de una URL para el reporte. Devuelve (texto, url_final).
 
@@ -294,18 +297,29 @@ class MassiveFormFiller(GenericCountryBase):
         firma el proxy: Windows ya confía en él, y truststore hace que Python use esa misma
         lista, así que no genera falsos FAIL (ver la inyección arriba y en run.py).
         """
-        try:
-            r = requests.get(url, headers={"User-Agent": self._UA},
-                             timeout=8, allow_redirects=True)
-        except requests.exceptions.SSLError as e:
-            # Certificado inválido/vencido/no confiable: es un hallazgo real del chequeo.
-            return f"SSL - ❌ FAIL Certificado TLS inválido o no confiable: {str(e)[:160]}", url
-        except requests.exceptions.Timeout:
-            return "Timeout - ❌ FAIL La URL no respondió en 8s", url
-        except requests.exceptions.RequestException as e:
-            return f"Error - ❌ FAIL {type(e).__name__}: {str(e)[:160]}", url
-        except Exception as e:
-            return f"Error - ❌ FAIL HTTP Code: {type(e).__name__}", url
+        # Un corte de conexión o un timeout suele ser momentáneo (ej. "Connection aborted /
+        # RemoteDisconnected"): se reintenta antes de dar la landing por inaccesible.
+        intentos = 1 + len(self._ESPERAS_REINTENTO_HTTP)
+        for intento in range(intentos):
+            try:
+                r = requests.get(url, headers={"User-Agent": self._UA},
+                                 timeout=8, allow_redirects=True)
+                break
+            except requests.exceptions.SSLError as e:
+                # Certificado inválido/vencido/no confiable: es un hallazgo real del chequeo.
+                return f"SSL - ❌ FAIL Certificado TLS inválido o no confiable: {str(e)[:160]}", url
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                if intento < intentos - 1:
+                    print(f"⟳ {type(e).__name__} en {url}: reintento {intento + 1}")
+                    time.sleep(self._ESPERAS_REINTENTO_HTTP[intento])
+                    continue
+                if isinstance(e, requests.exceptions.Timeout):
+                    return f"Timeout - ❌ FAIL La URL no respondió en 8s (tras {intentos} intentos)", url
+                return f"Error - ❌ FAIL {type(e).__name__} (tras {intentos} intentos): {str(e)[:160]}", url
+            except requests.exceptions.RequestException as e:
+                return f"Error - ❌ FAIL {type(e).__name__}: {str(e)[:160]}", url
+            except Exception as e:
+                return f"Error - ❌ FAIL HTTP Code: {type(e).__name__}", url
 
         if report_redirects and r.history:
             code = r.history[0].status_code
@@ -375,7 +389,17 @@ class MassiveFormFiller(GenericCountryBase):
         # 2. Navegar con Selenium
         ss_landing_path = ""
         try:
-            ss_landing_path = self.process_landing_page(landing_url, row_num, take_screenshot=tomar_capturas)
+            try:
+                ss_landing_path = self.process_landing_page(landing_url, row_num, take_screenshot=tomar_capturas)
+            except Exception as e:
+                # Corte de conexión o timeout del navegador (net::ERR_CONNECTION_RESET, ...):
+                # una vez más antes de darla por caída.
+                if getattr(self, "stop_event", None) and self.stop_event.is_set():
+                    raise
+                print(f"⟳ La landing no cargó en el navegador ({str(e)[:80]}): reintento")
+                time.sleep(3)
+                self._landing_issue = ""
+                ss_landing_path = self.process_landing_page(landing_url, row_num, take_screenshot=tomar_capturas)
         except Exception as e:
             return {
                 "ok": False,
