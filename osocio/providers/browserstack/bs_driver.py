@@ -169,7 +169,11 @@ def tunel_local() -> Tuple[bool, str]:
     Con el túnel, el navegador de la nube sale a internet por la PC donde corre
     BrowserStackLocal.exe, o sea por su VPN: así llega a sitios que solo se ven desde la
     red de la empresa (ej. stage). El binario lo abre la persona a mano, la app no lanza
-    nada: `BrowserStackLocal.exe --key <access key>`. Se prende en json/config_global.json:
+    nada: `BrowserStackLocal.exe --key <access key> --force-local --local-identifier X`.
+    Sin --force-local el túnel solo lleva hosts locales/privados: un dominio público que
+    solo deja entrar desde la VPN (stage) se abre igual desde la nube y da 403. El
+    identificador evita usar el túnel de otro equipo (la cuenta es compartida).
+    Se prende en json/config_global.json:
     {"browserstack": {"local": true, "local_identifier": "opcional"}}. Apagado por
     defecto: con el túnel pedido y cerrado, BrowserStack rechaza la sesión.
     """
@@ -186,7 +190,7 @@ def mensaje_tunel_cerrado(identificador: str = "") -> str:
     extra = f" --local-identifier {identificador}" if identificador else ""
     return ("BrowserStack no encuentra el túnel local (la VPN). Abrí BrowserStackLocal.exe en "
             "una terminal y dejalo corriendo:\n"
-            f"    BrowserStackLocal.exe --key <tu access key>{extra}\n"
+            f"    BrowserStackLocal.exe --key <tu access key> --force-local{extra}\n"
             "o apagá el túnel en json/config_global.json -> \"browserstack\": {\"local\": false}.")
 
 

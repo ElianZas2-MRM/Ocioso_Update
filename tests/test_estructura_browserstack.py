@@ -140,4 +140,4 @@ def test_tunel_local_se_lee_de_config_global(tmp_path, monkeypatch):
 
 def test_mensaje_tunel_cerrado_no_muestra_la_key():
     m = bs_driver.mensaje_tunel_cerrado("vpn")
-    assert "BrowserStackLocal.exe --key <tu access key> --local-identifier vpn" in m
+    assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m
