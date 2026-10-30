@@ -141,3 +141,24 @@ def test_tunel_local_se_lee_de_config_global(tmp_path, monkeypatch):
 def test_mensaje_tunel_cerrado_no_muestra_la_key():
     m = bs_driver.mensaje_tunel_cerrado("vpn")
     assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m
+
+
+@pytest.mark.parametrize("local,acepta", [((True, "vpn"), True), ((False, ""), None)])
+def test_con_tunel_acepta_el_certificado_de_la_red(monkeypatch, local, acepta):
+    """Por el túnel la red de la empresa firma HTTPS con su certificado: con el túnel se
+    acepta; sin túnel no se toca."""
+    capturado = {}
+
+    class _Remote:
+        def __init__(self, command_executor, options, client_config):
+            capturado.update(options.to_capabilities())
+
+        def implicitly_wait(self, s):
+            pass
+
+        def maximize_window(self):
+            pass
+    monkeypatch.setattr(bs_driver, "Remote", _Remote)
+    monkeypatch.setattr(bs_driver, "tunel_local", lambda: local)
+    bs_driver.create_bs_driver("u", "k", platform="iphone")
+    assert capturado.get("acceptInsecureCerts") == acepta

@@ -242,6 +242,12 @@ def create_bs_driver(username: str, access_key: str,
     # la sesión queda pedida como Mac y BrowserStack la resuelve sólo por el deviceName.
     options.set_capability("platformName", DISPOSITIVOS[platform]["platformName"])
     options.set_capability("bstack:options", bstack)
+    if bstack.get("local") == "true":
+        # Por el túnel el tráfico pasa por la red de la empresa, que inspecciona HTTPS y
+        # firma los sitios con su propio certificado: el device de la nube no lo conoce y
+        # mostraba "This Connection Is Not Private". Probado: iPhone y Android lo aceptan
+        # con esto; Safari de Mac lo ignora.
+        options.set_capability("acceptInsecureCerts", True)
     # Igual que los navegadores locales: no esperar trackers/píxeles de terceros. Con
     # "normal", en un device real la landing puede tardar más que el timeout de red.
     options.page_load_strategy = "eager"
