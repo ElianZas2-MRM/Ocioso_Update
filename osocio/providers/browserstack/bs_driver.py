@@ -160,14 +160,50 @@ def load_credentials(filepath: str = "") -> Tuple[str, str]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# TÚNEL LOCAL (VPN)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def tunel_local() -> Tuple[bool, str]:
+    """(activo, identificador) del túnel de BrowserStack Local.
+
+    Con el túnel, el navegador de la nube sale a internet por la PC donde corre
+    BrowserStackLocal.exe, o sea por su VPN: así llega a sitios que solo se ven desde la
+    red de la empresa (ej. stage). El binario lo abre la persona a mano, la app no lanza
+    nada: `BrowserStackLocal.exe --key <access key> --force-local --local-identifier X`.
+    Sin --force-local el túnel solo lleva hosts locales/privados: un dominio público que
+    solo deja entrar desde la VPN (stage) se abre igual desde la nube y da 403. El
+    identificador evita usar el túnel de otro equipo (la cuenta es compartida).
+    Se prende en json/config_global.json:
+    {"browserstack": {"local": true, "local_identifier": "opcional"}}. Apagado por
+    defecto: con el túnel pedido y cerrado, BrowserStack rechaza la sesión.
+    """
+    try:
+        from osocio.paths import JSON_DIR
+        with open(os.path.join(JSON_DIR, "config_global.json"), "r", encoding="utf-8") as f:
+            cfg = json.load(f).get("browserstack") or {}
+    except Exception:
+        return False, ""
+    return bool(cfg.get("local", False)), str(cfg.get("local_identifier") or "").strip()
+
+
+def mensaje_tunel_cerrado(identificador: str = "") -> str:
+    extra = f" --local-identifier {identificador}" if identificador else ""
+    return ("BrowserStack no encuentra el túnel local (la VPN). Abrí BrowserStackLocal.exe en "
+            "una terminal y dejalo corriendo:\n"
+            f"    BrowserStackLocal.exe --key <tu access key> --force-local{extra}\n"
+            "o apagá el túnel en json/config_global.json -> \"browserstack\": {\"local\": false}.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DRIVER
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_bstack_options(platform: str, build_name: str, session_name: str,
-                         os_version: str = "") -> Dict:
+                         os_version: str = "", local=None) -> Dict:
     """Arma el bloque bstack:options. Separado del driver para poder testearlo sin red.
 
     os_version pisa la versión del catálogo (para probar otra sin tocar DISPOSITIVOS).
+    local: (activo, identificador) del túnel; None = lo que diga config_global.json.
     """
     if platform not in DISPOSITIVOS:
         raise ValueError(f"Plataforma '{platform}' no soportada. Opciones: {', '.join(DISPOSITIVOS)}")
@@ -185,6 +221,11 @@ def build_bstack_options(platform: str, build_name: str, session_name: str,
         "networkLogs": "false",
         "consoleLogs": "errors",
     })
+    activo, identificador = tunel_local() if local is None else local
+    if activo:
+        opts["local"] = "true"
+        if identificador:
+            opts["localIdentifier"] = identificador
     return opts
 
 
@@ -201,6 +242,12 @@ def create_bs_driver(username: str, access_key: str,
     # la sesión queda pedida como Mac y BrowserStack la resuelve sólo por el deviceName.
     options.set_capability("platformName", DISPOSITIVOS[platform]["platformName"])
     options.set_capability("bstack:options", bstack)
+    if bstack.get("local") == "true":
+        # Por el túnel el tráfico pasa por la red de la empresa, que inspecciona HTTPS y
+        # firma los sitios con su propio certificado: el device de la nube no lo conoce y
+        # mostraba "This Connection Is Not Private". Probado: iPhone y Android lo aceptan
+        # con esto; Safari de Mac lo ignora.
+        options.set_capability("acceptInsecureCerts", True)
     # Igual que los navegadores locales: no esperar trackers/píxeles de terceros. Con
     # "normal", en un device real la landing puede tardar más que el timeout de red.
     options.page_load_strategy = "eager"
@@ -208,7 +255,12 @@ def create_bs_driver(username: str, access_key: str,
     # Devices reales: algunos comandos tardan más que en un navegador local.
     cfg = ClientConfig(remote_server_addr=BS_HUB, username=username, password=access_key,
                        timeout=300)
-    driver = Remote(command_executor=BS_HUB, options=options, client_config=cfg)
+    try:
+        driver = Remote(command_executor=BS_HUB, options=options, client_config=cfg)
+    except Exception as e:
+        if bstack.get("local") == "true" and "local" in str(e).lower():
+            raise RuntimeError(mensaje_tunel_cerrado(bstack.get("localIdentifier", ""))) from e
+        raise
     if platform == "mac":
         driver.maximize_window()
     driver.implicitly_wait(0)
