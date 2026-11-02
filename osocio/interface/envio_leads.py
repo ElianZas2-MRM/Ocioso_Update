@@ -506,6 +506,18 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                                      + "\n\nGenerá los datos (con al menos un lead) antes de ejecutar.")
             return
 
+    # Túnel de BrowserStack (VPN): la app no lo abre, lo abre la persona. Si está
+    # activado y hay sesiones de BrowserStack, se le muestran los pasos y recién corre
+    # cuando confirma que ya está conectado. En una corrida programada nadie responde:
+    # se corre igual y, si el túnel está cerrado, la sesión falla con el aviso de siempre.
+    if not scheduled and any(s["dtype"] != "desktop" for s in active_sessions_list):
+        from osocio.providers.browserstack.bs_driver import pasos_tunel, tunel_local
+        _tunel_on, _tunel_id = tunel_local()
+        if _tunel_on and not messagebox.askokcancel("Ocioso — Túnel de BrowserStack (VPN)",
+                                                    pasos_tunel(_tunel_id)):
+            log_message("[INFO] Corrida cancelada: el túnel de BrowserStack no estaba conectado.")
+            return
+
     import pandas as pd
     total_leads = 0
     for idx, s in enumerate(active_sessions_list):

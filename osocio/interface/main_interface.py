@@ -1639,7 +1639,7 @@ def iniciar_interfaz(autostart_leads=False):
                    bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
                    activebackground=CARD_BG_COLOR, activeforeground="white",
                    font=("Segoe UI", 8), cursor="hand2").pack(side="left")
-    tk.Label(tunel_row, text="solo Android por ahora · abrí antes BrowserStackLocal.exe",
+    tk.Label(tunel_row, text="solo Android e iPhone (Mac no) · al ejecutar te muestra los pasos",
              font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=(8, 0))
 
     def _guardar_tunel(*_):

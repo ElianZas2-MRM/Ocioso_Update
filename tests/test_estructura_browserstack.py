@@ -143,6 +143,15 @@ def test_mensaje_tunel_cerrado_no_muestra_la_key():
     assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m
 
 
+def test_pasos_tunel_antes_de_correr(monkeypatch):
+    """La ventana de pasos trae el comando con la key como marcador, nunca la real."""
+    monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "clave-secreta")
+    m = bs_driver.pasos_tunel("vpn")
+    assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m
+    assert "clave-secreta" not in m
+    assert "--local-identifier" not in bs_driver.pasos_tunel("")
+
+
 @pytest.mark.parametrize("local,acepta", [((True, "vpn"), True), ((False, ""), None)])
 def test_con_tunel_acepta_el_certificado_de_la_red(monkeypatch, local, acepta):
     """Por el túnel la red de la empresa firma HTTPS con su certificado: con el túnel se
