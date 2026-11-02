@@ -1,6 +1,6 @@
 {
   "pais": "Chile",
-  "ultima_deteccion": "2026-10-13T15:04:29",
+  "ultima_deteccion": "2026-10-27T11:21:45",
   "campos_nuevos": [
     {
       "id": "comment",
@@ -417,6 +417,20 @@
       "type": "select",
       "required": false,
       "label": "purchase_requirement",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "model-year",
+      "type": "text",
+      "required": true,
+      "label": " ",
+      "origen": "runtime_discovery"
+    },
+    {
+      "id": "vehicle-version",
+      "type": "text",
+      "required": true,
+      "label": " ",
       "origen": "runtime_discovery"
     }
   ]
