@@ -68,6 +68,63 @@ def nombre_sesion(pais: str, plataforma: str, excel_path: str) -> str:
     return f"{_NOMBRE_DISP[plataforma]} - {pais} - {os.path.basename(excel_path)}"
 
 
+def _ruta_corta(url: str) -> str:
+    """La parte de la URL que distingue un lead de otro (sin dominio ni parámetros)."""
+    from urllib.parse import urlparse
+    ruta = urlparse(url or "").path.strip("/")
+    return ruta[-60:] if ruta else (url or "")[:60]
+
+
+def texto_marca_lead(evento: str, numero: int, total: int, fila: int, url: str = "",
+                     ok: bool = True, motivo: str = "", enviar: bool = True) -> str:
+    """Texto de la marca en el video. Ej.: "Lead 3/10 · fila 4 · FALLÓ: sin TYP"."""
+    base = f"Lead {numero}/{total} · fila {fila}"
+    if evento == "inicio":
+        return f"{base} · empieza · {_ruta_corta(url)}"
+    if not enviar:
+        # Sin envío el motor no llega a la TYP: no es un fallo del lead.
+        return f"{base} · revisado sin enviar"
+    return f"{base} · enviado OK" if ok else f"{base} · FALLÓ: {motivo or 'ver Excel'}"
+
+
+class MarcasDelVideo:
+    """on_lead del motor: deja una marca en el video de BrowserStack al empezar y al
+    terminar cada lead, así en un video largo se va directo al lead que falló."""
+
+    def __init__(self, fabrica, enviar: bool = True):
+        self.fabrica = fabrica
+        self.enviar = enviar
+
+    def __call__(self, evento, fila=0, numero=0, total=0, url="", ok=True, motivo=""):
+        sesion = getattr(self.fabrica, "sesion", None)
+        driver = getattr(sesion, "driver", None)
+        if driver is None:
+            return
+        from osocio.providers.browserstack.bs_driver import annotate_script
+        texto = texto_marca_lead(evento, numero, total, fila, url, ok, motivo, self.enviar)
+        error = evento == "fin" and self.enviar and not ok
+        driver.execute_script(annotate_script(texto, "error" if error else "info"))
+
+
+def motivo_de_sesion(ok: int, fallidos: int, fail_rows=None, error: str = "") -> str:
+    """Lo que se ve en el dashboard junto al passed/failed, sin abrir la sesión.
+
+    Ej.: "2 de 10 leads fallaron: sin TYP (filas 4, 7)"."""
+    total = ok + fallidos
+    if error:
+        return f"Error de la corrida: {error}"
+    if not total:
+        return "No se procesó ningún lead"
+    if not fallidos:
+        return f"{ok} de {total} leads enviados OK"
+    por_motivo: Dict[str, list] = {}
+    for f in fail_rows or []:
+        por_motivo.setdefault(f.get("reason") or "sin detalle", []).append(str(f.get("row", "?")))
+    detalle = "; ".join(f"{m} (fila{'s' if len(filas) > 1 else ''} {', '.join(filas)})"
+                        for m, filas in por_motivo.items())
+    return f"{fallidos} de {total} leads fallaron" + (f": {detalle}" if detalle else "")
+
+
 def _resumen_vacio(pais: str, error: str = "") -> Dict:
     return {"pais": pais, "ok": 0, "failed": 0, "total": 0, "results_excel": None,
             "video_url": "", "session_id": "", "error": error or None, "fail_rows": []}
@@ -139,6 +196,7 @@ def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, l
     form = _clase_motor(plataforma)(pais, browser=f"browserstack_{plataforma}", browser_factory=fab,
                               is_scheduled=programada, excel_suffix=variante, capturas=False)
     form.EXCEL_PATH = excel_path
+    form.on_lead = MarcasDelVideo(fab, enviar)
     if not enviar:
         form.config["chequeo_campos"] = True
     try:
@@ -154,7 +212,8 @@ def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, l
         if fab.sesion is not None:
             if enviar:
                 todo_ok = resumen["failed"] == 0 and resumen["ok"] > 0 and not resumen["error"]
-                motivo = f"ok={resumen['ok']} fallidos={resumen['failed']}"
+                motivo = motivo_de_sesion(resumen["ok"], resumen["failed"], resumen["fail_rows"],
+                                          resumen["error"] or "")
             else:
                 # Sin envío el motor anota "Verificación visual", no "Lead enviado": eso no
                 # es un fallo de la sesión.
