@@ -138,6 +138,19 @@ def test_tunel_local_se_lee_de_config_global(tmp_path, monkeypatch):
     assert bs_driver.tunel_local() == (True, "vpn")
 
 
+def test_tunel_sin_identificador_usa_el_usuario_de_windows(tmp_path, monkeypatch):
+    """Sin identificador en la config, cada persona tiene el suyo (su usuario de
+    Windows): con la misma cuenta no se pisan los túneles."""
+    import osocio.paths
+    monkeypatch.setattr(osocio.paths, "JSON_DIR", str(tmp_path))
+    (tmp_path / "config_global.json").write_text(
+        json.dumps({"browserstack": {"local": True}}), encoding="utf-8")
+    monkeypatch.setattr(bs_driver.getpass, "getuser", lambda: "Elian.Zas")
+    assert bs_driver.tunel_local() == (True, "osocio-elian.zas")
+    monkeypatch.setattr(bs_driver.getpass, "getuser", lambda: "Juan Pérez")
+    assert bs_driver.identificador_por_defecto() == "osocio-juan-perez"
+
+
 def test_mensaje_tunel_cerrado_no_muestra_la_key():
     m = bs_driver.mensaje_tunel_cerrado("vpn")
     assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m

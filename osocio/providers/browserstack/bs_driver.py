@@ -11,8 +11,11 @@ No se usa el SDK de BrowserStack (browserstack.yml + pytest): la app arma el dri
 desde la interfaz, igual que con LambdaTest, así que se conecta directo al hub.
 """
 
+import getpass
 import json
 import os
+import re
+import unicodedata
 from typing import Dict, Tuple
 
 from selenium.webdriver import Remote
@@ -172,7 +175,8 @@ def tunel_local() -> Tuple[bool, str]:
     nada: `BrowserStackLocal.exe --key <access key> --force-local --local-identifier X`.
     Sin --force-local el túnel solo lleva hosts locales/privados: un dominio público que
     solo deja entrar desde la VPN (stage) se abre igual desde la nube y da 403. El
-    identificador evita usar el túnel de otro equipo (la cuenta es compartida).
+    identificador evita usar el túnel de otro equipo (la cuenta es compartida): si no
+    está en la config, sale del usuario de Windows (identificador_por_defecto).
     Se prende con el toggle de Envío de Leads o en json/config_global.json:
     {"browserstack": {"local": true, "local_identifier": "opcional"}}. Apagado por
     defecto: con el túnel pedido y cerrado, BrowserStack rechaza la sesión.
@@ -183,7 +187,21 @@ def tunel_local() -> Tuple[bool, str]:
             cfg = json.load(f).get("browserstack") or {}
     except Exception:
         return False, ""
-    return bool(cfg.get("local", False)), str(cfg.get("local_identifier") or "").strip()
+    return (bool(cfg.get("local", False)),
+            str(cfg.get("local_identifier") or "").strip() or identificador_por_defecto())
+
+
+def identificador_por_defecto() -> str:
+    """osocio-<usuario de Windows>: el mismo siempre en esa PC y distinto en cada
+    persona, así dos que usan la misma cuenta no se pisan el túnel (ni con Live, que
+    usa el túnel sin nombre). Solo letras, números, punto, guion y guion bajo."""
+    try:
+        usuario = getpass.getuser()
+    except Exception:
+        usuario = ""
+    usuario = unicodedata.normalize("NFKD", usuario).encode("ascii", "ignore").decode()
+    usuario = re.sub(r"[^a-z0-9._-]+", "-", usuario.lower()).strip("-.")
+    return f"osocio-{usuario}" if usuario else "osocio"
 
 
 def mensaje_tunel_cerrado(identificador: str = "") -> str:
