@@ -190,8 +190,8 @@ def mensaje_tunel_cerrado(identificador: str = "") -> str:
     extra = f" --local-identifier {identificador}" if identificador else ""
     return ("BrowserStack no encuentra el túnel local (la VPN). Abrí BrowserStackLocal.exe en "
             "una terminal y dejalo corriendo:\n"
-            f"    BrowserStackLocal.exe --key <tu access key> --force-local{extra}\n"
-            "o apagá el túnel en json/config_global.json -> \"browserstack\": {\"local\": false}.")
+            f"    .\\BrowserStackLocal.exe --key <tu access key> --force-local{extra}\n"
+            "o destildá \"BrowserStack por túnel (VPN)\" en Envío de Leads.")
 
 
 
@@ -202,10 +202,11 @@ def pasos_tunel(identificador: str = "") -> str:
     extra = f" --local-identifier {identificador}" if identificador else ""
     return ("El túnel de BrowserStack (VPN) está activado. Antes de correr:\n\n"
             "1. Conectate a la VPN de la empresa.\n"
-            "2. Abrí una terminal en la carpeta donde está BrowserStackLocal.exe "
+            "2. Abrí PowerShell en la carpeta donde está BrowserStackLocal.exe "
             "(se descarga de la página de BrowserStack Local) y corré:\n\n"
-            f"    BrowserStackLocal.exe --key <tu access key> --force-local{extra}\n\n"
-            "   La access key está en tu cuenta de BrowserStack (Automate → Access Key). "
+            f"    .\\BrowserStackLocal.exe --key <tu access key> --force-local{extra}\n\n"
+            "   El .\\ de adelante hace falta en PowerShell. "
+            "La access key está en tu cuenta de BrowserStack (Automate → Access Key). "
             "No la compartas.\n"
             "3. Esperá el mensaje \"You can now access your local server(s)\" y dejá esa "
             "ventana abierta mientras dure la corrida.\n\n"
