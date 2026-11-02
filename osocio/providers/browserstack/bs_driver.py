@@ -173,7 +173,7 @@ def tunel_local() -> Tuple[bool, str]:
     Sin --force-local el túnel solo lleva hosts locales/privados: un dominio público que
     solo deja entrar desde la VPN (stage) se abre igual desde la nube y da 403. El
     identificador evita usar el túnel de otro equipo (la cuenta es compartida).
-    Se prende en json/config_global.json:
+    Se prende con el toggle de Envío de Leads o en json/config_global.json:
     {"browserstack": {"local": true, "local_identifier": "opcional"}}. Apagado por
     defecto: con el túnel pedido y cerrado, BrowserStack rechaza la sesión.
     """
