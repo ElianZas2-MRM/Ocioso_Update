@@ -4220,21 +4220,13 @@ def iniciar_interfaz(autostart_leads=False):
     excel_pais_var = tk.StringVar(value="Argentina")
     excel_warn_var = tk.StringVar(value="")
 
-    # Detección de país desde las URLs (igual criterio que el original)
-    _EXCEL_COUNTRY_KW = {
-        "argentina": "Argentina", "bolivia": "Bolivia", "brasil": "Brasil", "brazil": "Brasil",
-        "chile": "Chile", "colombia": "Colombia", "ecuador": "Ecuador",
-        "paraguay": "Paraguay", "peru": "Peru", "uruguay": "Uruguay",
-        ".com.ar": "Argentina", ".com.bo": "Bolivia", ".com.br": "Brasil", ".com.co": "Colombia",
-        ".com.ec": "Ecuador", ".com.py": "Paraguay", ".com.pe": "Peru", ".com.uy": "Uruguay",
-    }
+    # Mercado desde las URLs pegadas: por dominio (.com.br, .cl), por ruta
+    # (/commonwealth/chile/, /cadillac/t1/brasil/) o por el dominio de preview de AEM.
+    from osocio.utils.mercado_por_url import aviso_varios_mercados, detectar_mercado
 
-    def _detect_excel_country(text):
-        low = text.lower()
-        for kw, pais in _EXCEL_COUNTRY_KW.items():
-            if kw in low:
-                return pais
-        return None
+    def _mercado_de_las_urls():
+        lineas = [ln.strip() for ln in excel_text_area.get("1.0", "end-1c").splitlines() if ln.strip()]
+        return detectar_mercado(lineas)
 
     # ── 0. CARD: MERCADO A GENERAR (un Excel por mercado a la vez) ──
     mercado_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
@@ -4514,17 +4506,35 @@ def iniciar_interfaz(autostart_leads=False):
             btn.bind("<Leave>", lambda e: btn.config(bg=BUTTON_INACTIVE) if not excel_selected_disp[k] else None)
         make_excel_disp_hover()
 
-    def _on_excel_url_change(*_):
-        detected = _detect_excel_country(excel_text_area.get("1.0", "end-1c"))
+    def _on_excel_url_change(*_, elegir=False):
+        """elegir=True (al pegar o escribir URLs): si todas son de un mercado, se elige
+        solo. Al tocar una tarjeta de mercado a mano no se pisa la elección: se avisa."""
+        detected, por_mercado = _mercado_de_las_urls()
+        if elegir and detected and detected != excel_pais_var.get():
+            select_excel_pais(detected)      # vuelve a entrar acá con elegir=False
+            return
         sel = excel_pais_var.get()
-        if detected and detected != sel:
+        if len(por_mercado) > 1:
+            excel_warn_lbl.config(fg="#F1948A")
+            excel_warn_var.set(f"⛔ Hay URLs de varios mercados ({', '.join(sorted(por_mercado))}). "
+                               "Se genera un Excel por mercado a la vez: dejá solo las de uno.")
+        elif detected and detected != sel:
+            excel_warn_lbl.config(fg="#F8C471")
             excel_warn_var.set(f"⚠ Las URLs parecen de {detected} pero tenés seleccionado {sel}. Seleccioná el mercado correcto antes de generar.")
+        elif detected:
+            excel_warn_lbl.config(fg="#82E0AA")
+            excel_warn_var.set(f"✓ Mercado detectado por las URLs: {detected}")
         else:
             excel_warn_var.set("")
         refresh_doc_types_section()
         update_excel_calculation()
 
-    excel_text_area.bind("<KeyRelease>", _on_excel_url_change)
+    def _al_cambiar_urls(_e=None):
+        # after_idle: con <<Paste>> el texto pegado todavía no está en la caja.
+        excel_text_area.after_idle(lambda: _on_excel_url_change(elegir=True))
+
+    excel_text_area.bind("<KeyRelease>", _al_cambiar_urls)
+    excel_text_area.bind("<<Paste>>", _al_cambiar_urls, add="+")
     refresh_doc_types_section()  # estado inicial (Argentina → oculto)
 
 
@@ -4581,7 +4591,10 @@ def iniciar_interfaz(autostart_leads=False):
         if err:
             messagebox.showwarning(title, "⚠ " + err)
             return
-        detected = _detect_excel_country(excel_text_area.get("1.0", "end-1c"))
+        detected, por_mercado = _mercado_de_las_urls()
+        if len(por_mercado) > 1:
+            messagebox.showerror("Revisá las URLs", aviso_varios_mercados(por_mercado))
+            return
         if detected and detected != pais:
             if not messagebox.askyesno("Verificá el mercado",
                                        f"Las URLs parecen de {detected} pero el mercado seleccionado es {pais}.\n\n¿Generar igual para {pais}?"):

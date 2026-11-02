@@ -485,7 +485,7 @@ Genera el Excel de datos de prueba (nombre, documento, teléfono, email, modelo,
 
 **Paso a paso:**
 
-1. **MERCADO A GENERAR**: elegís un país a la vez (se genera un Excel por mercado).
+1. **MERCADO A GENERAR**: elegís un país a la vez (se genera un Excel por mercado). **Al pegar las URLs, el mercado se elige solo**: lo saca del dominio (`.com.br`, `.cl`…), de la ruta (`/commonwealth/chile/`, `/cadillac/t1/brasil/`) o del dominio de preview de AEM (`cadillacbrasil-com-br-preview`), y lo muestra en verde. Si las URLs son de **varios mercados**, aparece un aviso en rojo y **GENERAR EXCELS** da un error con qué URL es de cuál, sin generar nada. Las URLs que no dicen el país (por ejemplo `oss.gm.com`) no cuentan: con esas se elige el mercado a mano.
 2. **DISPOSITIVOS PARA EL EXCEL**: selección múltiple (Chrome, Firefox, Edge, iPhone BS, Android BS, Mac BS) — se genera un Excel por dispositivo elegido. Tildá **"Es formulario T3 2.0"** si el form es la versión nueva Adobe AEM (sufijo `_T3.xlsx`), o **"Es Cadillac"** para la variante CDC (sufijo `_CDC.xlsx`). Son excluyentes: un Excel es de un mercado, o de su T3, o de Cadillac. Ver *[Variantes de un mercado](#variantes-de-un-mercado-t3-y-cadillac)*.
 3. **URLS A PROCESAR**: elegí el formato con las pills — **"URL Landing + URL Form"** (`url landing • url form • ...`) o **"Solo URL Form"** — y pegá las URLs en el cuadro de texto.
 4. Botones de la barra inferior:
