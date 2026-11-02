@@ -79,3 +79,29 @@ def aviso_varios_mercados(por_mercado: Dict[str, List[str]], max_por_mercado: in
         if len(urls) > max_por_mercado:
             lineas.append(f"  … y {len(urls) - max_por_mercado} más")
     return "\n".join(lineas)
+
+
+def pares_inconsistentes(pares: List[Tuple[str, str]]) -> List[Tuple[int, str, str, str, str]]:
+    """Pares (landing, form) donde la landing y el form dicen mercados distintos.
+
+    Devuelve (número de par desde 1, landing, mercado landing, form, mercado form). Si una
+    de las dos URLs no dice mercado (ej. un preview sin país), no se puede comparar y no
+    cuenta como inconsistencia.
+    """
+    malos = []
+    for n, (landing, form) in enumerate(pares, start=1):
+        ml, mf = mercados_de_url(landing), mercados_de_url(form)
+        if ml and mf and not (ml & mf):
+            malos.append((n, landing, ", ".join(sorted(ml)), form, ", ".join(sorted(mf))))
+    return malos
+
+
+def aviso_pares_inconsistentes(malos, max_pares: int = 5) -> str:
+    """Texto del error: en qué par la landing y el form son de mercados distintos."""
+    lineas = [f"En {len(malos)} par(es) la landing y el form son de mercados distintos. "
+              "Revisá que cada landing vaya con el form de su mercado:\n"]
+    for n, landing, ml, form, mf in malos[:max_pares]:
+        lineas += [f"Par {n}:", f"  • Landing ({ml}): {landing}", f"  • Form ({mf}): {form}"]
+    if len(malos) > max_pares:
+        lineas.append(f"… y {len(malos) - max_pares} par(es) más")
+    return "\n".join(lineas)

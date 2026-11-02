@@ -4222,7 +4222,9 @@ def iniciar_interfaz(autostart_leads=False):
 
     # Mercado desde las URLs pegadas: por dominio (.com.br, .cl), por ruta
     # (/commonwealth/chile/, /cadillac/t1/brasil/) o por el dominio de preview de AEM.
-    from osocio.utils.mercado_por_url import aviso_varios_mercados, detectar_mercado
+    from osocio.utils.mercado_por_url import (
+        aviso_pares_inconsistentes, aviso_varios_mercados, detectar_mercado, pares_inconsistentes,
+    )
 
     def _mercado_de_las_urls():
         lineas = [ln.strip() for ln in excel_text_area.get("1.0", "end-1c").splitlines() if ln.strip()]
@@ -4593,7 +4595,11 @@ def iniciar_interfaz(autostart_leads=False):
             return
         detected, por_mercado = _mercado_de_las_urls()
         if len(por_mercado) > 1:
-            messagebox.showerror("Revisá las URLs", aviso_varios_mercados(por_mercado))
+            # Landing de un mercado con el form de otro: se dice el par exacto, que es
+            # más fácil de encontrar que la lista por mercado.
+            malos = pares_inconsistentes([p for p in pares if p[0]])
+            messagebox.showerror("Revisá las URLs", aviso_pares_inconsistentes(malos) if malos
+                                 else aviso_varios_mercados(por_mercado))
             return
         if detected and detected != pais:
             if not messagebox.askyesno("Verificá el mercado",

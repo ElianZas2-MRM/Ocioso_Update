@@ -1,7 +1,10 @@
 """El generador de Excels elige el mercado por las URLs pegadas y frena si se mezclan."""
 import pytest
 
-from osocio.utils.mercado_por_url import aviso_varios_mercados, detectar_mercado, mercados_de_url
+from osocio.utils.mercado_por_url import (
+    aviso_pares_inconsistentes, aviso_varios_mercados, detectar_mercado, mercados_de_url,
+    pares_inconsistentes,
+)
 
 
 @pytest.mark.parametrize("url,mercado", [
@@ -70,3 +73,15 @@ def test_el_aviso_recorta_las_listas_largas():
 def test_sin_urls_con_mercado():
     assert detectar_mercado(["https://www.ejemplo.com/a"]) == (None, {})
     assert detectar_mercado([]) == (None, {})
+
+
+def test_landing_de_un_mercado_con_form_de_otro():
+    preview_br = "https://www-cadillacbrasil-com-br-preview.prod.acp.gm.com/content/cadillac/sa/br/pt/lyriq.html"
+    form_cl = "https://secure-developments.com/commonwealth/chile/gm_forms/vehicle-shopper"
+    form_br = "https://stage.secure-developments.com/commonwealth/gm_frontend/cadillac/t1/brasil/form/lyriq"
+    pares = [(preview_br, form_br), (preview_br, form_cl),
+             ("https://www.ejemplo.com/preview", form_cl)]    # landing sin país: no se compara
+    malos = pares_inconsistentes(pares)
+    assert malos == [(2, preview_br, "Brasil", form_cl, "Chile")]
+    aviso = aviso_pares_inconsistentes(malos)
+    assert "Par 2:" in aviso and "Landing (Brasil)" in aviso and "Form (Chile)" in aviso
