@@ -30,6 +30,20 @@ def _variante_del_dispositivo(device_label):
         if device_label.endswith(marca):
             return device_label[:-len(marca)], sufijo
     return device_label, ""
+
+
+def sesiones_con_variantes(base, extras):
+    """Las sesiones del mercado más las de las variantes tildadas (Cadillac, T3).
+
+    Si un dispositivo no tiene el Excel del mercado pero sí el de una variante, corre
+    solo la variante: así se puede correr únicamente Cadillac con sus …_CDC.xlsx sin
+    tener los Excel de Brasil. Sin variante para ese dispositivo, la sesión del mercado
+    queda y la validación de siempre avisa que falta su Excel.
+    """
+    con_variante = {_variante_del_dispositivo(e["device"])[0] for e in extras}
+    base = [s for s in base
+            if (s.get("excel") and os.path.exists(s["excel"])) or s["device"] not in con_variante]
+    return base + extras
 import threading
 import tkinter as tk
 from tkinter import messagebox
@@ -313,7 +327,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             path = gpath if shared else os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, t3))
             out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix,
                         "excel": path, "variante": VAR_T3 if t3 else ""})
-        return out + _sesiones_extra(out)
+        return sesiones_con_variantes(out, _sesiones_extra(out))
 
     if scheduled:
         disp_sched = scheduler_cfg_leads.get("dispositivo", "local")
@@ -339,7 +353,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                         "pais": p, "dtype": "desktop", "browser": nav, "device": suffix,
                         "excel": os.path.join(DATA_DIR, _lead_excel_name(p, suffix, t3))
                     })
-            sessions += _sesiones_extra(sessions)
+            sessions = sesiones_con_variantes(sessions, _sesiones_extra(sessions))
             market_jobs.append((p, sessions))
             
         mercados_par = (p_mode == "paralelo") and (len(market_jobs) > 1)
