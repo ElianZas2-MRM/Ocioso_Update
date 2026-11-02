@@ -1628,6 +1628,29 @@ def iniciar_interfaz(autostart_leads=False):
                    activebackground=CARD_BG_COLOR, activeforeground="white",
                    font=("Segoe UI", 8), cursor="hand2").pack(side="left")
 
+    # Túnel de BrowserStack Local: las sesiones de la nube salen por la VPN de esta PC
+    # (para stage). Se guarda directo en config_global["browserstack"]["local"], que es lo
+    # que lee bs_driver.tunel_local() al abrir cada sesión: no hace falta reiniciar.
+    _bs_cfg = cargar_config_global().get("browserstack", {})
+    var_bs_tunel = tk.BooleanVar(value=bool(_bs_cfg.get("local", False)))
+    tunel_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    tunel_row.pack(anchor="w", pady=(2, 0))
+    tk.Checkbutton(tunel_row, text="🔒 BrowserStack por túnel (VPN)", variable=var_bs_tunel,
+                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
+                   activebackground=CARD_BG_COLOR, activeforeground="white",
+                   font=("Segoe UI", 8), cursor="hand2").pack(side="left")
+    tk.Label(tunel_row, text="solo Android e iPhone (Mac no) · al ejecutar te muestra los pasos",
+             font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=(8, 0))
+
+    def _guardar_tunel(*_):
+        try:
+            cfg = cargar_config_global()
+            cfg.setdefault("browserstack", {})["local"] = bool(var_bs_tunel.get())
+            guardar_config_global(cfg)
+        except Exception:
+            pass
+    var_bs_tunel.trace_add("write", _guardar_tunel)
+
     def _refresh_t3_also_state(*_):
         """Con el modo 'sólo T3' activo, 'correr también T3' no tiene sentido: se apaga."""
         if var_t3.get():

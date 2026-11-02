@@ -115,3 +115,72 @@ def test_platform_name_correcto(plataforma, esperado):
     # SafariOptions trae "mac" de fábrica: el iPhone tiene que pedirse como iOS.
     assert bs_driver.DISPOSITIVOS[plataforma]["platformName"] == esperado
 
+
+
+def test_tunel_local_apagado_no_pide_local():
+    opts = bs_driver.build_bstack_options("iphone", "b", "s", local=(False, ""))
+    assert "local" not in opts and "localIdentifier" not in opts
+
+
+def test_tunel_local_prendido_pide_local_y_su_identificador():
+    opts = bs_driver.build_bstack_options("mac", "b", "s", local=(True, "vpn-elian"))
+    assert opts["local"] == "true" and opts["localIdentifier"] == "vpn-elian"
+    assert "localIdentifier" not in bs_driver.build_bstack_options("mac", "b", "s", local=(True, ""))
+
+
+def test_tunel_local_se_lee_de_config_global(tmp_path, monkeypatch):
+    import json
+    import osocio.paths
+    monkeypatch.setattr(osocio.paths, "JSON_DIR", str(tmp_path))
+    assert bs_driver.tunel_local() == (False, "")          # sin config: apagado
+    (tmp_path / "config_global.json").write_text(
+        json.dumps({"browserstack": {"local": True, "local_identifier": "vpn"}}), encoding="utf-8")
+    assert bs_driver.tunel_local() == (True, "vpn")
+
+
+def test_tunel_sin_identificador_usa_el_usuario_de_windows(tmp_path, monkeypatch):
+    """Sin identificador en la config, cada persona tiene el suyo (su usuario de
+    Windows): con la misma cuenta no se pisan los túneles."""
+    import osocio.paths
+    monkeypatch.setattr(osocio.paths, "JSON_DIR", str(tmp_path))
+    (tmp_path / "config_global.json").write_text(
+        json.dumps({"browserstack": {"local": True}}), encoding="utf-8")
+    monkeypatch.setattr(bs_driver.getpass, "getuser", lambda: "Elian.Zas")
+    assert bs_driver.tunel_local() == (True, "osocio-elian.zas")
+    monkeypatch.setattr(bs_driver.getpass, "getuser", lambda: "Juan Pérez")
+    assert bs_driver.identificador_por_defecto() == "osocio-juan-perez"
+
+
+def test_mensaje_tunel_cerrado_no_muestra_la_key():
+    m = bs_driver.mensaje_tunel_cerrado("vpn")
+    assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m
+
+
+def test_pasos_tunel_antes_de_correr(monkeypatch):
+    """La ventana de pasos trae el comando con la key como marcador, nunca la real."""
+    monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "clave-secreta")
+    m = bs_driver.pasos_tunel("vpn")
+    assert "BrowserStackLocal.exe --key <tu access key> --force-local --local-identifier vpn" in m
+    assert "clave-secreta" not in m
+    assert "--local-identifier" not in bs_driver.pasos_tunel("")
+
+
+@pytest.mark.parametrize("local,acepta", [((True, "vpn"), True), ((False, ""), None)])
+def test_con_tunel_acepta_el_certificado_de_la_red(monkeypatch, local, acepta):
+    """Por el túnel la red de la empresa firma HTTPS con su certificado: con el túnel se
+    acepta; sin túnel no se toca."""
+    capturado = {}
+
+    class _Remote:
+        def __init__(self, command_executor, options, client_config):
+            capturado.update(options.to_capabilities())
+
+        def implicitly_wait(self, s):
+            pass
+
+        def maximize_window(self):
+            pass
+    monkeypatch.setattr(bs_driver, "Remote", _Remote)
+    monkeypatch.setattr(bs_driver, "tunel_local", lambda: local)
+    bs_driver.create_bs_driver("u", "k", platform="iphone")
+    assert capturado.get("acceptInsecureCerts") == acepta
