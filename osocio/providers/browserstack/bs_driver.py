@@ -309,13 +309,29 @@ def create_bs_driver(username: str, access_key: str,
 # ESTADO DE LA SESIÓN Y VIDEO
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _motivo_para_browserstack(reason: str) -> str:
+    """El motivo del estado sin tildes y en 255 caracteres: BrowserStack borra las letras
+    con tilde ("envío" quedaba "envo")."""
+    texto = unicodedata.normalize("NFKD", reason or "").encode("ascii", "ignore").decode()
+    return texto[:255]
+
+
 def status_script(passed: bool, reason: str = "") -> str:
     """Comando de BrowserStack para marcar la sesión (equivalente a lambda-status)."""
     payload = {
         "action": "setSessionStatus",
-        "arguments": {"status": "passed" if passed else "failed", "reason": (reason or "")[:255]},
+        "arguments": {"status": "passed" if passed else "failed",
+                      "reason": _motivo_para_browserstack(reason)},
     }
     return "browserstack_executor: " + json.dumps(payload)
+
+
+def annotate_script(texto: str, nivel: str = "info") -> str:
+    """Comando de BrowserStack para dejar una marca en la línea de tiempo del video.
+
+    nivel: "info" o "error" (las de error se ven en rojo en el dashboard)."""
+    payload = {"action": "annotate", "arguments": {"data": (texto or "")[:255], "level": nivel}}
+    return "browserstack_executor: " + json.dumps(payload, ensure_ascii=False)
 
 
 def mark_bs_status(driver, passed: bool = True, reason: str = "") -> None:
@@ -335,7 +351,7 @@ def mark_bs_status_api(session_id: str, username: str, access_key: str,
         import requests
         resp = requests.put(f"{BS_API}/sessions/{session_id}.json", auth=(username, access_key),
                             json={"status": "passed" if passed else "failed",
-                                  "reason": (reason or "")[:255]}, timeout=15)
+                                  "reason": _motivo_para_browserstack(reason)}, timeout=15)
         return resp.ok
     except Exception:
         return False

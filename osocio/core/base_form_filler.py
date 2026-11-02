@@ -319,6 +319,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.RUN_NUMBER = None
         # Resumen por formulario de la última corrida (lo consume la UI para el modal detallado).
         self.run_summary = {"ok": 0, "fail": 0, "total": 0, "fail_rows": []}
+        # Aviso opcional al empezar y al terminar cada lead: on_lead(evento, **datos), con
+        # evento "inicio" o "fin". Lo usa BrowserStack para dejar marcas en el video.
+        self.on_lead = None
         self.driver = None
         self.screenshot_manager = None
         
@@ -479,6 +482,15 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         1) el elegido en el dropdown de modelos del form (si hay), o
         2) el ?model= de la URL del form (si es un modelo real, no un servicio)."""
         return self._tracked_model_value() or self._model_from_form_url()
+
+    def _avisar_lead(self, evento, **datos):
+        """Llama a on_lead si está puesto. Un fallo del aviso nunca corta la corrida."""
+        if self.on_lead is None:
+            return
+        try:
+            self.on_lead(evento, **datos)
+        except Exception as e:
+            print(f"Aviso: no se pudo marcar el lead ({evento}): {e}")
 
     @staticmethod
     def _short_fail_reason(result_text):
@@ -4780,6 +4792,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     expected_form_url = ""
 
                 use_iframe = bool(expected_form_url)
+                self._avisar_lead("inicio", fila=i, numero=_done_leads + 1, total=_total_leads,
+                                  url=landing_url)
 
                 form_data = self.extract_form_data(row)
                 result_text = ""
@@ -5431,6 +5445,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         })
                 except Exception:
                     pass
+                self._avisar_lead("fin", fila=i, numero=_done_leads + 1, total=_total_leads,
+                                  url=landing_url, ok=bool(_lead_ok),
+                                  motivo="" if _lead_ok else self._short_fail_reason(result_text))
                 _done_leads += 1
                 if progress_callback:
                     try:
