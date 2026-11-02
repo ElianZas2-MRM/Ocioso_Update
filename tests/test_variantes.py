@@ -207,3 +207,24 @@ def test_cada_sesion_declara_su_variante():
     assert '"variante"' in _fuente_envio_leads(), (
         "las sesiones no declaran a que variante pertenecen"
     )
+
+
+def test_solo_cadillac_sin_excel_del_mercado(tmp_path):
+    """Con 'Correr también Cadillac' y sin los Excel de Brasil, corre solo Cadillac; un
+    dispositivo sin Excel de Brasil ni de Cadillac sigue avisando que falta."""
+    from osocio.interface.envio_leads import sesiones_con_variantes
+    cdc = tmp_path / "Lead_information_Formulario_Brasil_Chrome_CDC.xlsx"
+    cdc.write_bytes(b"x")
+    base = [{"pais": "Brasil", "device": "Chrome", "excel": str(tmp_path / "Lead_information_Formulario_Brasil_Chrome.xlsx")},
+            {"pais": "Brasil", "device": "Edge", "excel": str(tmp_path / "Lead_information_Formulario_Brasil_Edge.xlsx")}]
+    extras = [{"pais": "Brasil", "device": "Chrome·CDC", "excel": str(cdc), "variante": "_CDC"}]
+    assert [s["device"] for s in sesiones_con_variantes(base, extras)] == ["Edge", "Chrome·CDC"]
+
+
+def test_con_excel_del_mercado_corren_los_dos(tmp_path):
+    from osocio.interface.envio_leads import sesiones_con_variantes
+    br = tmp_path / "Lead_information_Formulario_Brasil_Chrome.xlsx"
+    br.write_bytes(b"x")
+    base = [{"pais": "Brasil", "device": "Chrome", "excel": str(br)}]
+    extras = [{"pais": "Brasil", "device": "Chrome·CDC", "excel": str(br), "variante": "_CDC"}]
+    assert [s["device"] for s in sesiones_con_variantes(base, extras)] == ["Chrome", "Chrome·CDC"]
