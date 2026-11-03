@@ -403,9 +403,19 @@ class FormFillerIphone(GenericCountryBase):
         """La opción al azar de un select del iPhone: región, ciudad y concesionario rotan
         (las menos usadas hoy); el resto, None (al azar común)."""
         from osocio.utils.rotacion_dealers import tipo_de_campo
+        from osocio.utils.rotacion_dealers import DEALER, _norm
         tipo = tipo_de_campo(etiqueta)
         if not tipo or not opciones:
             return None
+        if tipo == DEALER:
+            self._opciones_dealer = {_norm(o) for o in opciones}
+        # Volver a lo que había antes de buscar otro concesionario (ver abajo).
+        forzada = (getattr(self, "_rotacion_forzar", None) or {}).get(tipo)
+        if forzada:
+            igual = next((o for o in opciones if _norm(o) == _norm(forzada)), None)
+            if igual is not None:
+                self._rotacion_anotar(tipo, etiqueta, igual, al_azar=True)
+                return igual
         excluir = (getattr(self, "_rotacion_excluir", None) or {}).get(tipo, ())
         i = self._rotacion().elegir(self._pais_rotacion(), tipo, opciones, excluir=excluir)
         self._rotacion_anotar(tipo, etiqueta, opciones[i], al_azar=True)
@@ -414,17 +424,39 @@ class FormFillerIphone(GenericCountryBase):
     def _evitar_concesionario_repetido_ios(self, valor_para):
         """Como _evitar_concesionario_repetido de los navegadores: si el concesionario al azar
         ya se usó hoy, se vuelve a elegir la ciudad (y si hace falta la región) y se completa
-        de nuevo lo que dependa de ella, hasta dar con uno sin usar."""
+        de nuevo lo que dependa de ella, hasta dar con uno sin usar. Si cambiar de ciudad
+        trae los mismos concesionarios (Cadillac), se corta y no se vuelve a buscar en ese
+        form. Si no aparece ninguno, se vuelve a lo que había: el form nunca queda a medias."""
         from osocio.utils.rotacion_dealers import CIUDAD, DEALER, REGION
         fila = getattr(self, "_rotacion_fila", None) or {}
         rot, pais = self._rotacion(), self._pais_rotacion()
+        fijos = getattr(self, "_dealers_fijos", None)
+        if fijos is None:
+            fijos = self._dealers_fijos = set()
+        clave = self._clave_form_rotacion()
 
         def repetido():
             d = fila.get(DEALER)
             return bool(d and d["al_azar"] and rot.veces(pais, DEALER, d["texto"]) > 0)
 
-        if not repetido():
+        if not repetido() or (clave and clave in fijos):
             return
+        original = {t: dict(v) for t, v in fila.items()}
+        vistos = set(getattr(self, "_opciones_dealer", None) or ())
+
+        def volver():
+            """Región y ciudad originales (por el elegidor) y se completa lo de abajo."""
+            forzar = {t: v["texto"] for t, v in original.items() if v.get("al_azar")}
+            self._rotacion_forzar = forzar
+            try:
+                for t in (REGION, CIUDAD):
+                    o = original.get(t)
+                    if o and o["al_azar"] and (fila.get(t) or {}).get("texto") != o["texto"]:
+                        self._nativo.elegir_de_nuevo(o["id"])
+                self._nativo.llenar(valor_para, al_llenar=self._registrar_campo_ios)
+            finally:
+                self._rotacion_forzar = {}
+
         for tipo_padre in (CIUDAD, REGION):
             padre = fila.get(tipo_padre)
             if not padre or not padre["al_azar"]:
@@ -444,6 +476,16 @@ class FormFillerIphone(GenericCountryBase):
                 if not repetido():
                     print(f"🔁 Concesionario sin usar hoy: {fila[DEALER]['texto']}")
                     return
+                nuevos = set(getattr(self, "_opciones_dealer", None) or ())
+                if tipo_padre == CIUDAD and len(probados) == 2 and nuevos and nuevos == vistos:
+                    if clave:
+                        fijos.add(clave)
+                    volver()
+                    print("🔁 El form ofrece los mismos concesionarios en todas las ciudades: "
+                          f"se queda {(fila.get(DEALER) or {}).get('texto', '?')}")
+                    return
+                vistos |= nuevos
+        volver()
         d = fila.get(DEALER) or {}
         self._aviso_rotacion = (f"concesionario repetido hoy: {d.get('texto', '?')} "
                                 "(ya se usaron hoy todos los que ofrece el form, o es el único)")

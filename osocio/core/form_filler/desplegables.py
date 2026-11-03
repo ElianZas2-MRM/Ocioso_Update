@@ -99,14 +99,17 @@ class DesplegablesMixin:
         self._rotacion_anotar(tipo, select_id, elegida.text, al_azar=True)
         return elegida
 
-    def _reelegir_al_azar(self, select_id, tipo, excluir):
+    def _reelegir_al_azar(self, select_id, tipo, excluir, solo=None):
         """Vuelve a elegir al azar (con rotación) en un dropdown ya completado, descartando
-        `excluir`. Devuelve el texto elegido, o None si no queda otra opción."""
+        `excluir`. Con `solo`, elige esa opción (para volver a lo que había). Devuelve el
+        texto elegido, o None si no queda otra opción."""
         from osocio.utils.rotacion_dealers import _norm
         el = self.safe_find_element(By.ID, select_id)
         if el is None:
             return None
         opciones = [o for o in self._get_valid_select_options(el) if _norm(o.text) not in {_norm(e) for e in excluir}]
+        if solo is not None:
+            opciones = [o for o in opciones if _norm(o.text) == _norm(solo)]
         if not opciones:
             return None
         i = self._rotacion().elegir(self._pais_rotacion(), tipo, [o.text for o in opciones])
@@ -122,10 +125,48 @@ class DesplegablesMixin:
         self._record_field_value(select_id, elegida.text)
         return elegida.text
 
+    def _clave_form_rotacion(self):
+        """Con qué se reconoce el form en la corrida (para recordar si sus concesionarios
+        son los mismos en todas las ciudades)."""
+        return (getattr(self, "expected_form_url", "") or getattr(self, "_aem_content_path", "")
+                or "").strip().lower()
+
+    def _opciones_de_concesionario(self, dealer_id):
+        """Los concesionarios que ofrece ahora el form (normalizados)."""
+        from osocio.utils.rotacion_dealers import _norm
+        el = self.safe_find_element(By.ID, dealer_id)
+        return {_norm(o.text) for o in (self._get_valid_select_options(el) or [])} if el is not None else set()
+
+    def _volver_a_lo_elegido(self, original):
+        """Deja región / ciudad / concesionario como estaban antes de buscar. Si un nivel
+        cambia, los de abajo se vuelven a elegir aunque el texto sea el mismo (la cascada
+        los vació). Si la opción original ya no está, elige la menos usada: nunca queda
+        un campo vacío."""
+        from osocio.utils.rotacion_dealers import CIUDAD, DEALER, REGION, _norm
+        fila = getattr(self, "_rotacion_fila", None) or {}
+        cambio_arriba = False
+        for tipo in (REGION, CIUDAD, DEALER):
+            orig = original.get(tipo)
+            if not orig or not orig["al_azar"]:
+                continue
+            actual = (fila.get(tipo) or {}).get("texto", "")
+            if not cambio_arriba and _norm(actual) == _norm(orig["texto"]):
+                continue
+            if tipo != REGION and not self._wait_for_dependent_dropdown_ready(orig["id"]):
+                print(f"⚠️ Rotación: no cargó {tipo} al volver a lo elegido")
+            if not self._reelegir_al_azar(orig["id"], tipo, excluir=(), solo=orig["texto"]):
+                self._reelegir_al_azar(orig["id"], tipo, excluir=())
+            cambio_arriba = True
+
     def _evitar_concesionario_repetido(self):
         """Si el concesionario elegido al azar ya se usó hoy, busca uno sin usar cambiando de
         ciudad y, si hace falta, de región (sólo los que se eligieron al azar: lo del Excel
-        no se toca). Si no queda ninguno sin usar, lo deja anotado para el resultado."""
+        no se toca). Si no queda ninguno sin usar, vuelve a lo que había (nunca deja la
+        ciudad vacía) y lo deja anotado para el resultado.
+
+        Si al cambiar de ciudad el form ofrece los mismos concesionarios (Cadillac: siempre
+        los mismos 3), buscar no sirve: se corta, se vuelve a lo que había y en las filas
+        siguientes ya no se busca. Repetir ahí es lo esperado, así que no se avisa."""
         from osocio.utils.rotacion_dealers import CIUDAD, DEALER, REGION
         fila = getattr(self, "_rotacion_fila", None) or {}
         dealer = fila.get(DEALER)
@@ -133,6 +174,12 @@ class DesplegablesMixin:
             return
         rot, pais = self._rotacion(), self._pais_rotacion()
         if rot.veces(pais, DEALER, dealer["texto"]) == 0:
+            return
+        fijos = getattr(self, "_dealers_fijos", None)
+        if fijos is None:
+            fijos = self._dealers_fijos = set()
+        clave = self._clave_form_rotacion()
+        if clave and clave in fijos:
             return
 
         def dealer_sin_usar():
@@ -144,9 +191,11 @@ class DesplegablesMixin:
         # 1) Otro concesionario de la misma ciudad (por si quedaba uno sin usar).
         if dealer_sin_usar():
             return
+        original = {t: dict(v) for t, v in fila.items()}
         ciudad, region = fila.get(CIUDAD), fila.get(REGION)
+        vistos = self._opciones_de_concesionario(dealer["id"])
         regiones_probadas = {region["texto"]} if region else set()
-        for _vuelta in range(4):
+        for vuelta in range(4):
             # 2) Otras ciudades de la región actual.
             if ciudad and ciudad["al_azar"]:
                 ciudades_probadas = {fila[CIUDAD]["texto"]}
@@ -158,6 +207,15 @@ class DesplegablesMixin:
                     if dealer_sin_usar():
                         print(f"🔁 Concesionario sin usar hoy: {fila[DEALER]['texto']} (ciudad {nueva})")
                         return
+                    nuevos = self._opciones_de_concesionario(dealer["id"])
+                    if vuelta == 0 and len(ciudades_probadas) == 2 and nuevos and nuevos == vistos:
+                        if clave:
+                            fijos.add(clave)
+                        self._volver_a_lo_elegido(original)
+                        print("🔁 El form ofrece los mismos concesionarios en todas las ciudades: "
+                              f"se queda {fila[DEALER]['texto']} (el menos usado hoy)")
+                        return
+                    vistos |= nuevos
             # 3) Otra región.
             if not (region and region["al_azar"] and ciudad and ciudad["al_azar"]):
                 break
@@ -165,12 +223,15 @@ class DesplegablesMixin:
             if not nueva_r:
                 break
             regiones_probadas.add(nueva_r)
+            # Sin ciudades cargadas no se sigue de largo: quedaría la ciudad vacía.
             if not self._wait_for_dependent_dropdown_ready(ciudad["id"]):
-                continue
-            self._reelegir_al_azar(ciudad["id"], CIUDAD, excluir=())
+                break
+            if not self._reelegir_al_azar(ciudad["id"], CIUDAD, excluir=()):
+                break
             if dealer_sin_usar():
                 print(f"🔁 Concesionario sin usar hoy: {fila[DEALER]['texto']} (región {nueva_r})")
                 return
+        self._volver_a_lo_elegido(original)
         texto = fila[DEALER]["texto"]
         unico = len(self._get_valid_select_options(self.safe_find_element(By.ID, dealer["id"])) or []) <= 1 \
             and not (ciudad and ciudad["al_azar"])

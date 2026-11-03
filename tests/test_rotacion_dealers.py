@@ -103,3 +103,11 @@ def test_corridas_en_paralelo_no_pierden_anotaciones(tmp_path):
     for h in hilos:
         h.join()
     assert sum(rot.usos("Chile", DEALER).values()) == 20
+
+
+def test_el_concesionario_cuenta_igual_sin_importar_los_km(tmp_path):
+    """El RAQ de Brasil antepone la distancia, que cambia según la ciudad."""
+    rot = RotacionDelDia(carpeta=str(tmp_path), fecha="2026-11-03")
+    rot.registrar("Brasil", {DEALER: "46.61km | SABENAUTO (CRUZEIRO DO SUL)"})
+    assert rot.veces("Brasil", DEALER, "6.41km | SABENAUTO (CRUZEIRO DO SUL)") == 1
+    assert rot.elegir("Brasil", DEALER, ["2.1km | SABENAUTO (CRUZEIRO DO SUL)", "9km | OTRO"]) == 1
