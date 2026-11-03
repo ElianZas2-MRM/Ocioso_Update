@@ -20,10 +20,14 @@ import datetime
 import json
 import os
 import random
+import re
 import time
 import unicodedata
 
 DEALER, CIUDAD, REGION = "concesionario", "ciudad", "region"
+
+# "46.61km | " al principio del texto del concesionario (RAQ de Brasil).
+_DISTANCIA = re.compile(r"^\s*[\d.,]+\s*km\s*\|\s*", re.IGNORECASE)
 
 # Palabras que identifican cada tipo de campo por id / name / etiqueta. El orden importa:
 # "concesionario" antes que nada (un id como "dealer-city" es del concesionario).
@@ -35,7 +39,10 @@ _CLAVES = (
 
 
 def _norm(texto):
-    s = unicodedata.normalize("NFKD", str(texto or "").lower())
+    # El RAQ de Brasil antepone la distancia ("46.61km | SABENAUTO (X)"), que cambia según
+    # la ciudad elegida: sin sacarla, el mismo concesionario contaba como varios.
+    texto = _DISTANCIA.sub("", str(texto or ""))
+    s = unicodedata.normalize("NFKD", texto.lower())
     return " ".join("".join(c for c in s if not unicodedata.combining(c)).split())
 
 
