@@ -2404,8 +2404,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
     def find_and_position_to_form(self, expected_form_url):
         """Encuentra el iframe del formulario y posiciona el viewport sobre él.
-        Usa 2 intentos: el primero espera activamente el iframe específico; el segundo
-        hace pre-scroll para activar lazy-loading antes de reintentar."""
+        Usa 3 intentos: el primero espera activamente el iframe específico; el segundo
+        hace pre-scroll para activar lazy-loading antes de reintentar; el tercero espera
+        un poco más por si la landing es lenta (Firefox a veces tarda en poner el src)."""
         expected_form_url = self._sanitize_url(expected_form_url)
         if not isinstance(expected_form_url, str):
             expected_form_url = str(expected_form_url or "").strip()
@@ -2429,19 +2430,26 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 return cand
             return None
 
-        max_attempts = 2
+        # Esperar el iframe GM del formulario (no cualquier iframe). Espera corta el primer
+        # intento para ser rápido; si no aparece, pre-scroll (footer) y reintento. El tercero
+        # es para landings lentas: en Firefox el form de Cadillac Vistiq tardó más de los
+        # ~17 s de los dos primeros y la fila quedó como FORM NO INSERTO con el form ahí.
+        _esperas = (6, 8, 12)
+        max_attempts = len(_esperas)
         for attempt in range(max_attempts):
             try:
-                # Esperar el iframe GM del formulario (no cualquier iframe). Espera corta el
-                # primer intento para ser rápido; si no aparece, pre-scroll (footer) y reintento.
-                _wait_s = 6 if attempt == 0 else 8
+                _wait_s = _esperas[attempt]
+                if attempt == 2:
+                    print("El form todavía no aparece, se espera un poco más (landing lenta)...")
                 try:
                     target_iframe = WebDriverWait(self.driver, _wait_s).until(_find_gm_now)
                 except TimeoutException:
                     target_iframe = None
 
                 if not target_iframe:
-                    if attempt < max_attempts - 1:
+                    if attempt == 1:
+                        self._scrollear_a_iframe_sin_cargar(_url)
+                    elif attempt == 0:
                         try:
                             self.pre_scroll_for_dynamic_content()
                         except Exception:
