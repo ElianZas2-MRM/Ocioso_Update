@@ -63,3 +63,28 @@ def test_el_motor_lee_el_excel_t1(tmp_path, monkeypatch):
     (tmp_path / "Lead_information_Formulario_Argentina_Chrome_T1.xlsx").write_text("")
     base = generic_country_base.GenericCountryBase("Argentina")
     assert base.config["excel_file"] == "Lead_information_Formulario_Argentina_Chrome_T1.xlsx"
+
+
+# --- Cadillac en los dos modos -------------------------------------------------------------
+
+def test_cadillac_sigue_el_modo():
+    from osocio.core.variantes import CDC_T3, variante_cadillac
+    assert variante_cadillac("T1") == CDC
+    assert variante_cadillac("T3") == CDC_T3
+
+
+def test_cadillac_t3_es_t3_y_tiene_su_excel():
+    from osocio.core.variantes import CDC_T3
+    assert variantes.es_t3(CDC_T3)
+    assert not variantes.es_t3(CDC)
+    assert nombre_excel_leads("Brasil", "Chrome", CDC_T3) == "Lead_information_Formulario_Brasil_Chrome_CDC_T3.xlsx"
+    assert etiqueta_de_corrida("Brasil", CDC_T3) == "CDC T3"
+    assert basenames_de_corrida("Brasil", "chrome", sufijo=CDC_T3)[0] == "resultados_Brasil_CDC_T3_Chrome"
+
+
+def test_la_etiqueta_de_sesion_de_cadillac_t3_no_se_confunde_con_t3():
+    from osocio.core.variantes import CDC_T3
+    from osocio.interface.envio_leads import _variante_del_dispositivo
+    assert _variante_del_dispositivo("Chrome·CDC_T3") == ("Chrome", CDC_T3)
+    assert _variante_del_dispositivo("Chrome·T3") == ("Chrome", T3)
+    assert _variante_del_dispositivo("Chrome·CDC") == ("Chrome", CDC)

@@ -15,8 +15,8 @@ el valor nuevo. Congelarlas acá rompería eso en silencio.
 import os
 from datetime import datetime
 
-from osocio.core.variantes import (CDC as VAR_CDC, T3 as VAR_T3, es_t3, etiqueta_de_corrida,
-                                   variante_del_modo)
+from osocio.core.variantes import (CDC as VAR_CDC, CDC_T3 as VAR_CDC_T3, T3 as VAR_T3, es_t3,
+                                   etiqueta_de_corrida, variante_del_modo)
 
 
 def _variante_del_dispositivo(device_label):
@@ -26,7 +26,7 @@ def _variante_del_dispositivo(device_label):
     Chrome·CDC) porque esa etiqueta es lo que identifica una sesion de punta a
     punta, incluido el reintento de fallidos.
     """
-    for sufijo in (VAR_T3, VAR_CDC):
+    for sufijo in (VAR_CDC_T3, VAR_T3, VAR_CDC):
         marca = "·" + sufijo.lstrip("_")
         if device_label.endswith(marca):
             return device_label[:-len(marca)], sufijo
@@ -91,7 +91,7 @@ class ContextoEnvioLeads:
 
     # --- qué eligió el usuario ------------------------------------------------------
     var_modo: object                  # "T1" | "T3": con qué Excels corre
-    var_cdc_also: object              # sumar Cadillac (CDC), que es T1
+    var_cdc_also: object              # sumar Cadillac (CDC en T1, CDC_T3 en T3)
     var_sched_t3: object              # sumar los T3 en las corridas programadas
     var_enviar_email: object
     var_modo_email: object            # "por_pais" | "consolidado"
@@ -148,7 +148,7 @@ class OpcionesEnvioLeads:
 
     t3: bool                 # modo T3: correr los formularios 2.0 de AEM
     t3_also: bool            # ademas de los T1 (solo programadas)
-    cdc_also: bool           # correr tambien Cadillac (CDC). Es T1, no T3.
+    cdc_also: bool           # correr tambien Cadillac (del mismo tipo que el modo)
     url_paralelo: bool       # varias URLs a la vez
     url_max: int             # cuantas en paralelo (1 a 20)
     enviar_mail: bool
@@ -167,9 +167,9 @@ def _leer_opciones(ctx, scheduled):
         # Las manuales corren solo el modo elegido. Las programadas pueden sumar los T3
         # con el toggle propio del scheduler.
         t3_also=(not t3) and scheduled and bool(ctx.var_sched_t3.get()),
-        # Cadillac es T1 y todavia no tiene toggle propio en la programacion, asi que
-        # en una corrida programada no entra.
-        cdc_also=(not t3) and (not scheduled) and bool(ctx.var_cdc_also.get()),
+        # Cadillac corre en el mismo tipo que el modo (CDC en T1, CDC_T3 en T3). Todavia
+        # no tiene toggle propio en la programacion, asi que en una programada no entra.
+        cdc_also=(not scheduled) and bool(ctx.var_cdc_also.get()),
         url_paralelo=bool(ctx.var_url_parallel.get()),
         url_max=max(1, min(20, int(ctx.url_max_var.get()))),
         enviar_mail=bool(ctx.var_enviar_email.get()),
@@ -312,7 +312,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     def _sesiones_extra(sessions):
         """Las sesiones que se suman por las variantes tildadas."""
         return (_sesiones_extra_de_variante(sessions, VAR_T3, t3_also)
-                + _sesiones_extra_de_variante(sessions, VAR_CDC, opciones.cdc_also))
+                + _sesiones_extra_de_variante(sessions, VAR_CDC_T3 if t3 else VAR_CDC,
+                                              opciones.cdc_also))
 
     def _sessions_for(pais):
         """Una sesión por dispositivo tildado. Cada dispositivo (desktop y BrowserStack)
