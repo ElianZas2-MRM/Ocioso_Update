@@ -90,6 +90,7 @@ def _excel_path_for(pais):
 from osocio.core.variantes import (T3 as VARIANTE_T3, variante_cadillac,
                                    nombre_excel_leads, ruta_excel_leads, variante_del_modo)
 from osocio.interface import tema
+from osocio.interface.progreso import BarraProgreso, Cronometro, IconoEstado
 from osocio.interface.menu_lateral import MenuLateral
 from osocio.interface.widgets import AvisoFlotante, BotonRedondo, Marco, Segmentado, Toggle
 from osocio.interface.widgets import ajustar_scroll
@@ -3970,7 +3971,7 @@ def iniciar_interfaz(autostart_leads=False):
         header_frame = Marco(modal, bg=MODAL_BG)
         header_frame.pack(fill="x", padx=20, pady=(5, 10))
         
-        icon_lbl = tk.Label(header_frame, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+        icon_lbl = IconoEstado(header_frame)  # spinner; al final ✓ / ✕ / ■
         icon_lbl.pack(side="left")
 
         rotation_glyphs = ["↻", "➔", "↻", "➔"]
@@ -3986,6 +3987,7 @@ def iniciar_interfaz(autostart_leads=False):
         title_lbl.pack(anchor="w")
         subtitle_lbl = tk.Label(title_info, text="Preparando...", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
         subtitle_lbl.pack(anchor="w")
+        Cronometro(title_info, icon_lbl, bg=MODAL_BG).pack(anchor="w")
         rotate_icon()
 
         def on_detener_click():
@@ -4055,7 +4057,7 @@ def iniciar_interfaz(autostart_leads=False):
             tk.Label(_hdr, text=_p, font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white").pack(side="left")
             _stx = tk.Label(_hdr, text="En espera...", font=("Segoe UI", 8), bg=MODAL_BG, fg=TEXT_SECONDARY)
             _stx.pack(side="right")
-            _cb = tk.Canvas(_row, height=8, bg="#35164D", highlightthickness=0)
+            _cb = BarraProgreso(_row, height=10, bg="#35164D")
             _cb.pack(fill="x", pady=(3, 0))
             _fl = _cb.create_rectangle(0, 0, 0, 8, fill="#7D4E9F", width=0)
             

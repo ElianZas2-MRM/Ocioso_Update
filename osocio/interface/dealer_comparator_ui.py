@@ -20,11 +20,12 @@ import os
 import threading
 from datetime import datetime
 from tkinter import (
-    BooleanVar, Canvas, Entry, Label, StringVar,
+    BooleanVar, Entry, Label, StringVar,
     Toplevel, filedialog, messagebox, ttk,
 )
 
 from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame
+from osocio.interface.progreso import BarraProgreso, Cronometro, IconoEstado
 
 from osocio.core.browser_manager import BrowserManager
 from osocio.core.dealer_comparator_runner import (
@@ -1320,7 +1321,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         # 1. Header (Comparando / Completo)
         header = Frame(modal, bg=MODAL_BG)
         header.pack(fill="x", padx=20, pady=(5, 10))
-        icon_lbl = Label(header, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+        icon_lbl = IconoEstado(header)  # spinner; al final ✓ / ✕ / ■
         icon_lbl.pack(side="left")
         title_info = Frame(header, bg=MODAL_BG)
         title_info.pack(side="left", padx=10)
@@ -1330,6 +1331,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         subtitle_lbl = Label(title_info, text=f"{state['pais']}", font=("Segoe UI", 9),
                               bg=MODAL_BG, fg=TEXT_S)
         subtitle_lbl.pack(anchor="w")
+        Cronometro(title_info, icon_lbl, bg=MODAL_BG).pack(anchor="w")
 
         # Animación de rotación del icono
         rotation_glyphs = ["↻", "➔", "↻", "➔"]
@@ -1355,7 +1357,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
         progress_row = Frame(modal, bg=MODAL_BG)
         progress_row.pack(fill="x", padx=20, pady=(0, 6))
-        pb_canvas = Canvas(progress_row, height=8, bg="#35164D", highlightthickness=0)
+        pb_canvas = BarraProgreso(progress_row, height=10, bg="#35164D")
         pb_canvas.pack(fill="x")
         pb_fill = pb_canvas.create_rectangle(0, 0, 0, 8, fill="#F8C471", width=0)
 
