@@ -32,6 +32,7 @@ SIDEBAR_SEP = "#3A3A42"
 SIDEBAR_HOVER = "#36363E"
 MODO_CAJA = "#303037"
 ZONA_OSCURA = MODO_CAJA       # cajas internas (credenciales de BrowserStack)
+ENTRADA_ZONA = "#18181D"      # cajas de texto dentro de una zona oscura
 MENU_SEL = "#0F0F12"          # ítem elegido del menú: negro en clásico, violeta en oscuro
 ACENTO = "#9B5CD6"            # toggles prendidos
 
@@ -68,6 +69,7 @@ _OSCURO = {
     "#3a3a42": "#33224a",   # SIDEBAR_SEP
     "#36363e": "#2f1c46",   # SIDEBAR_HOVER
     "#303037": "#28173d",   # MODO_CAJA / ZONA_OSCURA
+    "#18181d": "#140b20",   # ENTRADA_ZONA
     "#0f0f12": "#7c3aed",   # MENU_SEL
     "#9b5cd6": "#7c3aed",   # ACENTO
     "#7e5109": "#e0b25c",   # texto de aviso (marrón sobre amarillo claro en clásico)

@@ -233,7 +233,7 @@ def fondo_redondeado(w, h, relleno, borde=None, radio=10, grosor=1, borde_tema=F
     w, h = max(2, int(w)), max(2, int(h))
     clave = (w, h, relleno, borde, radio, grosor, borde_tema, tema.tema())
     img = _CACHE_FONDOS.get(clave)
-    if img is not None:
+    if img is not None and _viva(img):
         return img
     ss = 3
     lay = Image.new("RGBA", (w * ss, h * ss), (0, 0, 0, 0))
@@ -251,6 +251,15 @@ def fondo_redondeado(w, h, relleno, borde=None, radio=10, grosor=1, borde_tema=F
         _CACHE_FONDOS.clear()
     _CACHE_FONDOS[clave] = img
     return img
+
+
+def _viva(img):
+    """¿La imagen sigue existiendo en Tk? (si se cerró la ventana donde se creó, no)."""
+    try:
+        img._PhotoImage__photo.tk.call("image", "width", str(img))
+        return True
+    except (tk.TclError, AttributeError, RuntimeError):
+        return False
 
 
 def bg_visible(widget):

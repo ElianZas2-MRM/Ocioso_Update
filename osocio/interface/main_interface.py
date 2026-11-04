@@ -1682,7 +1682,7 @@ def iniciar_interfaz(autostart_leads=False):
     _bs_fila.pack(fill="x", padx=14, pady=(0, 10))
 
     tk.Label(_bs_fila, text="User", font=("Segoe UI", 9), bg=_BS_BG, fg="white").pack(side="left")
-    bs_user_ent = tk.Entry(_bs_fila, font=("Segoe UI", 9), bg=ENTRY_BG, fg="white", insertbackground="white",
+    bs_user_ent = tk.Entry(_bs_fila, font=("Segoe UI", 9), bg=tema.ENTRADA_ZONA, fg="white", insertbackground="white",
                            bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=24)
     bs_user_ent.pack(side="left", padx=(6, 16), ipady=4)
     # Cargar credenciales al inicializar
@@ -1690,14 +1690,14 @@ def iniciar_interfaz(autostart_leads=False):
     bs_user_ent.insert(0, _u_init)
 
     tk.Label(_bs_fila, text="Access key", font=("Segoe UI", 9), bg=_BS_BG, fg="white").pack(side="left")
-    bs_key_ent = tk.Entry(_bs_fila, font=("Segoe UI", 9), bg=ENTRY_BG, fg="white", insertbackground="white",
+    bs_key_ent = tk.Entry(_bs_fila, font=("Segoe UI", 9), bg=tema.ENTRADA_ZONA, fg="white", insertbackground="white",
                           bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=24, show="•")
     bs_key_ent.pack(side="left", padx=(6, 4), ipady=4)
     bs_key_ent.insert(0, _ak_init)
 
     def _ver_key():
         bs_key_ent.config(show="" if bs_key_ent.cget("show") else "•")
-    BotonRedondo(_bs_fila, image=get_button_icon("eye_lav.png"), bg=BUTTON_INACTIVE, padx=4, pady=1,
+    BotonRedondo(_bs_fila, image=get_button_icon("eye_lav.png"), bg=tema.SIDEBAR_HOVER, padx=4, pady=1,
                  command=_ver_key).pack(side="left", padx=(0, 12))
 
     # CTA de guardado de credenciales BrowserStack
@@ -1716,7 +1716,7 @@ def iniciar_interfaz(autostart_leads=False):
             messagebox.showerror("BrowserStack", f"Error al guardar credenciales:\n{e}")
 
     BotonRedondo(_bs_fila, text=" Guardar", image=get_button_icon("save_blue.png"), compound="left",
-                 font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE, padx=10, pady=2,
+                 font=("Segoe UI", 9, "bold"), bg=tema.SIDEBAR_HOVER, fg=TEXT_SAVE, padx=10, pady=2,
                  command=_save_bs_creds).pack(side="left")
     try:
         from osocio.providers.browserstack.dispositivos import max_paralelo as _bs_max
