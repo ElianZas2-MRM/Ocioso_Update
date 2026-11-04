@@ -20,9 +20,11 @@ import os
 import threading
 from datetime import datetime
 from tkinter import (
-    BooleanVar, Button, Canvas, Entry, Frame, Label, StringVar,
+    BooleanVar, Canvas, Entry, Label, StringVar,
     Toplevel, filedialog, messagebox, ttk,
 )
+
+from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame
 
 from osocio.core.browser_manager import BrowserManager
 from osocio.core.dealer_comparator_runner import (

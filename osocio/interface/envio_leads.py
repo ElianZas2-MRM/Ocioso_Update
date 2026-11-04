@@ -47,6 +47,8 @@ def sesiones_con_variantes(base, extras):
     return base + extras
 import threading
 import tkinter as tk
+
+from osocio.interface.widgets import BotonRedondo, Marco
 from tkinter import messagebox
 
 from osocio.paths import DATA_DIR
@@ -716,7 +718,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     modal.bind("<Destroy>", cleanup_root_binds)
 
     # Custom Title Bar for minimizing and closing
-    title_bar = tk.Frame(modal, bg=MODAL_BG)
+    title_bar = Marco(modal, bg=MODAL_BG)
     title_bar.pack(fill="x", side="top", padx=15, pady=(5, 0))
     
     title_lbl_bar = tk.Label(title_bar, text="Ejecución de Test", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF")
@@ -737,18 +739,18 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     title_lbl_bar.bind("<Button-1>", _start_drag)
     title_lbl_bar.bind("<B1-Motion>", _drag)
     
-    btn_cls = tk.Button(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
+    btn_cls = BotonRedondo(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
     btn_cls.pack(side="right")
     btn_cls.bind("<Enter>", lambda e: btn_cls.config(bg="#E74C3C", fg="white"))
     btn_cls.bind("<Leave>", lambda e: btn_cls.config(bg=MODAL_BG, fg="#C5A9DF"))
 
-    btn_min = tk.Button(title_bar, text="—", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=root.iconify)
+    btn_min = BotonRedondo(title_bar, text="—", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=root.iconify)
     btn_min.pack(side="right", padx=2)
     btn_min.bind("<Enter>", lambda e: btn_min.config(bg="#38234D"))
     btn_min.bind("<Leave>", lambda e: btn_min.config(bg=MODAL_BG))
 
     # 1. Header (Ejecutando / Completo)
-    header_frame = tk.Frame(modal, bg=MODAL_BG)
+    header_frame = Marco(modal, bg=MODAL_BG)
     header_frame.pack(fill="x", padx=20, pady=(5, 10))
     
     icon_lbl = tk.Label(header_frame, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
@@ -761,7 +763,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             icon_lbl.config(text=rotation_glyphs[idx % len(rotation_glyphs)])
             modal.after(250, lambda: rotate_icon(idx + 1))
 
-    title_info = tk.Frame(header_frame, bg=MODAL_BG)
+    title_info = Marco(header_frame, bg=MODAL_BG)
     title_info.pack(side="left", padx=10)
 
     title_lbl = tk.Label(title_info, text="Ejecutando...", font=("Segoe UI", 12, "bold"), bg=MODAL_BG, fg="white")
@@ -784,7 +786,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             pass
         log_message("[WARN] Detención solicitada por el usuario.")
 
-    btn_detener = tk.Button(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
+    btn_detener = BotonRedondo(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
                             font=("Segoe UI", 9, "bold"),
                             bg="#3D1220", fg="#F1948A", relief="flat", bd=0, highlightthickness=1,
                             highlightbackground="#F1948A", cursor="hand2", command=on_detener_click, padx=12, pady=4)
@@ -793,7 +795,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     btn_detener.bind("<Leave>", lambda e: btn_detener.config(bg="#3D1220") if btn_detener["state"] == "normal" else None)
 
     # 2. Badges Row
-    badges_row = tk.Frame(modal, bg=MODAL_BG)
+    badges_row = Marco(modal, bg=MODAL_BG)
     badges_row.pack(fill="x", padx=20, pady=5)
 
     def make_pill(parent, text, icon=None):
@@ -850,13 +852,13 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
     # Área de mercados con scroll: si no entran todas las barras (muchos mercados en
     # una pantalla chica), aparece la barra lateral en vez de recortarse.
-    markets_wrap = tk.Frame(modal, bg=MODAL_BG)
+    markets_wrap = Marco(modal, bg=MODAL_BG)
     markets_wrap.pack(fill="both", expand=True, padx=20, pady=(2, 8))
     markets_canvas = tk.Canvas(markets_wrap, bg=MODAL_BG, highlightthickness=0)
     markets_sb = tk.Scrollbar(markets_wrap, orient="vertical", command=markets_canvas.yview)
     markets_canvas.configure(yscrollcommand=markets_sb.set)
     markets_canvas.pack(side="left", fill="both", expand=True)
-    markets_frame = tk.Frame(markets_canvas, bg=MODAL_BG)
+    markets_frame = Marco(markets_canvas, bg=MODAL_BG)
     _mk_win = markets_canvas.create_window((0, 0), window=markets_frame, anchor="nw")
 
     def _sync_markets_scroll(_e=None):
@@ -878,9 +880,9 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
     _pais_bars = {}
     for _p, _tot in _pais_totals.items():
-        _row = tk.Frame(markets_frame, bg=MODAL_BG)
+        _row = Marco(markets_frame, bg=MODAL_BG)
         _row.pack(fill="x", pady=(0, 9))
-        _hdr = tk.Frame(_row, bg=MODAL_BG)
+        _hdr = Marco(_row, bg=MODAL_BG)
         _hdr.pack(fill="x")
         
         # Formatear el texto de dispositivos
@@ -1002,7 +1004,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         # Detalle de los forms con error: fila, motivo y URL, para ubicarlos sin
         # tener que abrir el Excel.
         if _fail_detail_lines:
-            _det = tk.Frame(modal, bg=MODAL_BG)
+            _det = Marco(modal, bg=MODAL_BG)
             _det.pack(fill="x", padx=20, pady=(2, 0))
             tk.Label(_det, text="Forms con error (FAIL):", font=("Segoe UI", 8, "bold"),
                      bg=MODAL_BG, fg="#F1948A").pack(anchor="w")
@@ -1043,18 +1045,18 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 _bg, _fg, _tx = "#3A1F22", "#F1948A", "⚠  Falta el destinatario: no se envió email."
         else:
             _bg, _fg, _tx = BUTTON_INACTIVE, TEXT_SECONDARY, "✉  Envío de email desactivado."
-        _eb = tk.Frame(modal, bg=_bg, bd=0, highlightthickness=1, highlightbackground=_fg)
+        _eb = Marco(modal, bg=_bg, bd=0, highlightthickness=1, highlightbackground=_fg)
         _eb.pack(fill="x", padx=20, pady=5)
         tk.Label(_eb, text=_tx, font=("Segoe UI", 9, "bold"), bg=_bg, fg=_fg, pady=4, wraplength=475, justify="center").pack(anchor="center")
 
-        summary_row = tk.Frame(modal, bg=MODAL_BG)
+        summary_row = Marco(modal, bg=MODAL_BG)
         summary_row.pack(fill="x", padx=20, pady=5)
         tk.Label(summary_row, text=f"🟢 {ok_total} OK      🔴 {fail_total} con error", font=("Segoe UI", 9, "bold"),
                  bg=MODAL_BG, fg="white").pack(side="left")
 
 
 
-        btn_close = tk.Button(modal, text="Cerrar resultados", font=("Segoe UI", 10, "bold"), bg="#AED6F1", fg="#110518",
+        btn_close = BotonRedondo(modal, text="Cerrar resultados", font=("Segoe UI", 10, "bold"), bg="#AED6F1", fg="#110518",
                               relief="flat", bd=0, cursor="hand2", command=on_cerrar, pady=6)
         btn_close.pack(fill="x", padx=20, pady=(15, 10))
         btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#D4E6F1"))

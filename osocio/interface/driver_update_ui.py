@@ -24,6 +24,8 @@ import os
 import queue
 import threading
 import tkinter as tk
+
+from osocio.interface.widgets import BotonRedondo, Marco
 from tkinter import ttk
 
 from osocio.utils.driver_updater import (
@@ -108,7 +110,7 @@ class _DriverUpdateWindow:
 
     # ── Construccion de la UI ────────────────────────────────────────────────
     def _build(self):
-        outer = tk.Frame(self.win, bg=_BG, padx=26, pady=22)
+        outer = Marco(self.win, bg=_BG, padx=26, pady=22)
         outer.pack(fill="both", expand=True)
 
         title = ("Drivers de navegador" if self.force
@@ -124,7 +126,7 @@ class _DriverUpdateWindow:
         tk.Label(outer, text=subtitle, bg=_BG, fg=_TEXT_SOFT, font=("Segoe UI", 9),
                  justify="left", anchor="w").pack(fill="x", pady=(6, 16))
 
-        card = tk.Frame(outer, bg=_CARD, highlightbackground=_BORDER,
+        card = Marco(outer, bg=_CARD, highlightbackground=_BORDER,
                         highlightthickness=1, padx=16, pady=14)
         card.pack(fill="x")
 
@@ -140,7 +142,7 @@ class _DriverUpdateWindow:
         )
 
         for status in self.statuses:
-            row = tk.Frame(card, bg=_CARD)
+            row = Marco(card, bg=_CARD)
             row.pack(fill="x", pady=5)
 
             tk.Label(row, text=status.driver_name, bg=_CARD, fg=_TEXT,
@@ -158,7 +160,7 @@ class _DriverUpdateWindow:
         self.summary = tk.Label(outer, text="", bg=_BG, fg=_TEXT_SOFT,
                                 font=("Segoe UI", 10, "bold"), wraplength=430, justify="left")
 
-        self.skip_button = tk.Button(
+        self.skip_button = BotonRedondo(
             outer, text="Omitir y abrir la app" if not self.force else "Cancelar",
             command=self._skip,
             bg=_CARD, fg=_TEXT_SOFT, activebackground=_BORDER, activeforeground=_TEXT,
