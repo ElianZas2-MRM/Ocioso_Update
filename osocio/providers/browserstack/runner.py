@@ -175,7 +175,7 @@ def run(pais: str, plataforma: str, excel_path: Optional[str] = None, variante: 
         return _resumen_vacio(pais, str(e))
 
     return _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn,
-                      enviar)
+                      enviar, stop_event)
 
 
 def _clase_motor(plataforma):
@@ -188,7 +188,8 @@ def _clase_motor(plataforma):
     return GenericCountryBase
 
 
-def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn, enviar=True):
+def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, log_fn, enviar=True,
+               stop_event=None):
     from osocio.providers.browserstack.fabrica import FabricaNavegadorBrowserStack
 
     resumen = _resumen_vacio(pais)
@@ -197,6 +198,7 @@ def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, l
     form = _clase_motor(plataforma)(pais, browser=f"browserstack_{plataforma}", browser_factory=fab,
                               is_scheduled=programada, excel_suffix=variante, capturas=False)
     form.EXCEL_PATH = excel_path
+    form.stop_event = stop_event   # "Detener": no se toca Enviar y no se sigue
     form.on_lead = MarcasDelVideo(fab, enviar)
     if not enviar:
         form.config["chequeo_campos"] = True

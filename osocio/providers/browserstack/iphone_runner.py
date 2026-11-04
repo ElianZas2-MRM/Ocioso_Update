@@ -611,6 +611,7 @@ class FormFillerIphone(GenericCountryBase):
             self._sync_tracked_with_dom_before_submit(getattr(self, "_current_form_data", {}))
         except Exception as e:
             print(f"  ⚠ Datos vs Excel: {e}")
+        self.frenar_si_pidieron_detener()
         if not nativo.tocar_enviar():
             return "Error al enviar: no se encontró el botón Enviar", None
         self._marcar_checkboxes_que_pide_el_form(nativo)
