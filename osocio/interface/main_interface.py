@@ -91,7 +91,7 @@ from osocio.core.variantes import (T3 as VARIANTE_T3, variante_cadillac,
                                    nombre_excel_leads, ruta_excel_leads, variante_del_modo)
 from osocio.interface import tema
 from osocio.interface.menu_lateral import MenuLateral
-from osocio.interface.widgets import BotonRedondo, Marco, Segmentado, Toggle
+from osocio.interface.widgets import AvisoFlotante, BotonRedondo, Marco, Segmentado, Toggle
 
 
 def _tag_variante(variante):
@@ -4602,49 +4602,66 @@ def iniciar_interfaz(autostart_leads=False):
                                        f"Las URLs parecen de {detected} pero el mercado seleccionado es {pais}.\n\n¿Generar igual para {pais}?"):
                 return
         columnas = build_excel_columns_for_country(pais)
-        created = []
-        try:
-            import pandas as pd
-            os.makedirs(DATA_DIR, exist_ok=True)
+        t3 = _variante_a_generar()
+        doc_types = _selected_doc_types()  # None para países sin multi-documento
+        n_archivos = 1 if shared else len(selected_list)
 
-            t3 = _variante_a_generar()
-            doc_types = _selected_doc_types()  # None para países sin multi-documento
+        # La generación corre en segundo plano con un aviso flotante: antes la ventana se
+        # quedaba congelada sin decir nada hasta que aparecía el cartel final.
+        aviso_excel.cargando("Generando Excels…",
+                             f"{pais} · {n_archivos} archivo(s) · {len(pares)} fila(s) cada uno")
+        for _b in (btn_exec_excel, btn_regen_excel):
+            _b.config(state="disabled")
 
-            # Modo compartido: un único Excel genérico con los mismos datos para todos.
-            if shared:
-                rows = _rows_for_pais(pais, pares, columnas, doc_types=doc_types)
-                df = pd.DataFrame(rows, columns=columnas).astype(str)
-                df.to_excel(_generic_excel_path_for(pais, t3), index=False)
-                messagebox.showinfo(title,
-                                    f"✓ Generado en data/:\n\n• {_lead_excel_name(pais, 'Generico', t3)} ({len(rows)} filas)\n\n"
-                                    "ℹ Modo Excel compartido: TODOS los dispositivos usarán este mismo Excel.\n"
-                                    "⚠ Los mismos datos pueden generar leads duplicados o rechazados.")
-                log_message(f"[SUCCESS] Generado Excel genérico (compartido) para {pais}.")
+        def _terminar(titulo_aviso, detalle, ok=True):
+            for _b in (btn_exec_excel, btn_regen_excel):
+                _b.config(state="normal")
+            if ok:
+                aviso_excel.listo(titulo_aviso, detalle)
                 try:
                     if active_p_tab[0] == pais:
                         update_table_data(pais)
                 except Exception:
                     pass
-                return
+            else:
+                aviso_excel.error(titulo_aviso, detalle)
 
-            for dev in selected_list:
-                rows = _rows_for_pais(pais, pares, columnas, device=_email_device_token(dev), doc_types=doc_types)  # datos aleatorios + email con dispositivo
-                fname = _lead_excel_name(pais, _device_excel_suffix(dev), t3)
-                pd.DataFrame(rows, columns=columnas).astype(str).to_excel(os.path.join(DATA_DIR, fname), index=False)
-                created.append(f"• {fname} ({len(rows)} filas)")
-            messagebox.showinfo(title,
-                                "✓ Generado(s) en data/:\n\n" + "\n".join(created) +
-                                "\n\nℹ En \"Datos por País\" se previsualiza el primer Excel (dispositivo).")
-            log_message(f"[SUCCESS] Generados {len(created)} Excel(s) para {pais}.")
+        def _trabajo():
             try:
-                if active_p_tab[0] == pais:
-                    update_table_data(pais)
-            except Exception:
-                pass
-        except PermissionError:
-            messagebox.showerror(title, "Cerrá los Excel abiertos y volvé a intentar.")
-        except Exception as e:
-            messagebox.showerror(title, f"No se pudo generar:\n{e}")
+                import pandas as pd
+                os.makedirs(DATA_DIR, exist_ok=True)
+                # Modo compartido: un único Excel genérico con los mismos datos para todos.
+                if shared:
+                    rows = _rows_for_pais(pais, pares, columnas, doc_types=doc_types)
+                    pd.DataFrame(rows, columns=columnas).astype(str).to_excel(
+                        _generic_excel_path_for(pais, t3), index=False)
+                    detalle = (f"• {_lead_excel_name(pais, 'Generico', t3)} ({len(rows)} filas)\n"
+                               "Modo compartido: todos los dispositivos usan este Excel "
+                               "(los mismos datos pueden dar leads duplicados).")
+                    log_message(f"[SUCCESS] Generado Excel genérico (compartido) para {pais}.")
+                else:
+                    created = []
+                    for dev in selected_list:
+                        # datos aleatorios + email con dispositivo
+                        rows = _rows_for_pais(pais, pares, columnas, device=_email_device_token(dev),
+                                              doc_types=doc_types)
+                        fname = _lead_excel_name(pais, _device_excel_suffix(dev), t3)
+                        pd.DataFrame(rows, columns=columnas).astype(str).to_excel(
+                            os.path.join(DATA_DIR, fname), index=False)
+                        created.append(f"• {fname} ({len(rows)} filas)")
+                    detalle = "\n".join(created) + "\nSe guardaron en data/."
+                    log_message(f"[SUCCESS] Generados {len(created)} Excel(s) para {pais}.")
+                root.after(0, lambda: _terminar(f"{title}: listo", detalle))
+            except PermissionError:
+                root.after(0, lambda: _terminar(f"{title}: no se pudo",
+                                                "Cerrá los Excel abiertos y volvé a intentar.", ok=False))
+            except Exception as e:
+                _msg = str(e)
+                root.after(0, lambda: _terminar(f"{title}: no se pudo", _msg, ok=False))
+
+        threading.Thread(target=_trabajo, daemon=True).start()
+
+    aviso_excel = AvisoFlotante(root)
 
     def cmd_generar_excels():
         _do_generar("Generar Excels")

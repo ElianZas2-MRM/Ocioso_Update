@@ -705,3 +705,100 @@ class Segmentado(Marco):
                     b.config(bg=self._bg, fg=self._fg)
             except tk.TclError:
                 pass
+
+
+class AvisoFlotante:
+    """Aviso flotante (toast) abajo a la derecha de la ventana.
+
+    `cargando()` muestra un spinner mientras algo corre; `listo()` / `error()` lo cambian
+    por el resultado. El de éxito se va solo; el de error queda hasta que se cierre.
+    """
+
+    _VERDE, _ROJO, _TXT = "#82E0AA", "#F1948A", "#E6D6F2"
+
+    def __init__(self, root):
+        self.root = root
+        self.caja = None
+        self._giro = None
+        self._cierre = None
+        self._angulo = 0
+
+    def _armar(self):
+        if self.caja is not None:
+            try:
+                if self.caja.winfo_exists():
+                    return
+            except tk.TclError:
+                pass
+        bg = tema.ZONA_OSCURA
+        self.caja = Marco(self.root, bg=bg, highlightthickness=1, highlightbackground=tema.SIDEBAR_SEP)
+        fila = tk.Frame(self.caja, bg=bg)
+        fila.pack(fill="x", padx=14, pady=12)
+        self.icono = tk.Canvas(fila, width=26, height=26, bg=bg, highlightthickness=0, bd=0)
+        self.icono.pack(side="left", anchor="n", padx=(0, 10))
+        textos = tk.Frame(fila, bg=bg)
+        textos.pack(side="left", fill="x", expand=True)
+        self.titulo = tk.Label(textos, text="", font=("Segoe UI", 10, "bold"), bg=bg, fg="#FFFFFF",
+                               anchor="w", justify="left")
+        self.titulo.pack(anchor="w")
+        self.detalle = tk.Label(textos, text="", font=("Segoe UI", 8), bg=bg, fg=self._TXT,
+                                anchor="w", justify="left", wraplength=320)
+        self.detalle.pack(anchor="w", pady=(2, 0))
+        cerrar = tk.Label(fila, text="✕", font=("Segoe UI", 9), bg=bg, fg=self._TXT, cursor="hand2")
+        cerrar.pack(side="right", anchor="n", padx=(10, 0))
+        cerrar.bind("<Button-1>", lambda e: self.ocultar())
+
+    def _mostrar(self, titulo, detalle):
+        self._armar()
+        self._cancelar()
+        self.titulo.config(text=titulo)
+        self.detalle.config(text=detalle or "")
+        self.caja.place(relx=1.0, rely=1.0, anchor="se", x=-22, y=-34)
+        self.caja.lift()
+
+    def _cancelar(self):
+        for attr in ("_giro", "_cierre"):
+            job = getattr(self, attr)
+            if job:
+                try:
+                    self.root.after_cancel(job)
+                except tk.TclError:
+                    pass
+                setattr(self, attr, None)
+
+    def _girar(self):
+        try:
+            self.icono.delete("all")
+            self.icono.create_oval(3, 3, 23, 23, outline=tema.SIDEBAR_SEP, width=3)
+            self.icono.create_arc(3, 3, 23, 23, start=self._angulo, extent=100, style="arc",
+                                  outline=tema.ACENTO, width=3)
+        except tk.TclError:
+            return
+        self._angulo = (self._angulo - 24) % 360
+        self._giro = self.root.after(50, self._girar)
+
+    def _marca(self, color, simbolo):
+        self.icono.delete("all")
+        self.icono.create_oval(2, 2, 24, 24, fill=color, outline=color)
+        self.icono.create_text(13, 13, text=simbolo, fill="#110518", font=("Segoe UI", 10, "bold"))
+
+    def cargando(self, titulo, detalle=""):
+        self._mostrar(titulo, detalle)
+        self._girar()
+
+    def listo(self, titulo, detalle="", segundos=8):
+        self._mostrar(titulo, detalle)
+        self._marca(self._VERDE, "✓")
+        self._cierre = self.root.after(int(segundos * 1000), self.ocultar)
+
+    def error(self, titulo, detalle=""):
+        self._mostrar(titulo, detalle)
+        self._marca(self._ROJO, "!")
+
+    def ocultar(self):
+        self._cancelar()
+        if self.caja is not None:
+            try:
+                self.caja.place_forget()
+            except tk.TclError:
+                pass
