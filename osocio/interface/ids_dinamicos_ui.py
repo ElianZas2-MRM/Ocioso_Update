@@ -12,8 +12,10 @@ import textwrap
 from datetime import datetime
 from tkinter import (
     LEFT, RIGHT,
-    Button, Canvas, Checkbutton, Entry, Frame, Label, Toplevel,
+    Canvas, Checkbutton, Entry, Label, Toplevel,
 )
+
+from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame
 from tkinter import ttk, messagebox
 from tkinter import StringVar, BooleanVar
 
@@ -1710,6 +1712,31 @@ def abrir_popup_ids_dinamicos(parent):
 
     popup = Toplevel(parent)
     popup.title("IDs Dinámicos")
+    _construir(popup)
+    return popup
+
+
+def construir_ids_dinamicos(pagina):
+    """IDs Dinámicos como página de la ventana principal (ya no como ventana aparte).
+
+    Se rearma cada vez que se abre la página, como antes se abría el popup de cero: así
+    muestra lo último que quedó guardado.
+    """
+    for c in pagina.winfo_children():
+        c.destroy()
+    _ensure_styles()
+    try:
+        consolidar_ids_dinamicos()
+    except Exception as e:
+        print(f"⚠️ No se pudo consolidar ids_dinamicos: {e}")
+    return _construir(pagina, en_pagina=True)
+
+
+def _construir(popup, en_pagina=False):
+    if en_pagina:
+        notebook_ids = ttk.Notebook(popup, style="TNotebook")
+        notebook_ids.pack(fill="both", expand=True)
+        return _llenar(popup, notebook_ids)
     popup.configure(bg=APP_BG_COLOR)
     popup.geometry("930x620")
     popup.minsize(760, 520)
@@ -1727,6 +1754,10 @@ def abrir_popup_ids_dinamicos(parent):
 
     notebook_ids = ttk.Notebook(popup, style="TNotebook")
     notebook_ids.pack(fill="both", expand=True, padx=10, pady=10)
+    _llenar(popup, notebook_ids)
+
+
+def _llenar(popup, notebook_ids):
 
     tab_campos_detectados = Frame(notebook_ids, bg=APP_BG_COLOR)
     tab_ids_unicos = Frame(notebook_ids, bg=APP_BG_COLOR)
@@ -1755,5 +1786,4 @@ def abrir_popup_ids_dinamicos(parent):
         return "break"
 
     popup.bind("<MouseWheel>", _on_popup_mousewheel)
-
-    return popup
+    return notebook_ids

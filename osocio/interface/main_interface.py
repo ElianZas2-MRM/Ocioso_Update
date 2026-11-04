@@ -41,13 +41,13 @@ try:
     from osocio.utils.scheduling import guardar_programacion, cargar_programacion, limpiar_programacion
     from osocio.interface.field_validation_ui import build_field_validation_tab
     from osocio.interface.dealer_comparator_ui import build_dealer_comparator_tab
-    from osocio.interface.ids_dinamicos_ui import abrir_popup_ids_dinamicos
+    from osocio.interface.ids_dinamicos_ui import construir_ids_dinamicos
 except Exception as _imp_err:  # noqa: BLE001
     BACKEND_OK = False
     _BACKEND_IMPORT_ERROR = str(_imp_err)
     build_field_validation_tab = None
     build_dealer_comparator_tab = None
-    abrir_popup_ids_dinamicos = None
+    construir_ids_dinamicos = None
     COUNTRY_CONFIGS = {}
 
     def build_excel_columns_for_country(pais):
@@ -89,7 +89,9 @@ def _excel_path_for(pais):
 
 from osocio.core.variantes import (CDC as VARIANTE_CDC, T3 as VARIANTE_T3,
                                    nombre_excel_leads, ruta_excel_leads, variante_del_modo)
-from osocio.interface.widgets import SelectorModo, Toggle
+from osocio.interface import tema
+from osocio.interface.menu_lateral import MenuLateral
+from osocio.interface.widgets import BotonRedondo, Marco, Segmentado, Toggle
 
 
 def _tag_variante(variante):
@@ -263,22 +265,22 @@ class _DemoSchedulerPanel(tk.Frame):
             self._on_close()
 
     def _build_ui(self):
-        header = tk.Frame(self, bg=_S_CARD)
+        header = Marco(self, bg=_S_CARD)
         header.pack(fill="x")
         tk.Label(header, text="⚙  Configurar automatización", font=("Segoe UI", 11, "bold"),
                  bg=_S_CARD, fg=_S_WHITE).pack(side="left", padx=16, pady=10)
         
-        btn_close = tk.Button(header, text="✕", font=("Segoe UI", 11), bg=_S_CARD, fg=_S_MUTED, relief="flat",
+        btn_close = BotonRedondo(header, text="✕", font=("Segoe UI", 11), bg=_S_CARD, fg=_S_MUTED, relief="flat",
                               cursor="hand2", activebackground=_S_BG, activeforeground=_S_WHITE, bd=0,
                               command=self._close)
         btn_close.pack(side="right", padx=12, pady=6)
         btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#E74C3C", fg="white"))
         btn_close.bind("<Leave>", lambda e: btn_close.config(bg=_S_CARD, fg=_S_MUTED))
         
-        tk.Frame(self, bg=_S_BORDER, height=1).pack(fill="x")
+        Marco(self, bg=_S_BORDER, height=1).pack(fill="x")
 
         self._build_footer(self, dict(padx=14, pady=10))
-        tk.Frame(self, bg=_S_BORDER, height=1).pack(fill="x", side="bottom")
+        Marco(self, bg=_S_BORDER, height=1).pack(fill="x", side="bottom")
 
         canvas = tk.Canvas(self, bg=_S_BG, highlightthickness=0)
         vsb = tk.Scrollbar(self, orient="vertical", command=canvas.yview)
@@ -286,7 +288,7 @@ class _DemoSchedulerPanel(tk.Frame):
         vsb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
 
-        body = tk.Frame(canvas, bg=_S_BG)
+        body = Marco(canvas, bg=_S_BG)
         win_id = canvas.create_window((0, 0), window=body, anchor="nw")
         body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
@@ -329,13 +331,13 @@ class _DemoSchedulerPanel(tk.Frame):
         self._build_days_section(body, p)
 
     def _card_frame(self, parent):
-        return tk.Frame(parent, bg=_S_CARD, highlightbackground=_S_BORDER, highlightthickness=1)
+        return Marco(parent, bg=_S_CARD, highlightbackground=_S_BORDER, highlightthickness=1)
 
     def _build_days_section(self, parent, pad):
         card = self._card_frame(parent)
         card.pack(fill="x", **pad)
 
-        hrow = tk.Frame(card, bg=_S_CARD)
+        hrow = Marco(card, bg=_S_CARD)
         hrow.pack(fill="x", padx=12, pady=(12, 6))
         tk.Label(hrow, text="DÍAS DE LA SEMANA", font=("Segoe UI", 9, "bold"), bg=_S_CARD, fg=_S_MUTED).pack(side="left")
         self._total_badge = tk.Label(hrow, text="", font=("Segoe UI", 8, "bold"), bg=_S_BG, fg=_S_ACCENT, padx=8, pady=2)
@@ -345,13 +347,13 @@ class _DemoSchedulerPanel(tk.Frame):
         self._clear_all_lbl.pack(side="right")
         self._clear_all_lbl.bind("<Button-1>", lambda e: self._clear_all())
 
-        day_row = tk.Frame(card, bg=_S_CARD)
+        day_row = Marco(card, bg=_S_CARD)
         day_row.pack(fill="x", padx=12, pady=(4, 6))
         self._day_btns = {}
         for short, full in _SCH_DAYS:
-            col_f = tk.Frame(day_row, bg=_S_CARD)
+            col_f = Marco(day_row, bg=_S_CARD)
             col_f.pack(side="left", expand=True, fill="x", padx=2)
-            btn = tk.Button(col_f, text=f"{short}\n—", font=("Segoe UI", 8, "bold"), relief="flat",
+            btn = BotonRedondo(col_f, text=f"{short}\n—", font=("Segoe UI", 8, "bold"), relief="flat",
                             cursor="hand2", pady=8, wraplength=60)
             btn.pack(fill="x")
             btn.config(command=lambda d=full: self._select_day(d))
@@ -360,7 +362,7 @@ class _DemoSchedulerPanel(tk.Frame):
         tk.Label(card, text="① Tocá un día para abrirlo.   ② Agregá u elegí sus horarios.   ③ Copialos a otros días con \"Todos\" o eligiendo días.",
                  font=("Segoe UI", 8, "italic"), bg=_S_CARD, fg=_S_MUTED, justify="left").pack(anchor="w", padx=12, pady=(0, 6))
 
-        self._hours_outer = tk.Frame(card, bg=_S_BG)
+        self._hours_outer = Marco(card, bg=_S_BG)
         self._hours_outer.pack(fill="x", padx=12, pady=(0, 8))
         self._hours_outer.pack_forget()
         self._update_day_buttons()
@@ -389,13 +391,13 @@ class _DemoSchedulerPanel(tk.Frame):
         self._apply_days = set()
 
         # Header
-        h_hdr = tk.Frame(self._hours_outer, bg=_S_BG)
+        h_hdr = Marco(self._hours_outer, bg=_S_BG)
         h_hdr.pack(fill="x", pady=(8, 4))
         tk.Label(h_hdr, text=f"🕐  Horarios para el {self._selected_day}", font=("Segoe UI", 10, "bold"),
                  bg=_S_BG, fg=_S_WHITE).pack(side="left")
 
         # 1) Agregar horario personalizado
-        cust_row = tk.Frame(self._hours_outer, bg=_S_BG)
+        cust_row = Marco(self._hours_outer, bg=_S_BG)
         cust_row.pack(fill="x", pady=(2, 6))
         tk.Label(cust_row, text="1)  Agregar horario:", font=("Segoe UI", 9, "bold"), bg=_S_BG, fg=_S_WHITE).pack(side="left")
         cust_entry = tk.Entry(cust_row, textvariable=self._custom_hour_var, font=("Segoe UI", 10), width=8,
@@ -403,23 +405,23 @@ class _DemoSchedulerPanel(tk.Frame):
         cust_entry.pack(side="left", padx=(6, 2), ipady=2)
         cust_entry.bind("<Return>", lambda e: self._add_custom_hour(self._custom_hour_var.get()))
         tk.Label(cust_row, text="HH:MM", font=("Segoe UI", 8), bg=_S_BG, fg=_S_MUTED).pack(side="left", padx=(2, 6))
-        tk.Button(cust_row, text="+ Agregar", font=("Segoe UI", 8, "bold"), bg=_S_SEL, fg=_S_WHITE, relief="flat",
+        BotonRedondo(cust_row, text="+ Agregar", font=("Segoe UI", 8, "bold"), bg=_S_SEL, fg=_S_WHITE, relief="flat",
                   cursor="hand2", padx=10, pady=3,
                   command=lambda: self._add_custom_hour(self._custom_hour_var.get())).pack(side="left")
 
         # Horarios elegidos (badges)
         tk.Label(self._hours_outer, text="Horarios elegidos (tocá para quitar):", font=("Segoe UI", 8, "bold"),
                  bg=_S_BG, fg=_S_MUTED).pack(anchor="w", pady=(4, 2))
-        self._badges_frame = tk.Frame(self._hours_outer, bg=_S_BG)
+        self._badges_frame = Marco(self._hours_outer, bg=_S_BG)
         self._badges_frame.pack(fill="x")
         self._refresh_badges()
 
         # 2) Aplicar estos horarios a otros días
-        tk.Frame(self._hours_outer, bg=_S_BORDER, height=1).pack(fill="x", pady=(6, 6))
+        Marco(self._hours_outer, bg=_S_BORDER, height=1).pack(fill="x", pady=(6, 6))
         tk.Label(self._hours_outer, text="2)  Aplicar estos horarios a otros días (se copia al instante):", font=("Segoe UI", 9, "bold"),
                  bg=_S_BG, fg=_S_WHITE).pack(anchor="w")
 
-        chips_row = tk.Frame(self._hours_outer, bg=_S_BG)
+        chips_row = Marco(self._hours_outer, bg=_S_BG)
         chips_row.pack(fill="x", pady=4)
         self._apply_chip_btns = {}
 
@@ -463,22 +465,22 @@ class _DemoSchedulerPanel(tk.Frame):
             all_on = bool(self._apply_days) and self._apply_days == set(d for _, d in _SCH_DAYS if d != self._selected_day)
             todos_btn.config(relief="raised" if all_on else "flat", bd=2 if all_on else 0)
 
-        todos_btn = tk.Button(chips_row, text="Todos", font=("Segoe UI", 8, "bold"), bg=_S_AMBER, fg=_S_BG, relief="flat",
+        todos_btn = BotonRedondo(chips_row, text="Todos", font=("Segoe UI", 8, "bold"), bg=_S_AMBER, fg=_S_BG, relief="flat",
                               cursor="hand2", padx=8, pady=4, command=_all_other)
         todos_btn.pack(side="left", padx=(0, 8))
         for _, d in _SCH_DAYS:
             if d == self._selected_day:
                 continue
-            b = tk.Button(chips_row, text=d[:3], font=("Segoe UI", 8, "bold"), bg=_S_UNSEL, fg=_S_MUTED, relief="flat",
+            b = BotonRedondo(chips_row, text=d[:3], font=("Segoe UI", 8, "bold"), bg=_S_UNSEL, fg=_S_MUTED, relief="flat",
                           cursor="hand2", padx=8, pady=4, command=lambda dd=d: _toggle_apply(dd))
             b.pack(side="left", padx=2)
             self._apply_chip_btns[d] = b
 
         # 3) …o elegí de la grilla (cada 15 min)
-        tk.Frame(self._hours_outer, bg=_S_BORDER, height=1).pack(fill="x", pady=(8, 6))
+        Marco(self._hours_outer, bg=_S_BORDER, height=1).pack(fill="x", pady=(8, 6))
         tk.Label(self._hours_outer, text="…o elegí de la grilla (cada 15 min):", font=("Segoe UI", 8, "italic"),
                  bg=_S_BG, fg=_S_MUTED).pack(anchor="w", pady=(0, 2))
-        grid = tk.Frame(self._hours_outer, bg=_S_BG)
+        grid = Marco(self._hours_outer, bg=_S_BG)
         grid.pack(fill="x", pady=(0, 4))
         current = self._schedule.get(self._selected_day, [])
         self._hour_btns = {}
@@ -488,7 +490,7 @@ class _DemoSchedulerPanel(tk.Frame):
         for idx, hour in enumerate(_SCH_HOURS):
             r, c = divmod(idx, 6)
             picked = hour in current
-            btn = tk.Button(grid, text=hour, font=("Segoe UI", 9),
+            btn = BotonRedondo(grid, text=hour, font=("Segoe UI", 9),
                             bg=_S_SEL if picked else _S_UNSEL, fg=_S_WHITE if picked else _S_MUTED,
                             relief="raised" if picked else "flat", cursor="hand2", padx=4, pady=6, width=5)
             btn.grid(row=r, column=c, padx=2, pady=2, sticky="ew")
@@ -506,7 +508,7 @@ class _DemoSchedulerPanel(tk.Frame):
             is_custom = h not in _SCH_HOURS
             bg = "#3A1A55" if is_custom else _S_BG
             fg = _S_AMBER if is_custom else _S_ACCENT
-            tk.Button(self._badges_frame, text=f"✕ {h}", font=("Segoe UI", 9, "bold"), bg=bg, fg=fg,
+            BotonRedondo(self._badges_frame, text=f"✕ {h}", font=("Segoe UI", 9, "bold"), bg=bg, fg=fg,
                       padx=6, pady=3, relief="solid", bd=1, cursor="hand2",
                       command=lambda x=h: self._toggle_hour(x)).pack(side="left", padx=2)
         if len(selected) > MAX_SHOW:
@@ -607,13 +609,13 @@ class _DemoSchedulerPanel(tk.Frame):
             self._refresh_badges()
 
     def _build_footer(self, parent, pad):
-        footer = tk.Frame(parent, bg=_S_BG)
+        footer = Marco(parent, bg=_S_BG)
         footer.pack(fill="x", side="bottom", **pad)
         self._val_lbl = tk.Label(footer, text="", font=("Segoe UI", 9), bg=_S_BG, fg=_S_AMBER,
                                  padx=10, pady=6, justify="left", anchor="w", wraplength=500, relief="flat")
-        btn_row = tk.Frame(footer, bg=_S_BG)
+        btn_row = Marco(footer, bg=_S_BG)
         btn_row.pack(fill="x")
-        self._save_btn = tk.Button(btn_row, text="💾  Guardar Horarios", font=("Segoe UI", 10, "bold"),
+        self._save_btn = BotonRedondo(btn_row, text="💾  Guardar Horarios", font=("Segoe UI", 10, "bold"),
                                    bg="#3498DB", fg="white", relief="flat", cursor="hand2", padx=16, pady=8,
                                    command=self._save)
         self._save_btn.pack(side="right")
@@ -849,11 +851,20 @@ def iniciar_interfaz(autostart_leads=False):
         except Exception:
             pass
 
+    # El tema se instala ANTES de crear la ventana: traduce cada color al pintarlo.
+    try:
+        _prefs_inicio = (cargar_config_global() or {}).get("ui_prefs", {})
+    except Exception:
+        _prefs_inicio = {}
+    tema.instalar(_prefs_inicio.get("tema") or tema.OSCURO)
+
     root = tk.Tk()
     root.title("Osocio - Form Automation")
-    root.geometry("1150x680")  # Ventana con tamaño considerable
-    root.minsize(1100, 600)
+    # Ventana con tamaño considerable (con el menú lateral): hasta 1440x880 si la pantalla da.
+    root.geometry(f"{min(1440, root.winfo_screenwidth() - 60)}x{min(880, root.winfo_screenheight() - 90)}")
+    root.minsize(1160, 620)
     root.configure(bg=APP_BG_COLOR)
+    tema.preparar(root)
 
     def _forzar_foreground(win):
         """Trae `win` al frente de VERDAD, aunque nadie haya tocado la app.
@@ -973,12 +984,12 @@ def iniciar_interfaz(autostart_leads=False):
         _hover_bg = SAVE_HOVER if _is_guardar else BUTTON_HOVER
 
         if photo:
-            btn = tk.Button(parent, text=clean_text, image=photo, compound="left",
+            btn = BotonRedondo(parent, text=clean_text, image=photo, compound="left",
                             font=("Segoe UI", 9, "bold"), bg=_base_bg, fg=_base_fg,
                             relief="flat", bd=0, activebackground=_hover_bg, activeforeground=_base_fg,
                             padx=12, pady=4, cursor="hand2", command=command)
         else:
-            btn = tk.Button(parent, text=clean_text, font=("Segoe UI", 9, "bold"), bg=_base_bg, fg=_base_fg,
+            btn = BotonRedondo(parent, text=clean_text, font=("Segoe UI", 9, "bold"), bg=_base_bg, fg=_base_fg,
                             relief="flat", bd=0, activebackground=_hover_bg, activeforeground=_base_fg,
                             padx=12, pady=4, cursor="hand2", command=command)
 
@@ -1010,6 +1021,27 @@ def iniciar_interfaz(autostart_leads=False):
     style.map("Treeview.Heading", background=[('active', BUTTON_HOVER)])
     style.map("Treeview", background=[('selected', ACCENT_COLOR)], foreground=[('selected', BUTTON_INACTIVE)])
 
+    # Pestañas internas (IDs Dinámicos) y combos, con los colores de la app
+    style.configure("TNotebook", background=APP_BG_COLOR, borderwidth=0, tabmargins=(0, 0, 0, 6),
+                    bordercolor=BORDER_COLOR, lightcolor=APP_BG_COLOR, darkcolor=APP_BG_COLOR)
+    style.configure("TNotebook.Tab", background=BUTTON_INACTIVE, foreground=TEXT_SECONDARY,
+                    padding=(16, 6), borderwidth=0, font=("Segoe UI", 9, "bold"))
+    style.map("TNotebook.Tab", background=[("selected", BUTTON_ACTIVE), ("active", BUTTON_HOVER)],
+              foreground=[("selected", "white")])
+    style.configure("TCombobox", fieldbackground=ENTRY_BG, background=BUTTON_INACTIVE,
+                    foreground="white", arrowcolor=TEXT_SECONDARY, bordercolor=BORDER_COLOR,
+                    lightcolor=ENTRY_BG, darkcolor=ENTRY_BG, selectbackground=ENTRY_BG,
+                    selectforeground="white")
+    style.map("TCombobox", fieldbackground=[("readonly", ENTRY_BG)],
+              foreground=[("readonly", "white")], selectbackground=[("readonly", ENTRY_BG)])
+
+    for _rb in ("TRadiobutton", "TCheckbutton"):
+        style.configure(_rb, background=CARD_BG_COLOR, foreground=TEXT_PRIMARY,
+                        indicatorbackground=ENTRY_BG, indicatorforeground="white",
+                        font=("Segoe UI", 9))
+        style.map(_rb, background=[("active", CARD_BG_COLOR)],
+                  indicatorbackground=[("selected", BUTTON_ACTIVE)])
+
     # DISEÑO PREMIUM PARA LAS BARRAS DE SCROLL (ttk Scrollbar - TScrollbar unificado para clam)
     style.configure("TScrollbar", 
                     troughcolor="#100518",     # Fondo negroso del canal
@@ -1040,67 +1072,33 @@ def iniciar_interfaz(autostart_leads=False):
         print(msg)
 
     # ==========================================
-    # 1. CABECERA FIJA (Imagen de Portada)
+    # 1. COLUMNA PRINCIPAL (a la derecha del menú lateral, que se arma más abajo)
     # ==========================================
-    _fullheader_path = os.path.join(ASSET_DIR, "Fullheader.png")
-    _fullheader_orig = None
-    if os.path.exists(_fullheader_path):
-        try:
-            _fullheader_orig = Image.open(_fullheader_path)
-        except Exception:
-            pass
+    main_col = Marco(root, bg=APP_BG_COLOR)
+    main_col.pack(side="left", fill="both", expand=True)
 
-    _FH_HEIGHT = 120  # Altura un poco más compacta
-    _FH_WIDTH = 1200
-    if _fullheader_orig:
-        _fh_orig_w, _fh_orig_h = _fullheader_orig.size
-        _FH_WIDTH = max(1, int(round((_fh_orig_w * _FH_HEIGHT) / _fh_orig_h)))
-
-    _HEADER_SPLIT_LEFT_COLOR = "#110830"
-    _HEADER_SPLIT_RIGHT_COLOR = "#28164B"
-    
-    header_canvas = tk.Canvas(root, bd=0, highlightthickness=0, height=_FH_HEIGHT, bg=APP_BG_COLOR)
-    header_canvas.pack(fill="x", side="top")
-
-    _fh_photo_ref = [None]
-    if _fullheader_orig:
-        try:
-            _fh_photo_ref[0] = ImageTk.PhotoImage(_fullheader_orig.resize((_FH_WIDTH, _FH_HEIGHT), Image.Resampling.LANCZOS))
-        except Exception:
-            _fh_photo_ref[0] = ImageTk.PhotoImage(_fullheader_orig)
-
-    def _render_fixed_header(_event=None):
-        header_canvas.delete("all")
-        canvas_w = max(1, header_canvas.winfo_width())
-        split_x = canvas_w // 2
-        header_canvas.create_rectangle(0, 0, split_x, _FH_HEIGHT, fill=_HEADER_SPLIT_LEFT_COLOR, outline="")
-        header_canvas.create_rectangle(split_x, 0, canvas_w, _FH_HEIGHT, fill=_HEADER_SPLIT_RIGHT_COLOR, outline="")
-        if _fh_photo_ref[0]:
-            x = (canvas_w - _FH_WIDTH) // 2
-            header_canvas.create_image(x, 0, anchor="nw", image=_fh_photo_ref[0])
-        else:
-            header_canvas.create_text(canvas_w // 2, _FH_HEIGHT // 2, 
-                                      text="OSOCIO FORM AUTOMATION", 
-                                      fill="white", font=("Segoe UI", 16, "bold"))
-
-    header_canvas.bind("<Configure>", _render_fixed_header)
-    root.after(50, _render_fixed_header)
-
-    # Separador debajo del header
-    sep = tk.Frame(root, height=2, bg=BORDER_COLOR)
-    sep.pack(fill="x")
+    # Título de la página abierta (lo cambia switch_tab)
+    encabezado = Marco(main_col, bg=APP_BG_COLOR)
+    encabezado.pack(fill="x", padx=22, pady=(16, 6))
+    titulo_pagina = tk.Label(encabezado, text="", font=("Segoe UI", 16, "bold"),
+                             bg=APP_BG_COLOR, fg=TEXT_PRIMARY)
+    titulo_pagina.pack(side="left")
+    subtitulo_pagina = tk.Label(encabezado, text="", font=("Segoe UI", 9),
+                                bg=APP_BG_COLOR, fg="#C5A9DF")
+    subtitulo_pagina.pack(side="left", padx=(12, 0), pady=(7, 0))
 
     # ==========================================
     # 2. TOP BAR (Email Destinatario)
     # ==========================================
-    top_bar = tk.Frame(root, bg=APP_BG_COLOR)
-    top_bar.pack(fill="x", padx=20, pady=(6, 4))
+    # Solo en las páginas que mandan mail (ver switch_tab).
+    top_bar = Marco(main_col, bg=APP_BG_COLOR)
+    top_bar.pack(fill="x", padx=22, pady=(0, 8))
 
     # Chequeo manual de drivers. Normalmente no hace falta: se verifican solos al abrir la app.
     # Sirve para el caso que el arranque no puede cubrir — que el navegador se autoactualice con
     # Osocio YA abierto — para no tener que cerrar y volver a abrir antes de correr algo.
     def _actualizar_drivers():
-        btn_drivers.config(state="disabled")
+        menu_lateral.set_drivers_estado("disabled")
         try:
             from osocio.interface.driver_update_ui import ensure_drivers_with_ui
             # force=True: la ventana se muestra siempre y contesta aunque no haya nada que
@@ -1109,19 +1107,7 @@ def iniciar_interfaz(autostart_leads=False):
         except Exception as exc:
             messagebox.showerror("Drivers", f"No se pudieron verificar los drivers:\n{exc}")
         finally:
-            try:
-                btn_drivers.config(state="normal")
-            except Exception:
-                pass
-
-    btn_drivers = tk.Button(top_bar, text=" Actualizar drivers",
-                            image=get_button_icon("refresh_lavender.png"), compound="left",
-                            command=_actualizar_drivers,
-                            bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
-                            activebackground=BUTTON_HOVER, activeforeground=TEXT_PRIMARY,
-                            relief="flat", bd=0, font=("Segoe UI", 9), cursor="hand2",
-                            padx=10, pady=4)
-    btn_drivers.pack(side="left")
+            menu_lateral.set_drivers_estado("normal")
 
     _cfg = {}
     try:
@@ -1163,26 +1149,18 @@ def iniciar_interfaz(autostart_leads=False):
     var_pausar_autenticacion.trace_add("write", _on_pause_change)
     var_ver_navegador.trace_add("write", _on_visible_change)
 
-    # Interruptor de modo: T1 en dorado, T3 en turquesa.
-    selector_modo = SelectorModo(top_bar, var_modo, bg=APP_BG_COLOR, fg_apagado="#9b8aa8",
-                                 command=lambda: _al_cambiar_modo())
-    selector_modo.pack(side="left", padx=(16, 0))
-
-    email_frame = tk.Frame(top_bar, bg=APP_BG_COLOR)
-    email_frame.pack(side="right")
+    email_frame = Marco(top_bar, bg=APP_BG_COLOR)
+    email_frame.pack(side="left")
 
     # Ícono de sobre a la izquierda
-    mail_ico = tk.Label(email_frame, text="✉", font=("Segoe UI", 11), bg=APP_BG_COLOR, fg=TEXT_SECONDARY)
-    mail_ico.pack(side="left", padx=(0, 6))
-
-    email_lbl = tk.Label(email_frame, text="Email destinatario:", font=("Segoe UI", 9, "bold"), bg=APP_BG_COLOR, fg=TEXT_PRIMARY)
+    email_lbl = tk.Label(email_frame, text="Email", font=("Segoe UI", 9, "bold"), bg=APP_BG_COLOR, fg=TEXT_PRIMARY)
     email_lbl.pack(side="left", padx=(0, 8))
     
     email_entry = tk.Entry(email_frame, font=("Segoe UI", 10), bg=ENTRY_BG, fg=TEXT_PRIMARY,
-                           insertbackground="white", bd=0, relief="flat", width=34,
+                           insertbackground="white", bd=0, relief="flat", width=30,
                            highlightthickness=1, highlightbackground=BORDER_COLOR, highlightcolor=ACCENT_COLOR,
                            disabledbackground=BUTTON_INACTIVE, disabledforeground=TEXT_SECONDARY)
-    email_entry.pack(side="left", ipady=3)
+    email_entry.pack(side="left", ipady=5)
     try:
         # obtener_email_destinatario() devuelve una LISTA (soporta varios emails
         # separados por coma). Insertarla directo en el Entry le pasa un objeto no-string
@@ -1204,7 +1182,7 @@ def iniciar_interfaz(autostart_leads=False):
     var_modo_email = tk.StringVar(value=_cfg.get("email_modo", "consolidado"))
 
     # Frame para las opciones extras de email
-    opts_frame = tk.Frame(email_frame, bg=APP_BG_COLOR)
+    opts_frame = Marco(email_frame, bg=APP_BG_COLOR)
 
     cb_adjuntar = tk.Checkbutton(opts_frame, text="Adjuntar resultados", variable=var_adjuntar_res,
                                  bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
@@ -1212,26 +1190,16 @@ def iniciar_interfaz(autostart_leads=False):
                                  font=("Segoe UI", 9), cursor="hand2")
     cb_adjuntar.pack(side="left", padx=(10, 0))
     
-    cb_ss = tk.Checkbutton(opts_frame, text="Adjuntar screenshots", variable=var_adjuntar_ss,
+    cb_ss = tk.Checkbutton(opts_frame, text="Adjuntar capturas", variable=var_adjuntar_ss,
                            bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
                            activebackground=APP_BG_COLOR, activeforeground="white",
                            font=("Segoe UI", 9), cursor="hand2")
     cb_ss.pack(side="left", padx=(10, 0))
     
-    lbl_modo = tk.Label(opts_frame, text="MODO:", font=("Segoe UI", 9, "bold"), bg=APP_BG_COLOR, fg=TEXT_SECONDARY)
-    lbl_modo.pack(side="left", padx=(15, 5))
-    
-    rb_pais = tk.Radiobutton(opts_frame, text="1 por país", variable=var_modo_email, value="por_pais",
-                             bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
-                             activebackground=APP_BG_COLOR, activeforeground="white",
-                             font=("Segoe UI", 9), cursor="hand2")
-    rb_pais.pack(side="left", padx=2)
-    
-    rb_cons = tk.Radiobutton(opts_frame, text="Consolidado", variable=var_modo_email, value="consolidado",
-                             bg=APP_BG_COLOR, fg=TEXT_PRIMARY, selectcolor=ENTRY_BG, bd=0,
-                             activebackground=APP_BG_COLOR, activeforeground="white",
-                             font=("Segoe UI", 9), cursor="hand2")
-    rb_cons.pack(side="left", padx=2)
+    lbl_modo = tk.Label(opts_frame, text="Mail:", font=("Segoe UI", 9), bg=APP_BG_COLOR, fg=TEXT_SECONDARY)
+    lbl_modo.pack(side="left", padx=(15, 6))
+    Segmentado(opts_frame, var_modo_email, [("por_pais", "1 por país"), ("consolidado", "Consolidado")],
+               bg=BUTTON_INACTIVE).pack(side="left")
 
     def toggle_email_options():
         if var_enviar_email.get():
@@ -1253,56 +1221,75 @@ def iniciar_interfaz(autostart_leads=False):
     # ==========================================
     # 3. TABS BAR
     # ==========================================
-    tab_bar = tk.Frame(root, bg=APP_BG_COLOR)
-    tab_bar.pack(fill="x", padx=20, pady=(0, 4))
-
-    content_area = tk.Frame(root, bg=APP_BG_COLOR)
-    content_area.pack(fill="both", expand=True, padx=20, pady=(0, 4))
+    content_area = Marco(main_col, bg=APP_BG_COLOR)
+    content_area.pack(fill="both", expand=True, padx=22, pady=(0, 4))
 
     tabs = {}
-    tab_buttons = []
+    # Páginas del menú lateral: (clave, título, subtítulo, ícono). IDs Dinámicos y Configurar
+    # eran ventanas aparte; ahora son páginas como las demás.
+    _PAGINAS = {
+        "leads": ("Envío de Leads", "Llená y enviá los forms de cada mercado", "play_white.png"),
+        "scheduler": ("Testeo Programado", "Corridas automáticas por día y horario", "monitor_lav.png"),
+        "validation": ("Validación de Campos", "Revisá que los campos de cada form estén bien", "search_lavender.png"),
+        "dealers": ("Comparar Dealers vs Form", "Los concesionarios del Excel contra los del form", "link_lav.png"),
+        "excel": ("Generar Excels con Datos", "Armá los Excels de leads a partir de las URLs", "download_blue.png"),
+        "ids": ("IDs Dinámicos", "Campos detectados, IDs y dependencias", "copy_lavender.png"),
+        "config": ("Configurar", "Opciones generales de la app", "gear_lav.png"),
+    }
+    _GRUPOS_MENU = [
+        ("Envíos", ["leads", "scheduler"]),
+        ("Validaciones", ["validation", "dealers"]),
+        ("Herramientas", ["excel", "ids", "config"]),
+    ]
+    _al_mostrar_pagina = {}   # clave → función a llamar cada vez que se abre esa página
+    pagina_activa = ["leads"]
 
     def switch_tab(target_name):
+        pagina_activa[0] = target_name
         for name, frame in tabs.items():
             if name == target_name:
                 frame.pack(fill="both", expand=True)
             else:
                 frame.pack_forget()
-        
-        for btn in tab_buttons:
-            if btn.tab_name == target_name:
-                btn.config(bg=TAB_ACTIVE_BG, fg=TAB_ACTIVE_FG, highlightthickness=1, highlightbackground=BORDER_COLOR)
-            else:
-                btn.config(bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, highlightthickness=0)
-
-    tabs_data = [
-        ("Envío de Leads", "leads", False),
-        ("Testeo Programado", "scheduler", False),
-        ("Validación de Campos", "validation", False),
-        ("Generar Excels con Datos", "excel", False),
-        ("Comparar Dealers vs Form", "dealers", False),
-    ]
-    for t_text, t_name, t_disabled in tabs_data:
-        btn = tk.Button(tab_bar, text=t_text, font=("Segoe UI", 9, "bold"), bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG,
-                        relief="flat", bd=0, activebackground=TAB_ACTIVE_BG, activeforeground=TAB_ACTIVE_FG,
-                        padx=18, pady=8, highlightthickness=0)
-        btn.tab_name = t_name
-        btn.pack(side="left", padx=2)
-        if t_disabled:
-            btn.config(state="disabled", disabledforeground="#8A6E9E", cursor="arrow")
+        titulo, sub, _ico = _PAGINAS.get(target_name, ("", "", ""))
+        titulo_pagina.config(text=titulo)
+        subtitulo_pagina.config(text=sub)
+        # La barra del mail va en las páginas que mandan mail con los resultados.
+        if target_name in ("leads", "scheduler", "validation", "dealers"):
+            top_bar.pack(fill="x", padx=22, pady=(0, 8), before=content_area)
         else:
-            btn.config(command=lambda name=t_name: switch_tab(name))
-        tab_buttons.append(btn)
+            top_bar.pack_forget()
+        try:
+            menu_lateral.marcar(target_name)
+        except NameError:
+            pass
+        fn = _al_mostrar_pagina.get(target_name)
+        if fn:
+            fn()
 
-    global_config_btn = tk.Button(
-        tab_bar, text="⚙ Configurar", font=("Segoe UI", 9, "bold"),
-        bg="#1F618D", fg="#f4f4f4", activebackground="#2980B9", activeforeground="#f4f4f4",
-        relief="flat", bd=0, padx=15, pady=8, cursor="hand2"
-    )
-    global_config_btn.pack(side="right", padx=(0, 2))
+    for t_name in _PAGINAS:
+        tabs[t_name] = Marco(content_area, bg=APP_BG_COLOR)
 
-    for _, t_name, _ in tabs_data:
-        tabs[t_name] = tk.Frame(content_area, bg=APP_BG_COLOR)
+    def _guardar_pref(clave, valor):
+        try:
+            cfg = cargar_config_global() or {}
+            cfg.setdefault("ui_prefs", {})[clave] = valor
+            guardar_config_global(cfg)
+        except Exception:
+            pass
+
+    def _cambiar_tema(nombre):
+        tema.cambiar(nombre, root)
+        _guardar_pref("tema", nombre)
+
+    menu_lateral = MenuLateral(
+        root, ASSET_DIR,
+        [(g, [(k, _PAGINAS[k][0], _PAGINAS[k][2]) for k in claves]) for g, claves in _GRUPOS_MENU],
+        al_elegir=switch_tab, var_modo=var_modo, al_cambiar_modo=lambda: _al_cambiar_modo(),
+        al_cambiar_tema=_cambiar_tema, al_actualizar_drivers=_actualizar_drivers,
+        compacto=bool(_ui_prefs.get("menu_compacto", False)),
+        al_compactar=lambda c: _guardar_pref("menu_compacto", bool(c)))
+    menu_lateral.pack(before=main_col)
 
     # Canvases registrados para el scroll con rueda de mouse
     scrollable_canvases = []
@@ -1312,7 +1299,7 @@ def iniciar_interfaz(autostart_leads=False):
         canvas = tk.Canvas(parent, bg=APP_BG_COLOR, bd=0, highlightthickness=0)
         v_scroll = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview, style="TScrollbar")
         
-        inner_frame = tk.Frame(canvas, bg=APP_BG_COLOR)
+        inner_frame = Marco(canvas, bg=APP_BG_COLOR)
         
         # Sincronizar el ancho del frame interno con el canvas
         def _on_canvas_configure(event):
@@ -1334,38 +1321,22 @@ def iniciar_interfaz(autostart_leads=False):
     # ==========================================
     leads_scroll_frame = make_scrollable_tab_container(tabs["leads"])
 
-    # --- Barra superior: acceso a IDs Dinámicos (campos no mapeados) ---
-    def _abrir_ids_dinamicos():
-        if abrir_popup_ids_dinamicos is None:
+    # --- IDs Dinámicos (campos no mapeados): página del menú, se rearma al abrirla ---
+    ids_notebook = [None]
+
+    def _mostrar_ids_dinamicos():
+        if construir_ids_dinamicos is None:
             messagebox.showwarning(
                 "IDs Dinámicos",
                 "No se pudo cargar el módulo de IDs Dinámicos.\n" + (_BACKEND_IMPORT_ERROR or ""),
             )
             return
         try:
-            abrir_popup_ids_dinamicos(leads_scroll_frame.winfo_toplevel())
+            ids_notebook[0] = construir_ids_dinamicos(tabs["ids"])
         except Exception as exc:
             messagebox.showerror("IDs Dinámicos", f"No se pudo abrir IDs Dinámicos:\n{exc}")
 
-    topbar_leads = tk.Frame(leads_scroll_frame, bg=APP_BG_COLOR)
-    topbar_leads.pack(fill="x", pady=(0, 6))
-    tk.Button(
-        topbar_leads,
-        text="⚙  IDs Dinámicos",
-        command=_abrir_ids_dinamicos,
-        bg="#FFC845",
-        fg="#3A1D52",
-        activebackground="#FFD873",
-        activeforeground="#3A1D52",
-        relief="flat",
-        bd=0,
-        highlightthickness=2,
-        highlightbackground="#FFE08A",
-        font=("Segoe UI", 10, "bold"),
-        cursor="hand2",
-        padx=16,
-        pady=6,
-    ).pack(side="right")
+    _al_mostrar_pagina["ids"] = _mostrar_ids_dinamicos
 
     # Modo de Excel: "por_dispositivo" (default, un Excel por dispositivo) o
     # "compartido" (un único Excel genérico con los mismos datos para todos).
@@ -1376,10 +1347,10 @@ def iniciar_interfaz(autostart_leads=False):
     excel_mode_holder = [_excel_mode_ini if _excel_mode_ini in ("por_dispositivo", "compartido") else "por_dispositivo"]
 
     # --- 1. CONFIGURACIÓN DE EJECUCIÓN (Card Panel) ---
-    config_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    config_card = Marco(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     config_card.pack(fill="x", pady=(0, 8), ipady=6)
 
-    sec_head = tk.Frame(config_card, bg=CARD_BG_COLOR)
+    sec_head = Marco(config_card, bg=CARD_BG_COLOR)
     sec_head.pack(fill="x", padx=15, pady=(6, 2))
     sec_title = tk.Label(sec_head, text="Configurá tu envío: elegí mercado, modo de ejecución y dispositivos",
                          font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY)
@@ -1390,18 +1361,18 @@ def iniciar_interfaz(autostart_leads=False):
                         font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF", justify="left")
     sec_hint.pack(anchor="w", padx=15, pady=(0, 6))
 
-    row_config = tk.Frame(config_card, bg=CARD_BG_COLOR)
+    row_config = Marco(config_card, bg=CARD_BG_COLOR)
     row_config.pack(fill="x", padx=15)
 
     # Piloto de grupos con botones pastel suaves. Devuelve un holder [valor] con la selección.
     def make_pill_group(parent, label_text, subtitle_text, options, default_val, sub_texts=None, on_change=None):
-        group_frame = tk.Frame(parent, bg=CARD_BG_COLOR)
+        group_frame = Marco(parent, bg=CARD_BG_COLOR)
         group_frame.pack(side="left", padx=(0, 25), anchor="n")
 
         lbl = tk.Label(group_frame, text=label_text, font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
         lbl.pack(anchor="w", pady=(0, 3))
 
-        btn_row = tk.Frame(group_frame, bg=CARD_BG_COLOR)
+        btn_row = Marco(group_frame, bg=CARD_BG_COLOR)
         btn_row.pack(anchor="w")
 
         selected_val = [default_val]
@@ -1427,7 +1398,7 @@ def iniciar_interfaz(autostart_leads=False):
             # opt puede ser "Texto" (el valor se deriva en minúscula) o ("Texto visible", "valor_interno"),
             # para poder cambiar la etiqueta sin romper lo que ya está guardado en config/schedule.
             opt_txt, opt_val = opt if isinstance(opt, tuple) else (opt, opt.lower())
-            b = tk.Button(btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+            b = BotonRedondo(btn_row, text=opt_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
                           relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                           highlightthickness=1, highlightbackground=BUTTON_INACTIVE,
                           padx=12, pady=4, cursor="hand2")
@@ -1464,13 +1435,13 @@ def iniciar_interfaz(autostart_leads=False):
         on_change=lambda v: [_refresh_excel_par_warning(), _save_ui_prefs()])
 
     # Dispositivos y Navegadores
-    disp_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
+    disp_frame = Marco(row_config, bg=CARD_BG_COLOR)
     disp_frame.pack(side="left", anchor="n", padx=(0, 20))
 
     disp_lbl = tk.Label(disp_frame, text="DISPOSITIVOS / NAVEGADORES", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
     disp_lbl.pack(anchor="w", pady=(0, 3))
 
-    disp_btn_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    disp_btn_row = Marco(disp_frame, bg=CARD_BG_COLOR)
     disp_btn_row.pack(anchor="w")
 
     from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS, migrar_seleccion
@@ -1516,7 +1487,7 @@ def iniciar_interfaz(autostart_leads=False):
             bs_user_ent.insert(0, u)
             bs_key_ent.delete(0, tk.END)
             bs_key_ent.insert(0, ak)
-            bs_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
+            bs_creds_frame.pack(fill="x", padx=15, pady=(8, 0), after=row_config)
         else:
             bs_creds_frame.pack_forget()
             
@@ -1538,7 +1509,7 @@ def iniciar_interfaz(autostart_leads=False):
         init_fg = "white" if is_sel else TEXT_SECONDARY
         init_hb = ACCENT_COLOR if is_sel else BUTTON_INACTIVE
         
-        b = tk.Button(disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
+        b = BotonRedondo(disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
                       relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                       highlightthickness=1, highlightbackground=init_hb,
                       padx=10, pady=4, cursor="hand2")
@@ -1618,11 +1589,11 @@ def iniciar_interfaz(autostart_leads=False):
     # Enviar en paralelo POR URL: una sesión (navegador) por URL, todas en simultáneo
     var_url_parallel = tk.BooleanVar(value=bool(_ui_prefs.get("url_parallel", False)))
     url_max_var = tk.StringVar(value=_ui_prefs.get("url_max", "6"))
-    url_par_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    url_par_row = Marco(disp_frame, bg=CARD_BG_COLOR)
     url_par_row.pack(anchor="w", pady=(2, 0))
     cb_url_par = Toggle(url_par_row, text="⚡ Enviar en paralelo por URL (una sesión por URL)",
                         variable=var_url_parallel, bg=CARD_BG_COLOR, fg=TEXT_SECONDARY,
-                        color_off=BUTTON_INACTIVE, borde=BORDER_COLOR)
+                        color_off=BUTTON_INACTIVE)
     cb_url_par.pack(side="left")
     tk.Label(url_par_row, text="máx. simultáneas:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left", padx=(10, 4))
     tk.Entry(url_par_row, textvariable=url_max_var, width=4, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white",
@@ -1632,24 +1603,22 @@ def iniciar_interfaz(autostart_leads=False):
     # Un mercado sin Excel …_CDC.xlsx simplemente no suma sesiones. Cadillac es solo T1:
     # en modo T3 el toggle no se ve y no se suma.
     var_cdc_also = tk.BooleanVar(value=bool(_ui_prefs.get("cdc_also", False)))
-    cdc_also_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    cdc_also_row = Marco(disp_frame, bg=CARD_BG_COLOR)
     if var_modo.get() != "T3":
         cdc_also_row.pack(anchor="w", pady=(2, 0))
     Toggle(cdc_also_row, text="Correr también Cadillac (CDC) del mercado",
            variable=var_cdc_also, icono=get_logo("cadillac.png", 14),
-           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE,
-           borde=BORDER_COLOR).pack(side="left")
+           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE).pack(side="left")
 
     # Túnel de BrowserStack Local: las sesiones de la nube salen por la VPN de esta PC
     # (para stage). Se guarda directo en config_global["browserstack"]["local"], que es lo
     # que lee bs_driver.tunel_local() al abrir cada sesión: no hace falta reiniciar.
     _bs_cfg = cargar_config_global().get("browserstack", {})
     var_bs_tunel = tk.BooleanVar(value=bool(_bs_cfg.get("local", False)))
-    tunel_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
+    tunel_row = Marco(disp_frame, bg=CARD_BG_COLOR)
     tunel_row.pack(anchor="w", pady=(2, 0))
     Toggle(tunel_row, text="🔒 BrowserStack por túnel (VPN)", variable=var_bs_tunel,
-           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE,
-           borde=BORDER_COLOR).pack(side="left")
+           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE).pack(side="left")
     tk.Label(tunel_row, text="solo Android e iPhone (Mac no) · al ejecutar te muestra los pasos",
              font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=(8, 0))
 
@@ -1700,25 +1669,36 @@ def iniciar_interfaz(autostart_leads=False):
     _refresh_excel_par_warning()
 
     # CREDENCIALES BROWSERSTACK INLINE (cada persona usa su usuario y su access key)
-    bs_creds_frame = tk.Frame(row_config, bg=CARD_BG_COLOR)
+    bs_creds_frame = Marco(config_card, bg="#3A1D52", highlightthickness=1, highlightbackground=BORDER_COLOR)
     if _hay_bs_seleccionado():
-        bs_creds_frame.pack(side="left", anchor="n", padx=(10, 0))
+        bs_creds_frame.pack(fill="x", padx=15, pady=(8, 0), after=row_config)
     else:
         bs_creds_frame.pack_forget()
 
-    tk.Label(bs_creds_frame, text="CREDENCIALES BROWSERSTACK", font=("Segoe UI", 8, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, columnspan=3, sticky="w")
+    _BS_BG = "#3A1D52"
+    tk.Label(bs_creds_frame, text="CREDENCIALES BROWSERSTACK", font=("Segoe UI", 8, "bold"),
+             bg=_BS_BG, fg=TEXT_SECONDARY).pack(anchor="w", padx=14, pady=(8, 4))
+    _bs_fila = tk.Frame(bs_creds_frame, bg=_BS_BG)
+    _bs_fila.pack(fill="x", padx=14, pady=(0, 10))
 
-    tk.Label(bs_creds_frame, text="User:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=1, column=0, sticky="w", pady=1)
-    bs_user_ent = tk.Entry(bs_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28)
-    bs_user_ent.grid(row=1, column=1, sticky="w", padx=4, pady=1)
+    tk.Label(_bs_fila, text="User", font=("Segoe UI", 9), bg=_BS_BG, fg="white").pack(side="left")
+    bs_user_ent = tk.Entry(_bs_fila, font=("Segoe UI", 9), bg=ENTRY_BG, fg="white", insertbackground="white",
+                           bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=24)
+    bs_user_ent.pack(side="left", padx=(6, 16), ipady=4)
     # Cargar credenciales al inicializar
     _u_init, _ak_init = _load_bs_creds()
     bs_user_ent.insert(0, _u_init)
 
-    tk.Label(bs_creds_frame, text="Key:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg="white").grid(row=2, column=0, sticky="w", pady=1)
-    bs_key_ent = tk.Entry(bs_creds_frame, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white", bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=28, show="*")
-    bs_key_ent.grid(row=2, column=1, sticky="w", padx=4, pady=1)
+    tk.Label(_bs_fila, text="Access key", font=("Segoe UI", 9), bg=_BS_BG, fg="white").pack(side="left")
+    bs_key_ent = tk.Entry(_bs_fila, font=("Segoe UI", 9), bg=ENTRY_BG, fg="white", insertbackground="white",
+                          bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, width=24, show="•")
+    bs_key_ent.pack(side="left", padx=(6, 4), ipady=4)
     bs_key_ent.insert(0, _ak_init)
+
+    def _ver_key():
+        bs_key_ent.config(show="" if bs_key_ent.cget("show") else "•")
+    BotonRedondo(_bs_fila, image=get_button_icon("eye_lav.png"), bg=BUTTON_INACTIVE, padx=4, pady=1,
+                 command=_ver_key).pack(side="left", padx=(0, 12))
 
     # CTA de guardado de credenciales BrowserStack
     def _save_bs_creds():
@@ -1735,19 +1715,26 @@ def iniciar_interfaz(autostart_leads=False):
         except Exception as e:
             messagebox.showerror("BrowserStack", f"Error al guardar credenciales:\n{e}")
 
-    # Debajo de User/Key (antes iba a la derecha en una 3ra columna y quedaba cortado)
-    bs_save_btn = make_icon_btn(bs_creds_frame, "💾 Guardar", TEXT_SAVE, command=_save_bs_creds, pack_btn=False)
-    bs_save_btn.grid(row=3, column=0, columnspan=2, padx=4, pady=(5, 1), sticky="ew")
+    BotonRedondo(_bs_fila, text=" Guardar", image=get_button_icon("save_blue.png"), compound="left",
+                 font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE, padx=10, pady=2,
+                 command=_save_bs_creds).pack(side="left")
+    try:
+        from osocio.providers.browserstack.dispositivos import max_paralelo as _bs_max
+        _bs_nota = f"máx. {_bs_max()} sesiones a la vez (las comparte todo el equipo)"
+    except Exception:
+        _bs_nota = ""
+    tk.Label(_bs_fila, text=_bs_nota, font=("Segoe UI", 8, "italic"), bg=_BS_BG,
+             fg="#C5A9DF").pack(side="left", padx=(14, 0))
 
     # ADVERTENCIA DINÁMICA DE MÚLTIPLES DISPOSITIVOS (Figma Style)
-    warning_box = tk.Frame(config_card, bg=WARN_BG, bd=1, highlightthickness=1, highlightbackground=WARN_BORDER)
+    warning_box = Marco(config_card, bg=WARN_BG, bd=1, highlightthickness=1, highlightbackground=WARN_BORDER)
     warning_box.pack_forget()
 
     warn_lbl = tk.Label(warning_box, text="⚠ Cuidado. Si corrés el mismo form en varios navegadores o dispositivos, cada uno necesita datos únicos — de lo contrario los leads pueden rechazarse o duplicarse.",
                         font=("Segoe UI", 8, "bold"), bg=WARN_BG, fg=WARN_TEXT, justify="left")
     warn_lbl.pack(side="left", padx=12, pady=6)
 
-    warn_cta = tk.Button(warning_box, text="Ir a Generar Excels ➜", font=("Segoe UI", 8, "bold"), bg=WARN_BG, fg=WARN_TEXT,
+    warn_cta = BotonRedondo(warning_box, text="Ir a Generar Excels ➜", font=("Segoe UI", 8, "bold"), bg=WARN_BG, fg=WARN_TEXT,
                          relief="flat", bd=0, highlightthickness=1, highlightbackground=WARN_BORDER, padx=10, pady=2, cursor="hand2", command=lambda: switch_tab("excel"))
     warn_cta.pack(side="right", padx=12, pady=6)
 
@@ -1763,27 +1750,21 @@ def iniciar_interfaz(autostart_leads=False):
         else:
             warning_box.pack_forget()
 
-    def abrir_config_avanzada():
-        win = tk.Toplevel(root)
-        win.title("Configuración avanzada")
-        win.configure(bg=CARD_BG_COLOR)
-        win.transient(root)
-        win.resizable(False, False)
-        w, h = 560, 480
-        px = root.winfo_rootx() + (root.winfo_width() - w) // 2
-        py = root.winfo_rooty() + (root.winfo_height() - h) // 2
-        win.geometry(f"{w}x{h}+{max(px,0)}+{max(py,0)}")
-
-        tk.Label(win, text="⚙  Configuración avanzada", font=("Segoe UI", 13, "bold"),
-                 bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w", padx=18, pady=(16, 2))
-        tk.Label(win, text="Opciones que no forman parte de la pantalla principal.",
-                 font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18, pady=(0, 12))
+    def construir_pagina_config():
+        """Configurar: antes una ventana aparte, ahora una página del menú. Se rearma cada vez
+        que se abre, así muestra lo guardado."""
+        pagina = tabs["config"]
+        for c in pagina.winfo_children():
+            c.destroy()
+        win = Marco(pagina, bg=CARD_BG_COLOR, highlightthickness=1, highlightbackground=BORDER_COLOR)
+        win.pack(fill="x", anchor="n", ipady=4)
+        Marco(win, bg=CARD_BG_COLOR, height=10).pack(fill="x")
 
         tk.Label(win, text="EXCEL POR DISPOSITIVO (SOLO ENVÍO DE LEADS / PROGRAMADOS)", font=("Segoe UI", 9, "bold"),
                  bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18)
 
         mode_var = tk.StringVar(value=excel_mode_holder[0])
-        opts_frame = tk.Frame(win, bg=CARD_BG_COLOR)
+        opts_frame = Marco(win, bg=CARD_BG_COLOR)
         opts_frame.pack(fill="x", padx=18, pady=(6, 0))
 
         tk.Radiobutton(opts_frame, variable=mode_var, value="por_dispositivo",
@@ -1809,26 +1790,18 @@ def iniciar_interfaz(autostart_leads=False):
         # ── Comportamiento de la app ────────────────────────────────────────────
         tk.Label(win, text="COMPORTAMIENTO DE LA APP", font=("Segoe UI", 9, "bold"),
                  bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=18, pady=(14, 4))
-        beh_frame = tk.Frame(win, bg=CARD_BG_COLOR)
+        beh_frame = Marco(win, bg=CARD_BG_COLOR)
         beh_frame.pack(fill="x", padx=18)
-        tk.Checkbutton(beh_frame, text="Ver navegador mientras corre  (solo Chrome / Firefox / Edge)",
-                       variable=var_ver_navegador, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
-                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
-                       anchor="w").pack(anchor="w", pady=2)
-        tk.Checkbutton(beh_frame, text="Minimizar a la bandeja al cerrar (en vez de cerrar el programa)",
-                       variable=var_minimizar_a_bandeja, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
-                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
-                       anchor="w").pack(anchor="w", pady=2)
-        tk.Checkbutton(beh_frame, text="Pausar para login manual en primer formulario (Envío de Leads / Comparador)",
-                       variable=var_pausar_autenticacion, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
-                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
-                       anchor="w").pack(anchor="w", pady=2)
-        tk.Checkbutton(beh_frame, text="Preview: ver navegador durante todo el envío (aun después de autenticar; solo con la pausa activa)",
-                       variable=var_preview_navegador, font=("Segoe UI", 9), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY,
-                       selectcolor=CARD_BG_COLOR, activebackground=CARD_BG_COLOR, activeforeground=TEXT_PRIMARY,
-                       anchor="w").pack(anchor="w", pady=2)
+        Toggle(beh_frame, text="Ver navegador mientras corre  (solo Chrome / Firefox / Edge)", variable=var_ver_navegador, font=("Segoe UI", 9),
+               bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, color_off=BUTTON_INACTIVE).pack(anchor="w", pady=4)
+        Toggle(beh_frame, text="Minimizar a la bandeja al cerrar (en vez de cerrar el programa)", variable=var_minimizar_a_bandeja, font=("Segoe UI", 9),
+               bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, color_off=BUTTON_INACTIVE).pack(anchor="w", pady=4)
+        Toggle(beh_frame, text="Pausar para login manual en primer formulario (Envío de Leads / Comparador)", variable=var_pausar_autenticacion, font=("Segoe UI", 9),
+               bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, color_off=BUTTON_INACTIVE).pack(anchor="w", pady=4)
+        Toggle(beh_frame, text="Preview: ver navegador durante todo el envío (aun después de autenticar; solo con la pausa activa)", variable=var_preview_navegador, font=("Segoe UI", 9),
+               bg=CARD_BG_COLOR, fg=TEXT_PRIMARY, color_off=BUTTON_INACTIVE).pack(anchor="w", pady=4)
 
-        btns = tk.Frame(win, bg=CARD_BG_COLOR)
+        btns = Marco(win, bg=CARD_BG_COLOR)
         btns.pack(side="bottom", fill="x", padx=18, pady=14)
 
         def _guardar():
@@ -1845,16 +1818,16 @@ def iniciar_interfaz(autostart_leads=False):
                 update_excel_calculation()
             except Exception:
                 pass
-            win.destroy()
+            switch_tab("leads")
 
-        tk.Button(btns, text="Guardar", font=("Segoe UI", 9, "bold"), bg=SAVE_BG, fg=SAVE_FG,
+        BotonRedondo(btns, text="Guardar", font=("Segoe UI", 9, "bold"), bg=SAVE_BG, fg=SAVE_FG,
                   activebackground=SAVE_HOVER, activeforeground=SAVE_FG,
                   relief="flat", bd=0, padx=18, pady=6, cursor="hand2", command=_guardar).pack(side="right")
-        tk.Button(btns, text="Cancelar", font=("Segoe UI", 9), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
-                  relief="flat", bd=0, padx=14, pady=6, cursor="hand2", command=win.destroy).pack(side="right", padx=(0, 8))
+        BotonRedondo(btns, text="Cancelar", font=("Segoe UI", 9), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+                  relief="flat", bd=0, padx=14, pady=6, cursor="hand2",
+                  command=lambda: switch_tab("leads")).pack(side="right", padx=(0, 8))
 
-    # The toolbar button is built before this dialog exists, so wire it here.
-    global_config_btn.config(command=abrir_config_avanzada)
+    _al_mostrar_pagina["config"] = construir_pagina_config
 
     actualizar_warning()
     paises_list = ["Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "Paraguay", "Peru", "Uruguay"]
@@ -1914,10 +1887,10 @@ def iniciar_interfaz(autostart_leads=False):
         refresh_all_country_ui()
 
     def build_country_selection_card(parent_frame):
-        p_card = tk.Frame(parent_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+        p_card = Marco(parent_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         p_card.pack(fill="x", pady=(0, 8), ipady=5)
 
-        p_hdr = tk.Frame(p_card, bg=CARD_BG_COLOR)
+        p_hdr = Marco(p_card, bg=CARD_BG_COLOR)
         p_hdr.pack(fill="x", padx=15, pady=(6, 4))
         tk.Label(p_hdr, text="🌐 PAÍSES A EJECUTAR", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
 
@@ -1928,7 +1901,7 @@ def iniciar_interfaz(autostart_leads=False):
         tk.Label(p_card, text="Elegí el o los países que querés ejecutar.",
                  font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 4))
 
-        g_frame = tk.Frame(p_card, bg=CARD_BG_COLOR)
+        g_frame = Marco(p_card, bg=CARD_BG_COLOR)
         g_frame.pack(fill="x", padx=15, pady=2)
 
         for idx, pais in enumerate(paises_list):
@@ -1939,7 +1912,7 @@ def iniciar_interfaz(autostart_leads=False):
             c_fg = ACCENT_COLOR if is_sel else "white"
             n_fg = ACCENT_COLOR if is_sel else TEXT_SECONDARY
 
-            card = tk.Frame(g_frame, bg=c_bg, bd=0, highlightthickness=1, highlightbackground=c_hb, cursor="hand2")
+            card = Marco(g_frame, bg=c_bg, bd=0, highlightthickness=1, highlightbackground=c_hb, cursor="hand2")
             card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
             g_frame.columnconfigure(idx % 9, weight=1)
 
@@ -1954,7 +1927,7 @@ def iniciar_interfaz(autostart_leads=False):
             for _w in (card, code_lbl, name_lbl):
                 _w.bind("<Button-1>", lambda e, p=pais: toggle_country(p))
 
-        l_frame = tk.Frame(p_card, bg=CARD_BG_COLOR)
+        l_frame = Marco(p_card, bg=CARD_BG_COLOR)
         l_frame.pack(fill="x", padx=15, pady=(2, 2))
 
         a_btn = tk.Label(l_frame, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, cursor="hand2")
@@ -2039,11 +2012,11 @@ def iniciar_interfaz(autostart_leads=False):
     # ====================================================
     # Barra de sub-pestañas (fija arriba, fuera del scroll)
     # ====================================================
-    sched_subtab_bar = tk.Frame(tabs["scheduler"], bg=APP_BG_COLOR)
+    sched_subtab_bar = Marco(tabs["scheduler"], bg=APP_BG_COLOR)
     sched_subtab_bar.pack(fill="x", pady=(6, 4))
 
-    sched_semanal_container = tk.Frame(tabs["scheduler"], bg=APP_BG_COLOR)
-    sched_masivo_container = tk.Frame(tabs["scheduler"], bg=APP_BG_COLOR)
+    sched_semanal_container = Marco(tabs["scheduler"], bg=APP_BG_COLOR)
+    sched_masivo_container = Marco(tabs["scheduler"], bg=APP_BG_COLOR)
     sched_semanal_container.pack(fill="both", expand=True)
 
     sched_subtab_btns = {}
@@ -2063,14 +2036,14 @@ def iniciar_interfaz(autostart_leads=False):
                 btn.config(bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, highlightthickness=0)
         _refresh_prog()
 
-    btn_sub_sem = tk.Button(sched_subtab_bar, text="📅 Envío de Leads Programados", font=("Segoe UI", 9, "bold"),
+    btn_sub_sem = BotonRedondo(sched_subtab_bar, text="📅 Envío de Leads Programados", font=("Segoe UI", 9, "bold"),
                             bg=TAB_ACTIVE_BG, fg=TAB_ACTIVE_FG, relief="flat", bd=0, activebackground=TAB_ACTIVE_BG,
                             activeforeground=TAB_ACTIVE_FG, padx=16, pady=6, cursor="hand2",
                             command=lambda: switch_sched_subtab("semanal"))
     btn_sub_sem.pack(side="left", padx=(0, 4))
     sched_subtab_btns["semanal"] = btn_sub_sem
 
-    btn_sub_mas = tk.Button(sched_subtab_bar, text="🔍 Revisión Masiva de Inserción (Smoke Test)", font=("Segoe UI", 9, "bold"),
+    btn_sub_mas = BotonRedondo(sched_subtab_bar, text="🔍 Revisión Masiva de Inserción (Smoke Test)", font=("Segoe UI", 9, "bold"),
                             bg=TAB_INACTIVE_BG, fg=TAB_INACTIVE_FG, relief="flat", bd=0, activebackground=TAB_ACTIVE_BG,
                             activeforeground=TAB_ACTIVE_FG, padx=16, pady=6, cursor="hand2",
                             command=lambda: switch_sched_subtab("masivo"))
@@ -2086,9 +2059,9 @@ def iniciar_interfaz(autostart_leads=False):
         ui = sched_ui[sub]
 
         # --- Guía rápida ---
-        guide = tk.Frame(parent, bg=SCHED_BG, bd=0, highlightthickness=1, highlightbackground=SCHED_BORDER)
+        guide = Marco(parent, bg=SCHED_BG, bd=0, highlightthickness=1, highlightbackground=SCHED_BORDER)
         guide.pack(fill="x", pady=(0, 6))
-        g_row = tk.Frame(guide, bg=SCHED_BG)
+        g_row = Marco(guide, bg=SCHED_BG)
         g_row.pack(fill="x", padx=12, pady=5)
         tk.Label(g_row, text=("💡 GUÍA RÁPIDA (REVISIÓN MASIVA):" if is_mas else "💡 GUÍA RÁPIDA:"),
                  font=("Segoe UI", 8, "bold"), bg=SCHED_BG, fg=GUIDE_ACCENT).pack(side="left")
@@ -2100,7 +2073,7 @@ def iniciar_interfaz(autostart_leads=False):
                  font=("Segoe UI", 8, "italic"), bg=SCHED_BG, fg="#C5A9DF").pack(side="left", padx=(8, 0))
 
         # --- Card de configuración ---
-        card = tk.Frame(parent, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+        card = Marco(parent, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
         card.pack(fill="x", pady=(0, 8), ipady=6)
 
         tk.Label(card, text="Configurá tu envío: elegí mercado, modo de ejecución y dispositivos",
@@ -2109,24 +2082,24 @@ def iniciar_interfaz(autostart_leads=False):
                             "③ Definí los días y horarios programados.",
                  font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(0, 8))
 
-        row = tk.Frame(card, bg=CARD_BG_COLOR)
+        row = Marco(card, bg=CARD_BG_COLOR)
         row.pack(fill="x", padx=15)
 
         # Los días y horarios se configuran desde el botón del footer, no desde la card.
 
         # Columna 1: PAÍSES A EJECUTAR
-        col_p = tk.Frame(row, bg=CARD_BG_COLOR)
+        col_p = Marco(row, bg=CARD_BG_COLOR)
         col_p.pack(side="left", anchor="n", padx=(0, 24))
         tk.Label(col_p, text="PAÍSES A EJECUTAR", font=("Segoe UI", 7, "bold"),
                  bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
-        pills = tk.Frame(col_p, bg=CARD_BG_COLOR)
+        pills = Marco(col_p, bg=CARD_BG_COLOR)
         pills.pack(anchor="w", pady=(4, 2))
         for idx, pais in enumerate(paises_list):
             sel = selected_countries[pais]
             c_bg = BUTTON_ACTIVE if sel else BUTTON_INACTIVE
             c_fg = "white" if sel else TEXT_SECONDARY
             c_hb = ACCENT_COLOR if sel else BORDER_COLOR
-            pill = tk.Frame(pills, bg=c_bg, bd=0, highlightthickness=1, highlightbackground=c_hb, cursor="hand2")
+            pill = Marco(pills, bg=c_bg, bd=0, highlightthickness=1, highlightbackground=c_hb, cursor="hand2")
             pill.grid(row=0, column=idx, padx=2, sticky="nsew")
             lbl = tk.Label(pill, text=p_codes[pais], font=("Segoe UI", 8, "bold"), bg=c_bg, fg=c_fg,
                            padx=7, pady=3, cursor="hand2")
@@ -2135,7 +2108,7 @@ def iniciar_interfaz(autostart_leads=False):
             for _w in (pill, lbl):
                 _w.bind("<Button-1>", lambda e, p=pais: toggle_country(p))
 
-        links = tk.Frame(col_p, bg=CARD_BG_COLOR)
+        links = Marco(col_p, bg=CARD_BG_COLOR)
         links.pack(anchor="w", pady=(2, 0))
         lk_all = tk.Label(links, text="Todos", font=("Segoe UI", 8, "underline"), bg=CARD_BG_COLOR,
                           fg=TEXT_SECONDARY, cursor="hand2")
@@ -2147,14 +2120,14 @@ def iniciar_interfaz(autostart_leads=False):
         lk_none.bind("<Button-1>", lambda e: select_none_countries())
 
         # Columna 2: DISPOSITIVOS / NAVEGADORES
-        col_nav = tk.Frame(row, bg=CARD_BG_COLOR)
+        col_nav = Marco(row, bg=CARD_BG_COLOR)
         col_nav.pack(side="left", anchor="n", padx=(0, 24))
         tk.Label(col_nav, text="DISPOSITIVOS / NAVEGADORES", font=("Segoe UI", 7, "bold"),
                  bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
-        nav_row = tk.Frame(col_nav, bg=CARD_BG_COLOR)
+        nav_row = Marco(col_nav, bg=CARD_BG_COLOR)
         nav_row.pack(anchor="w", pady=(4, 2))
         for txt, val in _NAV_OPTS:
-            b = tk.Button(nav_row, text="◉ " + txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE,
+            b = BotonRedondo(nav_row, text="◉ " + txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE,
                           fg=TEXT_SECONDARY, relief="flat", bd=0, activebackground=BUTTON_HOVER,
                           activeforeground="white", padx=10, pady=4, cursor="hand2",
                           highlightthickness=1, highlightbackground=BORDER_COLOR,
@@ -2163,14 +2136,14 @@ def iniciar_interfaz(autostart_leads=False):
             sched_navs_btns[sub][val] = b
 
         # Columna 3: MERCADOS (Secuencial / Paralelo)
-        col_merc = tk.Frame(row, bg=CARD_BG_COLOR)
+        col_merc = Marco(row, bg=CARD_BG_COLOR)
         col_merc.pack(side="left", anchor="n")
         tk.Label(col_merc, text="MERCADOS", font=("Segoe UI", 7, "bold"),
                  bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
-        merc_row = tk.Frame(col_merc, bg=CARD_BG_COLOR)
+        merc_row = Marco(col_merc, bg=CARD_BG_COLOR)
         merc_row.pack(anchor="w", pady=(4, 2))
         for txt, val in _MODE_OPTS:
-            b = tk.Button(merc_row, text=txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE,
+            b = BotonRedondo(merc_row, text=txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE,
                           fg=TEXT_SECONDARY, relief="flat", bd=0, activebackground=BUTTON_HOVER,
                           activeforeground="white", padx=12, pady=4, cursor="hand2",
                           highlightthickness=1, highlightbackground=BORDER_COLOR,
@@ -2181,29 +2154,29 @@ def iniciar_interfaz(autostart_leads=False):
         # Columna 4: FORMULARIOS T3 2.0 (sólo Envío de Leads programado)
         if not is_mas:
             # Solo en modo T1: en T3 ya se corren los T3.
-            col_t3 = tk.Frame(row, bg=CARD_BG_COLOR)
+            col_t3 = Marco(row, bg=CARD_BG_COLOR)
             sched_t3_cols.append(col_t3)
             tk.Label(col_t3, text="FORMULARIOS T3", font=("Segoe UI", 7, "bold"),
                      bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
             Toggle(col_t3, text="Correr también los T3 del mercado", variable=var_sched_t3,
                    command=_refresh_prog, bg=CARD_BG_COLOR, fg=TEXT_SECONDARY,
-                   color_off=BUTTON_INACTIVE, borde=BORDER_COLOR).pack(anchor="w", pady=(4, 0))
+                   color_off=BUTTON_INACTIVE).pack(anchor="w", pady=(4, 0))
             if var_modo.get() != "T3":
                 col_t3.pack(side="left", anchor="n", padx=(24, 0))
             tk.Label(col_t3, text="Suma una corrida extra por mercado que tenga Excel …_T3.",
                      font=("Segoe UI", 7, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w")
 
         # Slot para la fila del Excel Matriz (solo Revisión Masiva; se llena más abajo)
-        ui["excel_slot"] = tk.Frame(card, bg=CARD_BG_COLOR)
+        ui["excel_slot"] = Marco(card, bg=CARD_BG_COLOR)
         if is_mas:
             ui["excel_slot"].pack(fill="x", padx=15, pady=(12, 0))
 
         # Resumen de configuración
-        sum_wrap = tk.Frame(card, bg=CARD_BG_COLOR)
+        sum_wrap = Marco(card, bg=CARD_BG_COLOR)
         sum_wrap.pack(fill="x", padx=15, pady=(12, 2))
         tk.Label(sum_wrap, text=("⚙ Configuración (Revisión Masiva):" if is_mas else "⚙ Configuración (Envío de Leads):"),
                  font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w")
-        ui["badges"] = tk.Frame(sum_wrap, bg=CARD_BG_COLOR)
+        ui["badges"] = Marco(sum_wrap, bg=CARD_BG_COLOR)
         ui["badges"].pack(fill="x", pady=(5, 3))
         ui["status_lbl"] = tk.Label(sum_wrap, text="", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR,
                                     fg="#C5A9DF", anchor="w", justify="left")
@@ -2211,7 +2184,7 @@ def iniciar_interfaz(autostart_leads=False):
         return card
 
     def _mk_sched_badge(parent, text, fg, border, bg=BUTTON_INACTIVE):
-        f = tk.Frame(parent, bg=bg, bd=0, highlightthickness=1, highlightbackground=border)
+        f = Marco(parent, bg=bg, bd=0, highlightthickness=1, highlightbackground=border)
         f.pack(side="left", padx=(0, 8), pady=1)
         tk.Label(f, text=text, font=("Segoe UI", 8, "bold"), bg=bg, fg=fg, padx=9, pady=3).pack()
         return f
@@ -2287,7 +2260,7 @@ def iniciar_interfaz(autostart_leads=False):
         _refresh_prog()
 
     # Footer fijo de la sub-pestaña de leads (se completa más abajo) + zona scrolleable
-    leads_prog_actions_bar = tk.Frame(sched_semanal_container, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    leads_prog_actions_bar = Marco(sched_semanal_container, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     leads_prog_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
 
     scheduler_scroll_frame = make_scrollable_tab_container(sched_semanal_container)
@@ -2315,7 +2288,7 @@ def iniciar_interfaz(autostart_leads=False):
         popup.transient(root)
         popup.grab_set()
 
-        panel_container = tk.Frame(popup, bg=APP_BG_COLOR)
+        panel_container = Marco(popup, bg=APP_BG_COLOR)
         panel_container.pack(fill="both", expand=True, padx=10, pady=10)
 
         def _on_popup_save(cfg):
@@ -2523,13 +2496,13 @@ def iniciar_interfaz(autostart_leads=False):
     _refresh_deact_btn()
 
     # Footer fijo para Envío de Leads Programado (solo Programar + Configurar)
-    ctrl_card_leads = tk.Frame(leads_prog_actions_bar, bg=CARD_BG_COLOR, bd=0)
+    ctrl_card_leads = Marco(leads_prog_actions_bar, bg=CARD_BG_COLOR, bd=0)
     ctrl_card_leads.pack(fill="x", padx=15, pady=8)
 
-    btn_frame_leads = tk.Frame(ctrl_card_leads, bg=CARD_BG_COLOR)
+    btn_frame_leads = Marco(ctrl_card_leads, bg=CARD_BG_COLOR)
     btn_frame_leads.pack(fill="x", pady=(4, 4))
 
-    btn_sched_act = tk.Button(btn_frame_leads, text=" Programar test automático", image=get_button_icon("play_white.png"), compound="left",
+    btn_sched_act = BotonRedondo(btn_frame_leads, text=" Programar test automático", image=get_button_icon("play_white.png"), compound="left",
                               font=("Segoe UI", 10, "bold"), bg="#3498DB", fg="white",
                               relief="flat", bd=0, activebackground="#2980B9", activeforeground="white",
                               padx=18, pady=7, cursor="hand2", command=lambda: _sched_activate())
@@ -2537,7 +2510,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_sched_act.bind("<Enter>", lambda e: btn_sched_act.config(bg="#2980B9"))
     btn_sched_act.bind("<Leave>", lambda e: btn_sched_act.config(bg="#3498DB"))
 
-    btn_config_prog_leads_footer = tk.Button(btn_frame_leads, text=" Configurar días y horarios", image=get_button_icon("gear_white.png"), compound="left",
+    btn_config_prog_leads_footer = BotonRedondo(btn_frame_leads, text=" Configurar días y horarios", image=get_button_icon("gear_white.png"), compound="left",
                                              font=("Segoe UI", 9, "bold"),
                                              bg=BUTTON_ACTIVE, fg="white", relief="flat", bd=0, activebackground=BUTTON_HOVER,
                                              activeforeground="white", padx=14, pady=6, cursor="hand2",
@@ -2546,7 +2519,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_config_prog_leads_footer.bind("<Enter>", lambda e: btn_config_prog_leads_footer.config(bg=BUTTON_HOVER))
     btn_config_prog_leads_footer.bind("<Leave>", lambda e: btn_config_prog_leads_footer.config(bg=BUTTON_ACTIVE))
 
-    btn_sched_deact = tk.Button(btn_frame_leads, text=" Desactivar", image=get_button_icon("stop_coral.png"), compound="left",
+    btn_sched_deact = BotonRedondo(btn_frame_leads, text=" Desactivar", image=get_button_icon("stop_coral.png"), compound="left",
                                 font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
                                 relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
                                 padx=14, pady=6, cursor="hand2", command=lambda: _sched_deactivate())
@@ -2624,7 +2597,7 @@ def iniciar_interfaz(autostart_leads=False):
         (messagebox.showinfo if ok else messagebox.showerror)("Programador de Windows", msg)
         _refresh_win_task_lbl()
 
-    btn_win_task = tk.Button(btn_frame_leads, text=" Programar en Windows", image=get_button_icon("gear_white.png"),
+    btn_win_task = BotonRedondo(btn_frame_leads, text=" Programar en Windows", image=get_button_icon("gear_white.png"),
                              compound="left", font=("Segoe UI", 9, "bold"), bg=BUTTON_ACTIVE, fg="white",
                              relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                              padx=14, pady=6, cursor="hand2", command=cmd_registrar_win_task)
@@ -2632,12 +2605,12 @@ def iniciar_interfaz(autostart_leads=False):
     btn_win_task.bind("<Enter>", lambda e: btn_win_task.config(bg=BUTTON_HOVER))
     btn_win_task.bind("<Leave>", lambda e: btn_win_task.config(bg=BUTTON_ACTIVE))
 
-    btn_win_task_del = tk.Button(btn_frame_leads, text=" Quitar de Windows", image=get_button_icon("trash_coral.png"),
+    btn_win_task_del = BotonRedondo(btn_frame_leads, text=" Quitar de Windows", image=get_button_icon("trash_coral.png"),
                                  compound="left", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
                                  relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
                                  padx=14, pady=6, cursor="hand2", command=cmd_quitar_win_task)
 
-    win_task_row = tk.Frame(ctrl_card_leads, bg=CARD_BG_COLOR)
+    win_task_row = Marco(ctrl_card_leads, bg=CARD_BG_COLOR)
     win_task_row.pack(anchor="w", pady=(2, 0))
     win_task_lbl = tk.Label(win_task_row, text="", font=("Segoe UI", 8, "italic"),
                             bg=CARD_BG_COLOR, fg=TEXT_SECONDARY)
@@ -2679,7 +2652,7 @@ def iniciar_interfaz(autostart_leads=False):
         except Exception as e:
             messagebox.showinfo("Resultados", f"Carpeta de resultados:\n{carpeta}\n\n({e})")
 
-    btn_results_leads = tk.Button(btn_frame_leads, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
+    btn_results_leads = BotonRedondo(btn_frame_leads, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
                                   font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg="white",
                                   relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                                   padx=14, pady=6, cursor="hand2", command=view_results_dialog_leads)
@@ -2789,16 +2762,16 @@ def iniciar_interfaz(autostart_leads=False):
     threading.Thread(target=_sched_monitor, daemon=True).start()
 
     # --- 4. DATOS POR PAÍS (Card Panel Table) ---
-    datos_card = tk.Frame(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    datos_card = Marco(leads_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     datos_card.pack(fill="x", expand=False, ipady=4)
 
-    d_header = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    d_header = Marco(datos_card, bg=CARD_BG_COLOR)
     d_header.pack(fill="x", padx=15, pady=(6, 4))
 
     tk.Label(d_header, text="📄 DATOS POR PAÍS", font=("Segoe UI", 10, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(side="left")
     tk.Label(d_header, text="ℹ Acá verás una previsualización del Excel del primer dispositivo que encuentre el sistema.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=15)
 
-    p_tabs_row = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    p_tabs_row = Marco(datos_card, bg=CARD_BG_COLOR)
     p_tabs_row.pack(fill="x", padx=15, pady=(0, 6))
 
     p_tab_buttons = {}
@@ -2824,7 +2797,7 @@ def iniciar_interfaz(autostart_leads=False):
         btn_fg = "white" if pais == "Argentina" else TEXT_SECONDARY
         btn_hb = ACCENT_COLOR if pais == "Argentina" else BUTTON_INACTIVE
 
-        b = tk.Button(p_tabs_row, text=f"{pais}{suffix}", font=("Segoe UI", 8, "bold"), bg=btn_bg, fg=btn_fg,
+        b = BotonRedondo(p_tabs_row, text=f"{pais}{suffix}", font=("Segoe UI", 8, "bold"), bg=btn_bg, fg=btn_fg,
                       relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                       highlightthickness=1, highlightbackground=btn_hb,
                       padx=8, pady=3, cursor="hand2")
@@ -2864,7 +2837,7 @@ def iniciar_interfaz(autostart_leads=False):
     preview_device_combo.bind("<<ComboboxSelected>>", _on_preview_device_change)
 
     # Controles de Tabla
-    tbl_ctrl_row = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    tbl_ctrl_row = Marco(datos_card, bg=CARD_BG_COLOR)
     tbl_ctrl_row.pack(fill="x", padx=15, pady=(0, 6))
 
     # Etiqueta para avisos efímeros (Eliminar, Agregar, etc.) al lado de los botones
@@ -2990,7 +2963,7 @@ def iniciar_interfaz(autostart_leads=False):
     make_icon_btn(tbl_ctrl_row, "📂 Abrir Excel", TEXT_EXCEL, command=cmd_abrir_excel)
 
     # Frame contenedor con barras de scroll (TScrollbar estilizados)
-    tree_frame = tk.Frame(datos_card, bg=CARD_BG_COLOR)
+    tree_frame = Marco(datos_card, bg=CARD_BG_COLOR)
     tree_frame.pack(fill="x", expand=False, padx=15, pady=2)
 
     columns = ("url_landing", "url_form", "modelo", "nombre", "apellido", "email", "telefono", "documento", "direccion", "ciudad", "estado", "cod_postal", "comentarios")
@@ -3385,7 +3358,7 @@ def iniciar_interfaz(autostart_leads=False):
             messagebox.showinfo("Resultados", f"Carpeta de resultados:\n{carpeta}\n\n({e})")
 
     # CTAs en la cabecera de "DATOS POR PAÍS" (junto a la fila de países)
-    btn_resultados = tk.Button(d_header, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
+    btn_resultados = BotonRedondo(d_header, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
                                font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg="white",
                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                                padx=14, pady=4, cursor="hand2", command=view_results_dialog)
@@ -3395,11 +3368,13 @@ def iniciar_interfaz(autostart_leads=False):
 
 
 
-    btn_enviar = tk.Button(d_header, text=" EJECUTAR ENVÍO", image=get_button_icon("play_green.png"), compound="left",
+    exec_row = Marco(config_card, bg=CARD_BG_COLOR)
+    exec_row.pack(fill="x", padx=15, pady=(2, 8))
+    btn_enviar = BotonRedondo(exec_row, text=" EJECUTAR ENVÍO", image=get_button_icon("play_green.png"), compound="left",
                            font=("Segoe UI", 10, "bold"), bg=EXECUTE_BG, fg=EXECUTE_FG,
                            relief="flat", bd=0, activebackground=EXECUTE_HOVER, activeforeground=EXECUTE_FG,
                            padx=22, pady=7, cursor="hand2", command=execute_send_leads)
-    btn_enviar.pack(side="right", padx=(6, 0))
+    btn_enviar.pack(side="right")
     btn_enviar.bind("<Enter>", lambda e: btn_enviar.config(bg=EXECUTE_HOVER) if btn_enviar['state'] == "normal" else None)
     btn_enviar.bind("<Leave>", lambda e: btn_enviar.config(bg=EXECUTE_BG) if btn_enviar['state'] == "normal" else None)
 
@@ -3468,7 +3443,7 @@ def iniciar_interfaz(autostart_leads=False):
             return
         execute_send_leads(retry_only=targets)
 
-    btn_retry_leads = tk.Button(d_header, text=" REINTENTAR FALLIDOS", compound="left",
+    btn_retry_leads = BotonRedondo(d_header, text=" REINTENTAR FALLIDOS", compound="left",
                                  font=("Segoe UI", 9, "bold"), bg="#3D2E1A", fg="#F8C471",
                                  relief="flat", bd=0, activebackground="#5A431F", activeforeground="#F8C471",
                                  padx=18, pady=6, cursor="hand2", command=_retry_failed_leads)
@@ -3555,7 +3530,7 @@ def iniciar_interfaz(autostart_leads=False):
     # SUB-TAB INTERNA: REVISIÓN MASIVA DE FORMS
     # ==========================================
     # Barra de acciones fija en el footer (siempre visible sin scroll)
-    masivo_actions_bar = tk.Frame(sched_masivo_container, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    masivo_actions_bar = Marco(sched_masivo_container, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     masivo_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
 
     # Scrollable container (ocupa el resto)
@@ -3567,7 +3542,7 @@ def iniciar_interfaz(autostart_leads=False):
     # Fila del Excel Matriz: vive dentro de la card de configuración de arriba
     excel_row = sched_ui["masivo"]["excel_slot"]
 
-    file_frame = tk.Frame(excel_row, bg=CARD_BG_COLOR)
+    file_frame = Marco(excel_row, bg=CARD_BG_COLOR)
     file_frame.pack(fill="x")
     tk.Label(file_frame, text="📄 EXCEL MATRIZ FORMS:", font=("Segoe UI", 8, "bold"),
              bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left", padx=(0, 10))
@@ -3590,7 +3565,7 @@ def iniciar_interfaz(autostart_leads=False):
         if fn:
             var_excel_masivo.set(os.path.normpath(fn))
 
-    btn_buscar = tk.Button(file_frame, text="Buscar archivo", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE,
+    btn_buscar = BotonRedondo(file_frame, text="Buscar archivo", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE,
                            relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_SAVE,
                            padx=12, pady=4, cursor="hand2", command=buscar_excel_masivo)
     btn_buscar.pack(side="right")
@@ -3598,15 +3573,15 @@ def iniciar_interfaz(autostart_leads=False):
     btn_buscar.bind("<Leave>", lambda e: btn_buscar.config(bg=BUTTON_INACTIVE))
 
     # Card 2: Nombres de Columnas Mapeadas
-    mapping_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    mapping_card = Marco(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     mapping_card.pack(fill="x", pady=(0, 8), ipady=5)
 
-    map_header = tk.Frame(mapping_card, bg=CARD_BG_COLOR)
+    map_header = Marco(mapping_card, bg=CARD_BG_COLOR)
     map_header.pack(fill="x", padx=15, pady=(6, 4))
     tk.Label(map_header, text="⚙️ CONFIGURACIÓN DE COLUMNAS", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
     tk.Label(map_header, text="Nombres de las columnas en el Excel a buscar.", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=12)
 
-    grid_frame = tk.Frame(mapping_card, bg=CARD_BG_COLOR)
+    grid_frame = Marco(mapping_card, bg=CARD_BG_COLOR)
     grid_frame.pack(fill="x", padx=15, pady=5)
 
     # Variables para configuración de mapeo de nombres de columnas
@@ -3623,7 +3598,7 @@ def iniciar_interfaz(autostart_leads=False):
     ]
 
     for label_text, var, row, col in cols_config:
-        f = tk.Frame(grid_frame, bg=CARD_BG_COLOR)
+        f = Marco(grid_frame, bg=CARD_BG_COLOR)
         f.grid(row=row, column=col, padx=10, pady=5, sticky="ew")
         grid_frame.columnconfigure(col, weight=1)
         
@@ -3633,20 +3608,20 @@ def iniciar_interfaz(autostart_leads=False):
         ent.pack(fill="x", ipady=3)
 
     # Card 3: Comparar y Sincronizar Reportes (dentro de masivo_scroll_frame)
-    sync_card = tk.Frame(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    sync_card = Marco(masivo_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     sync_card.pack(fill="x", pady=(0, 8), ipady=8)
 
-    sync_hdr = tk.Frame(sync_card, bg=CARD_BG_COLOR)
+    sync_hdr = Marco(sync_card, bg=CARD_BG_COLOR)
     sync_hdr.pack(fill="x", padx=15, pady=(6, 4))
     tk.Label(sync_hdr, text="🔄 COMPARAR Y SINCRONIZAR REPORTES", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
     tk.Label(sync_hdr, text="Sincroniza reportes previos con la matriz cargada arriba (dejar vacío para autodetección).", font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=12)
 
-    sync_body = tk.Frame(sync_card, bg=CARD_BG_COLOR)
+    sync_body = Marco(sync_card, bg=CARD_BG_COLOR)
     sync_body.pack(fill="x", padx=15, pady=5)
 
     tk.Label(sync_body, text="Reporte de Resultados Histórico (Dejar vacío para buscar automáticamente todos en resultados/):", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 3))
     
-    sync_file_frame = tk.Frame(sync_body, bg=CARD_BG_COLOR)
+    sync_file_frame = Marco(sync_body, bg=CARD_BG_COLOR)
     sync_file_frame.pack(fill="x")
     
     var_sync_report_path = tk.StringVar()
@@ -3660,7 +3635,7 @@ def iniciar_interfaz(autostart_leads=False):
         if path:
             var_sync_report_path.set(os.path.normpath(path))
             
-    btn_select_sync = tk.Button(sync_file_frame, text="Buscar archivo", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE,
+    btn_select_sync = BotonRedondo(sync_file_frame, text="Buscar archivo", font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SAVE,
                                 relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_SAVE,
                                 padx=12, pady=4, cursor="hand2", command=select_sync_report)
     btn_select_sync.pack(side="right")
@@ -3668,7 +3643,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_select_sync.bind("<Leave>", lambda e: btn_select_sync.config(bg=BUTTON_INACTIVE))
 
     # Fila de Acción (Botón de Sincronizar)
-    sync_action_frame = tk.Frame(sync_body, bg=CARD_BG_COLOR)
+    sync_action_frame = Marco(sync_body, bg=CARD_BG_COLOR)
     sync_action_frame.pack(fill="x", pady=(10, 0))
     
     def run_sync_action():
@@ -3801,7 +3776,7 @@ def iniciar_interfaz(autostart_leads=False):
         import threading
         threading.Thread(target=sync_worker, daemon=True).start()
 
-    btn_run_sync = tk.Button(sync_action_frame, text=" Sincronizar y Actualizar Reporte", image=get_button_icon("sync_white.png"), compound="left",
+    btn_run_sync = BotonRedondo(sync_action_frame, text=" Sincronizar y Actualizar Reporte", image=get_button_icon("sync_white.png"), compound="left",
                              bg="#82E0AA", fg="#1E6038", activebackground="#6ECB94", activeforeground="#1E6038",
                              font=("Segoe UI", 10, "bold"), relief="flat", bd=0, padx=16, pady=6, cursor="hand2", command=run_sync_action)
     btn_run_sync.pack(side="left")
@@ -3809,14 +3784,14 @@ def iniciar_interfaz(autostart_leads=False):
     btn_run_sync.bind("<Leave>", lambda e: btn_run_sync.config(bg="#82E0AA"))
 
     # Card 4: Control de Comentarios y Ejecución (dentro del footer fijo masivo_actions_bar)
-    ctrl_card = tk.Frame(masivo_actions_bar, bg=CARD_BG_COLOR, bd=0)
+    ctrl_card = Marco(masivo_actions_bar, bg=CARD_BG_COLOR, bd=0)
     ctrl_card.pack(fill="x", padx=15, pady=8)
 
-    ctrl_hdr = tk.Frame(ctrl_card, bg=CARD_BG_COLOR)
+    ctrl_hdr = Marco(ctrl_card, bg=CARD_BG_COLOR)
     ctrl_hdr.pack(fill="x", pady=(2, 4))
     tk.Label(ctrl_hdr, text="⚡ OPCIONES Y EJECUCIÓN", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
 
-    opts_f = tk.Frame(ctrl_card, bg=CARD_BG_COLOR)
+    opts_f = Marco(ctrl_card, bg=CARD_BG_COLOR)
     opts_f.pack(fill="x", pady=5)
 
     var_borrar_comentarios = tk.BooleanVar(value=False)
@@ -3846,7 +3821,7 @@ def iniciar_interfaz(autostart_leads=False):
                               font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#F1948A")
     lbl_disclaimer.pack(side="left", padx=20)
 
-    btn_frame = tk.Frame(ctrl_card, bg=CARD_BG_COLOR)
+    btn_frame = Marco(ctrl_card, bg=CARD_BG_COLOR)
     btn_frame.pack(fill="x", pady=10)
 
     def cmd_iniciar_masivo():
@@ -3969,7 +3944,7 @@ def iniciar_interfaz(autostart_leads=False):
         modal.bind("<Destroy>", cleanup_root_binds, add="+")
 
         # Custom Title Bar
-        title_bar = tk.Frame(modal, bg=MODAL_BG)
+        title_bar = Marco(modal, bg=MODAL_BG)
         title_bar.pack(fill="x", side="top", padx=15, pady=(5, 0))
         
         title_lbl_bar = tk.Label(title_bar, text="Revisión Masiva de Forms", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF")
@@ -3989,13 +3964,13 @@ def iniciar_interfaz(autostart_leads=False):
         title_lbl_bar.bind("<Button-1>", _start_drag)
         title_lbl_bar.bind("<B1-Motion>", _drag)
         
-        btn_cls = tk.Button(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
+        btn_cls = BotonRedondo(title_bar, text="✕", font=("Segoe UI", 8, "bold"), bg=MODAL_BG, fg="#C5A9DF", relief="flat", bd=0, cursor="hand2", padx=6, pady=2, command=on_close_modal)
         btn_cls.pack(side="right")
         btn_cls.bind("<Enter>", lambda e: btn_cls.config(bg="#E74C3C", fg="white"))
         btn_cls.bind("<Leave>", lambda e: btn_cls.config(bg=MODAL_BG, fg="#C5A9DF"))
 
         # Header
-        header_frame = tk.Frame(modal, bg=MODAL_BG)
+        header_frame = Marco(modal, bg=MODAL_BG)
         header_frame.pack(fill="x", padx=20, pady=(5, 10))
         
         icon_lbl = tk.Label(header_frame, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
@@ -4007,7 +3982,7 @@ def iniciar_interfaz(autostart_leads=False):
                 icon_lbl.config(text=rotation_glyphs[idx % len(rotation_glyphs)])
                 modal.after(250, lambda: rotate_icon(idx + 1))
 
-        title_info = tk.Frame(header_frame, bg=MODAL_BG)
+        title_info = Marco(header_frame, bg=MODAL_BG)
         title_info.pack(side="left", padx=10)
 
         title_lbl = tk.Label(title_info, text="Ejecutando Revisión...", font=("Segoe UI", 12, "bold"), bg=MODAL_BG, fg="white")
@@ -4019,14 +3994,14 @@ def iniciar_interfaz(autostart_leads=False):
         def on_detener_click():
             on_close_modal()
 
-        btn_detener = tk.Button(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
+        btn_detener = BotonRedondo(header_frame, text=" Detener", image=get_button_icon("stop_coral.png"), compound="left",
                                 font=("Segoe UI", 9, "bold"),
                                 bg="#3D1220", fg="#F1948A", relief="flat", bd=0, highlightthickness=1,
                                 highlightbackground="#F1948A", cursor="hand2", command=on_detener_click, padx=12, pady=4)
         btn_detener.pack(side="right")
 
         # Badges Row
-        badges_row = tk.Frame(modal, bg=MODAL_BG)
+        badges_row = Marco(modal, bg=MODAL_BG)
         badges_row.pack(fill="x", padx=20, pady=5)
 
         def make_pill(parent, text, icon=None):
@@ -4046,13 +4021,13 @@ def iniciar_interfaz(autostart_leads=False):
         run_note.pack(anchor="w", padx=20, pady=(4, 8))
 
         # Scrollable container for progress bars
-        markets_wrap = tk.Frame(modal, bg=MODAL_BG)
+        markets_wrap = Marco(modal, bg=MODAL_BG)
         markets_wrap.pack(fill="both", expand=True, padx=20, pady=(2, 8))
         markets_canvas = tk.Canvas(markets_wrap, bg=MODAL_BG, highlightthickness=0)
         markets_sb = tk.Scrollbar(markets_wrap, orient="vertical", command=markets_canvas.yview)
         markets_canvas.configure(yscrollcommand=markets_sb.set)
         markets_canvas.pack(side="left", fill="both", expand=True)
-        markets_frame = tk.Frame(markets_canvas, bg=MODAL_BG)
+        markets_frame = Marco(markets_canvas, bg=MODAL_BG)
         _mk_win = markets_canvas.create_window((0, 0), window=markets_frame, anchor="nw")
 
         def _sync_markets_scroll(_e=None):
@@ -4075,9 +4050,9 @@ def iniciar_interfaz(autostart_leads=False):
         # Crear barras de progreso
         _pais_bars = {}
         for _p in active_markets:
-            _row = tk.Frame(markets_frame, bg=MODAL_BG)
+            _row = Marco(markets_frame, bg=MODAL_BG)
             _row.pack(fill="x", pady=(0, 9))
-            _hdr = tk.Frame(_row, bg=MODAL_BG)
+            _hdr = Marco(_row, bg=MODAL_BG)
             _hdr.pack(fill="x")
             
             tk.Label(_hdr, text=_p, font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white").pack(side="left")
@@ -4180,7 +4155,7 @@ def iniciar_interfaz(autostart_leads=False):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    btn_sched_mas = tk.Button(btn_frame, text=" Programar revisión automática", image=get_button_icon("play_white.png"), compound="left",
+    btn_sched_mas = BotonRedondo(btn_frame, text=" Programar revisión automática", image=get_button_icon("play_white.png"), compound="left",
                               font=("Segoe UI", 9, "bold"), bg="#3498DB", fg="white",
                               relief="flat", bd=0, activebackground="#2980B9", activeforeground="white",
                               padx=16, pady=6, cursor="hand2", command=lambda: _sched_activate_masivo())
@@ -4193,7 +4168,7 @@ def iniciar_interfaz(autostart_leads=False):
     RUN_MAS_HOVER = "#B3901F"
     RUN_MAS_FG = "#2E1146"
 
-    btn_run = tk.Button(btn_frame, text="▶  Iniciar ahora",
+    btn_run = BotonRedondo(btn_frame, text="▶  Iniciar ahora",
                        font=("Segoe UI", 10, "bold"), bg=RUN_MAS_BG, fg=RUN_MAS_FG,
                        relief="flat", bd=0, activebackground=RUN_MAS_HOVER, activeforeground=RUN_MAS_FG,
                        padx=22, pady=7, cursor="hand2", command=cmd_iniciar_masivo)
@@ -4201,7 +4176,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_run.bind("<Enter>", lambda e: btn_run.config(bg=RUN_MAS_HOVER) if btn_run['state'] == "normal" else None)
     btn_run.bind("<Leave>", lambda e: btn_run.config(bg=RUN_MAS_BG) if btn_run['state'] == "normal" else None)
 
-    btn_config_mas = tk.Button(btn_frame, text=" Configurar días y horarios", image=get_button_icon("gear_white.png"), compound="left",
+    btn_config_mas = BotonRedondo(btn_frame, text=" Configurar días y horarios", image=get_button_icon("gear_white.png"), compound="left",
                                font=("Segoe UI", 9, "bold"), bg=BUTTON_ACTIVE, fg="white",
                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                                padx=14, pady=6, cursor="hand2", command=lambda: open_scheduler_config_popup())
@@ -4209,7 +4184,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_config_mas.bind("<Enter>", lambda e: btn_config_mas.config(bg=BUTTON_HOVER))
     btn_config_mas.bind("<Leave>", lambda e: btn_config_mas.config(bg=BUTTON_ACTIVE))
 
-    btn_deact_mas = tk.Button(btn_frame, text=" Desactivar", image=get_button_icon("stop_coral.png"), compound="left",
+    btn_deact_mas = BotonRedondo(btn_frame, text=" Desactivar", image=get_button_icon("stop_coral.png"), compound="left",
                                font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
                                relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
                                padx=16, pady=6, cursor="hand2", command=lambda: _sched_deactivate_masivo())
@@ -4224,7 +4199,7 @@ def iniciar_interfaz(autostart_leads=False):
         except Exception as e:
             messagebox.showinfo("Resultados", f"Resultados guardados en:\n{dir_path}\n\n({e})")
 
-    btn_folder = tk.Button(btn_frame, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
+    btn_folder = BotonRedondo(btn_frame, text=" Ver Resultados", image=get_button_icon("report_white.png"), compound="left",
                           font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg="white",
                           relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                           padx=14, pady=6, cursor="hand2", command=abrir_carpeta_masivo)
@@ -4234,9 +4209,9 @@ def iniciar_interfaz(autostart_leads=False):
 # TAB 3: GENERAR EXCELS CON DATOS (excel)
     # ==========================================
     # Barra de acciones fija (Generar/Regenerar/Borrar), siempre visible sin scrollear
-    excel_actions_bar = tk.Frame(tabs["excel"], bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    excel_actions_bar = Marco(tabs["excel"], bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     excel_actions_bar.pack(side="bottom", fill="x", pady=(6, 0))
-    excel_footer_btns = tk.Frame(excel_actions_bar, bg=CARD_BG_COLOR)
+    excel_footer_btns = Marco(excel_actions_bar, bg=CARD_BG_COLOR)
     excel_footer_btns.pack(fill="x", padx=15, pady=8)
 
     excel_scroll_frame = make_scrollable_tab_container(tabs["excel"])
@@ -4260,10 +4235,10 @@ def iniciar_interfaz(autostart_leads=False):
         return detectar_mercado(lineas)
 
     # ── 0. CARD: MERCADO A GENERAR (un Excel por mercado a la vez) ──
-    mercado_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    mercado_card = Marco(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     mercado_card.pack(fill="x", pady=(0, 8), ipady=5)
 
-    m_header = tk.Frame(mercado_card, bg=CARD_BG_COLOR)
+    m_header = Marco(mercado_card, bg=CARD_BG_COLOR)
     m_header.pack(fill="x", padx=15, pady=(6, 4))
     tk.Label(m_header, text="🌐 MERCADO A GENERAR", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
     tk.Label(m_header, text="Se genera un Excel por mercado a la vez (podés incluir varios dispositivos del mismo mercado).",
@@ -4271,7 +4246,7 @@ def iniciar_interfaz(autostart_leads=False):
 
     excel_pais_cards = {}
     excel_pais_labels = {}
-    m_grid = tk.Frame(mercado_card, bg=CARD_BG_COLOR)
+    m_grid = Marco(mercado_card, bg=CARD_BG_COLOR)
     m_grid.pack(fill="x", padx=15, pady=2)
 
     def select_excel_pais(name):
@@ -4292,7 +4267,7 @@ def iniciar_interfaz(autostart_leads=False):
         code = p_codes[pais]
         sel0 = (pais == "Argentina")
         c_bg = BUTTON_INACTIVE if sel0 else CARD_BG_COLOR
-        card = tk.Frame(m_grid, bg=c_bg, bd=0, highlightthickness=1,
+        card = Marco(m_grid, bg=c_bg, bd=0, highlightthickness=1,
                         highlightbackground=ACCENT_COLOR if sel0 else BORDER_COLOR, cursor="hand2")
         card.grid(row=idx // 9, column=idx % 9, padx=3, pady=3, sticky="nsew")
         m_grid.columnconfigure(idx % 9, weight=1)
@@ -4308,16 +4283,16 @@ def iniciar_interfaz(autostart_leads=False):
             w.bind("<Button-1>", lambda e, p=pais: select_excel_pais(p))
 
     # ── 1. CARD: URLS A PROCESAR ──
-    urls_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    urls_card = Marco(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     urls_card.pack(fill="x", pady=(0, 8), ipady=6)
 
     # Cabecera con Título y Toggle Pills a la derecha
-    urls_header = tk.Frame(urls_card, bg=CARD_BG_COLOR)
+    urls_header = Marco(urls_card, bg=CARD_BG_COLOR)
     urls_header.pack(fill="x", padx=15, pady=(6, 4))
 
     tk.Label(urls_header, text="🔗 URLS A PROCESAR", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left")
 
-    mode_btn_frame = tk.Frame(urls_header, bg=CARD_BG_COLOR)
+    mode_btn_frame = Marco(urls_header, bg=CARD_BG_COLOR)
     mode_btn_frame.pack(side="right")
 
     mode_btns = {}
@@ -4338,7 +4313,7 @@ def iniciar_interfaz(autostart_leads=False):
         update_excel_calculation()
 
     for m_val, m_txt in [("landing_form", "URL Landing + URL Form"), ("solo_forms", "Solo URL Form")]:
-        b = tk.Button(mode_btn_frame, text=m_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
+        b = BotonRedondo(mode_btn_frame, text=m_txt, font=("Segoe UI", 8, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_SECONDARY,
                       relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                       highlightthickness=1, highlightbackground=BUTTON_INACTIVE,
                       padx=10, pady=3, cursor="hand2")
@@ -4352,7 +4327,7 @@ def iniciar_interfaz(autostart_leads=False):
         make_mode_hover()
 
     # Formato e Instrucción
-    fmt_row = tk.Frame(urls_card, bg=CARD_BG_COLOR)
+    fmt_row = Marco(urls_card, bg=CARD_BG_COLOR)
     fmt_row.pack(fill="x", padx=15, pady=(4, 4))
     
     fmt_val_lbl = tk.Label(fmt_row, text="FORMATO: url landing  •  url form  •  url landing  •  url form  •  ...",
@@ -4365,7 +4340,7 @@ def iniciar_interfaz(autostart_leads=False):
     excel_warn_lbl.pack(anchor="w", padx=15, pady=(0, 2))
 
     # Caja de texto para pegar URLs con barra de scroll vertical
-    excel_text_border = tk.Frame(urls_card, bg=BORDER_COLOR, padx=1, pady=1)
+    excel_text_border = Marco(urls_card, bg=BORDER_COLOR, padx=1, pady=1)
     excel_text_border.pack(fill="x", padx=15, pady=4)
 
     v_scroll_text = ttk.Scrollbar(excel_text_border, orient="vertical", style="TScrollbar")
@@ -4386,7 +4361,7 @@ def iniciar_interfaz(autostart_leads=False):
     excel_text_area.insert("1.0", initial_urls)
 
     # ── 2. CARD: DISPOSITIVOS PARA EL EXCEL ──
-    excel_devices_card = tk.Frame(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
+    excel_devices_card = Marco(excel_scroll_frame, bg=CARD_BG_COLOR, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR)
     excel_devices_card.pack(fill="x", pady=(0, 8), ipady=6, before=urls_card)
 
     tk.Label(excel_devices_card, text="🖥 DISPOSITIVOS PARA EL EXCEL", font=("Segoe UI", 9, "bold"), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(6, 2))
@@ -4397,12 +4372,11 @@ def iniciar_interfaz(autostart_leads=False):
     # T1 o T3 sale del modo de arriba. Cadillac (CDC) usa los mismos ids y el mismo
     # generador que Brasil, pero es T1: el toggle solo aparece en modo T1.
     var_gen_cdc = tk.BooleanVar(value=False)
-    gen_cdc_row = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR)
+    gen_cdc_row = Marco(excel_devices_card, bg=CARD_BG_COLOR)
     Toggle(gen_cdc_row, text="Es Cadillac (genera los Excels como …_CDC.xlsx)", variable=var_gen_cdc,
            icono=get_logo("cadillac.png", 14), command=lambda: update_excel_calculation(),
-           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE,
-           borde=BORDER_COLOR).pack(side="left")
-    gen_cdc_hueco = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR, height=0)
+           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE).pack(side="left")
+    gen_cdc_hueco = Marco(excel_devices_card, bg=CARD_BG_COLOR, height=0)
     gen_cdc_hueco.pack(fill="x")
     if var_modo.get() != "T3":
         gen_cdc_row.pack(anchor="w", padx=15, pady=(0, 6), before=gen_cdc_hueco)
@@ -4421,11 +4395,11 @@ def iniciar_interfaz(autostart_leads=False):
     except Exception:
         _DOC_TYPES = {"Brasil": ["CPF", "CNPJ", "CEP"]}
     excel_doc_vars = {}
-    excel_docs_frame = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR)
+    excel_docs_frame = Marco(excel_devices_card, bg=CARD_BG_COLOR)
     # Label creado UNA sola vez (no dentro del refresh, si no se acumulan copias)
     tk.Label(excel_docs_frame, text="📄 DOCUMENTOS A GENERAR", font=("Segoe UI", 8, "bold"),
              bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(2, 0))
-    _docs_cb_row = tk.Frame(excel_docs_frame, bg=CARD_BG_COLOR)
+    _docs_cb_row = Marco(excel_docs_frame, bg=CARD_BG_COLOR)
     _docs_cb_row.pack(anchor="w", pady=(0, 4))
 
     def refresh_doc_types_section(*_):
@@ -4451,10 +4425,10 @@ def iniciar_interfaz(autostart_leads=False):
         return {t: bool(excel_doc_vars.get(t, tk.BooleanVar(value=True)).get()) for t in tipos}
 
     # Contenedor horizontal para botones de dispositivos a la izquierda y mensajes al costado
-    excel_content_row = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR)
+    excel_content_row = Marco(excel_devices_card, bg=CARD_BG_COLOR)
     excel_content_row.pack(fill="x", padx=15, pady=4)
 
-    excel_disp_btn_row = tk.Frame(excel_content_row, bg=CARD_BG_COLOR)
+    excel_disp_btn_row = Marco(excel_content_row, bg=CARD_BG_COLOR)
     excel_disp_btn_row.pack(side="left", anchor="nw")
 
     # Panel de cálculo dinámico para múltiples archivos
@@ -4520,7 +4494,7 @@ def iniciar_interfaz(autostart_leads=False):
         init_fg = "white" if d_key == "chrome" else TEXT_SECONDARY
         init_hb = ACCENT_COLOR if d_key == "chrome" else BUTTON_INACTIVE
         
-        b = tk.Button(excel_disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
+        b = BotonRedondo(excel_disp_btn_row, text=disp, font=("Segoe UI", 8, "bold"), bg=init_bg, fg=init_fg,
                       relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground="white",
                       highlightthickness=1, highlightbackground=init_hb,
                       padx=10, pady=4, cursor="hand2")
@@ -4690,7 +4664,7 @@ def iniciar_interfaz(autostart_leads=False):
 
 
 
-    btn_exec_excel = tk.Button(excel_footer_btns, text=" GENERAR EXCELS", image=get_button_icon("download_blue.png"), compound="left",
+    btn_exec_excel = BotonRedondo(excel_footer_btns, text=" GENERAR EXCELS", image=get_button_icon("download_blue.png"), compound="left",
                                font=("Segoe UI", 9, "bold"), bg=VALIDATE_BG, fg=VALIDATE_FG,
                                relief="flat", bd=0, activebackground=VALIDATE_HOVER, activeforeground=VALIDATE_FG,
                                padx=18, pady=6, cursor="hand2", command=cmd_generar_excels)
@@ -4698,7 +4672,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_exec_excel.bind("<Enter>", lambda e: btn_exec_excel.config(bg=VALIDATE_HOVER))
     btn_exec_excel.bind("<Leave>", lambda e: btn_exec_excel.config(bg=VALIDATE_BG))
 
-    btn_regen_excel = tk.Button(excel_footer_btns, text=" REGENERAR DATOS", image=get_button_icon("bolt_yellow.png"), compound="left",
+    btn_regen_excel = BotonRedondo(excel_footer_btns, text=" REGENERAR DATOS", image=get_button_icon("bolt_yellow.png"), compound="left",
                                 font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_EXCEL,
                                 relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_EXCEL,
                                 padx=18, pady=6, cursor="hand2", command=cmd_regen_datos)
@@ -4706,7 +4680,7 @@ def iniciar_interfaz(autostart_leads=False):
     btn_regen_excel.bind("<Enter>", lambda e: btn_regen_excel.config(bg=BUTTON_HOVER))
     btn_regen_excel.bind("<Leave>", lambda e: btn_regen_excel.config(bg=BUTTON_INACTIVE))
 
-    btn_borrar_urls = tk.Button(excel_footer_btns, text=" Borrar URLs", image=get_button_icon("trash_coral.png"), compound="left",
+    btn_borrar_urls = BotonRedondo(excel_footer_btns, text=" Borrar URLs", image=get_button_icon("trash_coral.png"), compound="left",
                                 font=("Segoe UI", 9, "bold"), bg=BUTTON_INACTIVE, fg=TEXT_DELETE,
                                 relief="flat", bd=0, activebackground=BUTTON_HOVER, activeforeground=TEXT_DELETE,
                                 padx=18, pady=6, cursor="hand2", command=cmd_borrar_urls)
@@ -4724,6 +4698,16 @@ def iniciar_interfaz(autostart_leads=False):
     # CONFIGURACIÓN DEL MOUSEWHEEL GLOBAL Y SEGURO (Scroll suave y rápido)
     # ==========================================
     def _on_global_mousewheel(event):
+        if pagina_activa[0] == "ids" and ids_notebook[0] is not None:
+            # IDs Dinámicos: la lista de la solapa abierta (cada una tiene su canvas).
+            try:
+                nb = ids_notebook[0]
+                canvas = getattr(nb.nametowidget(nb.select()), "_scroll_canvas", None)
+                if canvas is not None and canvas.winfo_exists():
+                    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except Exception:
+                pass
+            return
         for canvas in scrollable_canvases:
             if not canvas.winfo_viewable():
                 continue
@@ -4761,7 +4745,7 @@ def iniciar_interfaz(autostart_leads=False):
     _restaurar_mousewheel()
 
     # Créditos (footer discreto)
-    footer_credit = tk.Frame(root, bg=APP_BG_COLOR)
+    footer_credit = Marco(main_col, bg=APP_BG_COLOR)
     footer_credit.pack(side="bottom", fill="x", pady=(0, 2))
     tk.Label(footer_credit, text="Some Updates by Elian Zás", font=("Segoe UI", 7), bg=APP_BG_COLOR, fg="#8A6DB0").pack(side="right", padx=(0, 20))
     tk.Label(footer_credit, text="Made by Ariel Melgratti", font=("Segoe UI", 8), bg=APP_BG_COLOR, fg="#D8B4FE").pack(expand=True)

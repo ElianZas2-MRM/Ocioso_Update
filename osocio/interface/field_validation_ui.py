@@ -11,7 +11,9 @@ import sys
 import threading
 from copy import deepcopy
 import pandas as pd
-from tkinter import BOTH, END, LEFT, RIGHT, BooleanVar, Button, Checkbutton, Entry, Frame, Label, StringVar, Text, Toplevel
+from tkinter import BOTH, END, LEFT, RIGHT, BooleanVar, Checkbutton, Entry, Label, StringVar, Text, Toplevel
+
+from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame
 from tkinter import messagebox
 from tkinter import ttk
 

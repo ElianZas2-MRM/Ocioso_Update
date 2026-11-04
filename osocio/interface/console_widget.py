@@ -7,7 +7,9 @@ Redirige sys.stdout para capturar todos los print() del backend.
 
 import sys
 import threading
-from tkinter import Frame, Label, Button, Text, Scrollbar, END, BOTH, RIGHT, Y, X, BOTTOM, LEFT
+from tkinter import Label, Text, Scrollbar, END, BOTH, RIGHT, Y, X, BOTTOM, LEFT
+
+from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame
 
 
 APP_BG_COLOR    = "#2b1d3a"
