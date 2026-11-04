@@ -42,7 +42,8 @@ def test_dos_colores_nunca_dan_el_mismo():
     """Si dos clásicos dieran el mismo oscuro, `cget` no sabría cuál devolver."""
     tema.instalar(tema.OSCURO)
     clasicos = ["#5D3C7A", "#4A2666", "#7D4E9F", "#35164D", "#602D8A", "#4C226E", "#2E1146",
-                "#E6D6F2", "#C5B2D6", "#C5A9DF", "#3A1D52", "#9B5CD6", "#34184A", "#3F1F58"]
+                "#E6D6F2", "#C5B2D6", "#C5A9DF", "#3A1D52", "#9B5CD6", "#24242A", "#303037",
+                "#36363E", "#3A3A42", "#0F0F12"]
     oscuros = [tema.color(c) for c in clasicos]
     assert len(set(oscuros)) == len(clasicos)
     tema.instalar(tema.CLASICO)
@@ -118,7 +119,7 @@ def test_menu_lateral_marca_la_pagina(raiz):
     menu.botones["ids"].invoke()
     assert elegidas == ["ids"]
     menu.marcar("ids")
-    assert menu.botones["ids"].cget("bg") == tema.ACENTO
+    assert menu.botones["ids"].cget("bg") == tema.MENU_SEL
     menu._alternar()          # tira de íconos
     assert menu.compacto and set(menu.botones) == {"leads", "ids"}
     menu._alternar_modo()

@@ -16,7 +16,7 @@ ANCHO_COMPACTO = 68
 
 _TXT = "#E6D6F2"
 _TXT_GRUPO = "#9B86B5"
-_HOVER = "#4C226E"
+_HOVER = tema.SIDEBAR_HOVER
 
 
 def _icono(asset_dir, nombre, color, tam=16):
@@ -245,7 +245,7 @@ class MenuLateral(tk.Frame):
         for k, b in self.botones.items():
             normal, sel = getattr(b, "_imgs_menu", (None, None))
             if k == clave:
-                b.config(bg=tema.ACENTO, fg="#FFFFFF", image=sel or "",
+                b.config(bg=tema.MENU_SEL, fg="#FFFFFF", image=sel or "",
                          font=("Segoe UI", 10, "bold"))
             else:
                 b.config(bg=tema.SIDEBAR_BG, fg=_TXT, image=normal or "", font=("Segoe UI", 10))

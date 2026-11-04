@@ -1669,13 +1669,13 @@ def iniciar_interfaz(autostart_leads=False):
     _refresh_excel_par_warning()
 
     # CREDENCIALES BROWSERSTACK INLINE (cada persona usa su usuario y su access key)
-    bs_creds_frame = Marco(config_card, bg="#3A1D52", highlightthickness=1, highlightbackground=BORDER_COLOR)
+    bs_creds_frame = Marco(config_card, bg=tema.ZONA_OSCURA, highlightthickness=1, highlightbackground=BORDER_COLOR)
     if _hay_bs_seleccionado():
         bs_creds_frame.pack(fill="x", padx=15, pady=(8, 0), after=row_config)
     else:
         bs_creds_frame.pack_forget()
 
-    _BS_BG = "#3A1D52"
+    _BS_BG = tema.ZONA_OSCURA
     tk.Label(bs_creds_frame, text="CREDENCIALES BROWSERSTACK", font=("Segoe UI", 8, "bold"),
              bg=_BS_BG, fg=TEXT_SECONDARY).pack(anchor="w", padx=14, pady=(8, 4))
     _bs_fila = tk.Frame(bs_creds_frame, bg=_BS_BG)
