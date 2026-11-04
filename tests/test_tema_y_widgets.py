@@ -42,8 +42,8 @@ def test_dos_colores_nunca_dan_el_mismo():
     """Si dos clásicos dieran el mismo oscuro, `cget` no sabría cuál devolver."""
     tema.instalar(tema.OSCURO)
     clasicos = ["#5D3C7A", "#4A2666", "#7D4E9F", "#35164D", "#602D8A", "#4C226E", "#2E1146",
-                "#E6D6F2", "#C5B2D6", "#C5A9DF", "#3A1D52", "#9B5CD6", "#24242A", "#303037",
-                "#36363E", "#3A3A42", "#0F0F12"]
+                "#E6D6F2", "#C5B2D6", "#C5A9DF", "#3A1D52", "#9B5CD6", "#1A1026", "#28173D",
+                "#2F1C46", "#33224A", "#0F0F12"]
     oscuros = [tema.color(c) for c in clasicos]
     assert len(set(oscuros)) == len(clasicos)
     tema.instalar(tema.CLASICO)
