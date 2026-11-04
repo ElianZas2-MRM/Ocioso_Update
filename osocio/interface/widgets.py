@@ -127,6 +127,9 @@ class Toggle(tk.Frame):
             self._txt.config(fg=fg)
         self._pintar()
 
+    def set_texto(self, texto):
+        self._txt.config(text=texto)
+
     def config_estado(self, habilitado):
         self._habilitado = bool(habilitado)
         cursor = "hand2" if habilitado else "arrow"

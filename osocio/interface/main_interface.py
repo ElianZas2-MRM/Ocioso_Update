@@ -87,7 +87,7 @@ def _excel_path_for(pais):
     return ruta_excel_leads(DATA_DIR, pais, "Chrome")
 
 
-from osocio.core.variantes import (CDC as VARIANTE_CDC, T3 as VARIANTE_T3,
+from osocio.core.variantes import (T3 as VARIANTE_T3, variante_cadillac,
                                    nombre_excel_leads, ruta_excel_leads, variante_del_modo)
 from osocio.interface import tema
 from osocio.interface.menu_lateral import MenuLateral
@@ -1599,13 +1599,12 @@ def iniciar_interfaz(autostart_leads=False):
     tk.Entry(url_par_row, textvariable=url_max_var, width=4, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white",
              bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, justify="center").pack(side="left", ipady=1)
 
-    # Cadillac (CDC): usa los mismos ids y el mismo generador que Brasil, pero es T1.
-    # Un mercado sin Excel …_CDC.xlsx simplemente no suma sesiones. Cadillac es solo T1:
-    # en modo T3 el toggle no se ve y no se suma.
+    # Cadillac (CDC): usa los mismos ids y el mismo generador que Brasil. Corre del mismo
+    # tipo que el modo: …_CDC.xlsx en T1 y …_CDC_T3.xlsx en T3. Un mercado sin esos Excels
+    # simplemente no suma sesiones.
     var_cdc_also = tk.BooleanVar(value=bool(_ui_prefs.get("cdc_also", False)))
     cdc_also_row = Marco(disp_frame, bg=CARD_BG_COLOR)
-    if var_modo.get() != "T3":
-        cdc_also_row.pack(anchor="w", pady=(2, 0))
+    cdc_also_row.pack(anchor="w", pady=(2, 0))
     Toggle(cdc_also_row, text="Correr también Cadillac (CDC) del mercado",
            variable=var_cdc_also, icono=get_logo("cadillac.png", 14),
            bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE).pack(side="left")
@@ -3326,18 +3325,13 @@ def iniciar_interfaz(autostart_leads=False):
         recargan la tabla y los nombres de archivo con los Excels del modo."""
         t3 = var_modo.get() == "T3"
         if t3:
-            cdc_also_row.pack_forget()
             for c in sched_t3_cols:
                 c.pack_forget()
         else:
-            cdc_also_row.pack(anchor="w", pady=(2, 0), before=tunel_row)
             for c in sched_t3_cols:
                 c.pack(side="left", anchor="n", padx=(24, 0))
         try:
-            if t3:
-                gen_cdc_row.pack_forget()
-            else:
-                gen_cdc_row.pack(anchor="w", padx=15, pady=(0, 6), before=gen_cdc_hueco)
+            gen_cdc_toggle.set_texto(_texto_gen_cdc())
             update_excel_calculation()
         except NameError:
             pass
@@ -4370,22 +4364,25 @@ def iniciar_interfaz(autostart_leads=False):
 
     # Variantes del mercado: mismos datos, otro nombre de archivo para diferenciarlas.
     # T1 o T3 sale del modo de arriba. Cadillac (CDC) usa los mismos ids y el mismo
-    # generador que Brasil, pero es T1: el toggle solo aparece en modo T1.
+    # generador que Brasil, y es del tipo del modo: …_CDC.xlsx en T1, …_CDC_T3.xlsx en T3.
     var_gen_cdc = tk.BooleanVar(value=False)
     gen_cdc_row = Marco(excel_devices_card, bg=CARD_BG_COLOR)
-    Toggle(gen_cdc_row, text="Es Cadillac (genera los Excels como …_CDC.xlsx)", variable=var_gen_cdc,
-           icono=get_logo("cadillac.png", 14), command=lambda: update_excel_calculation(),
-           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE).pack(side="left")
-    gen_cdc_hueco = Marco(excel_devices_card, bg=CARD_BG_COLOR, height=0)
-    gen_cdc_hueco.pack(fill="x")
-    if var_modo.get() != "T3":
-        gen_cdc_row.pack(anchor="w", padx=15, pady=(0, 6), before=gen_cdc_hueco)
+
+    def _texto_gen_cdc():
+        suf = "_CDC_T3" if var_modo.get() == "T3" else "_CDC"
+        return f"Es Cadillac (genera los Excels como …{suf}.xlsx)"
+
+    gen_cdc_toggle = Toggle(gen_cdc_row, text=_texto_gen_cdc(), variable=var_gen_cdc,
+                            icono=get_logo("cadillac.png", 14), command=lambda: update_excel_calculation(),
+                            bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE)
+    gen_cdc_toggle.pack(side="left")
+    gen_cdc_row.pack(anchor="w", padx=15, pady=(0, 6))
 
     def _variante_a_generar():
-        """La variante del Excel a generar: Cadillac si está prendido (solo T1), si no la
-        del modo (…_T1 o …_T3)."""
-        if var_modo.get() != "T3" and bool(var_gen_cdc.get()):
-            return VARIANTE_CDC
+        """La variante del Excel a generar: Cadillac del tipo del modo si está prendido
+        (…_CDC o …_CDC_T3), si no la del modo (…_T1 o …_T3)."""
+        if bool(var_gen_cdc.get()):
+            return variante_cadillac(var_modo.get())
         return _variante_modo()
 
     # Documentos a generar (solo países con múltiples campos de documento, ej. Brasil).

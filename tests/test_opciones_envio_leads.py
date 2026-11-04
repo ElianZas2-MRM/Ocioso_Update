@@ -153,12 +153,11 @@ def test_cadillac_se_lee_de_su_casilla():
     assert _leer_opciones(ContextoFalso(var_cdc_also=False), scheduled=False).cdc_also is False
 
 
-def test_en_una_corrida_solo_t3_no_se_agrega_cadillac():
-    """Si la corrida entera es de formularios 2.0, sumarle Cadillac no tiene sentido:
-    son Excels distintos y Cadillac no es T3."""
+def test_en_modo_t3_tambien_se_suma_cadillac():
+    """Cadillac también tiene formularios T3: en modo T3 se suma su variante …_CDC_T3."""
     opciones = _leer_opciones(ContextoFalso(var_modo="T3", var_cdc_also=True), scheduled=False)
     assert opciones.t3 is True
-    assert opciones.cdc_also is False
+    assert opciones.cdc_also is True
 
 
 def test_una_corrida_programada_todavia_no_corre_cadillac():

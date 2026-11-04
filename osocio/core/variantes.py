@@ -11,8 +11,10 @@ Hoy hay dos (más el T1, que es el mercado tal cual):
   sufijo, se siguen leyendo si no hay uno `_T1`. Resultados, reportes y mail no cambian.
 - `_T3`: los formularios 2.0 de Adobe AEM. Se estan migrando y van a terminar iguales a
   los T1, pero mientras tanto se corren aparte y sus resultados van a `resultados/t3/`.
-- `_CDC`: Cadillac. Usa los mismos ids que Brasil y el mismo generador de datos, pero
-  **es T1**: sus resultados van a `resultados/t1/` como los de cualquier otro mercado.
+- `_CDC`: Cadillac T1. Usa los mismos ids que Brasil y el mismo generador de datos; sus
+  resultados van a `resultados/t1/` como los de cualquier otro mercado.
+- `_CDC_T3`: Cadillac en formularios T3. Mismo criterio que `_T3`: resultados en
+  `resultados/t3/`.
 
 Por que existe este modulo
 --------------------------
@@ -33,6 +35,7 @@ SIN_VARIANTE = ""
 T1 = "_T1"
 T3 = "_T3"
 CDC = "_CDC"
+CDC_T3 = "_CDC_T3"
 
 # El modo que se elige arriba en la app. Cadillac (CDC) no es un modo: es T1.
 MODO_T1 = "T1"
@@ -43,6 +46,7 @@ MODO_T3 = "T3"
 _ETIQUETAS = {
     T3: "{pais} T3",
     CDC: "CDC",
+    CDC_T3: "CDC T3",
 }
 
 # Nombre con el que cada navegador aparece en los archivos de salida.
@@ -68,13 +72,19 @@ def es_t3(sufijo):
 
     Ojo: NO es lo mismo que "tiene sufijo". Cadillac tiene sufijo y no es T3. Confundir
     las dos cosas manda sus resultados a la carpeta equivocada sin que nadie se entere.
+    Cadillac T3 (`_CDC_T3`) sí es T3.
     """
-    return normalizar(sufijo) == T3
+    return normalizar(sufijo) in (T3, CDC_T3)
 
 
 def variante_del_modo(modo):
     """La variante con la que corre el modo elegido en la app: T3 o ninguna (T1)."""
     return T3 if str(modo or "").strip().upper() == MODO_T3 else SIN_VARIANTE
+
+
+def variante_cadillac(modo):
+    """La variante de Cadillac para el modo elegido: `_CDC` en T1, `_CDC_T3` en T3."""
+    return CDC_T3 if str(modo or "").strip().upper() == MODO_T3 else CDC
 
 
 def nombre_excel_leads(pais, dispositivo, sufijo=SIN_VARIANTE):
