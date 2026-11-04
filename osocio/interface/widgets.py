@@ -265,6 +265,26 @@ def _viva(img):
         return False
 
 
+def ajustar_scroll(canvas):
+    """Área de scroll de un canvas que nunca es más chica que lo que se ve.
+
+    Con `scrollregion=bbox("all")` a secas, si el contenido entra entero en la ventana el
+    área queda más chica que el canvas y Tk igual deja correr la vista con la rueda: la
+    página "baja" y queda un hueco vacío arriba. Así, si entra, no hay a dónde bajar.
+    """
+    try:
+        caja = canvas.bbox("all")
+        if not caja:
+            return
+        _x0, _y0, x1, y1 = caja
+        visible = canvas.winfo_height()
+        canvas.configure(scrollregion=(0, 0, x1, max(y1, visible)))
+        if y1 <= visible:
+            canvas.yview_moveto(0)
+    except tk.TclError:
+        pass
+
+
 def bg_visible(widget):
     """El color que se VE detrás de un widget: el de su tarjeta si está en una redondeada."""
     v = getattr(widget, "_bg_visible", None)
@@ -706,22 +726,3 @@ class Segmentado(Marco):
             except tk.TclError:
                 pass
 
-
-def ajustar_scroll(canvas):
-    """Área de scroll de un canvas que nunca es más chica que lo que se ve.
-
-    Con `scrollregion=bbox("all")` a secas, si el contenido entra entero en la ventana el
-    área queda más chica que el canvas y Tk igual deja correr la vista con la rueda: la
-    página "baja" y queda un hueco vacío arriba. Así, si entra, no hay a dónde bajar.
-    """
-    try:
-        caja = canvas.bbox("all")
-        if not caja:
-            return
-        _x0, _y0, x1, y1 = caja
-        visible = canvas.winfo_height()
-        canvas.configure(scrollregion=(0, 0, x1, max(y1, visible)))
-        if y1 <= visible:
-            canvas.yview_moveto(0)
-    except tk.TclError:
-        pass
