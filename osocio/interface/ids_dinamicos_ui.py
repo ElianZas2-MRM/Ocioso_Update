@@ -15,7 +15,7 @@ from tkinter import (
     Canvas, Checkbutton, Entry, Label, Toplevel,
 )
 
-from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame
+from osocio.interface.widgets import BotonRedondo as Button, Marco as Frame, ajustar_scroll
 from tkinter import ttk, messagebox
 from tkinter import StringVar, BooleanVar
 
@@ -271,7 +271,7 @@ def _build_tab_ids_excel(popup):
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
     popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
-    frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
+    frame_lista.bind("<Configure>", lambda _event=None: ajustar_scroll(canvas_lista))
     canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
 
     filas_widgets = {}
@@ -665,7 +665,7 @@ def _build_tab_ids_unicos(popup):
 
     def _actualizar_scroll_lista(_event=None):
         try:
-            canvas_lista.configure(scrollregion=canvas_lista.bbox("all"))
+            ajustar_scroll(canvas_lista)
         except Exception:
             pass
 
@@ -1172,7 +1172,7 @@ def _build_tab_dependencias(popup):
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
     popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
-    frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
+    frame_lista.bind("<Configure>", lambda _event=None: ajustar_scroll(canvas_lista))
     canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
 
     filas_widgets = {}
@@ -1556,7 +1556,7 @@ def _build_tab_campos_detectados(popup):
     frame_lista = Frame(canvas_lista, bg=APP_BG_COLOR)
     lista_window = canvas_lista.create_window((0, 0), window=frame_lista, anchor="nw")
     popup._scroll_canvas = canvas_lista  # para scroll con ruedita a nivel popup
-    frame_lista.bind("<Configure>", lambda _event=None: canvas_lista.configure(scrollregion=canvas_lista.bbox("all")))
+    frame_lista.bind("<Configure>", lambda _event=None: ajustar_scroll(canvas_lista))
     canvas_lista.bind("<Configure>", lambda event: canvas_lista.itemconfigure(lista_window, width=event.width))
 
     def _on_mousewheel(event):

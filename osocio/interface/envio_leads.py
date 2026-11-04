@@ -48,7 +48,7 @@ def sesiones_con_variantes(base, extras):
 import threading
 import tkinter as tk
 
-from osocio.interface.widgets import BotonRedondo, Marco
+from osocio.interface.widgets import BotonRedondo, Marco, ajustar_scroll
 from tkinter import messagebox
 
 from osocio.paths import DATA_DIR
@@ -864,7 +864,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
     def _sync_markets_scroll(_e=None):
         try:
-            markets_canvas.configure(scrollregion=markets_canvas.bbox("all"))
+            ajustar_scroll(markets_canvas)
             markets_canvas.itemconfig(_mk_win, width=markets_canvas.winfo_width())
             hace_falta = markets_frame.winfo_reqheight() > markets_canvas.winfo_height()
             if hace_falta and not markets_sb.winfo_ismapped():

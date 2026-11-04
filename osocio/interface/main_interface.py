@@ -91,7 +91,7 @@ from osocio.core.variantes import (T3 as VARIANTE_T3, variante_cadillac,
                                    nombre_excel_leads, ruta_excel_leads, variante_del_modo)
 from osocio.interface import tema
 from osocio.interface.menu_lateral import MenuLateral
-from osocio.interface.widgets import BotonRedondo, Marco, Segmentado, Toggle
+from osocio.interface.widgets import BotonRedondo, Marco, Segmentado, Toggle, ajustar_scroll
 
 
 def _tag_variante(variante):
@@ -290,8 +290,9 @@ class _DemoSchedulerPanel(tk.Frame):
 
         body = Marco(canvas, bg=_S_BG)
         win_id = canvas.create_window((0, 0), window=body, anchor="nw")
-        body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+        body.bind("<Configure>", lambda e: ajustar_scroll(canvas))
+        canvas.bind("<Configure>", lambda e: (canvas.itemconfig(win_id, width=e.width),
+                                              ajustar_scroll(canvas)))
 
         # OJO: acá había un canvas.bind_all("<MouseWheel>", ...). bind_all registra el handler
         # en el bindtag "all", que es GLOBAL a toda la aplicación, así que al abrir este panel
@@ -1304,9 +1305,10 @@ def iniciar_interfaz(autostart_leads=False):
         # Sincronizar el ancho del frame interno con el canvas
         def _on_canvas_configure(event):
             canvas.itemconfig(canvas_window, width=event.width)
+            ajustar_scroll(canvas)  # al agrandar la ventana, que no quede espacio para "bajar"
             
         canvas.bind("<Configure>", _on_canvas_configure)
-        inner_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        inner_frame.bind("<Configure>", lambda e: ajustar_scroll(canvas))
         
         canvas_window = canvas.create_window((0, 0), window=inner_frame, anchor="nw")
         canvas.configure(yscrollcommand=v_scroll.set)
@@ -4026,7 +4028,7 @@ def iniciar_interfaz(autostart_leads=False):
 
         def _sync_markets_scroll(_e=None):
             try:
-                markets_canvas.configure(scrollregion=markets_canvas.bbox("all"))
+                ajustar_scroll(markets_canvas)
                 markets_canvas.itemconfig(_mk_win, width=markets_canvas.winfo_width())
                 hace_falta = markets_frame.winfo_reqheight() > markets_canvas.winfo_height()
                 if hace_falta and not markets_sb.winfo_ismapped():
