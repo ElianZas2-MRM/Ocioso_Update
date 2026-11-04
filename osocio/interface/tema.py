@@ -25,14 +25,15 @@ OSCURO = "oscuro"
 CLASICO = "clasico"
 
 # Colores propios de piezas nuevas, escritos en "clásico" como todo lo demás.
-# Las "zonas oscuras" (menú lateral, caja de MODO, caja de credenciales) son violeta oscuro
-# en los dos temas: así se despegan del negro en el oscuro y combinan con el clásico.
-SIDEBAR_BG = "#1A1026"
-SIDEBAR_SEP = "#33224A"
-SIDEBAR_HOVER = "#2F1C46"
-MODO_CAJA = "#28173D"
+# Las "zonas oscuras" (menú lateral, caja de MODO, caja de credenciales) son violeta en los
+# dos temas: más oscuro en el oscuro (para despegarse del negro) y un poco más claro en el
+# clásico, donde el ítem elegido del menú va en negro y tiene que resaltar.
+SIDEBAR_BG = "#3B1F55"
+SIDEBAR_SEP = "#56357A"
+SIDEBAR_HOVER = "#4B2C69"
+MODO_CAJA = "#2D1442"
 ZONA_OSCURA = MODO_CAJA       # cajas internas (credenciales de BrowserStack)
-ENTRADA_ZONA = "#140B20"      # cajas de texto dentro de una zona oscura
+ENTRADA_ZONA = "#1E0C2E"      # cajas de texto dentro de una zona oscura
 MENU_SEL = "#0F0F12"          # ítem elegido del menú: negro en clásico, violeta en oscuro
 ACENTO = "#9B5CD6"            # toggles prendidos
 
@@ -65,11 +66,11 @@ _OSCURO = {
     "#1a1a2e": "#0b0b0e",
     "#9c6fb4": "#3a3a44",
     "#110830": "#0b0b0e",
-    "#1a1026": "#1a1026",   # SIDEBAR_BG: igual en los dos temas
-    "#33224a": "#33224a",   # SIDEBAR_SEP
-    "#2f1c46": "#2f1c46",   # SIDEBAR_HOVER
-    "#28173d": "#28173d",   # MODO_CAJA / ZONA_OSCURA
-    "#140b20": "#140b20",   # ENTRADA_ZONA
+    "#3b1f55": "#1a1026",   # SIDEBAR_BG: violeta oscuro
+    "#56357a": "#33224a",   # SIDEBAR_SEP
+    "#4b2c69": "#2f1c46",   # SIDEBAR_HOVER
+    "#2d1442": "#28173d",   # MODO_CAJA / ZONA_OSCURA
+    "#1e0c2e": "#140b20",   # ENTRADA_ZONA
     "#0f0f12": "#7c3aed",   # MENU_SEL
     "#9b5cd6": "#7c3aed",   # ACENTO
     "#7e5109": "#e0b25c",   # texto de aviso (marrón sobre amarillo claro en clásico)
