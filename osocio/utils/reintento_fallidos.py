@@ -27,6 +27,9 @@ from typing import List, Optional, Tuple
 from osocio.core.variantes import basenames_de_corrida
 
 ROJO_FALLA = "FFC7CE"   # el color con el que el motor pinta "Resultado" si el lead falló
+# Avisos (URL / form / TYP) en naranja: dos tonos para saber si el lead salió igual.
+NARANJA_ENVIADO = "FFE5B4"     # aviso, pero el lead viajó: no se reintenta
+NARANJA_SIN_ENVIO = "FFD199"   # aviso y el lead NO salió (form no inserto, landing caída): se reintenta
 COLUMNA_FILA_ORIGINAL = "Fila original"
 
 
@@ -71,7 +74,7 @@ def _leer(resultados_path: str):
         if COLUMNA_FILA_ORIGINAL in col:
             v = str(ws.cell(row=fila, column=col[COLUMNA_FILA_ORIGINAL]).value or "").strip()
             orig = int(float(v)) if v.replace(".", "", 1).isdigit() else None
-        filas.append((fila, orig, color.endswith(ROJO_FALLA),
+        filas.append((fila, orig, color.endswith(ROJO_FALLA) or color.endswith(NARANJA_SIN_ENVIO),
                       str(ws.cell(row=fila, column=col["URL"]).value or ""),
                       str(ws.cell(row=fila, column=col["Formulario"]).value or "") if "Formulario" in col else ""))
     return filas, COLUMNA_FILA_ORIGINAL in col

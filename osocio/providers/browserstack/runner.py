@@ -127,7 +127,8 @@ def motivo_de_sesion(ok: int, fallidos: int, fail_rows=None, error: str = "") ->
 
 def _resumen_vacio(pais: str, error: str = "") -> Dict:
     return {"pais": pais, "ok": 0, "failed": 0, "total": 0, "results_excel": None,
-            "video_url": "", "session_id": "", "error": error or None, "fail_rows": []}
+            "video_url": "", "session_id": "", "error": error or None, "fail_rows": [],
+            "warn": 0, "warn_rows": []}
 
 
 def escribir_video(results_path: str, video_url: str, log: Callable = print) -> None:
@@ -208,10 +209,13 @@ def _run_motor(pais, plataforma, excel_path, variante, programada, build_name, l
         summ = getattr(form, "run_summary", None) or {}
         resumen.update(ok=int(summ.get("ok", 0)), failed=int(summ.get("fail", 0)),
                        total=int(summ.get("total", 0)), fail_rows=list(summ.get("fail_rows") or []),
+                       warn=int(summ.get("warn", 0)), warn_rows=list(summ.get("warn_rows") or []),
                        results_excel=getattr(form, "RESULTADOS_PATH", None))
         if fab.sesion is not None:
             if enviar:
-                todo_ok = resumen["failed"] == 0 and resumen["ok"] > 0 and not resumen["error"]
+                # Los avisos (URL / form / TYP) no marcan la sesión como fallida: no son del envío.
+                todo_ok = (resumen["failed"] == 0 and resumen["ok"] + resumen["warn"] > 0
+                           and not resumen["error"])
                 motivo = motivo_de_sesion(resumen["ok"], resumen["failed"], resumen["fail_rows"],
                                           resumen["error"] or "")
             else:

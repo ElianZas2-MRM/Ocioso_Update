@@ -902,7 +902,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         _pais_bars[_p] = {"canvas": _cb, "fill": _fl, "status": _stx,
                           "total": _tot, "done": 0,
                           "forms_total": _forms_tot, "forms_ok": 0, "forms_fail": 0,
-                          "fail_rows": []}
+                          "forms_warn": 0, "fail_rows": [], "warn_rows": []}
 
     # Progreso real por formulario: cada sesión reporta cuántos leads lleva hechos.
     _sess_frac = {}          # fracción de la sesión (para animar la barra en vivo)
@@ -922,18 +922,18 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             fdone = min(_forms_done_pais(pais), ftot)
             frac = fdone / ftot
             sdone, stot = b["done"], b["total"]
-            okc, failc = b["forms_ok"], b["forms_fail"]
+            okc, failc, warnc = b["forms_ok"], b["forms_fail"], b["forms_warn"]
         w = int(max(1, b["canvas"].winfo_width()) * max(0.0, min(1.0, frac)))
         b["canvas"].coords(b["fill"], 0, 0, w, 8)
         if sdone >= stot:
-            col = "#F1948A" if failc else "#82E0AA"
+            col = "#F1948A" if failc else ("#F8C471" if warnc else "#82E0AA")
             b["canvas"].itemconfig(b["fill"], fill=col)
-            b["status"].config(text=f"✓ {okc} OK · {failc} error(es)", fg=col)
+            b["status"].config(text=f"{okc} OK · {warnc} aviso(s) · {failc} error(es)", fg=col)
         else:
             b["status"].config(text=f"{fdone}/{b['forms_total']} forms", fg=TEXT_SECONDARY)
 
 
-    def show_completed(ok_total, fail_total, detenido, err_msg):
+    def show_completed(ok_total, fail_total, detenido, err_msg, warn_total=0):
         _exec_state["running"] = False
         if not modal.winfo_exists():
             return
@@ -958,17 +958,22 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         # Veredicto global + subtítulo con el total de formularios OK / con error.
         _global_ok = (fail_total == 0 and not err_msg and not detenido)
         try:
-            subtitle_lbl.config(text=f"{ok_total + fail_total}/{total_leads} forms  ·  "
-                                     f"{ok_total} OK · {fail_total} con error")
+            subtitle_lbl.config(text=f"{ok_total + fail_total + warn_total}/{total_leads} forms  ·  "
+                                     f"{ok_total} OK · {warn_total} con aviso · {fail_total} con error")
         except Exception:
             pass
         try:
+            # Tres veredictos: rojo si algo falló en el envío / los campos, naranja si solo
+            # hubo avisos de URL / form / TYP (que no se pasen por alto), verde si nada.
             if detenido:
                 _v_txt, _v_bg = "⏹  DETENIDO POR EL USUARIO", "#B9770E"
-            elif _global_ok:
-                _v_txt, _v_bg = "✓  RESULTADO GLOBAL: PASS", "#1E8449"
-            else:
+            elif not _global_ok:
                 _v_txt, _v_bg = f"✕  RESULTADO GLOBAL: FAIL  ({fail_total} form/s con error)", "#943126"
+            elif warn_total:
+                _v_txt, _v_bg = (f"⚠  RESULTADO GLOBAL: PASS CON AVISOS  ({warn_total} form/s: "
+                                 f"URL, form o TYP)"), "#B9770E"
+            else:
+                _v_txt, _v_bg = "✓  RESULTADO GLOBAL: PASS", "#1E8449"
             tk.Label(modal, text=_v_txt, font=("Segoe UI", 10, "bold"),
                      bg=_v_bg, fg="white", padx=12, pady=6).pack(fill="x", padx=20, pady=(6, 4))
         except Exception:
@@ -976,20 +981,31 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
         # Completar todas las barras por mercado (contando FORMULARIOS)
         _fail_detail_lines = []  # ("País", "fila 3, fila 7")
+        _warn_detail_lines = []
         for _p, b in _pais_bars.items():
             if not b["canvas"].winfo_exists():
                 continue
-            _col = "#F1948A" if (b["forms_fail"] or err_msg or detenido) else "#82E0AA"
+            _col = ("#F1948A" if (b["forms_fail"] or err_msg or detenido)
+                    else "#F8C471" if b["forms_warn"] else "#82E0AA")
             _wfull = max(1, b["canvas"].winfo_width())
             b["canvas"].itemconfig(b["fill"], fill=_col)
             b["canvas"].coords(b["fill"], 0, 0, _wfull, 8)
             # PASS/FAIL explicito por mercado: antes decia "✓ 7 OK · 1 error(es)" y el
             # tilde daba a entender que habia salido todo bien aunque hubiera fallas.
             _es_pass = not (b["forms_fail"] or err_msg or detenido)
-            _pf = "PASS" if _es_pass else "FAIL"
-            _mark = "✓" if _es_pass else "✕"
+            if not _es_pass:
+                _pf, _mark = "FAIL", "✕"
+            elif b["forms_warn"]:
+                _pf, _mark = "PASS CON AVISOS", "⚠"
+            else:
+                _pf, _mark = "PASS", "✓"
             b["status"].config(
-                text=f"{_mark} {_pf} — {b['forms_ok']} OK · {b['forms_fail']} error(es)", fg=_col)
+                text=(f"{_mark} {_pf} — {b['forms_ok']} OK · {b['forms_warn']} aviso(s) · "
+                      f"{b['forms_fail']} error(es)"), fg=_col)
+            for _wr in b.get("warn_rows") or []:
+                if isinstance(_wr, dict):
+                    _warn_detail_lines.append((_p, _wr.get("row", "?"), _wr.get("reason", ""),
+                                               (_wr.get("url") or _wr.get("url_form") or "").strip()))
             if b.get("fail_rows"):
                 for _fr in b["fail_rows"]:
                     if isinstance(_fr, dict):
@@ -1017,6 +1033,22 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 if _u:
                     tk.Label(_det, text=f"       {_u}", font=("Segoe UI", 7),
                              bg=MODAL_BG, fg="#D98880", wraplength=460, justify="left").pack(anchor="w")
+
+        # Detalle de los avisos (URL / form / TYP): en naranja, debajo de los errores.
+        if _warn_detail_lines:
+            _det_w = tk.Frame(modal, bg=MODAL_BG)
+            _det_w.pack(fill="x", padx=20, pady=(4, 0))
+            tk.Label(_det_w, text="Forms con aviso (URL, form o TYP):", font=("Segoe UI", 8, "bold"),
+                     bg=MODAL_BG, fg="#F8C471").pack(anchor="w")
+            for _p, _rn, _rs, _u in _warn_detail_lines:
+                _txt = f"   • {_p} — fila {_rn}"
+                if _rs:
+                    _txt += f": {_rs}"
+                tk.Label(_det_w, text=_txt, font=("Segoe UI", 8),
+                         bg=MODAL_BG, fg="#F8C471", wraplength=470, justify="left").pack(anchor="w")
+                if _u:
+                    tk.Label(_det_w, text=f"       {_u}", font=("Segoe UI", 7),
+                             bg=MODAL_BG, fg="#D4A24C", wraplength=460, justify="left").pack(anchor="w")
 
         if err_msg:
             tk.Label(modal, text=f"✕ {err_msg}", font=("Segoe UI", 8), bg=MODAL_BG, fg="#F1948A",
@@ -1051,7 +1083,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
         summary_row = Marco(modal, bg=MODAL_BG)
         summary_row.pack(fill="x", padx=20, pady=5)
-        tk.Label(summary_row, text=f"🟢 {ok_total} OK      🔴 {fail_total} con error", font=("Segoe UI", 9, "bold"),
+        tk.Label(summary_row, text=f"🟢 {ok_total} OK      🟠 {warn_total} con aviso      🔴 {fail_total} con error",
+                 font=("Segoe UI", 9, "bold"),
                  bg=MODAL_BG, fg="white").pack(side="left")
 
 
@@ -1065,7 +1098,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     # Estado compartido entre sesiones (thread-safe)
     _lock = threading.Lock()
     # ok/fail acá cuentan FORMULARIOS (no sesiones); done cuenta sesiones terminadas.
-    _st = {"ok": 0, "fail": 0, "done": 0, "err": ""}
+    _st = {"ok": 0, "fail": 0, "warn": 0, "done": 0, "err": ""}
     _running_markets = set()   # mercados que están ejecutando ahora mismo
     _email_results = []  # entradas para el email consolidado / por país
     _email_lock = threading.Lock()
@@ -1081,25 +1114,30 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     # 2 por defecto); el resto espera su turno, así todos los países se ejecutan.
     _bs_sem = threading.Semaphore(bs_max_paralelo())
 
-    def _bump(pais, sess_id=None, ok=0, fail=0, err="", fail_rows=None):
-        """Cierra una sesión. ok/fail son FORMULARIOS de esa sesión; fail_rows son los
-        números de fila (del Excel) que fallaron, para poder ubicarlos."""
+    def _bump(pais, sess_id=None, ok=0, fail=0, err="", fail_rows=None, warn=0, warn_rows=None):
+        """Cierra una sesión. ok/warn/fail son FORMULARIOS de esa sesión (verde / naranja:
+        aviso de URL, form o TYP / rojo: error de campos o envío); fail_rows y warn_rows
+        son las filas del Excel, para poder ubicarlas."""
         with _lock:
             _st["ok"] += ok
             _st["fail"] += fail
+            _st["warn"] += warn
             _st["done"] += 1
             if err:
                 _st["err"] = err
             if sess_id is not None:
                 _sess_frac[sess_id] = 1.0  # sesión terminada = barra de esa sesión llena
-                _sess_forms_done[sess_id] = ok + fail  # forms procesados por esta sesión
+                _sess_forms_done[sess_id] = ok + fail + warn  # forms procesados por esta sesión
             b = _pais_bars.get(pais)
             if b:
                 b["done"] += 1
                 b["forms_ok"] += ok
                 b["forms_fail"] += fail
+                b["forms_warn"] += warn
                 if fail_rows:
                     b["fail_rows"].extend(fail_rows)
+                if warn_rows:
+                    b["warn_rows"].extend(warn_rows)
                 if b["done"] >= b["total"]:
                     _running_markets.discard(pais)
         def _u():
@@ -1107,6 +1145,13 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 subtitle_lbl.config(text=_subtitle_text())
                 _paint_pais(pais)
         _ui(_u)
+
+    def _a_reintentar(fail_rows, warn_rows):
+        """Filas para "Reintentar fallidos": las de error y las de aviso en las que el
+        lead no salió (form no inserto, landing caída). Un aviso con el lead enviado no
+        se vuelve a mandar."""
+        return [f for f in list(fail_rows or []) + list(warn_rows or [])
+                if not isinstance(f, dict) or f.get("reintentar", True)]
 
     def _record_retry_fails(pais, device, sess, excel, scheduled, frows):
         """Guarda/actualiza el estado para 'REINTENTAR FALLIDOS' de esta sesión —
@@ -1211,12 +1256,14 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 _summ = getattr(form, "run_summary", None) or {}
                 _ok = int(_summ.get("ok", 0))
                 _fail = int(_summ.get("fail", 0))
+                _warn = int(_summ.get("warn", 0))
                 _frows = list(_summ.get("fail_rows", []) or [])
-                if _ok == 0 and _fail == 0:
+                _wrows = list(_summ.get("warn_rows", []) or [])
+                if _ok == 0 and _fail == 0 and _warn == 0:
                     # Excel sin filas procesadas: contar la sesión como 1 form OK para no romper totales.
                     _ok = int(sess.get("rows_count", 1) or 1)
-                _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_frows)
-                _record_retry_fails(pais, device, sess, excel, scheduled, _frows)
+                _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_frows, warn=_warn, warn_rows=_wrows)
+                _record_retry_fails(pais, device, sess, excel, scheduled, _a_reintentar(_frows, _wrows))
             elif bs_dispositivo(dtype) is not None:
                 # BrowserStack (iPhone / Android / Mac): el mismo motor que los navegadores,
                 # con el driver de la nube. Ver providers/browserstack/runner.py.
@@ -1233,12 +1280,16 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 _collect_bs_email(sess.get("email_label") or pais, _bs.navegador, _bs.plataforma, summary)
                 _err = summary.get("error")
                 _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))
+                _warn = int(summary.get("warn", 0))
                 _bs_frows = list(summary.get("fail_rows", []) or [])
+                _bs_wrows = list(summary.get("warn_rows", []) or [])
                 if _err and _ok == 0 and _fail == 0:
                     _bump(pais, _sid, fail=1, err=str(_err)[:200])
                 else:
-                    _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_bs_frows)
-                _record_retry_fails(pais, device, sess, excel, scheduled, _bs_frows)
+                    _bump(pais, _sid, ok=_ok, fail=_fail, fail_rows=_bs_frows,
+                          warn=_warn, warn_rows=_bs_wrows)
+                _record_retry_fails(pais, device, sess, excel, scheduled,
+                                    _a_reintentar(_bs_frows, _bs_wrows))
         except Exception as e:
             log_message(f"[ERROR] {pais}/{device}: {e}")
             # Crash de la sesión: contar como fallidos todos sus formularios.
@@ -1299,7 +1350,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                 enviar_email_resultados_consolidados(list(_email_results))
             except Exception as _e:
                 log_message(f"[ERROR] email consolidado: {_e}")
-        _ui(lambda: show_completed(_st["ok"], _st["fail"], _detenido, _st["err"]))
+        _ui(lambda: show_completed(_st["ok"], _st["fail"], _detenido, _st["err"], _st["warn"]))
 
     _exec_state["running"] = True
     threading.Thread(target=_worker, daemon=True).start()
