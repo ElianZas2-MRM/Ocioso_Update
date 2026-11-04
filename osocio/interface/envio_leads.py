@@ -49,6 +49,7 @@ import threading
 import tkinter as tk
 
 from osocio.interface.widgets import BotonRedondo, Marco
+from osocio.interface.progreso import BarraProgreso, Cronometro, IconoEstado
 from tkinter import messagebox
 
 from osocio.paths import DATA_DIR
@@ -754,7 +755,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     header_frame = Marco(modal, bg=MODAL_BG)
     header_frame.pack(fill="x", padx=20, pady=(5, 10))
     
-    icon_lbl = tk.Label(header_frame, text="↻", font=("Segoe UI", 16, "bold"), bg=MODAL_BG, fg="#C5A9DF")
+    icon_lbl = IconoEstado(header_frame)  # spinner; al final ✓ / ✕ / ■
     icon_lbl.pack(side="left")
     
     # Animación de rotación del icono
@@ -771,6 +772,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     title_lbl.pack(anchor="w")
     subtitle_lbl = tk.Label(title_info, text=f"Preparando… 0/{total_leads} forms", font=("Segoe UI", 9), bg=MODAL_BG, fg=TEXT_SECONDARY)
     subtitle_lbl.pack(anchor="w")
+    Cronometro(title_info, icon_lbl, bg=MODAL_BG).pack(anchor="w")
     rotate_icon()
     
     # Botón Detener: mismo comportamiento que la X de cerrar — pide confirmación antes
@@ -895,7 +897,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         tk.Label(_hdr, text=display_name, font=("Segoe UI", 10, "bold"), bg=MODAL_BG, fg="white").pack(side="left")
         _stx = tk.Label(_hdr, text=f"0/{_forms_tot} forms", font=("Segoe UI", 8), bg=MODAL_BG, fg=TEXT_SECONDARY)
         _stx.pack(side="right")
-        _cb = tk.Canvas(_row, height=8, bg="#35164D", highlightthickness=0)
+        _cb = BarraProgreso(_row, height=10, bg="#35164D")
         _cb.pack(fill="x", pady=(3, 0))
         _fl = _cb.create_rectangle(0, 0, 0, 8, fill="#F8C471", width=0)
         # total     = sesiones (para saber cuándo el país terminó todas sus sesiones)
