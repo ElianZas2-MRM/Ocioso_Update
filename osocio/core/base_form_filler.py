@@ -218,6 +218,67 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             out.append((self._iframe_src_of(f), disp))
         return out
 
+    def _esperar_iframe_esperado(self, expected_url, segundos=4.0):
+        """Unos segundos más buscando el iframe cuyo src es el form esperado (o None)."""
+        if not expected_url:
+            return None
+        fin = time.time() + segundos
+        while time.time() < fin:
+            try:
+                self.driver.switch_to.default_content()
+                iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+                for f, (src, _vis) in zip(iframes, self._src_y_visibilidad_de_iframes(iframes)):
+                    if src and self._diferencia_url_form(src, expected_url)[0]:
+                        return f
+            except Exception:
+                pass
+            time.sleep(0.5)
+        return None
+
+    @staticmethod
+    def clasificar_fila(envio_ok, motivo_envio="", landing_caida=False, form_estado="inserto_ok",
+                        campos_con_error=(), link_issue=False, dif_menor=(), url_problema="",
+                        cta_eletricos=""):
+        """Estado de una fila: ("ok" | "aviso" | "error", errores, avisos).
+
+        - error (rojo): algo de los CAMPOS o del envío en el form correcto (campos sin
+          completar, dropdown/opción no encontrada, datos distintos a los pedidos, el form
+          rechazó el envío...).
+        - aviso (naranja): problemas de URL / form / TYP: landing o form 404, form inserto
+          distinto o no inserto, link con error en la TYP, TYP que no se ve, CTA eléctricos,
+          URL del form escrita distinta.
+        Si el form es otro (o no está), los problemas de campos son consecuencia de eso: van
+        como parte del aviso, no como error.
+        """
+        errores, avisos = [], []
+        form_correcto = form_estado == "inserto_ok" and not landing_caida
+        if url_problema:
+            avisos.append(f"URL con problema: {url_problema}")
+        elif landing_caida:
+            avisos.append("la landing no cargó")
+        if form_estado == "no_inserto":
+            avisos.append("form no inserto")
+        elif form_estado == "inserto_otro":
+            avisos.append("form inserto distinto al esperado")
+        if link_issue:
+            avisos.append("link con error en la TYP")
+        if dif_menor:
+            avisos.append("URL del form escrita distinta (" + ", ".join(dif_menor) + ")")
+        if str(cta_eletricos or "").upper().startswith("FAIL"):
+            avisos.append("CTA eléctricos con error")
+        campos = [c for c in campos_con_error if c]
+        if not envio_ok:
+            if motivo_envio == "sin TYP":
+                avisos.append("la TYP no se ve")
+            elif form_correcto:
+                errores.append(motivo_envio or "error al enviar")
+        if form_correcto:
+            errores.extend(campos)
+        elif campos:
+            avisos.append("campos: " + "; ".join(campos))
+        estado = "error" if errores else ("aviso" if avisos else "ok")
+        return estado, errores, avisos
+
     def _pick_gm_iframe(self, iframes, expected_url=None):
         """
         Elige el iframe correcto entre varios candidatos.
@@ -318,7 +379,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.RESULTADOS_PATH = None
         self.RUN_NUMBER = None
         # Resumen por formulario de la última corrida (lo consume la UI para el modal detallado).
-        self.run_summary = {"ok": 0, "fail": 0, "total": 0, "fail_rows": []}
+        self.run_summary = {"ok": 0, "fail": 0, "warn": 0, "total": 0, "fail_rows": [], "warn_rows": []}
         # Aviso opcional al empezar y al terminar cada lead: on_lead(evento, **datos), con
         # evento "inicio" o "fin". Lo usa BrowserStack para dejar marcas en el video.
         self.on_lead = None
@@ -4447,23 +4508,77 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         return False
 
     def _apply_row_color(self, sheet, row_index, is_ok, start_col=None,
-                         form_coincide_col=None, form_coincide_ok=None):
-        """Colorea SOLO las columnas de resultado (desde start_col) según si el lead
-        se envió OK (verde) o con error (rojo). Los datos de entrada quedan sin color."""
+                         form_coincide_col=None, form_coincide_ok=None, estado=None,
+                         lead_salio=True):
+        """Colorea SOLO las columnas de resultado (desde start_col): verde (ok), naranja
+        (aviso de URL / form / TYP) o rojo (error). Los datos de entrada quedan sin color.
+
+        El naranja tiene dos tonos según si el lead salió o no: "Reintentar fallidos"
+        lee el color de "Resultado" para saber qué filas volver a correr."""
+        from osocio.utils.reintento_fallidos import (NARANJA_ENVIADO, NARANJA_SIN_ENVIO,
+                                                     ROJO_FALLA)
         GREEN_ROW  = PatternFill(fill_type="solid", fgColor="C6EFCE")
-        RED_ROW    = PatternFill(fill_type="solid", fgColor="FFC7CE")
+        RED_ROW    = PatternFill(fill_type="solid", fgColor=ROJO_FALLA)
         GREEN_CELL = PatternFill(fill_type="solid", fgColor="375623")
         RED_CELL   = PatternFill(fill_type="solid", fgColor="C00000")
+        ORANGE_CELL = PatternFill(fill_type="solid", fgColor="FFC000")
         WHITE_FONT = Font(color="FFFFFF", bold=True)
 
-        row_fill = GREEN_ROW if is_ok else RED_ROW
+        if estado is None:
+            estado = "ok" if is_ok else "error"
+        if estado == "ok":
+            row_fill = GREEN_ROW
+        elif estado == "aviso":
+            row_fill = PatternFill(fill_type="solid",
+                                   fgColor=NARANJA_ENVIADO if lead_salio else NARANJA_SIN_ENVIO)
+        else:
+            row_fill = RED_ROW
         for col in range(start_col or 1, sheet.max_column + 1):
             sheet.cell(row=row_index, column=col).fill = row_fill
 
         if form_coincide_col and form_coincide_ok is not None:
             cell = sheet.cell(row=row_index, column=form_coincide_col)
-            cell.fill = GREEN_CELL if form_coincide_ok else RED_CELL
-            cell.font = WHITE_FONT
+            if form_coincide_ok:
+                cell.fill, cell.font = GREEN_CELL, WHITE_FONT
+            elif estado == "error":
+                cell.fill, cell.font = RED_CELL, WHITE_FONT
+            else:
+                cell.fill, cell.font = ORANGE_CELL, Font(color="000000", bold=True)
+
+    @staticmethod
+    def _color_estado_url(valor):
+        """Color de la celda de estado de una URL: verde 200, ámbar redirige, rojo el resto.
+        Con "Esperada: … | Inserta: …" manda el peor de los dos."""
+        txt = str(valor or "").strip().upper()
+        if txt in ("-", ""):
+            return None
+        peor = "C6EFCE"
+        for parte in txt.split("|"):
+            p = parte.strip()
+            if p.startswith(("ESPERADA:", "INSERTA:")):
+                p = p.split(":", 1)[1].strip()
+            if p.startswith("200"):
+                continue
+            if "REDIRIGE" in p:
+                peor = "FFC000" if peor == "C6EFCE" else peor
+            else:
+                return "FFC7CE"
+        return peor
+
+    def _estado_urls_form(self, esperada, inserta):
+        """Texto de "Estado URL form": el de la esperada y, si el form inserto es OTRA URL,
+        también el de la inserta (para ver que la que realmente está en la landing anda)."""
+        base = getattr(self, "_estado_url_form", "-") or "-"
+        inserta = (inserta or "").strip()
+        if not esperada or not inserta.lower().startswith("http") \
+                or self._diferencia_url_form(inserta, esperada)[0]:
+            return base
+        try:
+            from osocio.utils.url_status import check_url_status
+            st = check_url_status(inserta)
+            return f"Esperada: {base} | Inserta: {st.get('label', '-')}"
+        except Exception:
+            return base
 
     def submit_and_verify_form(self, current_ss_number, expected_form_url):
         """Envía el formulario y verifica resultado"""
@@ -4711,7 +4826,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             
             # Verificar y crear columnas necesarias
             headers = [cell.value for cell in sheet[1] if cell.value]
-            required_columns = ["Resultado", "Formulario Inserto", "Formulario Completado", "TY Page",
+            required_columns = ["Estado", "Resultado", "Formulario Inserto", "Formulario Completado", "TY Page",
                                 "TYP con CTA", "LINK ISSUE TYP",
                                 "Form URL esperada", "Form URL encontrada", "Form coincide",
                                 "Datos vs Excel", "Motivo",
@@ -4729,6 +4844,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             # Obtener índices de columnas
             headers = [cell.value for cell in sheet[1] if cell.value]
             result_col = headers.index("Resultado") + 1
+            estado_col = headers.index("Estado") + 1 if "Estado" in headers else None
             form_inserto_col = headers.index("Formulario Inserto") + 1
             form_completado_col = headers.index("Formulario Completado") + 1
             ty_page_col = headers.index("TY Page") + 1
@@ -4750,7 +4866,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             _total_leads = max(0, sheet.max_row - 1)
             _done_leads = 0
             # Resumen autoritativo por formulario (lo lee la UI para el modal / email).
-            self.run_summary = {"ok": 0, "fail": 0, "total": _total_leads, "fail_rows": []}
+            self.run_summary = {"ok": 0, "fail": 0, "warn": 0, "total": _total_leads,
+                                "fail_rows": [], "warn_rows": []}
 
             # Encabezados SIN filtrar los vacíos: los índices tienen que alinear con la fila
             raw_headers = [cell.value for cell in sheet[1]]
@@ -4900,6 +5017,12 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             self.driver.switch_to.default_content()
                             _ruta_aem = self._aem_form_embebido(expected_form_url)
                         if not target_iframe and not _ruta_aem:
+                            # Antes de agarrar "cualquier iframe GM": unos segundos más por el
+                            # esperado. En Edge el correcto a veces llega tarde y se tomaba otro.
+                            target_iframe = self._esperar_iframe_esperado(expected_form_url)
+                            if target_iframe is not None:
+                                print("Formulario esperado encontrado en la espera extra")
+                        if not target_iframe and not _ruta_aem:
                             print("Formulario esperado no encontrado, buscando iframe GM disponible...")
                             try:
                                 _cand, _es_gm = self._pick_gm_iframe(
@@ -4909,9 +5032,16 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 _cand, _es_gm = None, False
                             if _cand is not None:
                                 target_iframe = _cand
-                                # Si es un iframe GM (aunque su src no matchee 1:1 el Excel) no lo
-                                # tratamos como mismatch duro: es el form correcto de todos modos.
+                                # Un iframe GM puede ser el mismo form con la URL escrita distinta
+                                # (eso lo resuelve _diferencia_url_form más abajo) o OTRO form de la
+                                # página. Antes se daba por bueno cualquier GM y el lead se llenaba
+                                # en otro form y salía PASS (Perú agrofest, Brasil eletricos en Edge).
+                                _src_cand = self._iframe_src_of(_cand)
                                 if not _es_gm:
+                                    form_url_mismatch = True
+                                elif _src_cand and not self._diferencia_url_form(
+                                        _src_cand, expected_form_url)[0]:
+                                    print(f"⚠ El iframe GM disponible es OTRO form: {_src_cand}")
                                     form_url_mismatch = True
                             else:
                                 form_url_mismatch = True
@@ -5217,6 +5347,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
                 # Determinar si el lead se envió OK antes de agregar prefijos
                 _lead_ok = (result_text == "Lead enviado correctamente")
+                _envio_ok = _lead_ok
+                _motivo_envio = "" if _envio_ok else self._short_fail_reason(result_text)
 
                 # Landing rota (404): cualquier problema de la landing es fallo del form.
                 _landing_issue = getattr(self, "_landing_issue", "")
@@ -5321,6 +5453,32 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                         f"{', '.join(self._form_dif_menor)} (es el mismo form) — "
                         f"esperada: {expected_form_url} | encontrada: {_encontrada}"
                     )
+                # Estado de la fila en TRES niveles: ok / aviso (URL, form, TYP) / error (campos
+                # o envío). Es lo que lee el resumen del final, el mail y "Reintentar fallidos".
+                _campos_err = []
+                if _sin_mapeo:
+                    _campos_err.append(f"campos sin completar: {', '.join(_sin_mapeo)}")
+                if _no_encontrados:
+                    _campos_err.append(f"dropdown no encontrado: {'; '.join(_no_encontrados)}")
+                if getattr(self, "_opciones_no_encontradas", []):
+                    _campos_err.append(
+                        f"opción no encontrada: {'; '.join(self._opciones_no_encontradas)}")
+                if getattr(self, "_datos_mismatch", False):
+                    _campos_err.append(
+                        f"datos distintos a los del Excel: {getattr(self, '_datos_vs_excel', '')}")
+                _estado_fila, _errores_fila, _avisos_fila = self.clasificar_fila(
+                    envio_ok=_envio_ok, motivo_envio=_motivo_envio,
+                    landing_caida=bool(_landing_issue), form_estado=self._form_inserto_estado,
+                    campos_con_error=_campos_err,
+                    link_issue=bool(getattr(self, "_link_issue_present", False)),
+                    dif_menor=list(self._form_dif_menor),
+                    url_problema=getattr(self, "_url_status_problema", "") or "",
+                    cta_eletricos=getattr(self, "_cta_eletricos", "") or "")
+                # ¿Salió el lead? (lo que se reintenta es lo que no salió, o lo que dio error)
+                _lead_salio = bool(_envio_ok and not _landing_issue
+                                   and self._form_inserto_estado != "no_inserto")
+                if estado_col:
+                    sheet.cell(row=i, column=estado_col).value = _estado_fila.upper()
                 sheet.cell(row=i, column=result_col).value = result_text
                 # OJO: NO se tocan las columnas de entrada (Modelo/Nombre/etc. las setea el
                 # usuario). El modelo realmente elegido queda en las columnas de tracking
@@ -5369,22 +5527,21 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
                 # Motivo del fallo: por qué no salió el lead, sin leer el Resultado entero
                 _motivo = "-"
-                if not _lead_ok:
-                    _motivo = self._short_fail_reason(result_text)
-                    _url_prob = getattr(self, "_url_status_problema", "") or ""
-                    if _url_prob:
-                        # Una landing 404 explica cualquier "form no encontrado": va primero
-                        _motivo = f"{_url_prob} | {_motivo}"
-                elif self._form_dif_menor:
-                    _motivo = f"URL del form difiere en {', '.join(self._form_dif_menor)} (lead OK)"
+                if _estado_fila == "error":
+                    _motivo = "ERROR: " + " | ".join(_errores_fila)
+                    if _avisos_fila:
+                        _motivo += " || AVISO: " + " | ".join(_avisos_fila)
+                elif _estado_fila == "aviso":
+                    _motivo = ("AVISO: " + " | ".join(_avisos_fila)
+                               + (" (lead enviado)" if _lead_salio else " (lead no enviado)"))
                 if motivo_col:
                     sheet.cell(row=i, column=motivo_col).value = _motivo
                 if estado_url_landing_col:
                     sheet.cell(row=i, column=estado_url_landing_col).value = (
                         getattr(self, "_estado_url_landing", "-") or "-")
                 if estado_url_form_col:
-                    sheet.cell(row=i, column=estado_url_form_col).value = (
-                        getattr(self, "_estado_url_form", "-") or "-")
+                    sheet.cell(row=i, column=estado_url_form_col).value = self._estado_urls_form(
+                        expected_form_url, _found_url)
                 if cta_eletricos_col:
                     sheet.cell(row=i, column=cta_eletricos_col).value = (
                         getattr(self, "_cta_eletricos", "-") or "-")
@@ -5392,35 +5549,33 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                 self.write_tracked_fields_to_sheet(sheet, i)
 
                 # Colorear SOLO las columnas de resultado: verde si lead OK, rojo si error
-                self._apply_row_color(sheet, i, _lead_ok, start_col=result_col,
-                                      form_coincide_col=form_coincide_col, form_coincide_ok=_form_coincide_ok)
+                self._apply_row_color(sheet, i, _estado_fila == "ok", start_col=result_col,
+                                      form_coincide_col=form_coincide_col, form_coincide_ok=_form_coincide_ok,
+                                      estado=_estado_fila, lead_salio=_lead_salio)
 
-                # Form distinto al esperado PERO el lead viajó: ámbar, no rojo — hay dato en
-                # la base, sólo que entró por otro formulario.
-                # Mismo form con la URL escrita distinta (y lead OK): ámbar con el aviso.
-                if getattr(self, "_form_mismatch_enviado", False) or (_lead_ok and self._form_dif_menor):
-                    for _c in (result_col, form_coincide_col, motivo_col):
+                # Aviso (URL / form / TYP): las celdas clave en naranja fuerte.
+                if _estado_fila == "aviso":
+                    for _c in (result_col, motivo_col, estado_col):
                         if not _c:
                             continue
                         _cell = sheet.cell(row=i, column=_c)
                         _cell.fill = PatternFill(fill_type="solid", fgColor="FFC000")
                         _cell.font = Font(color="000000", bold=True)
 
-                # Estado de las URLs: verde 200, ámbar si redirige, rojo si 404/503/sin respuesta
+                # Estado de las URLs: verde 200, ámbar si redirige, rojo si 404/503/sin respuesta.
+                # "Esperada: … | Inserta: …" toma el color del peor de los dos.
                 for _c in (estado_url_landing_col, estado_url_form_col):
                     if not _c:
                         continue
                     _cell = sheet.cell(row=i, column=_c)
-                    _txt = str(_cell.value or "").upper()
-                    if _txt.startswith("200"):
-                        _fg = "C6EFCE"
-                    elif "REDIRIGE" in _txt:
-                        _fg = "FFC000"
-                    elif _txt in ("-", ""):
-                        continue
-                    else:
-                        _fg = "FFC7CE"
-                    _cell.fill = PatternFill(fill_type="solid", fgColor=_fg)
+                    _fg = self._color_estado_url(_cell.value)
+                    if _fg:
+                        _cell.fill = PatternFill(fill_type="solid", fgColor=_fg)
+                if estado_col:
+                    _ce = sheet.cell(row=i, column=estado_col)
+                    _ce.fill = PatternFill(fill_type="solid", fgColor={
+                        "ok": "375623", "aviso": "FFC000", "error": "C00000"}[_estado_fila])
+                    _ce.font = Font(color="000000" if _estado_fila == "aviso" else "FFFFFF", bold=True)
 
                 # Enviado OK pero con datos distintos a los pedidos en el Excel: la fila no
                 # puede quedar verde a secas — se marca en ámbar el detalle de la diferencia.
@@ -5429,33 +5584,40 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                     _dv.fill = PatternFill(fill_type="solid", fgColor="FFC000")
                     _dv.font = Font(color="000000", bold=True)
 
-                # LINK ISSUE TYP: rojo si hay link raro, aunque el lead se haya enviado OK
+                # LINK ISSUE TYP: naranja (aviso) si hay link raro, aunque el lead haya salido OK
                 if link_issue_col and getattr(self, "_link_issue_present", False):
                     _cell = sheet.cell(row=i, column=link_issue_col)
-                    _cell.fill = PatternFill(fill_type="solid", fgColor="C00000")
-                    _cell.font = Font(color="FFFFFF", bold=True)
+                    _cell.fill = PatternFill(fill_type="solid", fgColor="FFC000")
+                    _cell.font = Font(color="000000", bold=True)
 
                 self.safe_save_workbook(wb, self.RESULTADOS_PATH)
                 # Acumular resumen por formulario (autoritativo, mismo criterio que el color).
                 try:
-                    if _lead_ok:
+                    if _estado_fila == "ok":
                         self.run_summary["ok"] += 1
                     else:
-                        self.run_summary["fail"] += 1
                         # fila + motivo corto + URL (para el resumen rápido del modal / email).
                         # La URL importa: con "fila 6" solo, hay que abrir el Excel para saber
                         # cual fallo. En URL suelta landing_url ya trae la URL del form.
-                        self.run_summary["fail_rows"].append({
+                        _fila_res = {
                             "row": i,
-                            "reason": self._short_fail_reason(result_text),
+                            "reason": "; ".join(_errores_fila or _avisos_fila)[:200],
                             "url": landing_url or "",
                             "url_form": expected_form_url or "",
-                        })
+                            # "Reintentar fallidos" toma lo que dio error o el lead que no salió
+                            "reintentar": _estado_fila == "error" or not _lead_salio,
+                        }
+                        if _estado_fila == "error":
+                            self.run_summary["fail"] += 1
+                            self.run_summary["fail_rows"].append(_fila_res)
+                        else:
+                            self.run_summary["warn"] += 1
+                            self.run_summary["warn_rows"].append(_fila_res)
                 except Exception:
                     pass
                 self._avisar_lead("fin", fila=i, numero=_done_leads + 1, total=_total_leads,
-                                  url=landing_url, ok=bool(_lead_ok),
-                                  motivo="" if _lead_ok else self._short_fail_reason(result_text))
+                                  url=landing_url, ok=_estado_fila == "ok",
+                                  motivo="; ".join(_errores_fila or _avisos_fila)[:120])
                 _done_leads += 1
                 if progress_callback:
                     try:

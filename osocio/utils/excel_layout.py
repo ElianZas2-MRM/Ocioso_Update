@@ -21,6 +21,7 @@ from typing import List
 # El tracking por paso (PasoN::campo, Final::campo, Reintento::campo) se detecta
 # aparte y va detrás de estas, antes de los datos de entrada.
 ORDEN_RESULTADO = [
+    "Estado",         # OK / AVISO / ERROR: el veredicto de la fila de un vistazo
     "Resultado",
     "Motivo",
     "Formulario Inserto",

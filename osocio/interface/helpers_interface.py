@@ -671,6 +671,8 @@ def analizar_errores_excel(ruta_excel):
         col_estado_landing      = _col("estado url landing")
         col_estado_form         = _col("estado url form")
         col_cta_eletricos       = _col("cta eletricos br")
+        # OK / AVISO / ERROR: lo escribe el motor (mismo criterio que el resumen de la corrida).
+        col_estado              = _col("estado")
 
         def _val(fila, col):
             """Valor de la celda como texto limpio, o '' si no existe / está vacía."""
@@ -756,14 +758,27 @@ def analizar_errores_excel(ruta_excel):
         # el Excel lo marcaba pero el email lo reportaba como PASS. Ahora también fallan.
         _verif_fail_mask = _mask_fail(col_form_coincide) | _mask_fail(col_cta_eletricos)
         errores_mask = procesados_mask & (~_ok_mask | _sin_completar_mask | _verif_fail_mask)
+        avisos_mask = pd.Series(False, index=df.index)
+        if col_estado:
+            # Excel nuevo: el veredicto de cada fila ya viene escrito. Rojo = error de campos
+            # o de envío; naranja = aviso de URL / form / TYP.
+            _est = df[col_estado].astype(str).fillna("").str.strip().str.upper()
+            errores_mask = procesados_mask & (_est == "ERROR")
+            avisos_mask = procesados_mask & (_est == "AVISO")
+        con_avisos = int(avisos_mask.sum())
+        detalles_avisos = []
+        for _ia, _fa in df[avisos_mask].iterrows():
+            _ua, _usa = _urls_de(_fa)
+            detalles_avisos.append({'url': _ua, 'url_secure': _usa, 'error': _detalle_error(_fa),
+                                    'linea': _ia + 2})
 
         errores = df[errores_mask]
         con_errores = int(errores_mask.sum())
         procesados = int(procesados_mask.sum())
-        exitosos = procesados - con_errores
+        exitosos = procesados - con_errores - con_avisos
         no_procesados = total_filas - procesados
 
-        exitosos_df = df[procesados_mask & ~errores_mask]
+        exitosos_df = df[procesados_mask & ~errores_mask & ~avisos_mask]
         detalles_ok = []
         for _i, _fila in exitosos_df.iterrows():
             _url, _url_sec = _urls_de(_fila)
@@ -852,6 +867,8 @@ def analizar_errores_excel(ruta_excel):
                 'total': total_filas,
                 'exitosos': exitosos,
                 'con_errores': 0,
+                'con_avisos': con_avisos,
+                'detalles_avisos': detalles_avisos,
                 'no_procesados': no_procesados,
                 'detalles': [],
                 'detalles_ok': detalles_ok,
@@ -877,6 +894,8 @@ def analizar_errores_excel(ruta_excel):
             'total': total_filas,
             'exitosos': exitosos,
             'con_errores': con_errores,
+            'con_avisos': con_avisos,
+            'detalles_avisos': detalles_avisos,
             'no_procesados': no_procesados,
             'detalles': detalles,
             'detalles_ok': detalles_ok,
@@ -1279,7 +1298,9 @@ def _build_url_table_html(items):
         return ""
 
     # Fails first, then passes; within each group keep original order
-    sorted_items = [i for i in items if not i['ok']] + [i for i in items if i['ok']]
+    sorted_items = ([i for i in items if not i['ok'] and not i.get('aviso')]
+                    + [i for i in items if i.get('aviso')]
+                    + [i for i in items if i['ok']])
 
     _TD = 'style="padding:7px 10px;border:1px solid #ddd;vertical-align:top"'
     _TD_IC = 'style="padding:7px 8px;border:1px solid #ddd;vertical-align:top;text-align:center;width:28px"'
@@ -1298,10 +1319,13 @@ def _build_url_table_html(items):
         form_url = _h.escape(form_raw) if form_raw else '<span style="color:#999">—</span>'
         error   = _h.escape(item.get('error', ''))
         es_ok   = bool(item['ok'])
-        icon    = "✅" if es_ok else "❌"
-        estado  = "PASS" if es_ok else "FAIL"
-        est_col = "#1e8449" if es_ok else "#c0392b"
-        row_bg  = "#f0fff4" if es_ok else "#fff5f5"
+        es_aviso = bool(item.get('aviso'))
+        if es_aviso:
+            icon, estado, est_col, row_bg = "⚠️", "AVISO", "#b9770e", "#fff8e6"
+        elif es_ok:
+            icon, estado, est_col, row_bg = "✅", "PASS", "#1e8449", "#f0fff4"
+        else:
+            icon, estado, est_col, row_bg = "❌", "FAIL", "#c0392b", "#fff5f5"
         linea   = item.get('linea', '')
 
         rows_html += (
@@ -1322,7 +1346,7 @@ def _build_url_table_html(items):
                 f'<tr style="background:{row_bg}">'
                 '<td style="border:1px solid #ddd;border-top:none"></td>'
                 f'<td colspan="3" style="padding:3px 10px 8px 10px;border:1px solid #ddd;'
-                f'border-top:none;color:#c0392b;font-size:12px">↳ {_h.escape(str(_linea_txt))}{error}</td>'
+                f'border-top:none;color:{est_col};font-size:12px">↳ {_h.escape(str(_linea_txt))}{error}</td>'
                 '</tr>'
             )
 
@@ -1370,19 +1394,26 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
             con_errores = max(con_errores, 1)
         no_procesados = int(errores.get('no_procesados', 0))
         total_filas = int(errores.get('total', 0))
+        con_avisos = int(errores.get('con_avisos', 0))
 
         nav_label, vp_label = _label_navegador(browser or "", viewport or "")
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
 
-        resultado_global = "PASS" if con_errores == 0 else "FAILED"
-        asunto = f"[{resultado_global}] Osocio {_PAIS_ABREV.get(pais, pais)} {fecha_actual} — {exitosos} OK / {con_errores} errores"
+        # Tres estados: FAILED (error de campos / envío), CON AVISOS (URL, form o TYP), PASS.
+        resultado_global = ("FAILED" if con_errores else
+                            "PASS CON AVISOS" if con_avisos else "PASS")
+        asunto = (f"[{resultado_global}] Osocio {_PAIS_ABREV.get(pais, pais)} {fecha_actual} — "
+                  f"{exitosos} OK / {con_avisos} avisos / {con_errores} errores")
 
         encabezado = pais
         if browser:
             encabezado += f" — {nav_label} / {vp_label}"
 
-        icono = "✅" if con_errores == 0 else "❌"
-        if con_errores == 0:
+        icono = "❌" if con_errores else ("⚠️" if con_avisos else "✅")
+        if con_errores == 0 and con_avisos:
+            estado_texto = (f"PASS CON AVISOS — {con_avisos} formulario(s) con problemas de URL, "
+                            f"form inserto o TYP (ver detalle)")
+        elif con_errores == 0:
             estado_texto = "OK — todos los formularios insertados y leads enviados correctamente"
         elif _problema:
             estado_texto = _problema
@@ -1403,8 +1434,11 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
 
         _fail_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles') or [])]
         _pass_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles_ok') or [])]
+        _warn_urls = [_url_short(d.get('url', '')) for d in (errores.get('detalles_avisos') or [])]
         if _fail_urls:
             cuerpo += f"FAILED ({len(_fail_urls)}): {pais}\n"
+        if _warn_urls:
+            cuerpo += f"CON AVISOS ({len(_warn_urls)}): {pais}\n"
         if _pass_urls:
             cuerpo += f"PASSED ({len(_pass_urls)}): {pais}\n"
 
@@ -1427,7 +1461,10 @@ def enviar_email_resultados(pais, excel_path, screenshots_dir, browser=None, vie
         if _problema:
             _err_items.append({'linea': os.path.basename(excel_path), 'url': '(sin datos del Excel)',
                                'url_secure': '', 'ok': False, 'error': _problema})
-        _url_table_html = _build_url_table_html(_ok_items + _err_items)
+        _warn_items = [{'linea': d['linea'], 'url': d.get('url', ''), 'url_secure': d.get('url_secure', ''),
+                        'ok': False, 'aviso': True, 'error': d.get('error', '')}
+                       for d in (errores.get('detalles_avisos') or [])]
+        _url_table_html = _build_url_table_html(_ok_items + _warn_items + _err_items)
 
         config = cargar_config_global()
         enviar_mail = bool(config.get("enviar_mail", False))
@@ -1529,6 +1566,7 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
         # Acumular resultados por país para el resumen PASSED/FAILED
         pais_errores = {}   # pais -> total con_errores sumado
         pais_exitosos = {}  # pais -> total exitosos sumado
+        pais_avisos = {}    # pais -> total con aviso (URL / form / TYP) sumado
         adjuntos = []
         detalles_fallidos = []   # bloques de detalle solo para países FAILED
         detalles_url_pais = []   # [(pais, nav_label, vp_label, todos_urls)] para tabla por URL
@@ -1560,14 +1598,19 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
 
             pais_errores[pais] = pais_errores.get(pais, 0) + con_errores
             pais_exitosos[pais] = pais_exitosos.get(pais, 0) + exitosos
+            pais_avisos[pais] = pais_avisos.get(pais, 0) + int(errores.get("con_avisos", 0))
 
             _ok_items_c = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': True, 'error': ''} for d in (errores.get('detalles_ok') or [])]
             _err_items_c = [{'linea': d['linea'], 'url': d.get('url',''), 'url_secure': d.get('url_secure',''), 'ok': False, 'error': d.get('error', '')} for d in (errores.get('detalles') or [])]
             if _problema:
                 _err_items_c.append({'linea': os.path.basename(excel_path), 'url': '(sin datos del Excel)',
                                      'url_secure': '', 'ok': False, 'error': _problema})
-            if _ok_items_c or _err_items_c:
-                detalles_url_pais.append((pais, nav_label, vp_label, _err_items_c + _ok_items_c))
+            _warn_items_c = [{'linea': d['linea'], 'url': d.get('url', ''), 'url_secure': d.get('url_secure', ''),
+                              'ok': False, 'aviso': True, 'error': d.get('error', '')}
+                             for d in (errores.get('detalles_avisos') or [])]
+            if _ok_items_c or _err_items_c or _warn_items_c:
+                detalles_url_pais.append((pais, nav_label, vp_label,
+                                          _err_items_c + _warn_items_c + _ok_items_c))
 
             if con_errores > 0:
                 bloque = f"❌ {pais.upper()} — {nav_label} / {vp_label}\n"
@@ -1602,24 +1645,33 @@ def enviar_email_resultados_consolidados(resultados_ejecucion):
             [r.get("pais", "N/A") for r in resultados_ejecucion]
         ))
         paises_failed = [p for p in todos_paises if pais_errores.get(p, 0) > 0]
-        paises_passed = [p for p in todos_paises if pais_errores.get(p, 0) == 0]
+        paises_avisos = [p for p in todos_paises
+                         if pais_errores.get(p, 0) == 0 and pais_avisos.get(p, 0) > 0]
+        paises_passed = [p for p in todos_paises
+                         if pais_errores.get(p, 0) == 0 and pais_avisos.get(p, 0) == 0]
 
         total_exitosos = sum(pais_exitosos.values())
         total_errores = sum(pais_errores.values())
-        resultado_global = "PASS" if not paises_failed else "FAILED"
+        resultado_global = ("FAILED" if paises_failed else
+                            "PASS CON AVISOS" if paises_avisos else "PASS")
 
         partes_asunto = []
         if paises_passed:
             partes_asunto.append(f"{_abrev_paises(paises_passed)} ✓")
+        if paises_avisos:
+            partes_asunto.append(f"{_abrev_paises(paises_avisos)} ⚠")
         if paises_failed:
             partes_asunto.append(f"{_abrev_paises(paises_failed)} ✗")
         asunto = f"[{resultado_global}] Osocio — {fecha_actual} — {' | '.join(partes_asunto)}"
 
-        icono_global = "✅" if resultado_global == "PASS" else "❌"
+        icono_global = {"PASS": "✅", "PASS CON AVISOS": "⚠️"}.get(resultado_global, "❌")
         cuerpo = f"{icono_global} RESULTADO GLOBAL: {resultado_global}\n\n"
 
         if paises_failed:
             cuerpo += f"FAILED ({len(paises_failed)}): {' | '.join(paises_failed)}\n"
+        if paises_avisos:
+            cuerpo += (f"CON AVISOS ({len(paises_avisos)}): {' | '.join(paises_avisos)} "
+                       f"— problemas de URL, form inserto o TYP\n")
         if paises_passed:
             cuerpo += f"PASSED ({len(paises_passed)}): {' | '.join(paises_passed)}\n"
 
