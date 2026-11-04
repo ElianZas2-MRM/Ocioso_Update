@@ -711,7 +711,9 @@ class AvisoFlotante:
     """Aviso flotante (toast) abajo a la derecha de la ventana.
 
     `cargando()` muestra un spinner mientras algo corre; `listo()` / `error()` lo cambian
-    por el resultado. El de éxito se va solo; el de error queda hasta que se cierre.
+    por el resultado. El de éxito se va solo con una cuenta regresiva a la vista (se pausa
+    con el mouse encima) y puede traer un botón de acción ("Abrir carpeta"); el de error
+    queda hasta que se cierre.
     """
 
     _VERDE, _ROJO, _TXT = "#82E0AA", "#F1948A", "#E6D6F2"
@@ -722,6 +724,8 @@ class AvisoFlotante:
         self._giro = None
         self._cierre = None
         self._angulo = 0
+        self._restan = 0
+        self._encima = False
 
     def _armar(self):
         if self.caja is not None:
@@ -744,13 +748,25 @@ class AvisoFlotante:
         self.detalle = tk.Label(textos, text="", font=("Segoe UI", 8), bg=bg, fg=self._TXT,
                                 anchor="w", justify="left", wraplength=320)
         self.detalle.pack(anchor="w", pady=(2, 0))
+        self.pie = tk.Frame(textos, bg=bg)
+        self.btn_accion = BotonRedondo(self.pie, text="", font=("Segoe UI", 8, "bold"),
+                                       bg="#602D8A", fg="#FFFFFF", padx=10, pady=1)
+        self.cuenta = tk.Label(self.pie, text="", font=("Segoe UI", 8, "italic"), bg=bg,
+                               fg="#9B86B5")
+        self.cuenta.pack(side="right")
         cerrar = tk.Label(fila, text="✕", font=("Segoe UI", 9), bg=bg, fg=self._TXT, cursor="hand2")
         cerrar.pack(side="right", anchor="n", padx=(10, 0))
         cerrar.bind("<Button-1>", lambda e: self.ocultar())
+        # Con el mouse encima la cuenta regresiva se frena (para leer o hacer clic).
+        self.caja.bind("<Enter>", lambda e: setattr(self, "_encima", True), add="+")
+        self.caja.bind("<Leave>", self._salio, add="+")
 
     def _mostrar(self, titulo, detalle):
         self._armar()
         self._cancelar()
+        self._encima = False
+        self.btn_accion.pack_forget()
+        self.pie.pack_forget()
         self.titulo.config(text=titulo)
         self.detalle.config(text=detalle or "")
         self.caja.place(relx=1.0, rely=1.0, anchor="se", x=-22, y=-34)
@@ -786,10 +802,47 @@ class AvisoFlotante:
         self._mostrar(titulo, detalle)
         self._girar()
 
-    def listo(self, titulo, detalle="", segundos=8):
+    def listo(self, titulo, detalle="", segundos=8, accion=None):
+        """`accion`: (texto, función) para un botón, p. ej. ("Abrir carpeta", abrir)."""
         self._mostrar(titulo, detalle)
         self._marca(self._VERDE, "✓")
-        self._cierre = self.root.after(int(segundos * 1000), self.ocultar)
+        if accion:
+            texto, fn = accion
+            self.btn_accion.config(text=texto, command=lambda: (fn(), self.ocultar()))
+            self.btn_accion.pack(side="left")
+        self.pie.pack(fill="x", pady=(8, 0))
+        self._restan = max(1, int(round(segundos)))
+        self._contar()
+
+    def _contar(self):
+        if not self._encima:
+            if self._restan <= 0:
+                self.ocultar()
+                return
+            try:
+                self.cuenta.config(text=f"se cierra en {self._restan} s")
+            except tk.TclError:
+                return
+            self._restan -= 1
+        else:
+            try:
+                self.cuenta.config(text="en pausa")
+            except tk.TclError:
+                return
+        self._cierre = self.root.after(1000, self._contar)
+
+    def _salio(self, event):
+        # <Leave> también salta al pasar a un hijo de la caja: solo cuenta si el mouse
+        # quedó afuera de verdad.
+        try:
+            x, y = self.root.winfo_pointerxy()
+            w = self.caja.winfo_containing(x, y)
+        except (tk.TclError, KeyError):
+            w = None
+        while w is not None and w is not self.caja:
+            w = getattr(w, "master", None)
+        if w is None:
+            self._encima = False
 
     def error(self, titulo, detalle=""):
         self._mostrar(titulo, detalle)

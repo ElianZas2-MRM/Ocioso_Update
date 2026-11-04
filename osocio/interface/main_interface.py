@@ -4613,11 +4613,17 @@ def iniciar_interfaz(autostart_leads=False):
         for _b in (btn_exec_excel, btn_regen_excel):
             _b.config(state="disabled")
 
+        def _abrir_carpeta_data():
+            try:
+                os.startfile(DATA_DIR)
+            except Exception as e:
+                messagebox.showinfo(title, f"Los Excels están en:\n{DATA_DIR}\n\n({e})")
+
         def _terminar(titulo_aviso, detalle, ok=True):
             for _b in (btn_exec_excel, btn_regen_excel):
                 _b.config(state="normal")
             if ok:
-                aviso_excel.listo(titulo_aviso, detalle)
+                aviso_excel.listo(titulo_aviso, detalle, accion=("Abrir carpeta", _abrir_carpeta_data))
                 try:
                     if active_p_tab[0] == pais:
                         update_table_data(pais)

@@ -31,15 +31,45 @@ def test_cargando_muestra_el_aviso_con_el_spinner(raiz):
     assert aviso._giro is not None, "el spinner tiene que estar girando"
 
 
-def test_listo_frena_el_spinner_y_se_va_solo(raiz):
+def test_listo_frena_el_spinner_muestra_los_segundos_y_se_va_solo(raiz):
     aviso = AvisoFlotante(raiz)
     aviso.cargando("Generando Excels…")
     aviso.listo("Generar Excels: listo", "• Lead_information_Formulario_Argentina_Chrome_T1.xlsx",
-                segundos=0.05)
+                segundos=1)
     assert aviso._giro is None
-    raiz.after(150, raiz.quit)
+    assert aviso.cuenta.cget("text") == "se cierra en 1 s"
+    raiz.after(1400, raiz.quit)
     raiz.mainloop()
     assert not aviso.caja.winfo_ismapped()
+
+
+def test_con_el_mouse_encima_la_cuenta_se_pausa(raiz):
+    aviso = AvisoFlotante(raiz)
+    aviso.listo("Generar Excels: listo", segundos=1)
+    aviso._encima = True
+    raiz.after(1400, raiz.quit)
+    raiz.mainloop()
+    assert aviso.caja.winfo_ismapped()
+    assert aviso.cuenta.cget("text") == "en pausa"
+
+
+def test_el_boton_abrir_carpeta_hace_lo_suyo_y_cierra(raiz):
+    abiertas = []
+    aviso = AvisoFlotante(raiz)
+    aviso.listo("Generar Excels: listo", accion=("Abrir carpeta", lambda: abiertas.append(1)))
+    raiz.update()
+    assert aviso.btn_accion.winfo_ismapped() and aviso.btn_accion.cget("text") == "Abrir carpeta"
+    aviso.btn_accion.invoke()
+    raiz.update()
+    assert abiertas == [1]
+    assert not aviso.caja.winfo_ismapped()
+
+
+def test_sin_accion_no_hay_boton(raiz):
+    aviso = AvisoFlotante(raiz)
+    aviso.listo("Listo")
+    raiz.update()
+    assert not aviso.btn_accion.winfo_ismapped()
 
 
 def test_el_error_queda_hasta_que_se_cierra(raiz):
