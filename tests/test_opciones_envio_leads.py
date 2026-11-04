@@ -29,8 +29,7 @@ class ContextoFalso:
 
     def __init__(self, **cambios):
         por_defecto = {
-            "var_t3": False,
-            "var_t3_also": False,
+            "var_modo": "T1",
             "var_cdc_also": False,
             "var_sched_t3": False,
             "var_url_parallel": False,
@@ -116,35 +115,31 @@ def test_ver_navegador_se_lee_tal_cual():
 
 # --- la regla de los formularios 2.0 (T3) -------------------------------------------
 
+def test_el_modo_t3_corre_los_formularios_t3():
+    assert _leer_opciones(ContextoFalso(var_modo="T3"), scheduled=False).t3 is True
+    assert _leer_opciones(ContextoFalso(var_modo="T1"), scheduled=False).t3 is False
+
+
 def test_si_la_corrida_es_solo_t3_no_se_agregan_los_normales():
-    """`t3_also` significa 'además de los normales'. Si ya es una corrida T3, no aplica."""
-    opciones = _leer_opciones(ContextoFalso(var_t3=True, var_t3_also=True), scheduled=False)
+    """`t3_also` significa 'además de los T1'. En modo T3 no aplica."""
+    opciones = _leer_opciones(ContextoFalso(var_modo="T3", var_sched_t3=True), scheduled=True)
     assert opciones.t3 is True
     assert opciones.t3_also is False
 
 
-def test_en_una_corrida_manual_manda_la_casilla_de_la_pantalla():
-    opciones = _leer_opciones(
-        ContextoFalso(var_t3=False, var_t3_also=True, var_sched_t3=False), scheduled=False
-    )
+def test_una_corrida_manual_corre_solo_el_modo_elegido():
+    """Ya no hay "correr también T3" en la pantalla: se elige el modo arriba."""
+    opciones = _leer_opciones(ContextoFalso(var_modo="T1", var_sched_t3=True), scheduled=False)
+    assert opciones.t3 is False
+    assert opciones.t3_also is False
+
+
+def test_en_una_corrida_programada_manda_el_toggle_del_scheduler():
+    opciones = _leer_opciones(ContextoFalso(var_modo="T1", var_sched_t3=True), scheduled=True)
     assert opciones.t3_also is True
 
-
-def test_en_una_corrida_programada_manda_la_casilla_del_scheduler():
-    """Acá está el detalle: programada y manual leen variables DISTINTAS.
-
-    Si se mezclaran, una corrida automática usaría lo que quedó tildado en pantalla en vez
-    de lo que se configuró en la programación.
-    """
-    opciones = _leer_opciones(
-        ContextoFalso(var_t3=False, var_t3_also=False, var_sched_t3=True), scheduled=True
-    )
-    assert opciones.t3_also is True
-
-    opciones = _leer_opciones(
-        ContextoFalso(var_t3=False, var_t3_also=True, var_sched_t3=False), scheduled=True
-    )
-    assert opciones.t3_also is False, "programada tiene que ignorar la casilla de pantalla"
+    opciones = _leer_opciones(ContextoFalso(var_modo="T1", var_sched_t3=False), scheduled=True)
+    assert opciones.t3_also is False
 
 
 # --- Cadillac (CDC) --------------------------------------------------------------------
@@ -161,7 +156,7 @@ def test_cadillac_se_lee_de_su_casilla():
 def test_en_una_corrida_solo_t3_no_se_agrega_cadillac():
     """Si la corrida entera es de formularios 2.0, sumarle Cadillac no tiene sentido:
     son Excels distintos y Cadillac no es T3."""
-    opciones = _leer_opciones(ContextoFalso(var_t3=True, var_cdc_also=True), scheduled=False)
+    opciones = _leer_opciones(ContextoFalso(var_modo="T3", var_cdc_also=True), scheduled=False)
     assert opciones.t3 is True
     assert opciones.cdc_also is False
 

@@ -4,8 +4,11 @@ Una variante NO es un mercado nuevo. Comparte el `field_mapping`, los ids y el g
 de datos del mercado del que cuelga; lo unico propio es contra que formularios corre. Por
 eso se resuelve con un sufijo en el nombre del Excel en vez de duplicar configuracion.
 
-Hoy hay dos:
+Hoy hay dos (más el T1, que es el mercado tal cual):
 
+- `_T1`: los formularios de siempre. No es una variante: solo le pone nombre a sus Excels
+  para distinguirlos de los T3 en `data/` (`…_Chrome_T1.xlsx`). Los Excels viejos, sin
+  sufijo, se siguen leyendo si no hay uno `_T1`. Resultados, reportes y mail no cambian.
 - `_T3`: los formularios 2.0 de Adobe AEM. Se estan migrando y van a terminar iguales a
   los T1, pero mientras tanto se corren aparte y sus resultados van a `resultados/t3/`.
 - `_CDC`: Cadillac. Usa los mismos ids que Brasil y el mismo generador de datos, pero
@@ -24,9 +27,16 @@ BUSCA para adjuntarlos al mail. Ya se desincronizaron una vez y el mail dejo de 
 se arma una sola vez.
 """
 
+import os
+
 SIN_VARIANTE = ""
+T1 = "_T1"
 T3 = "_T3"
 CDC = "_CDC"
+
+# El modo que se elige arriba en la app. Cadillac (CDC) no es un modo: es T1.
+MODO_T1 = "T1"
+MODO_T3 = "T3"
 
 # Como se nombra cada variante en los reportes y en el mail. El "{pais}" se reemplaza; una
 # etiqueta sin el es un nombre propio que no depende del mercado (Cadillac es Cadillac).
@@ -62,6 +72,34 @@ def es_t3(sufijo):
     return normalizar(sufijo) == T3
 
 
+def variante_del_modo(modo):
+    """La variante con la que corre el modo elegido en la app: T3 o ninguna (T1)."""
+    return T3 if str(modo or "").strip().upper() == MODO_T3 else SIN_VARIANTE
+
+
+def nombre_excel_leads(pais, dispositivo, sufijo=SIN_VARIANTE):
+    """Nombre del Excel de leads: `Lead_information_Formulario_Brasil_Chrome_T1.xlsx`.
+
+    Sin variante es T1: el Excel nuevo lleva `_T1` para no confundirse con el `_T3`.
+    """
+    sufijo = normalizar(sufijo) or T1
+    return f"Lead_information_Formulario_{pais}_{dispositivo}{sufijo}.xlsx"
+
+
+def ruta_excel_leads(carpeta, pais, dispositivo, sufijo=SIN_VARIANTE):
+    """Ruta del Excel de leads a leer o crear.
+
+    Para T1 se prefiere el `…_T1.xlsx`; si no existe pero hay uno viejo sin sufijo, se usa
+    ese. Así nadie tiene que renombrar los Excels que ya tenía.
+    """
+    ruta = os.path.join(carpeta, nombre_excel_leads(pais, dispositivo, sufijo))
+    if normalizar(sufijo) in (SIN_VARIANTE, T1) and not os.path.exists(ruta):
+        viejo = os.path.join(carpeta, f"Lead_information_Formulario_{pais}_{dispositivo}.xlsx")
+        if os.path.exists(viejo):
+            return viejo
+    return ruta
+
+
 def etiqueta_de_corrida(pais, sufijo=SIN_VARIANTE):
     """Como se nombra esta corrida en los reportes y en el mail."""
     plantilla = _ETIQUETAS.get(normalizar(sufijo))
@@ -88,7 +126,7 @@ def basenames_de_corrida(pais, navegador, programada=False, sufijo=SIN_VARIANTE)
     """
     dispositivo = _nombre_dispositivo(navegador)
     partes = [pais]
-    variante = normalizar(sufijo).lstrip("_")
+    variante = "" if normalizar(sufijo) == T1 else normalizar(sufijo).lstrip("_")
     if variante:
         partes.append(variante)
     if dispositivo:

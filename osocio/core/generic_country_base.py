@@ -4,6 +4,7 @@ Reemplaza los 9 archivos individuales (Formulario_*_Base.py) del proyecto origin
 Recibe el nombre del país, carga su config desde country_configs.py y crea BaseFormFiller.
 """
 import copy
+import os
 from osocio.core.base_form_filler import BaseFormFiller
 from osocio.core.country_configs import get_country_config
 
@@ -34,8 +35,11 @@ class GenericCountryBase(BaseFormFiller):
         elif browser == "edge":
             dev_name = "Edge"
         # excel_suffix permite apuntar a una variante del mismo mercado sin duplicar
-        # configuración (hoy sólo "_T3", los formularios 2.0 de Adobe AEM).
-        config['excel_file'] = f"Lead_information_Formulario_{country_name}_{dev_name}{excel_suffix or ''}.xlsx"
+        # configuración ("_T3", "_CDC"). Sin variante es T1: …_T1.xlsx, o el viejo sin sufijo.
+        from osocio.core.variantes import ruta_excel_leads
+        from osocio.paths import DATA_DIR
+        config['excel_file'] = os.path.basename(
+            ruta_excel_leads(DATA_DIR, country_name, dev_name, excel_suffix))
         # Explicito, para que el motor no tenga que adivinarlo del nombre del archivo.
         config['excel_suffix'] = excel_suffix or ""
 

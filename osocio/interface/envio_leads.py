@@ -15,7 +15,8 @@ el valor nuevo. Congelarlas acá rompería eso en silencio.
 import os
 from datetime import datetime
 
-from osocio.core.variantes import CDC as VAR_CDC, T3 as VAR_T3, etiqueta_de_corrida
+from osocio.core.variantes import (CDC as VAR_CDC, T3 as VAR_T3, es_t3, etiqueta_de_corrida,
+                                   variante_del_modo)
 
 
 def _variante_del_dispositivo(device_label):
@@ -87,10 +88,9 @@ class ContextoEnvioLeads:
     email_entry: object               # destinatario del mail final
 
     # --- qué eligió el usuario ------------------------------------------------------
-    var_t3: object                    # formularios 2.0 de AEM
-    var_t3_also: object               # además de los normales
-    var_cdc_also: object              # ídem para Cadillac (CDC), que es T1
-    var_sched_t3: object              # el equivalente para corridas programadas
+    var_modo: object                  # "T1" | "T3": con qué Excels corre
+    var_cdc_also: object              # sumar Cadillac (CDC), que es T1
+    var_sched_t3: object              # sumar los T3 en las corridas programadas
     var_enviar_email: object
     var_modo_email: object            # "por_pais" | "consolidado"
     var_adjuntar_res: object          # adjuntar el Excel de resultados
@@ -144,8 +144,8 @@ class OpcionesEnvioLeads:
     es una lectura en vivo, no una opción.
     """
 
-    t3: bool                 # correr los formularios 2.0 de AEM
-    t3_also: bool            # ademas de los normales
+    t3: bool                 # modo T3: correr los formularios 2.0 de AEM
+    t3_also: bool            # ademas de los T1 (solo programadas)
     cdc_also: bool           # correr tambien Cadillac (CDC). Es T1, no T3.
     url_paralelo: bool       # varias URLs a la vez
     url_max: int             # cuantas en paralelo (1 a 20)
@@ -159,16 +159,14 @@ class OpcionesEnvioLeads:
 
 def _leer_opciones(ctx, scheduled):
     """Toma una foto de lo que el usuario eligio en la pantalla."""
-    t3 = bool(ctx.var_t3.get())
+    t3 = es_t3(variante_del_modo(ctx.var_modo.get()))
     return OpcionesEnvioLeads(
         t3=t3,
-        # En una corrida programada manda la casilla del scheduler, no la de la pantalla.
-        t3_also=(not t3) and bool(
-            ctx.var_sched_t3.get() if scheduled else ctx.var_t3_also.get()
-        ),
-        # Cadillac todavia no tiene casilla propia en la programacion, asi que en
-        # una corrida programada no entra. Se lee la de la pantalla solo en las
-        # manuales, por el mismo motivo que t3_also.
+        # Las manuales corren solo el modo elegido. Las programadas pueden sumar los T3
+        # con el toggle propio del scheduler.
+        t3_also=(not t3) and scheduled and bool(ctx.var_sched_t3.get()),
+        # Cadillac es T1 y todavia no tiene toggle propio en la programacion, asi que
+        # en una corrida programada no entra.
         cdc_also=(not t3) and (not scheduled) and bool(ctx.var_cdc_also.get()),
         url_paralelo=bool(ctx.var_url_parallel.get()),
         url_max=max(1, min(20, int(ctx.url_max_var.get()))),
@@ -198,6 +196,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         _ensure_serialized_setup,
         _generic_excel_path_for,
         _lead_excel_name,
+        _lead_excel_path,
         get_button_icon,
     )
 
@@ -295,7 +294,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         etiqueta = sufijo.lstrip("_")
         extra = []
         for s in sessions:
-            path = os.path.join(DATA_DIR, _lead_excel_name(s["pais"], s["device"], sufijo))
+            path = _lead_excel_path(s["pais"], s["device"], sufijo)
             if not os.path.exists(path):
                 continue
             e = dict(s)
@@ -324,7 +323,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
         for suffix, dtype, browser, key in _DEVICE_SUFFIX:
             if not selected_disp.get(key):
                 continue
-            path = gpath if shared else os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, t3))
+            path = gpath if shared else _lead_excel_path(pais, suffix, t3)
             out.append({"pais": pais, "dtype": dtype, "browser": browser, "device": suffix,
                         "excel": path, "variante": VAR_T3 if t3 else ""})
         return sesiones_con_variantes(out, _sesiones_extra(out))
@@ -343,7 +342,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
             if _bs is not None:
                 sessions.append({
                     "pais": p, "dtype": _bs.dtype, "browser": None, "device": _bs.sufijo_excel,
-                    "excel": os.path.join(DATA_DIR, _lead_excel_name(p, _bs.sufijo_excel, t3))
+                    "excel": _lead_excel_path(p, _bs.sufijo_excel, t3)
                 })
             else: # local
                 navs = scheduler_cfg_leads.get("navegadores", []) or ["chrome"]
@@ -351,7 +350,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                     suffix = "Chrome" if nav == "chrome" else "Firefox" if nav == "firefox" else "Edge"
                     sessions.append({
                         "pais": p, "dtype": "desktop", "browser": nav, "device": suffix,
-                        "excel": os.path.join(DATA_DIR, _lead_excel_name(p, suffix, t3))
+                        "excel": _lead_excel_path(p, suffix, t3)
                     })
             sessions = sesiones_con_variantes(sessions, _sesiones_extra(sessions))
             market_jobs.append((p, sessions))
@@ -439,7 +438,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     for s in active_sessions_list:
         _ex = s["excel"]
         _nombre = os.path.basename(_ex) if _ex else \
-            f"Lead_information_Formulario_{s['pais']}_{s['device']}.xlsx"
+            _lead_excel_name(s['pais'], s['device'], s.get('variante', ''))
         if not _ex or not os.path.exists(_ex):
             faltantes.append(f"• {s['pais']} · {s['device']}: {_nombre} (no existe)")
             faltantes_sessions.append(s)
