@@ -91,7 +91,8 @@ from osocio.core.variantes import (T3 as VARIANTE_T3, variante_cadillac,
                                    nombre_excel_leads, ruta_excel_leads, variante_del_modo)
 from osocio.interface import tema
 from osocio.interface.menu_lateral import MenuLateral
-from osocio.interface.widgets import BotonRedondo, Marco, Segmentado, Toggle, ajustar_scroll
+from osocio.interface.widgets import BotonRedondo, Marco, Segmentado, Toggle
+from osocio.interface.widgets import ajustar_scroll
 
 
 def _tag_variante(variante):
