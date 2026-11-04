@@ -226,7 +226,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     # ── Guía rápida (breve — el detalle está en la mini-guía de cada bloque) ─────
     guide_card = Frame(root_frame, bg=CARD_BG, bd=0, highlightthickness=1, highlightbackground=BORDER)
     guide_card.pack(fill="x", pady=(0, 8), ipady=4)
-    Label(guide_card, text="Seguí los pasos ①→④ de cada bloque. EJECUTAR se habilita cuando está todo completo.",
+    Label(guide_card, text="① Mercado  →  ② Excel de los forms  →  ③ Excel de dealers (matriz)  →  "
+                           "④ Columnas.   EJECUTAR se habilita cuando está todo completo.",
           font=("Segoe UI", 9, "bold"), bg=CARD_BG, fg=TEXT_P).pack(anchor="w", padx=15, pady=(6, 6))
 
     def card(title, subtitle=None, parent=None, side=None, expand=False, subtitle_wrap=750):
@@ -245,6 +246,25 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             Label(head, text=subtitle, font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF",
                   wraplength=subtitle_wrap, justify="left").pack(side="left", padx=12)
         return block
+
+    def grupo(parent, titulo):
+        """Columna dentro de una tarjeta, como MERCADOS / EXCELS / DISPOSITIVOS en Envío."""
+        g = Frame(parent, bg=CARD_BG)
+        g.pack(side="left", anchor="n", padx=(0, 8))
+        Label(g, text=titulo, font=("Segoe UI", 8, "bold"), bg=CARD_BG, fg=TEXT_S).pack(
+            anchor="w", padx=15, pady=(0, 3))
+        return g
+
+    def seccion(parent, titulo, ayuda=""):
+        """Bloque rotulado dentro de una tarjeta (los dos Excels van uno debajo del otro)."""
+        sec = Frame(parent, bg=CARD_BG)
+        sec.pack(fill="x", pady=(2, 6))
+        Label(sec, text=titulo, font=("Segoe UI", 9, "bold"), bg=CARD_BG, fg=TEXT_P).pack(
+            anchor="w", padx=15)
+        if ayuda:
+            Label(sec, text=ayuda, font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF",
+                  wraplength=900, justify="left").pack(anchor="w", padx=15, pady=(0, 4))
+        return sec
 
     def labeled_entry(parent_frame, label_text, var, width=16):
         col = Frame(parent_frame, bg=CARD_BG)
@@ -347,65 +367,101 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         for w in (c, code_lbl, name_lbl):
             w.bind("<Button-1>", lambda e, p=pais: select_country(p))
 
-    # ── 2. Bloque de 3 columnas: Navegador · Excel de URLs · Modelos ─────────────
-    blockA = Frame(root_frame, bg=root_frame.cget("bg"))
-    blockA.pack(fill="x", pady=(0, 0))
-
-    # Col 1 — Dispositivos / Navegadores
-    dev_col = card("🖥 NAVEGADOR", parent=blockA, side="left", expand=True, subtitle_wrap=200)
-    mini_guide(dev_col, "② Elegí el navegador con el que se abre el form.")
-    browser_var = StringVar(value="chrome")
-    dev_row = Frame(dev_col, bg=CARD_BG)
-    dev_row.pack(anchor="w", padx=15, pady=(0, 2))
-    make_single_select(dev_row, BROWSER_OPTIONS, browser_var, default="chrome")
-    lt_row = Frame(dev_col, bg=CARD_BG)
-    lt_row.pack(anchor="w", padx=15, pady=(2, 2))
-    from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS
-    for _lt in (d.etiqueta for d in DISPOSITIVOS_BS):
-        Button(lt_row, text=_lt, font=("Segoe UI", 9, "bold"), bg=BTN_INACTIVE, fg="#6E5A86",
-               relief="flat", bd=0, state="disabled", disabledforeground="#6E5A86",
-               highlightthickness=1, highlightbackground=BTN_INACTIVE,
-               padx=14, pady=6).pack(side="left", padx=3)
-    Label(lt_row, text="(próx.)", font=("Segoe UI", 8, "italic"),
-          bg=CARD_BG, fg="#6E5A86").pack(side="left", padx=4)
-    ver_navegador_var = BooleanVar(value=False)
-    viewport_var = StringVar(value="fullscreen")  # siempre escritorio
-
-    # Col 2 — Excel de URLs del form
-    urls_col = card("🔗 EXCEL DE URLs", parent=blockA, side="left", expand=True, subtitle_wrap=200)
-    mini_guide(urls_col, "③ Cargá un Excel con columnas 'URL' y 'Formulario' (como el de Envío de Leads).")
+    # ── 2. Archivos: el Excel de los forms y el de dealers (matriz), bien separados ─────
+    archivos_card = card("📂 ARCHIVOS")
+    urls_col = seccion(archivos_card, "②  EXCEL DE LOS FORMS  ·  qué forms chequear",
+                       "El mismo Excel que sale de Generar Excels (columnas 'URL' y 'Formulario'). "
+                       "Se listan solos los del mercado elegido que están en data/.")
     url_excel_path_var = StringVar()
+    forms_row = Frame(urls_col, bg=CARD_BG)
+    forms_row.pack(fill="x", padx=15, pady=(0, 2))
+    forms_combo_var = StringVar()
+    forms_combo = ttk.Combobox(forms_row, textvariable=forms_combo_var, state="readonly", width=70,
+                               style="Dealer.TCombobox", font=("Segoe UI", 10))
+    forms_combo.pack(side="left")
+    _forms_por_etiqueta = {}   # lo que muestra el desplegable -> ruta del Excel
 
-    def _pick_url_excel():
-        path = filedialog.askopenfilename(title="Seleccionar Excel de URLs del form",
-                                          filetypes=[("Excel", "*.xlsx *.xls"), ("Todos", "*.*")])
-        if path:
-            url_excel_path_var.set(path)
+    def _etiqueta_forms(path):
+        from datetime import datetime as _dt
+        try:
+            fecha = _dt.fromtimestamp(os.path.getmtime(path)).strftime("%d/%m %H:%M")
+        except OSError:
+            fecha = "?"
+        return f"{os.path.basename(path)}   ·   {fecha}"
+
+    def _refrescar_forms_detectados(*_a):
+        """Los Excels de leads del mercado elegido que hay en data/ (los de Generar Excels),
+        el más nuevo primero. Si no hay uno elegido, se toma el más nuevo solo."""
+        import glob as _glob
+        from osocio.paths import DATA_DIR as _DATA
+        pais = state.get("pais")
+        rutas = []
+        if pais:
+            rutas = sorted(_glob.glob(os.path.join(_DATA, f"Lead_information_Formulario_{pais}_*.xlsx")),
+                           key=os.path.getmtime, reverse=True)
+            rutas = [r for r in rutas if not os.path.basename(r).startswith("~$")]
+        actual = url_excel_path_var.get().strip()
+        if actual and os.path.exists(actual) and os.path.normcase(actual) not in {
+                os.path.normcase(r) for r in rutas}:
+            rutas.append(actual)          # elegido a mano con "Buscar otro…"
+        _forms_por_etiqueta.clear()
+        for r in rutas:
+            _forms_por_etiqueta[_etiqueta_forms(r)] = r
+        forms_combo.config(values=list(_forms_por_etiqueta))
+        if not rutas:
+            forms_combo_var.set("")
+            if actual and not os.path.exists(actual):
+                url_excel_path_var.set("")
+            url_warn_var.set(f"⚠ No hay Excels de {pais} en data/: generalos en Generar Excels "
+                             "o usá \"Buscar otro…\"." if pais else "Elegí primero el mercado.")
+            return
+        if not actual or not os.path.exists(actual):
+            url_excel_path_var.set(rutas[0])
+            actual = rutas[0]
+        for et, r in _forms_por_etiqueta.items():
+            if os.path.normcase(r) == os.path.normcase(actual):
+                forms_combo_var.set(et)
+        _refresh_url_excel_preview()
+
+    def _al_elegir_forms(_e=None):
+        ruta = _forms_por_etiqueta.get(forms_combo_var.get())
+        if ruta:
+            url_excel_path_var.set(ruta)
             _refresh_url_excel_preview()
             refresh_execute_state()
 
-    Button(urls_col, text=" Seleccionar Excel de URLs", image=get_button_icon("folder_yellow.png"),
-           compound="left", font=("Segoe UI", 9, "bold"), bg=BTN_ACTIVE, fg="white", relief="flat", bd=0,
-           padx=16, pady=6, cursor="hand2", command=_pick_url_excel).pack(anchor="w", padx=15, pady=(0, 2))
-    Label(urls_col, textvariable=url_excel_path_var, font=("Segoe UI", 8), bg=CARD_BG,
-          fg=TEXT_S, wraplength=320, justify="left").pack(anchor="w", padx=15)
+    forms_combo.bind("<<ComboboxSelected>>", _al_elegir_forms)
+    # Al abrir el desplegable se vuelve a mirar data/: aparecen los Excels recién generados.
+    forms_combo.config(postcommand=_refrescar_forms_detectados)
+
+    def _pick_url_excel():
+        path = filedialog.askopenfilename(title="Seleccionar Excel de los forms",
+                                          filetypes=[("Excel", "*.xlsx *.xls"), ("Todos", "*.*")])
+        if path:
+            url_excel_path_var.set(path)
+            _refrescar_forms_detectados()
+            refresh_execute_state()
+
+    Button(forms_row, text=" Buscar otro…", image=get_button_icon("folder_yellow.png"),
+           compound="left", font=("Segoe UI", 8, "bold"), bg=BTN_INACTIVE, fg="white", relief="flat", bd=0,
+           padx=12, pady=4, cursor="hand2", command=_pick_url_excel).pack(side="left", padx=(8, 0))
 
     # Modo fijo: por cada fila decide solo — landing+form si la columna 'URL' tiene valor,
     # o solo form si viene vacía. (Ya no hay toggle manual.)
     url_mode_var = StringVar(value="landing_form")
 
-    fmt_val_lbl = Label(urls_col, text="Toma 'URL' (landing) + 'Formulario' por fila; si 'URL' está vacía, usa solo el form.",
-                         font=("Segoe UI", 8, "bold"), bg=CARD_BG, fg="#C5A9DF", wraplength=320, justify="left")
-    fmt_val_lbl.pack(anchor="w", padx=15, pady=(4, 0))
     url_warn_var = StringVar(value="")
-    Label(urls_col, textvariable=url_warn_var, font=("Segoe UI", 8, "italic"),
-          bg=CARD_BG, fg="#F8C471", wraplength=320, justify="left").pack(anchor="w", padx=15, pady=(0, 6))
+    url_warn_lbl = Label(urls_col, textvariable=url_warn_var, font=("Segoe UI", 8, "bold"),
+                         bg=CARD_BG, fg="#82E0AA", wraplength=900, justify="left")
+    url_warn_lbl.pack(anchor="w", padx=15, pady=(4, 0))
+    # Verde si está todo bien (✓), ámbar si es un aviso.
+    url_warn_var.trace_add("write", lambda *_a: url_warn_lbl.config(
+        fg="#82E0AA" if url_warn_var.get().startswith("✓") else "#F8C471"))
 
     def switch_url_mode(_mode=None):
         # Compatibilidad: ya no hay toggle; el modo se decide por fila.
         _refresh_url_excel_preview()
 
-    # Col 3 — se rellena más abajo con el bloque Modelos (models_card usa este parent)
 
     def _read_url_pairs_from_excel():
         """Lee el Excel de URLs y devuelve pares (landing_url, form_url) — uno por fila.
@@ -478,12 +534,28 @@ def build_dealer_comparator_tab(tab_frame, ctx):
 
     switch_url_mode("landing_form")
 
-    # ── 3. Bloque de 2 columnas: Excel de dealers · Columnas del Excel ──────────
+    # ── 3. Excel de dealers (la matriz): segunda sección de Archivos ─────────────
+    Frame(archivos_card, bg=BORDER, height=1).pack(fill="x", padx=15, pady=(4, 8))
+    excel_card = seccion(archivos_card, "③  EXCEL DE DEALERS (MATRIZ)  ·  los concesionarios esperados",
+                         "La matriz de dealers, la fila donde están los encabezados y, si hace falta, "
+                         "el filtro para quedarse con las filas de este mercado.")
+
+    # Opciones del chequeo: columnas como en Envío de Leads (Navegador · Modelos · Compra · Salida)
+    opciones_card = card("⚙ OPCIONES DEL CHEQUEO")
+    opciones_row = Frame(opciones_card, bg=CARD_BG)
+    opciones_row.pack(fill="x", pady=(0, 4))
+    dev_col = grupo(opciones_row, "NAVEGADOR")
+    browser_var = StringVar(value="chrome")
+    dev_row = Frame(dev_col, bg=CARD_BG)
+    dev_row.pack(anchor="w", padx=12, pady=(0, 2))
+    make_single_select(dev_row, BROWSER_OPTIONS, browser_var, default="chrome")
+    Label(dev_col, text="Con el que se abre el form (BrowserStack, próximamente).",
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#C5A9DF").pack(anchor="w", padx=15, pady=(4, 0))
+    ver_navegador_var = BooleanVar(value=False)
+    viewport_var = StringVar(value="fullscreen")  # siempre escritorio
+
     blockB = Frame(root_frame, bg=root_frame.cget("bg"))
     blockB.pack(fill="x", pady=(0, 0))
-
-    excel_card = card("📄 EXCEL DE DEALERS A CHEQUEAR", parent=blockB, side="left", expand=False)
-    mini_guide(excel_card, "④ Cargá el Excel de dealers esperados, la fila de encabezados y (opcional) el filtro.")
     excel_path_var = StringVar()
     excel_row = Frame(excel_card, bg=CARD_BG)
     excel_row.pack(fill="x", padx=15, pady=(0, 4))
@@ -537,8 +609,8 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                  style="Dealer.TCombobox", values=CONDITION_LABELS, font=("Segoe UI", 10)).pack(fill="x")
 
     # ── 4. Columnas del Excel (columna derecha del bloque B) ────────────────────
-    columns_card = card("🧭 COLUMNAS DEL EXCEL", parent=blockB, side="left", expand=True)
-    mini_guide(columns_card, "⑤ Mapeá qué columna del Excel es cada dato (Dealer es obligatoria).")
+    columns_card = card("🧭 COLUMNAS DEL EXCEL DE DEALERS", parent=blockB, side="left", expand=True)
+    mini_guide(columns_card, "④ Mapeá qué columna de la matriz es cada dato (Dealer es obligatoria).")
     levels_label_row = Frame(columns_card, bg=CARD_BG)
     levels_label_row.pack(fill="x", padx=15, pady=(0, 2))
     Label(levels_label_row, text="Campos que tiene el form (id HTML del select):", font=("Segoe UI", 8),
@@ -668,14 +740,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
            cursor="hand2", command=lambda: _add_field_check_row()).pack(anchor="w", pady=2)
 
     # ── 4b. Modelos (3ra columna del bloque A: Navegador · URLs · Modelos) ──────
-    models_card = card("🚗 MODELOS", parent=blockA, side="left", expand=True, subtitle_wrap=200)
-    mini_guide(models_card, "Opcional: si el form tiene selector de Modelo (id \"models\" o \"model\").")
+    models_card = grupo(opciones_row, "MODELOS  (opcional)")
     has_models_var = BooleanVar(value=False)
     models_toggle_row = Frame(models_card, bg=CARD_BG)
     models_toggle_row.pack(fill="x", padx=15, pady=(0, 4))
     models_toggle_btn, _models_refresh = make_toggle_pill(models_toggle_row, "🚗  Tiene selector de Modelo", has_models_var)
     Label(models_card, text="⚠ Detecta el selector con id \"models\" o \"model\". Otros ids no soportados aún.",
-          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=320,
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=300,
           justify="left").pack(anchor="w", padx=15, pady=(0, 4))
 
     models_body = Frame(models_card, bg=CARD_BG)
@@ -748,10 +819,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
     # región→ciudad→dealer, y encima las listas de ciudades y dealers cambian según la
     # opción elegida. Por eso se elige primero, y aplica igual aunque el form no tenga
     # selector de Modelo (o aunque lo tenga: entonces va antes que él).
-    purchase_card = card("💳 FORMA DE COMPRA", parent=blockA, side="left", expand=True, subtitle_wrap=200)
-    mini_guide(purchase_card, "Solo Argentina. Si el form tiene \"¿Cómo deseas realizar la compra?\" "
-                              f"(id \"{PURCHASE_FIELD_ID}\"), elegí con cuál de las dos opciones se "
-                              "chequean los dealers.")
+    purchase_card = grupo(opciones_row, "FORMA DE COMPRA  (solo Argentina)")
     has_purchase_var = BooleanVar(value=False)
     purchase_toggle_row = Frame(purchase_card, bg=CARD_BG)
     purchase_toggle_row.pack(fill="x", padx=15, pady=(0, 4))
@@ -759,7 +827,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         purchase_toggle_row, "💳  Tiene ¿Cómo deseas realizar la compra?", has_purchase_var)
     Label(purchase_card,
           text="⚠ Los dealers cambian según la opción — hacé una corrida por cada una.",
-          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=320,
+          font=("Segoe UI", 8, "italic"), bg=CARD_BG, fg="#F8C471", wraplength=300,
           justify="left").pack(anchor="w", padx=15, pady=(0, 4))
 
     purchase_body = Frame(purchase_card, bg=CARD_BG)
@@ -802,8 +870,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         (hoy, Argentina) — en el resto el form no tiene el campo y mostrarlo solo confunde."""
         if state["pais"] in PURCHASE_FIELD_COUNTRIES:
             if not purchase_card.winfo_ismapped():
-                purchase_card.pack(side="left", fill="both", expand=True,
-                                   padx=(0, 8), pady=(0, 8), ipady=5)
+                purchase_card.pack(side="left", anchor="n", padx=(0, 8))
         else:
             purchase_card.pack_forget()
 
@@ -814,7 +881,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         return bool(has_purchase_var.get()) and state["pais"] in PURCHASE_FIELD_COUNTRIES
 
     # ── 5. Modo de salida ─────────────────────────────────────────────────────
-    output_card = card("📦 MODO DE SALIDA")
+    output_card = Frame(dev_col, bg=CARD_BG)
+    output_card.pack(anchor="w", pady=(10, 0))
+    Label(output_card, text="MODO DE SALIDA", font=("Segoe UI", 8, "bold"), bg=CARD_BG,
+          fg=TEXT_S).pack(anchor="w", padx=15, pady=(0, 3))
     output_mode_var = StringVar(value="excel")
     output_row = Frame(output_card, bg=CARD_BG)
     output_row.pack(fill="x", padx=15, pady=(0, 6))
@@ -1043,6 +1113,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
         state["pais"] = pais
         _refresh_pais_cards()
         _apply_country_settings(pais)
+        _refrescar_forms_detectados()
         _refresh_purchase_card_visibility()
         refresh_execute_state()
 
