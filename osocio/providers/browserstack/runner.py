@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Callable, Dict, Optional
 
 from osocio.paths import DATA_DIR
+from osocio.core.variantes import ruta_excel_leads
 
 PLATAFORMAS = ("iphone", "android", "mac")
 
@@ -33,8 +34,7 @@ COLUMNA_VIDEO = "Video"
 
 
 def excel_por_defecto(pais: str, plataforma: str, variante: str = "") -> str:
-    return os.path.join(
-        DATA_DIR, f"Lead_information_Formulario_{pais}_{SUFIJO_EXCEL[plataforma]}{variante or ''}.xlsx")
+    return ruta_excel_leads(DATA_DIR, pais, SUFIJO_EXCEL[plataforma], variante)
 
 
 _NOMBRE_DISP = {"iphone": "iPhone", "android": "Android", "mac": "Mac"}

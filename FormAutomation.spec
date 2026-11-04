@@ -13,6 +13,8 @@ a = Analysis(
         ('Asset/Fullheader.png', 'Asset'),
         ('Asset/icon.ico', 'Asset'),
         ('Asset/osopng.png', 'Asset'),
+        ('Asset/cadillac.png', 'Asset'),
+        ('Asset/chevrolet.png', 'Asset'),
         ('Asset/tabler_icons', 'Asset/tabler_icons'),
     ],
     # lambdatest_mac/android ya no van en datas: eran carpetas sueltas que se cargaban por

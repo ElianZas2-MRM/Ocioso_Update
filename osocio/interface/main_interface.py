@@ -81,13 +81,15 @@ def _excel_path_for(pais):
     primer dispositivo disponible (Chrome→Firefox→Edge→iPhone→Android→Mac) o el genérico.
     Si ninguno existe, devuelve la ruta de Chrome (para creación por defecto)."""
     for suf in ("Chrome", "Firefox", "Edge", "Iphone", "Android", "Mac", "Generico"):
-        p = os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_{suf}.xlsx")
+        p = ruta_excel_leads(DATA_DIR, pais, suf)
         if os.path.exists(p):
             return p
-    return os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_Chrome.xlsx")
+    return ruta_excel_leads(DATA_DIR, pais, "Chrome")
 
 
-from osocio.core.variantes import CDC as VARIANTE_CDC, T3 as VARIANTE_T3
+from osocio.core.variantes import (CDC as VARIANTE_CDC, T3 as VARIANTE_T3,
+                                   nombre_excel_leads, ruta_excel_leads, variante_del_modo)
+from osocio.interface.widgets import SelectorModo, Toggle
 
 
 def _tag_variante(variante):
@@ -112,13 +114,18 @@ def _etiqueta_t3(pais):
 
 
 def _lead_excel_name(pais, suffix, variante=""):
-    """Nombre de archivo Excel de leads: …_{Pais}_{Dispositivo}[_T3|_CDC].xlsx."""
-    return f"Lead_information_Formulario_{pais}_{suffix}{_tag_variante(variante)}.xlsx"
+    """Nombre de archivo Excel de leads a crear: …_{Pais}_{Dispositivo}_T1|_T3|_CDC.xlsx."""
+    return nombre_excel_leads(pais, suffix, _tag_variante(variante))
+
+
+def _lead_excel_path(pais, suffix, variante=""):
+    """Excel de leads a leer: el `_T1` o, si no hay, el viejo sin sufijo (ver variantes)."""
+    return ruta_excel_leads(DATA_DIR, pais, suffix, _tag_variante(variante))
 
 
 def _generic_excel_path_for(pais, variante=""):
     """Excel único 'compartido' del país: mismos datos para todos los dispositivos."""
-    return os.path.join(DATA_DIR, _lead_excel_name(pais, "Generico", variante))
+    return _lead_excel_path(pais, "Generico", variante)
 
 
 def _device_excel_suffix(dev):
@@ -643,6 +650,22 @@ from osocio.paths import BASE_DIR, ASSET_DIR
 
 ICONS_CACHE = {}
 
+_LOGOS_CACHE = {}
+
+
+def get_logo(name, alto):
+    """Logo de Asset/ (p. ej. el escudo de Cadillac) a la altura pedida, con transparencia."""
+    clave = (name, alto)
+    if clave not in _LOGOS_CACHE:
+        try:
+            img = Image.open(os.path.join(ASSET_DIR, name)).convert("RGBA")
+            img = img.resize((max(1, round(img.width * alto / img.height)), alto), Image.LANCZOS)
+            _LOGOS_CACHE[clave] = ImageTk.PhotoImage(img)
+        except Exception:
+            _LOGOS_CACHE[clave] = None
+    return _LOGOS_CACHE[clave]
+
+
 def get_button_icon(name):
     if not name:
         return None
@@ -1106,6 +1129,16 @@ def iniciar_interfaz(autostart_leads=False):
     except Exception:
         pass
     _ui_prefs = _cfg.get("ui_prefs", {})
+
+    # Modo T1 / T3: de él sale con qué Excels corre todo (…_T1 o …_T3). Se guarda. Si no
+    # había modo guardado pero sí el viejo check "Formularios T3 2.0", se arranca en T3.
+    _modo_guardado = str(_ui_prefs.get("modo") or ("T3" if _ui_prefs.get("t3") else "T1")).upper()
+    var_modo = tk.StringVar(value="T3" if _modo_guardado == "T3" else "T1")
+
+    def _variante_modo():
+        """La variante del modo elegido: "_T3" o "" (T1). Cadillac se suma aparte."""
+        return variante_del_modo(var_modo.get())
+
     var_ver_navegador = tk.BooleanVar(value=bool(_ui_prefs.get("visible_browser", False)))
     # Por defecto DESTILDADO: al cerrar la ventana el programa se cierra directo.
     # Si el usuario lo tilda, la X minimiza a la bandeja (persistente).
@@ -1129,6 +1162,11 @@ def iniciar_interfaz(autostart_leads=False):
 
     var_pausar_autenticacion.trace_add("write", _on_pause_change)
     var_ver_navegador.trace_add("write", _on_visible_change)
+
+    # Interruptor de modo: T1 en dorado, T3 en turquesa.
+    selector_modo = SelectorModo(top_bar, var_modo, bg=APP_BG_COLOR, fg_apagado="#9b8aa8",
+                                 command=lambda: _al_cambiar_modo())
+    selector_modo.pack(side="left", padx=(16, 0))
 
     email_frame = tk.Frame(top_bar, bg=APP_BG_COLOR)
     email_frame.pack(side="right")
@@ -1542,10 +1580,11 @@ def iniciar_interfaz(autostart_leads=False):
                 cfg["ui_prefs"]["url_parallel"] = bool(var_url_parallel.get())
             if 'url_max_var' in globals() or 'url_max_var' in locals():
                 cfg["ui_prefs"]["url_max"] = url_max_var.get()
-            if 'var_t3' in globals() or 'var_t3' in locals():
-                cfg["ui_prefs"]["t3"] = bool(var_t3.get())
-            if 'var_t3_also' in globals() or 'var_t3_also' in locals():
-                cfg["ui_prefs"]["t3_also"] = bool(var_t3_also.get())
+            cfg["ui_prefs"]["modo"] = var_modo.get()
+            cfg["ui_prefs"].pop("t3", None)
+            cfg["ui_prefs"].pop("t3_also", None)
+            if 'var_cdc_also' in globals() or 'var_cdc_also' in locals():
+                cfg["ui_prefs"]["cdc_also"] = bool(var_cdc_also.get())
             if 'var_win_abrir_app' in globals() or 'var_win_abrir_app' in locals():
                 cfg["ui_prefs"]["win_task_abrir_app"] = bool(var_win_abrir_app.get())
             
@@ -1581,52 +1620,25 @@ def iniciar_interfaz(autostart_leads=False):
     url_max_var = tk.StringVar(value=_ui_prefs.get("url_max", "6"))
     url_par_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
     url_par_row.pack(anchor="w", pady=(2, 0))
-    cb_url_par = tk.Checkbutton(url_par_row, text="⚡ Enviar en paralelo por URL (una sesión por URL)", variable=var_url_parallel,
-                                bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                                activebackground=CARD_BG_COLOR, activeforeground="white",
-                                font=("Segoe UI", 8), cursor="hand2")
+    cb_url_par = Toggle(url_par_row, text="⚡ Enviar en paralelo por URL (una sesión por URL)",
+                        variable=var_url_parallel, bg=CARD_BG_COLOR, fg=TEXT_SECONDARY,
+                        color_off=BUTTON_INACTIVE, borde=BORDER_COLOR)
     cb_url_par.pack(side="left")
     tk.Label(url_par_row, text="máx. simultáneas:", font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(side="left", padx=(10, 4))
     tk.Entry(url_par_row, textvariable=url_max_var, width=4, font=("Segoe UI", 8), bg=ENTRY_BG, fg="white",
              bd=0, relief="flat", highlightthickness=1, highlightbackground=BORDER_COLOR, justify="center").pack(side="left", ipady=1)
 
-    # Formularios T3 2.0 (Adobe AEM): usa los Excels con nombre …_T3.xlsx
-    var_t3 = tk.BooleanVar(value=bool(_ui_prefs.get("t3", False)))
-    t3_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
-    t3_row.pack(anchor="w", pady=(2, 0))
-    cb_t3 = tk.Checkbutton(t3_row, text="🧩 Formularios T3 2.0 (usa los Excels …_T3)", variable=var_t3,
-                           command=lambda: (update_table_data(active_p_tab[0]), _refresh_t3_also_state()),
-                           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                           activebackground=CARD_BG_COLOR, activeforeground="white",
-                           font=("Segoe UI", 8), cursor="hand2")
-    cb_t3.pack(side="left")
-
-    # Correr el mercado normal Y ADEMÁS su formulario T3 2.0 en la misma ejecución:
-    # se agrega una sesión extra por dispositivo usando el Excel …_T3.xlsx, sólo si
-    # ese Excel existe (un mercado sin form T3 simplemente no suma sesiones).
-    var_t3_also = tk.BooleanVar(value=bool(_ui_prefs.get("t3_also", False)))
-    t3_also_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
-    t3_also_row.pack(anchor="w", pady=(2, 0))
-    cb_t3_also = tk.Checkbutton(t3_also_row, text="➕ Correr también los formularios T3 2.0 (AEM) del mercado",
-                                variable=var_t3_also,
-                                bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                                activebackground=CARD_BG_COLOR, activeforeground="white",
-                                font=("Segoe UI", 8), cursor="hand2")
-    cb_t3_also.pack(side="left")
-    t3_also_hint = tk.Label(t3_also_row, text="", font=("Segoe UI", 8, "italic"),
-                            bg=CARD_BG_COLOR, fg="#C5A9DF")
-    t3_also_hint.pack(side="left", padx=(8, 0))
-
     # Cadillac (CDC): usa los mismos ids y el mismo generador que Brasil, pero es T1.
-    # Igual que con T3, un mercado sin Excel …_CDC.xlsx simplemente no suma sesiones.
+    # Un mercado sin Excel …_CDC.xlsx simplemente no suma sesiones. Cadillac es solo T1:
+    # en modo T3 el toggle no se ve y no se suma.
     var_cdc_also = tk.BooleanVar(value=bool(_ui_prefs.get("cdc_also", False)))
     cdc_also_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
-    cdc_also_row.pack(anchor="w", pady=(2, 0))
-    tk.Checkbutton(cdc_also_row, text="🚗 Correr también Cadillac (CDC) del mercado",
-                   variable=var_cdc_also,
-                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                   activebackground=CARD_BG_COLOR, activeforeground="white",
-                   font=("Segoe UI", 8), cursor="hand2").pack(side="left")
+    if var_modo.get() != "T3":
+        cdc_also_row.pack(anchor="w", pady=(2, 0))
+    Toggle(cdc_also_row, text="Correr también Cadillac (CDC) del mercado",
+           variable=var_cdc_also, icono=get_logo("cadillac.png", 14),
+           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE,
+           borde=BORDER_COLOR).pack(side="left")
 
     # Túnel de BrowserStack Local: las sesiones de la nube salen por la VPN de esta PC
     # (para stage). Se guarda directo en config_global["browserstack"]["local"], que es lo
@@ -1635,10 +1647,9 @@ def iniciar_interfaz(autostart_leads=False):
     var_bs_tunel = tk.BooleanVar(value=bool(_bs_cfg.get("local", False)))
     tunel_row = tk.Frame(disp_frame, bg=CARD_BG_COLOR)
     tunel_row.pack(anchor="w", pady=(2, 0))
-    tk.Checkbutton(tunel_row, text="🔒 BrowserStack por túnel (VPN)", variable=var_bs_tunel,
-                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                   activebackground=CARD_BG_COLOR, activeforeground="white",
-                   font=("Segoe UI", 8), cursor="hand2").pack(side="left")
+    Toggle(tunel_row, text="🔒 BrowserStack por túnel (VPN)", variable=var_bs_tunel,
+           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE,
+           borde=BORDER_COLOR).pack(side="left")
     tk.Label(tunel_row, text="solo Android e iPhone (Mac no) · al ejecutar te muestra los pasos",
              font=("Segoe UI", 8, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(side="left", padx=(8, 0))
 
@@ -1651,17 +1662,6 @@ def iniciar_interfaz(autostart_leads=False):
             pass
     var_bs_tunel.trace_add("write", _guardar_tunel)
 
-    def _refresh_t3_also_state(*_):
-        """Con el modo 'sólo T3' activo, 'correr también T3' no tiene sentido: se apaga."""
-        if var_t3.get():
-            var_t3_also.set(False)
-            cb_t3_also.config(state="disabled", cursor="arrow")
-            t3_also_hint.config(text="(ya estás corriendo sólo los Excels …_T3)")
-        else:
-            cb_t3_also.config(state="normal", cursor="hand2")
-            t3_also_hint.config(text="")
-    _refresh_t3_also_state()
-
     def refresh_ver_nav_state():
         # "Ver navegador" sólo aplica a browsers de escritorio (chrome/firefox/edge).
         # Si no hay ninguno seleccionado, se fuerza apagado (el checkbox está en Config avanzada).
@@ -1671,8 +1671,8 @@ def iniciar_interfaz(autostart_leads=False):
 
     var_url_parallel.trace_add("write", _save_ui_prefs)
     url_max_var.trace_add("write", _save_ui_prefs)
-    var_t3.trace_add("write", _save_ui_prefs)
-    var_t3_also.trace_add("write", _save_ui_prefs)
+    var_modo.trace_add("write", _save_ui_prefs)
+    var_cdc_also.trace_add("write", _save_ui_prefs)
     var_enviar_email.trace_add("write", _save_ui_prefs)
     var_adjuntar_res.trace_add("write", _save_ui_prefs)
     var_adjuntar_ss.trace_add("write", _save_ui_prefs)
@@ -1985,6 +1985,7 @@ def iniciar_interfaz(autostart_leads=False):
     # "Correr también los T3" de la programación: es propio del test programado, no
     # hereda el checkbox de Envío de Leads (esa pestaña es para corridas manuales).
     var_sched_t3 = tk.BooleanVar(value=False)
+    sched_t3_cols = []  # columnas del toggle, para esconderlas en modo T3
 
     _active_sched_subtab = {"current": "semanal"}
     # UI por sub-pestaña: cada una tiene su propia copia de la card de configuración.
@@ -2179,15 +2180,16 @@ def iniciar_interfaz(autostart_leads=False):
 
         # Columna 4: FORMULARIOS T3 2.0 (sólo Envío de Leads programado)
         if not is_mas:
+            # Solo en modo T1: en T3 ya se corren los T3.
             col_t3 = tk.Frame(row, bg=CARD_BG_COLOR)
-            col_t3.pack(side="left", anchor="n", padx=(24, 0))
-            tk.Label(col_t3, text="FORMULARIOS T3 2.0 (AEM)", font=("Segoe UI", 7, "bold"),
+            sched_t3_cols.append(col_t3)
+            tk.Label(col_t3, text="FORMULARIOS T3", font=("Segoe UI", 7, "bold"),
                      bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w")
-            tk.Checkbutton(col_t3, text="➕ Correr también los T3 del mercado", variable=var_sched_t3,
-                           command=_refresh_prog,
-                           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                           activebackground=CARD_BG_COLOR, activeforeground="white",
-                           font=("Segoe UI", 8), cursor="hand2").pack(anchor="w", pady=(4, 0))
+            Toggle(col_t3, text="Correr también los T3 del mercado", variable=var_sched_t3,
+                   command=_refresh_prog, bg=CARD_BG_COLOR, fg=TEXT_SECONDARY,
+                   color_off=BUTTON_INACTIVE, borde=BORDER_COLOR).pack(anchor="w", pady=(4, 0))
+            if var_modo.get() != "T3":
+                col_t3.pack(side="left", anchor="n", padx=(24, 0))
             tk.Label(col_t3, text="Suma una corrida extra por mercado que tenga Excel …_T3.",
                      font=("Segoe UI", 7, "italic"), bg=CARD_BG_COLOR, fg="#C5A9DF").pack(anchor="w")
 
@@ -2256,8 +2258,10 @@ def iniciar_interfaz(autostart_leads=False):
                             BADGE_GREEN, BADGE_GREEN)
             if total > 0:
                 _mk_sched_badge(bframe, f"📅 {dias} día(s) · {total} horario(s)", BADGE_GREEN, BADGE_GREEN)
-            if sub == "semanal" and var_sched_t3.get():
-                _mk_sched_badge(bframe, "🧩 + FORMULARIOS T3", BADGE_AMBER, BADGE_AMBER)
+            if sub == "semanal" and var_modo.get() == "T3":
+                _mk_sched_badge(bframe, "MODO T3", BADGE_AMBER, BADGE_AMBER)
+            elif sub == "semanal" and var_sched_t3.get():
+                _mk_sched_badge(bframe, "+ FORMULARIOS T3", BADGE_AMBER, BADGE_AMBER)
 
             falta = []
             if n_p == 0:
@@ -2834,15 +2838,14 @@ def iniciar_interfaz(autostart_leads=False):
     preview_device_var = tk.StringVar()
 
     def _available_device_excels(pais):
-        t3 = bool(var_t3.get())
-        t3_tag = "_T3" if t3 else ""
+        variante = _variante_modo()
         from osocio.providers.browserstack.dispositivos import DISPOSITIVOS_BS
         specs = ([("Chrome", "Chrome"), ("Firefox", "Firefox"), ("Edge", "Edge")]
                  + [(d.etiqueta, d.sufijo_excel) for d in DISPOSITIVOS_BS]
                  + [("Genérico (compartido)", "Generico")])
         out = []
         for label, suf in specs:
-            p = os.path.join(DATA_DIR, f"Lead_information_Formulario_{pais}_{suf}{t3_tag}.xlsx")
+            p = _lead_excel_path(pais, suf, variante)
             if os.path.exists(p):
                 out.append((label, p))
         return out
@@ -3338,13 +3341,39 @@ def iniciar_interfaz(autostart_leads=False):
             var_pausar_autenticacion=var_pausar_autenticacion,
             var_preview_navegador=var_preview_navegador,
             var_sched_t3=var_sched_t3,
-            var_t3=var_t3,
+            var_modo=var_modo,
             var_cdc_also=var_cdc_also,
-            var_t3_also=var_t3_also,
             var_url_parallel=var_url_parallel,
             var_ver_navegador=var_ver_navegador,
         )
         return ejecutar_envio_leads(ctx, scheduled=scheduled, retry_only=retry_only)
+
+    def _al_cambiar_modo():
+        """Cambió T1 ⇄ T3: se muestran/esconden los toggles que solo son de T1 y se
+        recargan la tabla y los nombres de archivo con los Excels del modo."""
+        t3 = var_modo.get() == "T3"
+        if t3:
+            cdc_also_row.pack_forget()
+            for c in sched_t3_cols:
+                c.pack_forget()
+        else:
+            cdc_also_row.pack(anchor="w", pady=(2, 0), before=tunel_row)
+            for c in sched_t3_cols:
+                c.pack(side="left", anchor="n", padx=(24, 0))
+        try:
+            if t3:
+                gen_cdc_row.pack_forget()
+            else:
+                gen_cdc_row.pack(anchor="w", padx=15, pady=(0, 6), before=gen_cdc_hueco)
+            update_excel_calculation()
+        except NameError:
+            pass
+        try:
+            update_table_data(active_p_tab[0])
+            _refresh_prog()
+        except Exception:
+            pass
+        log_message(f"[INFO] Modo {'T3' if t3 else 'T1'}: se usan los Excels …_{'T3' if t3 else 'T1'}.xlsx")
 
     def view_results_dialog():
         carpeta = os.path.join(BASE_DIR, "resultados")
@@ -3381,7 +3410,7 @@ def iniciar_interfaz(autostart_leads=False):
         Si no hay resultados en disco, queda lo que haya en memoria."""
         from osocio.providers.browserstack.dispositivos import por_cualquier_nombre
         from osocio.utils.reintento_fallidos import fallidas_desde_resultados
-        variante = VARIANTE_T3 if var_t3.get() else ""
+        variante = _variante_modo()
         etiqueta_var = ("·" + variante.lstrip("_")) if variante else ""
         carpeta = os.path.join(BASE_DIR, "resultados")
         lf = _exec_state.setdefault("last_fails", {})
@@ -3397,7 +3426,7 @@ def iniciar_interfaz(autostart_leads=False):
                 if excel_mode_holder[0] == "compartido":
                     entrada = _generic_excel_path_for(pais, variante)
                 else:
-                    entrada = os.path.join(DATA_DIR, _lead_excel_name(pais, suffix, variante))
+                    entrada = _lead_excel_path(pais, suffix, variante)
                 res, filas = fallidas_desde_resultados(carpeta, pais, navegador, entrada, variante,
                                                        log=log_message)
                 if res is None:
@@ -4365,29 +4394,25 @@ def iniciar_interfaz(autostart_leads=False):
              font=("Segoe UI", 8), bg=CARD_BG_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=15, pady=(0, 6))
 
     # Variantes del mercado: mismos datos, otro nombre de archivo para diferenciarlas.
-    # Cadillac (CDC) usa los mismos ids y el mismo generador que Brasil, pero es T1.
+    # T1 o T3 sale del modo de arriba. Cadillac (CDC) usa los mismos ids y el mismo
+    # generador que Brasil, pero es T1: el toggle solo aparece en modo T1.
     var_gen_cdc = tk.BooleanVar(value=False)
-    tk.Checkbutton(excel_devices_card, text="🚗 Es Cadillac (genera los Excels como …_CDC.xlsx)", variable=var_gen_cdc,
-                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                   activebackground=CARD_BG_COLOR, activeforeground="white",
-                   font=("Segoe UI", 8), cursor="hand2").pack(anchor="w", padx=15, pady=(0, 2))
-
-    var_gen_t3 = tk.BooleanVar(value=False)
-    tk.Checkbutton(excel_devices_card, text="🧩 Es formulario T3 2.0 (genera los Excels como …_T3.xlsx)", variable=var_gen_t3,
-                   bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, selectcolor=ENTRY_BG, bd=0,
-                   activebackground=CARD_BG_COLOR, activeforeground="white",
-                   font=("Segoe UI", 8), cursor="hand2",
-                   command=lambda: update_excel_calculation()).pack(anchor="w", padx=15, pady=(0, 6))
+    gen_cdc_row = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR)
+    Toggle(gen_cdc_row, text="Es Cadillac (genera los Excels como …_CDC.xlsx)", variable=var_gen_cdc,
+           icono=get_logo("cadillac.png", 14), command=lambda: update_excel_calculation(),
+           bg=CARD_BG_COLOR, fg=TEXT_SECONDARY, color_off=BUTTON_INACTIVE,
+           borde=BORDER_COLOR).pack(side="left")
+    gen_cdc_hueco = tk.Frame(excel_devices_card, bg=CARD_BG_COLOR, height=0)
+    gen_cdc_hueco.pack(fill="x")
+    if var_modo.get() != "T3":
+        gen_cdc_row.pack(anchor="w", padx=15, pady=(0, 6), before=gen_cdc_hueco)
 
     def _variante_a_generar():
-        """Que variante representan los checks de arriba.
-
-        Son excluyentes: un Excel es de un mercado, o de su T3, o de Cadillac. Si
-        estan los dos tildados manda Cadillac, que es la eleccion mas explicita.
-        """
-        if bool(var_gen_cdc.get()):
+        """La variante del Excel a generar: Cadillac si está prendido (solo T1), si no la
+        del modo (…_T1 o …_T3)."""
+        if var_modo.get() != "T3" and bool(var_gen_cdc.get()):
             return VARIANTE_CDC
-        return VARIANTE_T3 if bool(var_gen_t3.get()) else ""
+        return _variante_modo()
 
     # Documentos a generar (solo países con múltiples campos de documento, ej. Brasil).
     # Cada tipo tildado se genera en su columna (CPF/CNPJ/CEP); destildado → columna vacía.
