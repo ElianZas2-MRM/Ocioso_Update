@@ -784,7 +784,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
     def on_detener_click():
         on_close_modal()
         try:
-            run_note.config(text="Deteniendo… (termina el lead en curso)", fg="#F8C471")
+            run_note.config(text="Deteniendo… el lead que estaba por enviarse NO se manda",
+                            fg="#F8C471")
         except Exception:
             pass
         log_message("[WARN] Detención solicitada por el usuario.")
@@ -1233,6 +1234,8 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
 
                 if excel:
                     form.EXCEL_PATH = excel  # ← una sesión por Excel generado
+                # "Detener" llega al motor: no toca Enviar y no sigue con las filas que faltan.
+                form.stop_event = stop_event
                 def _pcb(done, total):
                     with _lock:
                         _sess_frac[_sid] = (done / total) if total else 0.0
@@ -1279,7 +1282,7 @@ def ejecutar_envio_leads(ctx, scheduled=False, retry_only=None):
                                             variante=sess.get("variante", ""), programada=scheduled,
                                             build_name=bs_runner.nombre_build_del_dia(
                                                 scheduled, _inicio_corrida),
-                                            log_fn=log_message) or {}
+                                            log_fn=log_message, stop_event=stop_event) or {}
                 _collect_bs_email(sess.get("email_label") or pais, _bs.navegador, _bs.plataforma, summary)
                 _err = summary.get("error")
                 _ok, _fail = int(summary.get("ok", 0)), int(summary.get("failed", 0))

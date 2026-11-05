@@ -84,6 +84,13 @@ def set_global_manual_input_callback(callback):
     _global_manual_input_callback = callback
 
 
+class DetenidoPorUsuario(Exception):
+    """El usuario apretó Detener (o cerró la corrida): no se toca Enviar."""
+
+
+MENSAJE_DETENIDO = "Detenido por el usuario: el lead NO se envió"
+
+
 class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMixin, DesplegablesMixin, CasillasYRadiosMixin, NavegacionDOMMixin):
     """Clase base unificada para todos los formularios de países"""
 
@@ -268,7 +275,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             avisos.append("CTA eléctricos con error")
         campos = [c for c in campos_con_error if c]
         if not envio_ok:
-            if motivo_envio == "sin TYP":
+            if motivo_envio == "detenido por el usuario":
+                avisos.append("detenido por el usuario (el lead no se envió)")
+            elif motivo_envio == "sin TYP":
                 avisos.append("la TYP no se ve")
             elif form_correcto:
                 errores.append(motivo_envio or "error al enviar")
@@ -380,6 +389,10 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         self.RUN_NUMBER = None
         # Resumen por formulario de la última corrida (lo consume la UI para el modal detallado).
         self.run_summary = {"ok": 0, "fail": 0, "warn": 0, "total": 0, "fail_rows": [], "warn_rows": []}
+        # Lo setea la ventana de la corrida: con "Detener" (o al cerrarla) se frena ANTES de
+        # tocar Enviar y no se sigue con las filas que faltan. Sin esto la sesión en curso
+        # terminaba todas sus filas y mandaba los leads igual.
+        self.stop_event = None
         # Aviso opcional al empezar y al terminar cada lead: on_lead(evento, **datos), con
         # evento "inicio" o "fin". Lo usa BrowserStack para dejar marcas en el video.
         self.on_lead = None
@@ -557,6 +570,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
     def _short_fail_reason(result_text):
         """Motivo corto del fallo para el resumen rápido (modal/email). p.ej. 'form ausente'."""
         t = (result_text or "").lower()
+        if "detenido por el usuario" in t:
+            return "detenido por el usuario"
         if "form no inserto" in t or "formulario ausente" in t:
             return "form no inserto"
         if "no coincide con el esperado" in t:
@@ -4580,6 +4595,16 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         except Exception:
             return base
 
+    def pidieron_detener(self):
+        ev = getattr(self, "stop_event", None)
+        return bool(ev is not None and ev.is_set())
+
+    def frenar_si_pidieron_detener(self):
+        """Justo antes de tocar Enviar: si se pidió detener, el lead no sale."""
+        if self.pidieron_detener():
+            print("⏹ Detención pedida por el usuario: NO se toca Enviar.")
+            raise DetenidoPorUsuario(MENSAJE_DETENIDO)
+
     def submit_and_verify_form(self, current_ss_number, expected_form_url):
         """Envía el formulario y verifica resultado"""
         expected_form_url = self._sanitize_url(expected_form_url)
@@ -4607,6 +4632,7 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
             self._scroll_element_into_view(boton_enviar)
             time.sleep(0.3)
+            self.frenar_si_pidieron_detener()
 
             try:
                 boton_enviar.click()
@@ -4793,6 +4819,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             print("Captura 3/3: TY Page (área del formulario)")
             return result_text, ty_page_name
 
+        except DetenidoPorUsuario:
+            raise
         except Exception as e:
             result_text = f"Error al enviar: {e}"
             print(result_text)
@@ -4874,6 +4902,9 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
             # Procesar cada fila
             for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                if self.pidieron_detener():
+                    print(f"⏹ Detenido por el usuario: no se procesan las filas desde la {i}.")
+                    break
                 self.begin_row_tracking()
                 # Columnas SI/NO que apuntan a un checkbox por name/id (ver build_checkbox_prefs)
                 self.checkbox_prefs = self.build_checkbox_prefs(raw_headers, row)
@@ -5302,6 +5333,8 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                                 except Exception as _cap_e:
                                     print(f"Error capturando evidencia: {_cap_e}")
 
+                    except DetenidoPorUsuario:
+                        result_text = MENSAJE_DETENIDO
                     except Exception as e:
                         # Errores durante llenado o envío (iframe o documento principal)
                         _exc_info = f"[{type(e).__name__}] {e}"
