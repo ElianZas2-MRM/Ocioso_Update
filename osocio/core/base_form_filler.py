@@ -2721,65 +2721,100 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         return next((r for r in cls._LANDINGS_CON_CTA
                      if url == r["landing"] and r.get("popup", False) == popup), None)
 
+    # Si un camino no llega al form (ej. BR Montana accesorios: "Saber mais" → /pacotes, que
+    # no tiene "Tenho interesse"), se vuelve a la landing y se prueba por otro CTA del primer
+    # paso. Tope para no recorrer la página entera.
+    _MAX_CTAS_A_PROBAR = 6
+
+    def _esperar_pagina_lista(self):
+        try:
+            WebDriverWait(self.driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") in ("interactive", "complete"))
+        except Exception:
+            pass
+        time.sleep(0.5)
+        self.handle_cookie_popups()
+
+    def _recorrer_pasos_cta(self, pasos, ya_probados):
+        """Hace los pasos de la regla una vez. En el primer paso no elige los CTAs (por href)
+        de `ya_probados`. Devuelve (problema, href del CTA del primer paso): problema "" si
+        llegó; href None si el primer paso no tenía ningún CTA para elegir."""
+        from urllib.parse import urlparse
+        primer_href = None
+        for i, paso in enumerate(pasos):
+            if paso.get("tabs"):
+                tabs = [t for t in self.driver.find_elements(By.CSS_SELECTOR, paso["tabs"]) if t.is_displayed()]
+                if tabs:
+                    tab = random.choice(tabs)
+                    nombre_tab = (tab.text or "").strip()
+                    self.driver.execute_script(
+                        "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", tab)
+                    time.sleep(0.8)
+                    print(f"CTA de landing: tab '{nombre_tab}'")
+            ctas = self.driver.find_elements(By.CSS_SELECTOR, paso["cta"])
+            visibles = [c for c in ctas if c.is_displayed()] or ctas
+            if i == 0 and ya_probados:
+                visibles = [c for c in visibles if (c.get_attribute("href") or "") not in ya_probados]
+            if not visibles:
+                return (f"No se encontró ningún CTA ({paso['cta']}) en {self.driver.current_url}",
+                        primer_href)
+            cta = random.choice(visibles)
+            if i == 0:
+                primer_href = cta.get_attribute("href") or ""
+            detalle = (cta.get_attribute("data-dtm") or cta.get_attribute("title") or cta.text or "").strip()
+            if paso.get("modal"):
+                # Abre un modal en la misma página: esperar a que aparezca un iframe nuevo.
+                antes = len(self.driver.find_elements(By.TAG_NAME, "iframe"))
+                self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
+                try:
+                    WebDriverWait(self.driver, 10).until(
+                        lambda d: len(d.find_elements(By.TAG_NAME, "iframe")) > antes)
+                except Exception:
+                    pass
+                time.sleep(1.5)
+                print(f"CTA de landing '{detalle}' → modal abierto")
+                continue
+            self._seguir_cta(cta)
+
+            def llego(d):
+                return re.search(paso["destino"], urlparse(d.current_url or "").path.lower().rstrip("/"))
+            try:
+                WebDriverWait(self.driver, 15).until(llego)
+            except Exception:
+                return (f"El CTA '{detalle}' no llevó a {paso['destino']} "
+                        f"(quedó en {self.driver.current_url})", primer_href)
+            print(f"CTA de landing '{detalle}' → {self.driver.current_url}")
+            self._esperar_pagina_lista()
+        return "", primer_href
+
     def _entrar_por_cta_de_landing(self, landing_url):
         regla = self._regla_cta_de_landing(landing_url)
         if regla is None:
             return
-        from urllib.parse import urlparse
         try:
-            for paso in regla["pasos"]:
-                if paso.get("tabs"):
-                    tabs = [t for t in self.driver.find_elements(By.CSS_SELECTOR, paso["tabs"]) if t.is_displayed()]
-                    if tabs:
-                        tab = random.choice(tabs)
-                        nombre_tab = (tab.text or "").strip()
-                        self.driver.execute_script(
-                            "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", tab)
-                        time.sleep(0.8)
-                        print(f"CTA de landing: tab '{nombre_tab}'")
-                ctas = self.driver.find_elements(By.CSS_SELECTOR, paso["cta"])
-                visibles = [c for c in ctas if c.is_displayed()] or ctas
-                if not visibles:
-                    self._landing_issue = (f"No se encontró ningún CTA ({paso['cta']}) en "
-                                           f"{self.driver.current_url}")
-                    print(f"⚠ {self._landing_issue}")
+            inicio = self.driver.current_url
+            probados, problema = [], ""
+            for intento in range(self._MAX_CTAS_A_PROBAR):
+                if intento:
+                    print(f"↺ Ese camino no llegó al form: se prueba por otro CTA (intento {intento + 1})")
+                    self.driver.get(inicio)
+                    self._esperar_pagina_lista()
+                nuevo_problema, href = self._recorrer_pasos_cta(regla["pasos"], set(probados))
+                if not nuevo_problema:
+                    self.pre_scroll_for_dynamic_content()
                     return
-                cta = random.choice(visibles)
-                detalle = (cta.get_attribute("data-dtm") or cta.get_attribute("title") or cta.text or "").strip()
-                if paso.get("modal"):
-                    self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", cta)
-                else:
-                    self._seguir_cta(cta)
-                if paso.get("modal"):
-                    # Abre un modal en la misma página: esperar a que aparezca un iframe nuevo.
-                    antes = len(self.driver.find_elements(By.TAG_NAME, "iframe"))
-                    try:
-                        WebDriverWait(self.driver, 10).until(
-                            lambda d: len(d.find_elements(By.TAG_NAME, "iframe")) > antes)
-                    except Exception:
-                        pass
-                    time.sleep(1.5)
-                    print(f"CTA de landing '{detalle}' → modal abierto")
-                    continue
-
-                def llego(d):
-                    return re.search(paso["destino"], urlparse(d.current_url or "").path.lower().rstrip("/"))
-                try:
-                    WebDriverWait(self.driver, 15).until(llego)
-                except Exception:
-                    self._landing_issue = (f"El CTA '{detalle}' no llevó a {paso['destino']} "
-                                           f"(quedó en {self.driver.current_url})")
-                    print(f"⚠ {self._landing_issue}")
-                    return
-                print(f"CTA de landing '{detalle}' → {self.driver.current_url}")
-                try:
-                    WebDriverWait(self.driver, 10).until(
-                        lambda d: d.execute_script("return document.readyState") in ("interactive", "complete"))
-                except Exception:
-                    pass
-                time.sleep(0.5)
-                self.handle_cookie_popups()
-            self.pre_scroll_for_dynamic_content()
+                if href is None and probados:
+                    break   # ya no quedan CTAs sin probar en el primer paso
+                problema = nuevo_problema
+                if not href:
+                    break   # el primer paso no tiene CTA (o no tiene href): no hay otro camino
+                probados.append(href)
+            if len(probados) > 1:
+                nombres = ", ".join(h.rstrip("/").rsplit("/", 1)[-1] for h in probados)
+                problema = (f"Se probaron {len(probados)} caminos ({nombres}) y ninguno llegó al form. "
+                            f"Último: {problema}")
+            self._landing_issue = problema
+            print(f"⚠ {self._landing_issue}")
         except Exception as e:
             self._landing_issue = f"No se pudo entrar por el CTA de la landing: {e}"
             print(f"⚠ {self._landing_issue}")
