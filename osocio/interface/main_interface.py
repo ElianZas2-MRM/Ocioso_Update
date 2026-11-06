@@ -24,6 +24,7 @@ from PIL import Image, ImageTk
 # otro lado (ver tests/test_rutas.py). Este import vive afuera del try de abajo a
 # proposito: paths.py solo usa os y sys, asi que no puede fallar por dependencias.
 from osocio.paths import BASE_DIR, DATA_DIR, JSON_DIR
+from osocio.version import VERSION
 
 _APP_BASE = BASE_DIR
 
@@ -862,7 +863,7 @@ def iniciar_interfaz(autostart_leads=False):
     tema.instalar(_prefs_inicio.get("tema") or tema.OSCURO)
 
     root = tk.Tk()
-    root.title("Osocio - Form Automation")
+    root.title(f"Osocio - Form Automation v{VERSION}")
     # Ventana con tamaño considerable (con el menú lateral): hasta 1440x880 si la pantalla da.
     root.geometry(f"{min(1440, root.winfo_screenwidth() - 60)}x{min(880, root.winfo_screenheight() - 90)}")
     root.minsize(1160, 620)
