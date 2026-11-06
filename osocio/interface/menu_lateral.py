@@ -8,6 +8,7 @@ import tkinter as tk
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from osocio.interface import tema
+from osocio.version import VERSION
 from osocio.interface.widgets import (COLOR_T1, COLOR_T3, BotonRedondo, Marco, SelectorModo,
                                       Toggle, _hex)
 
@@ -131,6 +132,8 @@ class MenuLateral(tk.Frame):
         tk.Label(tit, text="Osocio", font=("Segoe UI", 11, "bold"), bg=bg, fg="#FFFFFF").pack(side="left")
         tk.Label(tit, text="Form Automation", font=("Segoe UI", 8), bg=bg, fg=_TXT_GRUPO).pack(
             side="left", padx=(5, 0), pady=(3, 0))
+        tk.Label(tit, text=f"v{VERSION}", font=("Segoe UI", 7), bg=bg, fg=_TXT_GRUPO).pack(
+            side="left", padx=(5, 0), pady=(4, 0))
 
         caja = Marco(arriba, bg=tema.MODO_CAJA, highlightthickness=1,
                      highlightbackground=tema.SIDEBAR_SEP)
