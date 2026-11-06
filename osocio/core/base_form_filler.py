@@ -188,7 +188,15 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
         return cls._diferencia_url_form(encontrada, esperada)[0]
 
     def _is_gm_form_src(self, src):
-        s = (src or "").lower()
+        """¿El src es un form GM? Se mira solo el host y el path: los pixels de publicidad
+        (ej. Floodlight de doubleclick) llevan la URL del form como parámetro
+        (ref=…gm_forms…) y se tomaban por el form."""
+        from urllib.parse import urlparse
+        try:
+            u = urlparse((src or "").strip())
+            s = (u.netloc + u.path).lower()
+        except Exception:
+            s = (src or "").lower()
         return any(m in s for m in self.GM_FORM_URL_MARKERS)
 
     # src y "se ve" de todos los iframes en UN viaje al navegador. Uno por uno eran dos
@@ -2490,6 +2498,14 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
             expected_form_url = expected_form_url.strip()
         if not expected_form_url:
             return None
+
+        # Siempre se busca en la landing. Tras el error de event_id el driver quedaba adentro
+        # del iframe del form y se tomaba un iframe de ahí adentro (un pixel de doubleclick)
+        # como "Form URL encontrada".
+        try:
+            self.driver.switch_to.default_content()
+        except Exception:
+            pass
 
         _url = expected_form_url
 
