@@ -1328,6 +1328,54 @@
       ],
       "nombre_campo": "CEP (digite o CEP completo – apenas números – e localize a Concessionária mais próxima)",
       "origen": "autovalor"
+    },
+    {
+      "id": "company-type",
+      "valor": [
+        "Manufactura",
+        "Agricultura"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "company-type",
+      "origen": "autovalor"
+    },
+    {
+      "id": "fleet-size",
+      "valor": [
+        "1 a 5 vehículos",
+        "16 a 25 vehículos"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "fleet-size",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase-date",
+      "valor": [
+        "Próximos 60 días",
+        "En 60 días o más"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "purchase-date",
+      "origen": "autovalor"
+    },
+    {
+      "id": "purchase-requirement",
+      "valor": [
+        "De 1 a 5 vehículos",
+        "De 6 a 15 vehículos"
+      ],
+      "paises": [
+        "Chile"
+      ],
+      "nombre_campo": "purchase-requirement",
+      "origen": "autovalor"
     }
   ],
   "dependencies": [
