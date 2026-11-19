@@ -1739,13 +1739,24 @@ def enviar_email_comparador_dealers(pais, carpeta_reporte, excel_path, counts,
         dup_n = int(c.get("DUPLICADO", 0))
         oculto_n = int(c.get("OCULTO", 0))
         nota_n = int(c.get("NOTA", 0))
+        disclaimer_n = int(c.get("NAME_DISCLAIMER", 0))
 
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
         hay_problemas = (fail_n + missing_n) > 0
-        estado = "PASS" if not hay_problemas else "FAILED"
-        icono = "✅" if not hay_problemas else "❌"
+        avisos_n = extra_n + dup_n + oculto_n + nota_n + disclaimer_n
+        if hay_problemas:
+            estado = "FAILED"
+            icono = "❌"
+        elif avisos_n > 0:
+            estado = "PASS CON AVISOS"
+            icono = "⚠️"
+        else:
+            estado = "PASS"
+            icono = "✅"
         asunto = (f"[{estado}] Comparador Dealers {_PAIS_ABREV.get(pais, pais)} {fecha_actual} — "
                   f"{pass_n} OK / {fail_n} FAIL / {missing_n} MISSING")
+        if not hay_problemas and avisos_n > 0:
+            asunto += f" / {avisos_n} AVISO(S)"
 
         cuerpo = f"{icono} Comparador de Dealers — {pais}\nFecha: {fecha_actual}\n"
         if form_url:

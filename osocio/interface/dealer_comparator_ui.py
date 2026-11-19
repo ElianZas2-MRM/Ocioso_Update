@@ -86,6 +86,46 @@ MODAL_BG = "#231830"
 MODAL_PILL_BG = "#38234D"
 
 
+def clasificar_resultado_comparador(counts, error_msg=None, detenido=False, disclaimer_count=0):
+    """Clasifica el resultado final del Comparador en (estado, icono, color, titulo, sufijo_resumen).
+
+    - 'detenido' / 'error': rojo (#F1948A) si se detuvo, hubo error de ejecución, o hay FAIL/MISSING.
+    - 'aviso': amarillo (#F8C471) si no hay FAIL/MISSING pero sí EXTRA, DUPLICADO, OCULTO, NOTA
+      o diferencias menores de nombre (disclaimer_count).
+    - 'ok': verde (#82E0AA) únicamente cuando todo dio PASS sin avisos ni extras.
+    """
+    c = counts or {}
+    fail_n = int(c.get("FAIL", 0)) + int(c.get("MISSING", 0))
+    aviso_n = (
+        int(c.get("EXTRA", 0))
+        + int(c.get("DUPLICADO", 0))
+        + int(c.get("OCULTO", 0))
+        + int(c.get("NOTA", 0))
+        + int(disclaimer_count or 0)
+    )
+    if detenido:
+        return "detenido", "■", "#F1948A", "Comparación detenida", ""
+    if error_msg:
+        return "error", "✕", "#F1948A", "Comparación con error", ""
+    if fail_n > 0:
+        return (
+            "error",
+            "✕",
+            "#F1948A",
+            "Comparación con errores",
+            f"   —   ✕ {fail_n} con problemas, revisá el Excel",
+        )
+    if aviso_n > 0:
+        return (
+            "aviso",
+            "⚠",
+            "#F8C471",
+            "Comparación completada con avisos",
+            f"   —   ⚠ {aviso_n} aviso(s), revisá el Excel",
+        )
+    return "ok", "✓", "#82E0AA", "Comparación completada", "   —   ✓ Todo OK"
+
+
 def _get_base_dir():
     # La raiz se resuelve en osocio/paths.py y en ningun otro lado (ver tests/test_rutas.py).
     from osocio.paths import BASE_DIR
@@ -1454,7 +1494,7 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                 status_lbl.config(text=f"{cur}/{total} — {label_txt}")
             root.after(0, _apply)
 
-        def _set_complete(ok, counts, detenido=False, error_msg=None, load_error_count=0):
+        def _set_complete(ok, counts, detenido=False, error_msg=None, load_error_count=0, disclaimer_count=0):
             def _apply():
                 if not modal.winfo_exists():
                     return
@@ -1465,24 +1505,22 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         btn_detener.pack_forget()
                     except Exception:
                         pass
-                    if detenido:
-                        icon_lbl.config(text="■", fg="#F1948A")
-                        title_lbl.config(text="Comparación detenida")
-                    elif error_msg:
-                        icon_lbl.config(text="✕", fg="#F1948A")
-                        title_lbl.config(text="Comparación con error")
-                        status_lbl.config(text=error_msg, fg="#F1948A")
-                    else:
-                        icon_lbl.config(text="✓", fg="#82E0AA")
-                        title_lbl.config(text="Comparación completada")
+                    _estado, icono, color, titulo, sufijo = clasificar_resultado_comparador(
+                        counts, error_msg=error_msg, detenido=detenido, disclaimer_count=disclaimer_count,
+                    )
+                    icon_lbl.config(text=icono, fg=color)
+                    title_lbl.config(text=titulo)
+                    if error_msg:
+                        status_lbl.config(text=error_msg, fg=color)
                     w = max(1, pb_canvas.winfo_width())
                     pb_canvas.coords(pb_fill, 0, 0, w, 8)
-                    pb_canvas.itemconfig(pb_fill, fill="#F1948A" if (counts.get("FAIL") or error_msg or detenido)
-                                          else "#82E0AA")
-                    _total = sum(counts.get(k, 0) for k in ("PASS", "FAIL", "EXTRA", "DUPLICADO", "OCULTO", "NOTA"))
+                    pb_canvas.itemconfig(pb_fill, fill=color)
+                    _total = sum(counts.get(k, 0) for k in ("PASS", "FAIL", "MISSING", "EXTRA", "DUPLICADO", "OCULTO", "NOTA"))
                     # Línea 1: PASS/FAIL bien grande. Línea 2: el resto de estados solo si hay.
                     resumen = f"🟢 {counts.get('PASS', 0)} PASS      🔴 {counts.get('FAIL', 0)} FAIL"
                     extras_line = []
+                    if counts.get("MISSING"):
+                        extras_line.append(f"🟣 {counts['MISSING']} MISSING")
                     if counts.get("EXTRA"):
                         extras_line.append(f"🟡 {counts['EXTRA']} EXTRA")
                     if counts.get("DUPLICADO"):
@@ -1491,12 +1529,13 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                         extras_line.append(f"🟠 {counts['OCULTO']} OCULTO")
                     if counts.get("NOTA"):
                         extras_line.append(f"🔷 {counts['NOTA']} NOTA")
+                    if disclaimer_count:
+                        extras_line.append(f"⚠ {disclaimer_count} nombre(s) distinto(s)")
                     if extras_line:
                         resumen += "\n" + "   ".join(extras_line)
                     resumen += f"\nTotal chequeado: {_total}"
-                    if not detenido and not error_msg:
-                        resumen += ("   —   ✓ Todo OK" if not counts.get("FAIL")
-                                    else f"   —   ⚠ {counts.get('FAIL', 0)} con problemas, revisá el Excel")
+                    if sufijo:
+                        resumen += sufijo
                     if load_error_count:
                         # El form tiró su pantalla de error de carga durante la corrida — ya se
                         # reintentó una vez y se omitieron estas filas para no colgar el resto
@@ -1930,6 +1969,10 @@ def build_dealer_comparator_tab(tab_frame, ctx):
                             _pair_counts = {}
                             for r in pair_results:
                                 _pair_counts[r["status"]] = _pair_counts.get(r["status"], 0) + 1
+                            _pair_counts["NAME_DISCLAIMER"] = sum(
+                                1 for r in pair_results
+                                if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel")
+                            )
                             enviado = enviar_email_comparador_dealers(
                                 state["pais"], pair_dir, export_path, _pair_counts,
                                 form_url=form_url, landing_url=landing_url,
@@ -1974,9 +2017,15 @@ def build_dealer_comparator_tab(tab_frame, ctx):
             state["driver"] = None
             modal = state.get("modal")
             if modal:
-                load_error_count = sum(1 for r in state.get("results", []) if r.get("load_error_skip"))
+                _res = state.get("results", [])
+                load_error_count = sum(1 for r in _res if r.get("load_error_skip"))
+                disclaimer_count = sum(
+                    1 for r in _res
+                    if r.get("name_disclaimer") and r.get("status") == "PASS" and not r.get("hidden_in_excel")
+                )
                 modal["set_complete"](not error_msg, counts, detenido=state["stop_event"].is_set(),
-                                       error_msg=error_msg, load_error_count=load_error_count)
+                                       error_msg=error_msg, load_error_count=load_error_count,
+                                       disclaimer_count=disclaimer_count)
             root.after(0, lambda: _set_running(False))
 
     def _run_or_stop():
