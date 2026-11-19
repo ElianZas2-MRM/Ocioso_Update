@@ -4862,12 +4862,19 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
 
             # TY div detectado — capturar la TY ACOTADA al área del form (muestra "Solicitud
             # enviada"), NO toda la landing (para eso están landing_inicial y landing_final).
-            self.driver.switch_to.default_content()
-            print("Salido del contexto iframe")
-            self.reposition_to_form(expected_form_url)
-            ty_page_name = self.screenshot_manager.fname("form", "typage", current_ss_number)
-            self.screenshot_manager.take_form_screenshot(current_ss_number, "typage", full_page=True)
-            print("Captura 3/3: TY Page (área del formulario)")
+            # Si falla la captura o se cae la conexión del driver después de haber confirmado
+            # la TYP, el lead YA se envió correctamente: no pisar `result_text` ni devolver
+            # `ty_page_name=None` (eso dispararía reintentos duplicados o marcaría FAIL).
+            ty_page_name = ""
+            try:
+                self.driver.switch_to.default_content()
+                print("Salido del contexto iframe")
+                self.reposition_to_form(expected_form_url)
+                ty_page_name = self.screenshot_manager.fname("form", "typage", current_ss_number)
+                self.screenshot_manager.take_form_screenshot(current_ss_number, "typage", full_page=True)
+                print("Captura 3/3: TY Page (área del formulario)")
+            except Exception as _ty_cap_e:
+                print(f"  ⚠ TY confirmada pero falló la captura post-envío: {_ty_cap_e}")
             return result_text, ty_page_name
 
         except DetenidoPorUsuario:
@@ -5404,8 +5411,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             self.field_mapping = _original_field_mapping
 
                     # 6. Volver al contexto principal
-                    self.driver.switch_to.default_content()
-                    print("Vuelto al contexto principal")
+                    try:
+                        self.driver.switch_to.default_content()
+                        print("Vuelto al contexto principal")
+                    except Exception as _sw_e:
+                        print(f"  ⚠ No se pudo volver al contexto principal post-envío: {_sw_e}")
 
                     # 6b. Captura de LANDING COMPLETA post-envío (aparezca o no la thank-you page).
                     if self.screenshot_manager:
@@ -5417,8 +5427,11 @@ class BaseFormFiller(FormulariosAEMMixin, ReglasPorMercadoMixin, IdsDinamicosMix
                             print(f"  ⚠ Captura landing_final: {_e}")
 
                 except Exception as e:
-                    result_text = f" Error general: {e}"
-                    print(result_text)
+                    if result_text == "Lead enviado correctamente":
+                        print(f"  ⚠ Error post-envío con TYP ya confirmada (se mantiene PASS): {e}")
+                    else:
+                        result_text = f" Error general: {e}"
+                        print(result_text)
                     try:
                         self.driver.switch_to.default_content()
                     except:
